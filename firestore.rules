@@ -1,0 +1,48 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+
+    match /users/{uid} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.auth.uid == uid;
+      allow update, delete: if signedIn() && request.auth.uid == uid;
+    }
+
+    match /communities/{communityId} {
+      allow read: if true;
+      allow create: if signedIn();
+      allow update, delete: if signedIn(); // TODO: stram op (captain/admin)
+
+      match /members/{uid} {
+        allow read: if true;
+        allow create: if signedIn() && request.auth.uid == uid;
+        allow update, delete: if signedIn() && request.auth.uid == uid;
+      }
+    }
+
+    match /matches/{matchId} {
+      allow read: if true;
+      allow create, update, delete: if signedIn(); // TODO: admin-only
+    }
+
+    match /events/{eventId} {
+      allow read: if true;
+      allow create: if signedIn();
+      allow update, delete: if signedIn(); // TODO: owner/captain
+
+      match /attendees/{uid} {
+        allow read: if true;
+        allow create, update: if signedIn() && request.auth.uid == uid;
+        allow delete: if signedIn() && request.auth.uid == uid;
+      }
+
+      match /messages/{messageId} {
+        allow read: if true;
+        allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+        allow update, delete: if false; // MVP: ingen edits/slet
+      }
+    }
+  }
+}

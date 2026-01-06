@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "FCN Fans",
+    "slug": "fcn-fans-mvp",
+    "scheme": "fcnfans",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.yourcompany.fcnfans"
+    },
+    "android": {
+      "package": "com.yourcompany.fcnfans"
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": []
+  }
+}
