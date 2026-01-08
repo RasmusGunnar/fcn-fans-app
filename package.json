@@ -16,6 +16,7 @@
     "@react-navigation/native": "^6.1.18",
     "@react-navigation/native-stack": "^6.11.0",
     "expo": "~54.0.31",
+    "expo-linear-gradient": "~15.0.8",
     "expo-linking": "~8.0.11",
     "expo-status-bar": "~3.0.9",
     "firebase": "^10.14.1",
@@ -27,7 +28,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.24.0",
-    "@types/react": "~18.2.79",
+    "@types/react": "~19.1.10",
     "eslint": "^9.10.0",
     "eslint-config-expo": "~7.0.0",
     "typescript": "^5.5.4"
