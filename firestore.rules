@@ -1,48 +1,21 @@
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
+import { initializeApp, getApp, getApps } from "firebase/app";
+import { initializeAuth, getReactNativePersistence } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-    function signedIn() { return request.auth != null; }
+const firebaseConfig = {
+  apiKey: "AIzaSyC5q7l156xwphjtUPM4Jqz4dAi6HZ7W7_4",
+  authDomain: "fcn-app-fb985.firebaseapp.com",
+  projectId: "fcn-app-fb985",
+  storageBucket: "fcn-app-fb985.firebasestorage.app",
+  messagingSenderId: "373991311744",
+  appId: "1:373991311744:web:7807a0e730e61bbc8e5965"
+};
 
-    match /users/{uid} {
-      allow read: if signedIn();
-      allow create: if signedIn() && request.auth.uid == uid;
-      allow update, delete: if signedIn() && request.auth.uid == uid;
-    }
+const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-    match /communities/{communityId} {
-      allow read: if true;
-      allow create: if signedIn();
-      allow update, delete: if signedIn(); // TODO: stram op (captain/admin)
+export const auth = initializeAuth(app, {
+  persistence: getReactNativePersistence(AsyncStorage),
+});
 
-      match /members/{uid} {
-        allow read: if true;
-        allow create: if signedIn() && request.auth.uid == uid;
-        allow update, delete: if signedIn() && request.auth.uid == uid;
-      }
-    }
-
-    match /matches/{matchId} {
-      allow read: if true;
-      allow create, update, delete: if signedIn(); // TODO: admin-only
-    }
-
-    match /events/{eventId} {
-      allow read: if true;
-      allow create: if signedIn();
-      allow update, delete: if signedIn(); // TODO: owner/captain
-
-      match /attendees/{uid} {
-        allow read: if true;
-        allow create, update: if signedIn() && request.auth.uid == uid;
-        allow delete: if signedIn() && request.auth.uid == uid;
-      }
-
-      match /messages/{messageId} {
-        allow read: if true;
-        allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
-        allow update, delete: if false; // MVP: ingen edits/slet
-      }
-    }
-  }
-}
+export const db = getFirestore(app);
