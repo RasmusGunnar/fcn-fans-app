@@ -1,3 +1,30 @@
+import React from 'react';
+import { View, Text, StyleSheet, Alert } from 'react-native';
+import { PrimaryButton } from '../components/PrimaryButton';
+import { useAuth } from '../auth/AuthProvider';
+
+export default function ProfileScreen() {
+  const { user, signOut } = useAuth();
+
+  const onLogout = async () => {
+    await signOut();
+    Alert.alert('Logget ud', 'Du er nu logget ud');
+  };
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Profil</Text>
+      <Text style={styles.email}>{user?.email ?? 'Ingen email'}</Text>
+      <PrimaryButton title="Log ud" onPress={onLogout} />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, padding: 16 },
+  title: { fontSize: 24, fontWeight: '800', marginBottom: 12 },
+  email: { marginBottom: 20 }
+});
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { signOut } from "firebase/auth";
