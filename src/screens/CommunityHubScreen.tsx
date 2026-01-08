@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, FlatList } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { RootStackParamList } from "../../App";
+import { RootStackParamList } from "../navigation/types";
 import { db } from "../firebase";
 import { Community, Event } from "../types";
 import { doc, onSnapshot, collection, query, where, orderBy, limit } from "firebase/firestore";

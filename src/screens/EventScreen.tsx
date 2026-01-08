@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, FlatList, TextInput, Alert } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { RootStackParamList } from "../../App";
+import { RootStackParamList } from "../navigation/types";
 import { db } from "../firebase";
 import { doc, onSnapshot, collection, query, orderBy, addDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { useAuth } from '../auth/AuthProvider';
