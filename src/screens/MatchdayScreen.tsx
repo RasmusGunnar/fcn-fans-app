@@ -8,7 +8,7 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../App";
 
-export function MatchdayScreen() {
+export default function MatchdayScreen() {
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [matches, setMatches] = useState<Match[]>([]);
   const [events, setEvents] = useState<Event[]>([]);

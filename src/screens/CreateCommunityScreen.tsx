@@ -1,16 +1,19 @@
 import React, { useState } from "react";
 import { View, Text, TextInput, StyleSheet, Alert } from "react-native";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
-import { db, auth } from "../firebase";
+import { db } from "../firebase";
+import { useAuth } from "../auth/AuthProvider";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { useNavigation } from "@react-navigation/native";
 
-export function CreateCommunityScreen() {
+export default function CreateCommunityScreen() {
   const nav = useNavigation();
   const [name, setName] = useState("Ganløse");
   const [municipality, setMunicipality] = useState("Egedal");
   const [description, setDescription] = useState("FCN-fans i Ganløse og omegn");
   const [type, setType] = useState<"city" | "area">("city");
+
+  const { user } = useAuth();
 
   const create = async () => {
     try {
@@ -21,13 +24,13 @@ export function CreateCommunityScreen() {
         description: description.trim(),
         type,
         memberCount: 1,
-        createdBy: auth.currentUser?.uid,
+        createdBy: user?.id ?? null,
         createdAt: Date.now(),
         createdAtServer: serverTimestamp()
       });
       // Opret medlemsskab
       await addDoc(collection(db, "communities", ref.id, "members"), {
-        uid: auth.currentUser?.uid,
+        uid: user?.id ?? null,
         role: "captain",
         joinedAt: Date.now()
       });

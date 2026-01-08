@@ -1,17 +1,25 @@
+import 'react-native-url-polyfill/auto';
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Fill these from env or replace with your values
-const SUPABASE_URL = process.env.SUPABASE_URL ?? 'https://your-project.supabase.co';
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY ?? 'public-anon-key';
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+if (!supabaseUrl || !supabaseUrl.startsWith('https://')) {
+  throw new Error('Invalid EXPO_PUBLIC_SUPABASE_URL: must be a valid https:// URL. Set EXPO_PUBLIC_SUPABASE_URL in your environment.');
+}
+
+if (!supabaseAnonKey) {
+  throw new Error('Missing EXPO_PUBLIC_SUPABASE_ANON_KEY. Set EXPO_PUBLIC_SUPABASE_ANON_KEY in your environment.');
+}
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage: AsyncStorage as any,
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: false
-  }
+    detectSessionInUrl: false,
+  },
 });
 
 export default supabase;

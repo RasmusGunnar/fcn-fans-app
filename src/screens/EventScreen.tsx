@@ -2,19 +2,21 @@ import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, FlatList, TextInput, Alert } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../../App";
-import { auth, db } from "../firebase";
+import { db } from "../firebase";
 import { doc, onSnapshot, collection, query, orderBy, addDoc, serverTimestamp, setDoc } from "firebase/firestore";
+import { useAuth } from '../auth/AuthProvider';
 import { Event, Message } from "../types";
 import { PrimaryButton } from "../components/PrimaryButton";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Event">;
 
-export function EventScreen({ route, navigation }: Props) {
+export default function EventScreen({ route, navigation }: Props) {
   const { eventId } = route.params;
   const [event, setEvent] = useState<Event | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
   const [going, setGoing] = useState(false);
+  const { user } = useAuth();
 
   useEffect(() => {
     const unsubE = onSnapshot(doc(db, "events", eventId), (snap) => {
@@ -35,7 +37,7 @@ export function EventScreen({ route, navigation }: Props) {
 
   const toggleGoing = async () => {
     try {
-      const uid = auth.currentUser?.uid;
+      const uid = user?.id;
       if (!uid) return;
       const next = !going;
       setGoing(next);
@@ -50,7 +52,7 @@ export function EventScreen({ route, navigation }: Props) {
 
   const send = async () => {
     try {
-      const uid = auth.currentUser?.uid;
+      const uid = user?.id;
       if (!uid) return;
       const t = text.trim();
       if (!t) return;

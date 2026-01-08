@@ -1,22 +1,27 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Alert } from 'react-native';
-import supabase from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 
 type User = any;
+type Session = any;
 
 type AuthContextValue = {
+  session: Session | null;
   user: User | null;
   loading: boolean;
   signInWithOtp: (email: string) => Promise<void>;
   verifyOtp: (email: string, token: string) => Promise<void>;
   signInWithApple: () => Promise<void>;
+  signInWithPassword: (email: string, password: string) => Promise<any>;
+  signUp: (email: string, password: string) => Promise<any>;
   signOut: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -26,6 +31,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const { data } = await supabase.auth.getSession();
         if (!mounted) return;
+        setSession(data.session ?? null);
         setUser(data.session?.user ?? null);
       } catch (e) {
         console.warn('Error getting session', e);
@@ -34,14 +40,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     })();
 
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, sess) => {
+      setSession(sess ?? null);
+      setUser(sess?.user ?? null);
     });
 
     return () => {
       mounted = false;
-      // unsubscribe
-      try { data.subscription.unsubscribe(); } catch (e) { /* ignore */ }
+      try { listener.subscription.unsubscribe(); } catch (e) { /* ignore */ }
     };
   }, []);
 
@@ -53,6 +59,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       Alert.alert('Kode sendt', 'Tjek din email for login-kode.');
     } catch (e: any) {
       Alert.alert('Fejl', e.message ?? String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signInWithPassword = async (email: string, password: string) => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      return data;
+    } catch (e: any) {
+      Alert.alert('Fejl', e.message ?? String(e));
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signUp = async (email: string, password: string) => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signUp({ email, password });
+      if (error) throw error;
+      return data;
+    } catch (e: any) {
+      Alert.alert('Fejl', e.message ?? String(e));
+      throw e;
     } finally {
       setLoading(false);
     }
@@ -74,7 +108,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signInWithApple = async () => {
     setLoading(true);
     try {
-      // This triggers the OAuth flow; on mobile you may prefer native Apple sign-in
       const { error } = await supabase.auth.signInWithOAuth({ provider: 'apple' as any });
       if (error) throw error;
     } catch (e: any) {
@@ -96,11 +129,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signInWithOtp, verifyOtp, signInWithApple, signOut }}>
+    <AuthContext.Provider value={{ session, user, loading, signInWithOtp, verifyOtp, signInWithApple, signInWithPassword, signUp, signOut }}>
       {children}
     </AuthContext.Provider>
   );
-};
+}
 
 export const useAuth = () => {
   const ctx = useContext(AuthContext);

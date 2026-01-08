@@ -13,5 +13,3 @@ export function AppTabs() {
     </Tab.Navigator>
   );
 }
-
-export default AppTabs;

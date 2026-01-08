@@ -9,7 +9,7 @@ import { PrimaryButton } from "../components/PrimaryButton";
 
 type Props = NativeStackScreenProps<RootStackParamList, "CommunityHub">;
 
-export function CommunityHubScreen({ route, navigation }: Props) {
+export default function CommunityHubScreen({ route, navigation }: Props) {
   const { communityId } = route.params;
   const [community, setCommunity] = useState<Community | null>(null);
   const [events, setEvents] = useState<Event[]>([]);

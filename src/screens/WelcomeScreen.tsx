@@ -1,127 +1,132 @@
-import React, { useState } from "react";
-import { SafeAreaView, View, Text, StyleSheet, Pressable, Image, Alert, TextInput } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
-import { useAuth } from "../auth/AuthProvider";
-import { spacing } from "../theme";
-import { PrimaryButton } from "../components/PrimaryButton";
+import React, { useMemo, useState } from 'react';
+import { Alert, Button, Platform, Text, TextInput, View } from 'react-native';
+import { supabase } from '../lib/supabase';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { AuthStackParamList } from '../navigation/AuthStack';
 
-export default function WelcomeScreen({ navigation }: any) {
-  const [email, setEmail] = useState("");
-  const { signInWithOtp, signInWithApple, loading } = useAuth();
+let AppleAuthentication: any = null;
+if (Platform.OS === 'ios') {
+  AppleAuthentication = require('expo-apple-authentication');
+}
 
-  const onSend = async () => {
-    if (!email || !email.includes("@")) return Alert.alert("Ugyldig email", "Indtast en gyldig emailadresse");
-    await signInWithOtp(email);
-    navigation.navigate("EmailOtp", { email });
+type Props = NativeStackScreenProps<AuthStackParamList, 'Welcome'>;
+
+export default function WelcomeScreen({ navigation }: Props) {
+  const [email, setEmail] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const canSend = useMemo(() => email.trim().includes('@') && !busy, [email, busy]);
+
+  const sendCode = async () => {
+    try {
+      setBusy(true);
+      const cleanEmail = email.trim().toLowerCase();
+
+      const { error } = await supabase.auth.signInWithOtp({
+        email: cleanEmail,
+      });
+      if (error) throw error;
+
+      Alert.alert('Kode sendt', 'OTP-flow er fjernet fra hoved-login. Skiftet til email+password.');
+    } catch (e: any) {
+      Alert.alert('Fejl', e?.message ?? 'Kunne ikke sende kode');
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const onApple = async () => {
-    Alert.alert("Apple", "Starter Apple login...");
+  const signInWithApple = async () => {
     try {
-      await signInWithApple();
-    } catch (e) {}
+      if (Platform.OS !== 'ios') {
+        Alert.alert('Apple login', 'Apple login virker kun på iOS.');
+        return;
+      }
+
+      setBusy(true);
+
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+        ],
+      });
+
+      if (!credential.identityToken) {
+        throw new Error('Apple returnerede ingen identityToken');
+      }
+
+      const { error } = await supabase.auth.signInWithIdToken({
+        provider: 'apple',
+        token: credential.identityToken,
+      });
+      if (error) throw error;
+
+      // RootNavigator skifter automatisk til AppTabs når session er sat
+    } catch (e: any) {
+      Alert.alert('Fejl', e?.message ?? 'Apple login fejlede');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
-    <LinearGradient colors={["#B0122A", "#E34A2B", "#B0122A"]} style={styles.bg} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-      <SafeAreaView style={styles.safe}>
-        <View pointerEvents="none" style={styles.band1} />
-        <View pointerEvents="none" style={styles.band2} />
+    <View style={{ padding: 16, gap: 14 }}>
+      <Text style={{ fontSize: 24, fontWeight: '700' }}>Velkommen</Text>
+      <Text style={{ opacity: 0.8 }}>
+        Log ind for at se feed og favoritter.
+      </Text>
 
-        <View style={styles.container}>
-          <Image source={require("../../assets/fcn-fans-logo.png")} style={styles.logo} resizeMode="contain" />
+      {/* Email */}
+      <Text style={{ marginTop: 10, fontWeight: '600' }}>Mail</Text>
+      <TextInput
+        value={email}
+        onChangeText={setEmail}
+        autoCapitalize="none"
+        autoCorrect={false}
+        keyboardType="email-address"
+        placeholder="din@email.dk"
+        style={{ borderWidth: 1, padding: 12, borderRadius: 10 }}
+      />
+      <Button
+        title={busy ? 'Sender...' : 'Send kode'}
+        onPress={sendCode}
+        disabled={!canSend}
+      />
 
-          <Text style={styles.title}>Velkommen FCN Fans!</Text>
+      {/* Separator */}
+      <View style={{ height: 1, backgroundColor: '#ddd', marginVertical: 12 }} />
 
-          <TextInput
-            value={email}
-            onChangeText={setEmail}
-            placeholder="Din email"
-            placeholderTextColor="rgba(255,255,255,0.8)"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            style={styles.input}
-          />
+      <Text style={{ fontWeight: '700' }}>Er du ikke oprettet endnu?</Text>
+      <Text style={{ opacity: 0.8 }}>
+        Så opret dig med (det er samme flow – du får en kode):
+      </Text>
 
-          <PrimaryButton title={loading ? "Sender..." : "Send kode"} onPress={onSend} />
+      {/* Social options */}
+      {Platform.OS === 'ios' ? (
+        <Button
+          title={busy ? '...' : 'Fortsæt med Apple'}
+          onPress={signInWithApple}
+          disabled={busy}
+        />
+      ) : (
+        <Button
+          title="Apple (kun iOS)"
+          onPress={() => Alert.alert('Info', 'Apple login virker kun på iOS.')}
+        />
+      )}
 
-          <View style={{ height: spacing.sm }} />
+      <Button
+        title="Fortsæt med Facebook (kommer snart)"
+        onPress={() => Alert.alert('Kommer snart', 'Facebook login kommer efter MVP.')}
+        disabled={busy}
+      />
 
-          <Pressable style={[styles.socialBtn, styles.apple]} onPress={onApple}>
-            <Text style={styles.socialTxt}>Fortsæt med Apple</Text>
-          </Pressable>
-
-          <View style={{ height: spacing.sm }} />
-
-          <Pressable onPress={() => navigation.navigate("Login") }>
-            <Text style={styles.link}>Log ind med email (eksisterende flow)</Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
-    </LinearGradient>
+      <Button
+        title="Fortsæt med Mail (send kode)"
+        onPress={sendCode}
+        disabled={!canSend}
+      />
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  bg: { flex: 1 },
-  safe: { flex: 1 },
-  container: { flex: 1, paddingHorizontal: 24, alignItems: "center", justifyContent: "center" },
-  logo: { width: 220, height: 220, marginBottom: 10 },
-  title: { color: "white", fontSize: 22, fontWeight: "800", marginBottom: 18 },
-  input: { width: '100%', maxWidth: 360, borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 12, color: 'white' },
-
-  socialBtn: {
-    width: "100%",
-    maxWidth: 320,
-    backgroundColor: "rgba(255,255,255,0.12)",
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: "center",
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.25)",
-  },
-  socialBtnText: { color: "white", fontWeight: "700", fontSize: 16 },
-  apple: { backgroundColor: '#000', borderColor: '#000' },
-  socialTxt: { color: 'white', fontWeight: '700' },
-  link: { color: 'white', textDecorationLine: 'underline', marginTop: 8 },
-
-  primaryBtn: {
-    width: "100%",
-    maxWidth: 320,
-    backgroundColor: "#F2C14E",
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: "center",
-    marginTop: 4,
-    marginBottom: 10,
-  },
-  primaryBtnText: { color: "#2B1B00", fontWeight: "800", fontSize: 16 },
-
-  secondaryLink: {
-    color: "white",
-    opacity: 0.9,
-    fontSize: 14,
-    fontWeight: "600",
-    textDecorationLine: "underline",
-    marginTop: 6,
-  },
-  band1: {
-    position: 'absolute',
-    width: '140%',
-    height: 140,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    top: 180,
-    left: -80,
-    transform: [{ rotate: '-18deg' }]
-  },
-  band2: {
-    position: 'absolute',
-    width: '140%',
-    height: 110,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    top: 320,
-    left: -120,
-    transform: [{ rotate: '-18deg' }]
-  },
-});

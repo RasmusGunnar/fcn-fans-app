@@ -1,17 +1,17 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import WelcomeScreen from '../screens/WelcomeScreen';
-import EmailOtpScreen from '../screens/EmailOtpScreen';
+import LoginScreen from '../screens/LoginScreen';
 
-const Stack = createNativeStackNavigator();
+export type AuthStackParamList = {
+  Welcome: undefined;
+};
+
+const Stack = createNativeStackNavigator<AuthStackParamList>();
 
 export function AuthStack() {
   return (
-    <Stack.Navigator initialRouteName="Welcome">
-      <Stack.Screen name="Welcome" component={WelcomeScreen} options={{ headerShown: false }} />
-      <Stack.Screen name="EmailOtp" component={EmailOtpScreen} options={{ title: 'Indtast kode' }} />
+    <Stack.Navigator>
+      <Stack.Screen name="Welcome" component={LoginScreen} options={{ title: 'Login' }} />
     </Stack.Navigator>
   );
 }
-
-export default AuthStack;
