@@ -4,5 +4,8 @@
     "strict": true,
     "noEmit": true,
     "types": ["react", "react-native"]
-  }
+  },
+  "exclude": [
+    "supabase/functions/**"
+  ]
 }

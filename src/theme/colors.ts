@@ -1,5 +1,6 @@
 export const colors = {
   fcnRed: '#D8001D',
+  fcnRedDark: '#B00016',
   bg: '#F6F7F9',
   card: '#FFFFFF',
   text: '#111827',

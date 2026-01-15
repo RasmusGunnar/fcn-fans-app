@@ -26,7 +26,7 @@ export function CardActions({ liked, likes, comments, onToggleLike, onPressComme
         </Pressable>
       </View>
       <Pressable style={styles.action} onPress={onPressShare}>
-        <Ionicons name="share-outline" size={20} color={colors.subtext} />
+        <Ionicons name="share-social-outline" size={20} color={colors.subtext} />
       </Pressable>
     </View>
   );

@@ -47,7 +47,11 @@ export default function EventsScreen() {
       style={styles.container}
       contentContainerStyle={{ paddingBottom: tabBarHeight + spacing.lg }}
     >
-      <AppHeader title="Events & Busture" subtitle="Kommende kampe og rejser" />
+      <AppHeader
+        title="Events & Busture"
+        subtitle="Kommende kampe og rejser"
+        onPressProfile={() => (navigation as any).navigate('Profile')}
+      />
 
       <View style={styles.content}>
         {/* Matches */}

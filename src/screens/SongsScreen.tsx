@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { Ionicons } from '@expo/vector-icons';
 import { AppHeader } from '../components/AppHeader';
 import { SongAccordionCard } from '../components/songs/SongAccordionCard';
 import { SongSuggestCard } from '../components/songs/SongSuggestCard';
@@ -74,12 +73,11 @@ export default function SongsScreen() {
       style={styles.container}
       contentContainerStyle={{ paddingBottom: tabBarHeight + spacing.lg }}
     >
-      <View style={styles.headerContainer}>
-        <View style={styles.iconCircle}>
-          <Ionicons name="musical-notes" size={24} color={colors.fcnRed} />
-        </View>
-        <AppHeader title="Sangbog" subtitle="Alle vores fansange" />
-      </View>
+      <AppHeader
+        title="Sangbog"
+        subtitle="Alle vores fansange"
+        onPressProfile={() => (navigation as any).navigate('Profile')}
+      />
 
       <View style={styles.content}>
         {songs.map(song => (
@@ -103,21 +101,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bg,
-  },
-  headerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-  },
-  iconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.sm,
   },
   content: {
     paddingTop: spacing.md,

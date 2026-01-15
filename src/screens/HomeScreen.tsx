@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, StyleSheet, RefreshControl } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { AppHeader } from '../components/AppHeader';
 import { Card } from '../components/ui/Card';
@@ -11,10 +12,31 @@ import { NewsCard } from '../components/cards/NewsCard';
 import { FanPostCard } from '../components/cards/FanPostCard';
 import { FanFactionCard } from '../components/cards/FanFactionCard';
 import { CardActions } from '../components/cards/CardActions';
+import { useFeed } from '../state/FeedContext';
 import { colors, spacing } from '../theme';
 
 export default function HomeScreen() {
+  const navigation = useNavigation();
   const tabBarHeight = useBottomTabBarHeight();
+  const { posts, fetchPosts, loading } = useFeed();
+
+  // Fetch posts from Supabase on mount
+  useEffect(() => {
+    fetchPosts();
+  }, [fetchPosts]);
+
+  // Debug: Log posts from feed on render
+  useEffect(() => {
+    if (__DEV__ && posts.length > 0) {
+      const firstPost = posts[0];
+      console.log('[HomeScreen] Posts loaded from feed:', {
+        totalCount: posts.length,
+        firstPostId: firstPost.id,
+        firstPostAuthor: firstPost.authorName,
+        firstPostHasMedia: !!firstPost.media,
+      });
+    }
+  }, [posts]);
   const [matchLiked, setMatchLiked] = useState(false);
   const [matchLikes, setMatchLikes] = useState(42);
 
@@ -27,8 +49,22 @@ export default function HomeScreen() {
   const [newsLiked, setNewsLiked] = useState(false);
   const [newsLikes, setNewsLikes] = useState(23);
 
-  const [fanPostLiked, setFanPostLiked] = useState(false);
-  const [fanPostLikes, setFanPostLikes] = useState(12);
+  const postLikeStates = posts.reduce((acc, post) => {
+    acc[post.id] = { liked: false, likes: post.likesCount };
+    return acc;
+  }, {} as Record<string, { liked: boolean; likes: number }>);
+
+  const [postLikes, setPostLikes] = useState(postLikeStates);
+
+  const togglePostLike = (postId: string) => {
+    setPostLikes((prev) => ({
+      ...prev,
+      [postId]: {
+        liked: !prev[postId].liked,
+        likes: prev[postId].liked ? prev[postId].likes - 1 : prev[postId].likes + 1,
+      },
+    }));
+  };
 
   const [factionLiked, setFactionLiked] = useState(false);
   const [factionLikes, setFactionLikes] = useState(7);
@@ -53,11 +89,6 @@ export default function HomeScreen() {
     setNewsLikes(newsLiked ? newsLikes - 1 : newsLikes + 1);
   };
 
-  const toggleFanPostLike = () => {
-    setFanPostLiked(!fanPostLiked);
-    setFanPostLikes(fanPostLiked ? fanPostLikes - 1 : fanPostLikes + 1);
-  };
-
   const toggleFactionLike = () => {
     setFactionLiked(!factionLiked);
     setFactionLikes(factionLiked ? factionLikes - 1 : factionLikes + 1);
@@ -67,8 +98,20 @@ export default function HomeScreen() {
     <ScrollView
       style={styles.container}
       contentContainerStyle={{ paddingBottom: tabBarHeight + spacing.lg }}
+      refreshControl={
+        <RefreshControl
+          refreshing={loading}
+          onRefresh={fetchPosts}
+          tintColor={colors.fcnRed}
+          colors={[colors.fcnRed]}
+        />
+      }
     >
-      <AppHeader title="FC Nordsjælland" subtitle="Fan Fællesskab" />
+      <AppHeader
+        title="FC Nordsjælland"
+        subtitle="Fan Fællesskab"
+        onPressProfile={() => (navigation as any).navigate('Profile')}
+      />
 
       <View style={styles.content}>
         <Card style={styles.card}>
@@ -149,18 +192,16 @@ export default function HomeScreen() {
           onPressRead={() => console.log('Read article')}
         />
 
-        <FanPostCard
-          name="Morten Hansen"
-          group="Farum Fans"
-          timeAgo="For 2 timer siden"
-          text="Hej alle! Jeg glæder mig til kampen i morgen. Kommer nogen med toget fra København?"
-          liked={fanPostLiked}
-          likes={fanPostLikes}
-          comments={4}
-          onToggleLike={toggleFanPostLike}
-          onPressComment={() => console.log('Fan post comment')}
-          onPressShare={() => console.log('Fan post share')}
-        />
+        {posts.map((post) => (
+          <FanPostCard
+            key={post.id}
+            post={post}
+            liked={postLikes[post.id]?.liked || false}
+            onToggleLike={() => togglePostLike(post.id)}
+            onPressComment={() => console.log('Fan post comment')}
+            onPressShare={() => console.log('Fan post share')}
+          />
+        ))}
 
         <FanFactionCard
           name="Ultras FCN"
