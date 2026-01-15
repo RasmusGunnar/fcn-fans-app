@@ -1,20 +1,23 @@
 import React, { useState } from "react";
 import { View, Text, TextInput, StyleSheet, Alert, Switch } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { RootStackParamList } from "../../App";
+import { RootStackParamList } from "../navigation/types";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
-import { auth, db } from "../firebase";
+import { db } from "../firebase";
+import { useAuth } from "../auth/AuthProvider";
 import { PrimaryButton } from "../components/PrimaryButton";
 
 type Props = NativeStackScreenProps<RootStackParamList, "CreateEvent">;
 
-export function CreateEventScreen({ route, navigation }: Props) {
+export default function CreateEventScreen({ route, navigation }: Props) {
   const { communityId, matchId } = route.params ?? {};
   const [title, setTitle] = useState(matchId ? "Mødested før kampen" : "Afgang fra Ganløse");
   const [locationName, setLocationName] = useState(communityId ? "Ganløse (aftalt sted)" : "Farum Kro");
   const [startTime, setStartTime] = useState(new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString().slice(0, 16)); // yyyy-mm-ddThh:mm
   const [visibility, setVisibility] = useState<"community" | "public">(communityId ? "community" : "public");
   const [soloWelcome, setSoloWelcome] = useState(true);
+
+  const { user } = useAuth();
 
   const create = async () => {
     try {
@@ -28,7 +31,7 @@ export function CreateEventScreen({ route, navigation }: Props) {
         locationName: locationName.trim(),
         startTime: dt.getTime(),
         soloWelcome,
-        createdBy: auth.currentUser?.uid,
+        createdBy: user?.id ?? null,
         createdAt: Date.now(),
         createdAtServer: serverTimestamp(),
         attendanceCount: 0

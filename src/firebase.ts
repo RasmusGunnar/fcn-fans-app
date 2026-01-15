@@ -1,7 +1,5 @@
 import { initializeApp, getApp, getApps } from "firebase/app";
-import { initializeAuth, getReactNativePersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // TODO: Udfyld fra Firebase Console -> Project settings -> Your apps -> SDK setup and configuration
 const firebaseConfig = {
@@ -15,10 +13,5 @@ const firebaseConfig = {
 
 // Undgå at initializeApp kører flere gange (hot reload)
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-
-// ✅ React Native korrekt auth-init + persistence
-export const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(AsyncStorage),
-});
 
 export const db = getFirestore(app);

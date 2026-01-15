@@ -1,22 +1,39 @@
-import React from "react";
-import { View, Text, StyleSheet } from "react-native";
-import { signOut } from "firebase/auth";
-import { auth } from "../firebase";
-import { PrimaryButton } from "../components/PrimaryButton";
+import React from 'react';
+import { Button, Text, View, ScrollView, StyleSheet } from 'react-native';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useAuth } from '../auth/AuthProvider';
+import { colors, spacing } from '../theme';
 
-export function ProfileScreen() {
+export default function ProfileScreen() {
+  const { user, signOut } = useAuth();
+  const tabBarHeight = useBottomTabBarHeight();
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.h1}>Profil</Text>
-      <Text style={styles.muted}>{auth.currentUser?.email}</Text>
-      <View style={{ height: 16 }} />
-      <PrimaryButton title="Log ud" onPress={() => signOut(auth)} />
-    </View>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={{ paddingBottom: tabBarHeight + spacing.lg, padding: spacing.md }}
+    >
+      <Text style={styles.title}>Profil</Text>
+      <Text style={styles.email}>{user?.email ?? 'Ingen email'}</Text>
+      <Button title="Log ud" onPress={async () => { try { await signOut(); } catch (e) { /* ignore */ } }} />
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
-  h1: { fontSize: 24, fontWeight: "800" },
-  muted: { opacity: 0.7, marginTop: 6 }
+  container: {
+    flex: 1,
+    backgroundColor: colors.bg,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: spacing.sm,
+  },
+  email: {
+    fontSize: 16,
+    color: colors.subtext,
+    marginBottom: spacing.lg,
+  },
 });
