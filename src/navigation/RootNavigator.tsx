@@ -9,6 +9,7 @@ import CreateScreen from '../screens/CreateScreen';
 import CommunityDetailScreen from '../screens/CommunityDetailScreen';
 import MatchDetailsScreen from '../screens/MatchDetailsScreen';
 import BusTripDetailsScreen from '../screens/BusTripDetailsScreen';
+import EventDetailsScreen from '../screens/EventDetailsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import PostDetailScreen from '../screens/PostDetailScreen';
 
@@ -37,6 +38,7 @@ export function RootNavigator() {
         <Stack.Screen name="CommunityDetail" component={CommunityDetailScreen} />
         <Stack.Screen name="MatchDetails" component={MatchDetailsScreen} />
         <Stack.Screen name="BusTripDetails" component={BusTripDetailsScreen} />
+        <Stack.Screen name="EventDetails" component={EventDetailsScreen} />
         <Stack.Screen name="Profile" component={ProfileScreen} />
         <Stack.Screen name="PostDetail" component={PostDetailScreen} />
       </Stack.Navigator>

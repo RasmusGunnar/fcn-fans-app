@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Card } from '../components/ui/Card';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { FanPostCard } from '../components/cards/FanPostCard';
@@ -16,7 +15,7 @@ export default function CommunityDetailScreen() {
   const navigation = useNavigation();
   const route = useRoute<CommunityDetailRouteProp>();
   const { title } = route.params || { title: 'Farum Fans' };
-  const tabBarHeight = useBottomTabBarHeight();
+  const insets = useSafeAreaInsets();
 
   const [postText, setPostText] = useState('');
   const [posts, setPosts] = useState<Post[]>([
@@ -75,7 +74,7 @@ export default function CommunityDetailScreen() {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={{ paddingBottom: tabBarHeight + spacing.lg }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + spacing.lg }}
       >
         {/* Community Info Card */}
         <Card style={styles.infoCard}>

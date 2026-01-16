@@ -1,4 +1,6 @@
 // Central navigation param lists used across screens
+import type { Fixture } from '../services/fixtures';
+
 export type AuthStackParamList = {
   Welcome: undefined;
   EmailOtp?: { email?: string } | undefined;
@@ -18,10 +20,17 @@ export type RootStackParamList = {
   Event: { eventId: string };
   CreateEvent: { communityId?: string | null; matchId?: string | null };
 
+  // events module
+  BusTripDetails: { busTripId: string };
+  EventDetails: { eventId: string };
+
   // community flow
   Communities: undefined;
   CreateCommunity: undefined;
   CommunityHub: { communityId: string };
+
+  // match details
+  MatchDetails: { fixture?: Fixture; fixtureId?: string };
 
   // other screens
   Matchday: undefined;

@@ -1,7 +1,7 @@
-import React from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Alert } from 'react-native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../auth/AuthProvider';
 import { AppHeader } from '../components/AppHeader';
@@ -9,6 +9,17 @@ import { Card } from '../components/ui/Card';
 import { Pill } from '../components/ui/Pill';
 import { OutlineButton } from '../components/ui/OutlineButton';
 import { colors, spacing } from '../theme';
+import {
+  fetchMyProfile,
+  fetchMyCommunities,
+  fetchMyUpcomingItems,
+  countOwnedCommunities,
+  formatMemberSince,
+  formatEventDate,
+  type UserProfile,
+  type MyCommunity,
+  type UpcomingItem,
+} from '../services/profileApi';
 
 function SectionCard({ title, icon, children }: { title: string; icon?: string; children: React.ReactNode }) {
   return (
@@ -39,33 +50,135 @@ function ProfileRow({ icon, title, subtitle, onPress, isLogout }: { icon: string
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
-  const tabBarHeight = useBottomTabBarHeight();
-  const { signOut } = useAuth();
+  const insets = useSafeAreaInsets();
+  const { user, signOut } = useAuth();
+
+  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [ownerCommunities, setOwnerCommunities] = useState<MyCommunity[]>([]);
+  const [memberCommunities, setMemberCommunities] = useState<MyCommunity[]>([]);
+  const [upcomingItems, setUpcomingItems] = useState<UpcomingItem[]>([]);
+  const [ownedCount, setOwnedCount] = useState(0);
+
+  const loadData = async () => {
+    if (!user?.id) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+
+    const results = await Promise.allSettled([
+      fetchMyProfile(user.id),
+      fetchMyCommunities(user.id),
+      fetchMyUpcomingItems(user.id),
+      countOwnedCommunities(user.id),
+    ]);
+
+    // Extract profile
+    if (results[0].status === 'fulfilled') {
+      setProfile(results[0].value);
+    }
+
+    // Extract communities
+    if (results[1].status === 'fulfilled') {
+      setOwnerCommunities(results[1].value.ownerCommunities);
+      setMemberCommunities(results[1].value.memberCommunities);
+    }
+
+    // Extract upcoming items
+    if (results[2].status === 'fulfilled') {
+      setUpcomingItems(results[2].value);
+    }
+
+    // Extract owned count
+    if (results[3].status === 'fulfilled') {
+      setOwnedCount(results[3].value);
+    }
+
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      loadData();
+    }, [])
+  );
 
   const handleLogout = async () => {
     try {
       await signOut();
     } catch (e) {
-      // ignore
+      console.error('Logout error:', e);
     }
   };
 
-  const navigateToCommunity = () => {
-    (navigation as any).navigate('CommunityDetail');
+  const handleEditProfile = () => {
+    Alert.alert('Rediger profil', 'Denne funktion kommer snart!');
   };
 
-  const navigateToMatch = () => {
-    (navigation as any).navigate('MatchDetails');
+  const navigateToCommunity = (communityId: string) => {
+    (navigation as any).navigate('CommunityDetail', { communityId });
   };
 
-  const navigateToTrip = () => {
-    (navigation as any).navigate('BusTripDetails');
+  const navigateToItem = (item: UpcomingItem) => {
+    if (item.targetType === 'match') {
+      (navigation as any).navigate('MatchDetails', { fixtureId: item.targetId });
+    } else if (item.targetType === 'bus_trip') {
+      (navigation as any).navigate('BusTripDetails', { busTripId: item.targetId });
+    } else if (item.targetType === 'event') {
+      (navigation as any).navigate('EventDetails', { eventId: item.targetId });
+    }
   };
+
+  const getItemIcon = (type: string): string => {
+    if (type === 'match') return 'football';
+    if (type === 'bus_trip') return 'bus';
+    return 'calendar';
+  };
+
+  // If not logged in
+  if (!user) {
+    return (
+      <View style={styles.container}>
+        <AppHeader
+          title="Min Profil"
+          subtitle="Indstillinger & fællesskaber"
+          showProfileButton={false}
+        />
+        <View style={styles.emptyContainer}>
+          <Ionicons name="person-circle-outline" size={64} color={colors.subtext} />
+          <Text style={styles.emptyText}>Du skal være logget ind</Text>
+          <Text style={styles.emptySubtext}>Log ind for at se din profil</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <AppHeader
+          title="Min Profil"
+          subtitle="Indstillinger & fællesskaber"
+          showProfileButton={false}
+        />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.fcnRed} />
+          <Text style={styles.loadingText}>Henter profil...</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={{ padding: spacing.md, paddingBottom: tabBarHeight + spacing.lg }}
+      contentContainerStyle={{ padding: spacing.md, paddingBottom: insets.bottom + 24 }}
     >
       <AppHeader
         title="Min Profil"
@@ -73,17 +186,28 @@ export default function ProfileScreen() {
         showProfileButton={false}
       />
 
+      {/* Profile Card */}
       <Card style={{ marginTop: spacing.md, marginBottom: spacing.md }}>
         <View style={styles.profileSummary}>
           <View style={styles.avatar}>
             <Ionicons name="person" size={32} color={colors.card} />
           </View>
           <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>Morten Hansen</Text>
-            <Text style={styles.profileSubtext}>Medlem siden marts 2023</Text>
+            <Text style={styles.profileName}>
+              {profile?.display_name || user?.email || 'Fan'}
+            </Text>
+            <Text style={styles.profileSubtext}>
+              {profile?.member_since
+                ? `Medlem siden ${formatMemberSince(profile.member_since)}`
+                : 'Ny bruger'}
+            </Text>
             <View style={styles.badges}>
-              <Pill label="Fan" variant="red" />
-              <Pill label="Ejer af 1 fællesskab" variant="neutral" />
+              <Pill label="Fan" />
+              {ownedCount > 0 && (
+                <Pill
+                  label={`Ejer af ${ownedCount} fællesskab${ownedCount > 1 ? 'er' : ''}`}
+                />
+              )}
             </View>
           </View>
         </View>
@@ -91,65 +215,74 @@ export default function ProfileScreen() {
           <OutlineButton
             title="Rediger profil"
             icon="pencil"
-            onPress={() => console.log('TODO: Edit profile')}
+            onPress={handleEditProfile}
           />
         </View>
       </Card>
 
-      <SectionCard title="MINE FÆLLESSKABER (EJER)" icon="crown">
-        <ProfileRow
-          icon="people"
-          title="Farum Fans"
-          subtitle="156 medlemmer • Du er ejer"
-          onPress={navigateToCommunity}
-        />
-      </SectionCard>
+      {/* Owned Communities */}
+      {ownerCommunities.length > 0 && (
+        <SectionCard title="MINE FÆLLESSKABER (EJER)" icon="crown">
+          {ownerCommunities.map((community) => (
+            <ProfileRow
+              key={community.id}
+              icon="people"
+              title={community.name}
+              subtitle={`${community.memberCount} medlemmer • Du er ejer`}
+              onPress={() => navigateToCommunity(community.id)}
+            />
+          ))}
+        </SectionCard>
+      )}
 
-      <SectionCard title="MEDLEM AF FÆLLESSKABER">
-        <ProfileRow
-          icon="people"
-          title="Udebane-Crew"
-          subtitle="213 medlemmer • Du er medlem"
-          onPress={navigateToCommunity}
-        />
-        <ProfileRow
-          icon="people"
-          title="Vilde Tigre"
-          subtitle="342 medlemmer • Fan fraktion"
-          onPress={navigateToCommunity}
-        />
-      </SectionCard>
+      {/* Member Communities */}
+      {memberCommunities.length > 0 && (
+        <SectionCard title="MEDLEM AF FÆLLESSKABER">
+          {memberCommunities.map((community) => (
+            <ProfileRow
+              key={community.id}
+              icon="people"
+              title={community.name}
+              subtitle={`${community.memberCount} medlemmer • ${
+                community.type === 'fan_faction' ? 'Fan fraktion' : 'Du er medlem'
+              }`}
+              onPress={() => navigateToCommunity(community.id)}
+            />
+          ))}
+        </SectionCard>
+      )}
 
-      <SectionCard title="DINE KOMMENDE EVENTS">
-        <ProfileRow
-          icon="calendar"
-          title="FCN vs Brøndby"
-          subtitle="Søndag 19. januar, kl. 14:00"
-          onPress={navigateToMatch}
-        />
-        <ProfileRow
-          icon="bus"
-          title="Bustur til Silkeborg"
-          subtitle="Lørdag 25. januar, kl. 10:00"
-          onPress={navigateToTrip}
-        />
-      </SectionCard>
+      {/* Upcoming Events */}
+      {upcomingItems.length > 0 && (
+        <SectionCard title="DINE KOMMENDE EVENTS">
+          {upcomingItems.map((item) => (
+            <ProfileRow
+              key={item.id}
+              icon={getItemIcon(item.targetType)}
+              title={item.title}
+              subtitle={formatEventDate(item.date)}
+              onPress={() => navigateToItem(item)}
+            />
+          ))}
+        </SectionCard>
+      )}
 
+      {/* Settings */}
       <Card style={{ marginBottom: spacing.md }}>
         <ProfileRow
           icon="notifications"
           title="Notifikationer"
-          onPress={() => console.log('TODO: Notifications')}
+          onPress={() => Alert.alert('Notifikationer', 'Kommer snart!')}
         />
         <ProfileRow
           icon="settings"
           title="Generelle indstillinger"
-          onPress={() => console.log('TODO: Settings')}
+          onPress={() => Alert.alert('Indstillinger', 'Kommer snart!')}
         />
         <ProfileRow
           icon="help-circle"
           title="Hjælp & support"
-          onPress={() => console.log('TODO: Help')}
+          onPress={() => Alert.alert('Hjælp', 'Kontakt support@fcnfans.dk')}
         />
         <ProfileRow
           icon="log-out"
@@ -171,6 +304,36 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bg,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xl * 2,
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    fontSize: 14,
+    color: colors.subtext,
+  },
+  emptyContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xl * 2,
+    paddingHorizontal: spacing.lg,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text,
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: colors.subtext,
+    textAlign: 'center',
   },
   profileSummary: {
     flexDirection: 'row',
@@ -196,11 +359,13 @@ const styles = StyleSheet.create({
   profileSubtext: {
     fontSize: 14,
     color: colors.subtext,
+    marginTop: spacing.xs,
     marginBottom: spacing.sm,
   },
   badges: {
     flexDirection: 'row',
     gap: spacing.xs,
+    flexWrap: 'wrap',
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -240,6 +405,7 @@ const styles = StyleSheet.create({
   rowSubtitle: {
     fontSize: 14,
     color: colors.subtext,
+    marginTop: 2,
   },
   footer: {
     alignItems: 'center',
