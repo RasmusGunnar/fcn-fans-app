@@ -1,63 +1,84 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import HomeScreen from '../screens/HomeScreen';
 import CommunitiesScreen from '../screens/CommunitiesScreen';
 import EventsScreen from '../screens/EventsScreen';
 import SongsScreen from '../screens/SongsScreen';
-import ProfileScreen from '../screens/ProfileScreen';
 import { colors, spacing } from '../theme';
+import CreateActionSheet from '../components/CreateActionSheet';
+import { MediaAsset } from '../lib/mediaPicker';
 
 const Tab = createBottomTabNavigator();
 
 const tabData = [
-  { name: 'Home', label: 'Hjem', icon: 'home' as const },
-  { name: 'Communities', label: 'Fællesskab', icon: 'people' as const },
-  { name: 'Events', label: 'Events', icon: 'calendar' as const },
-  { name: 'Songs', label: 'Sange', icon: 'musical-notes' as const },
-  { name: 'Profile', label: 'Profil', icon: 'person' as const },
+  { name: 'Home', label: 'Hjem', iconActive: 'home' as const, iconInactive: 'home-outline' as const },
+  { name: 'Communities', label: 'Fællesskab', iconActive: 'people' as const, iconInactive: 'people-outline' as const },
+  { name: 'Events', label: 'Events', iconActive: 'calendar' as const, iconInactive: 'calendar-outline' as const },
+  { name: 'Songs', label: 'Sange', iconActive: 'musical-notes' as const, iconInactive: 'musical-notes-outline' as const },
 ];
 
 function CustomTabBar({ state, descriptors, navigation }: any) {
+  const insets = useSafeAreaInsets();
+  const [sheetVisible, setSheetVisible] = useState(false);
   const onPlusPress = () => {
-    navigation.navigate('Create');
+    setSheetVisible(true);
+  };
+
+  const handlePicked = (asset: MediaAsset) => {
+    setSheetVisible(false);
+    navigation.navigate('Create', { initialAttachment: asset });
+  };
+
+  const leftTabs = tabData.slice(0, 2);
+  const rightTabs = tabData.slice(2, 4);
+
+  const renderTab = (tab: typeof tabData[0]) => {
+    const route = state.routes.find((r: any) => r.name === tab.name);
+    if (!route) return null;
+    const { options } = descriptors[route.key];
+    const isFocused = state.index === state.routes.indexOf(route);
+
+    const onPress = () => {
+      const event = navigation.emit({
+        type: 'tabPress',
+        target: route.key,
+        canPreventDefault: true,
+      });
+
+      if (!isFocused && !event.defaultPrevented) {
+        navigation.navigate(route.name);
+      }
+    };
+
+    const iconName = isFocused ? tab.iconActive : tab.iconInactive;
+
+    return (
+      <Pressable key={tab.name} onPress={onPress} style={styles.tab}>
+        <Ionicons name={iconName} size={20} color={isFocused ? colors.fcnRed : colors.subtext} />
+        <Text style={[styles.tabText, isFocused && styles.tabTextActive]}>{tab.label}</Text>
+      </Pressable>
+    );
   };
 
   return (
-    <SafeAreaView edges={['bottom']} style={styles.safeArea}>
+    <View style={[styles.tabBarContainer, { height: 64 + insets.bottom }]}> 
       <View style={styles.tabBar}>
-        {tabData.map((tab, index) => {
-          const route = state.routes.find((r: any) => r.name === tab.name);
-          if (!route) return null;
-          const { options } = descriptors[route.key];
-          const isFocused = state.index === index;
-
-          const onPress = () => {
-            const event = navigation.emit({
-              type: 'tabPress',
-              target: route.key,
-              canPreventDefault: true,
-            });
-
-            if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(route.name);
-            }
-          };
-
-          return (
-            <Pressable key={tab.name} onPress={onPress} style={styles.tab}>
-              <Ionicons name={tab.icon} size={20} color={isFocused ? colors.fcnRed : colors.subtext} />
-              <Text style={[styles.tabText, isFocused && styles.tabTextActive]}>{tab.label}</Text>
-            </Pressable>
-          );
-        })}
+        <View style={styles.sideGroup}>
+          {leftTabs.map(renderTab)}
+        </View>
+        <View style={{ width: 60 }} />
+        <View style={styles.sideGroup}>
+          {rightTabs.map(renderTab)}
+        </View>
         <Pressable style={styles.centerButton} onPress={onPlusPress}>
           <Text style={styles.plusText}>+</Text>
         </Pressable>
       </View>
-    </SafeAreaView>
+      <CreateActionSheet visible={sheetVisible} onClose={() => setSheetVisible(false)} onPicked={handlePicked} />
+    </View>
   );
 }
 
@@ -73,33 +94,36 @@ export function AppTabs() {
       <Tab.Screen name="Communities" component={CommunitiesScreen} />
       <Tab.Screen name="Events" component={EventsScreen} />
       <Tab.Screen name="Songs" component={SongsScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  tabBarContainer: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    zIndex: 100,
+    backgroundColor: 'white',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    zIndex: 1000,
+    elevation: 10,
   },
   tabBar: {
     flexDirection: 'row',
-    backgroundColor: colors.card,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingBottom: spacing.sm,
-    paddingTop: spacing.sm,
+    height: 64,
     position: 'relative',
-    elevation: 8,
+  },
+  sideGroup: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
   },
   tab: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 8,
   },
   tabText: {
     fontSize: 12,
@@ -112,7 +136,7 @@ const styles = StyleSheet.create({
   centerButton: {
     position: 'absolute',
     left: '50%',
-    top: -15,
+    top: -20,
     width: 60,
     height: 60,
     borderRadius: 30,

@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Card } from '../components/ui/Card';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { FanPostCard } from '../components/cards/FanPostCard';
+import { Post } from '../types/post';
 import { colors, spacing } from '../theme';
 
 type CommunityDetailRouteProp = RouteProp<{ CommunityDetail: { id: string; title: string } }, 'CommunityDetail'>;
@@ -15,38 +15,41 @@ export default function CommunityDetailScreen() {
   const navigation = useNavigation();
   const route = useRoute<CommunityDetailRouteProp>();
   const { title } = route.params || { title: 'Farum Fans' };
-  const tabBarHeight = useBottomTabBarHeight();
+  const insets = useSafeAreaInsets();
 
   const [postText, setPostText] = useState('');
-  const [posts, setPosts] = useState([
+  const [posts, setPosts] = useState<Post[]>([
     {
       id: '1',
-      name: 'Morten Hansen',
-      group: 'Farum Fans',
-      timeAgo: 'For 2 timer siden',
+      authorName: 'Morten Hansen',
+      communityName: 'Farum Fans',
+      createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
       text: 'Hej alle! Jeg glæder mig til kampen i morgen. Kommer nogen med toget fra København?',
-      liked: false,
-      likes: 12,
-      comments: 4,
+      likesCount: 12,
+      commentsCount: 4,
+      likedByMe: false,
     },
     {
       id: '2',
-      name: 'Lars Jensen',
-      group: 'Farum Fans',
-      timeAgo: 'For 5 timer siden',
+      authorName: 'Lars Jensen',
+      communityName: 'Farum Fans',
+      createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
       text: 'Har nogen set den nye trøje? Ser rigtig godt ud!',
-      liked: true,
-      likes: 8,
-      comments: 2,
+      likesCount: 8,
+      commentsCount: 2,
+      likedByMe: true,
     },
   ]);
 
+  const [postLikes, setPostLikes] = useState<Record<string, boolean>>(
+    posts.reduce((acc, post) => ({ ...acc, [post.id]: post.likedByMe }), {})
+  );
+
   const toggleLike = (postId: string) => {
-    setPosts(posts.map(post =>
-      post.id === postId
-        ? { ...post, liked: !post.liked, likes: post.liked ? post.likes - 1 : post.likes + 1 }
-        : post
-    ));
+    setPostLikes((prev) => ({
+      ...prev,
+      [postId]: !prev[postId],
+    }));
   };
 
   const handleSharePost = () => {
@@ -71,7 +74,7 @@ export default function CommunityDetailScreen() {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={{ paddingBottom: tabBarHeight + spacing.lg }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + spacing.lg }}
       >
         {/* Community Info Card */}
         <Card style={styles.infoCard}>
@@ -148,13 +151,8 @@ export default function CommunityDetailScreen() {
           {posts.map(post => (
             <FanPostCard
               key={post.id}
-              name={post.name}
-              group={post.group}
-              timeAgo={post.timeAgo}
-              text={post.text}
-              liked={post.liked}
-              likes={post.likes}
-              comments={post.comments}
+              post={post}
+              liked={postLikes[post.id] || false}
               onToggleLike={() => toggleLike(post.id)}
               onPressComment={() => console.log('Comment on post', post.id)}
               onPressShare={() => console.log('Share post', post.id)}

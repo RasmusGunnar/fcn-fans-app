@@ -80,7 +80,11 @@ export default function CommunitiesScreen() {
       style={styles.container}
       contentContainerStyle={{ paddingBottom: tabBarHeight + spacing.lg }}
     >
-      <AppHeader title="Fællesskaber" subtitle="Find dit fanfællesskab" />
+      <AppHeader
+        title="Fællesskaber"
+        subtitle="Find dit fanfællesskab"
+        onPressProfile={() => (navigation as any).navigate('Profile')}
+      />
 
       <View style={styles.content}>
         {/* Fan Fraktioner Section */}

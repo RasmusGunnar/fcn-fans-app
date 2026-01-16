@@ -1,23 +1,80 @@
-import React from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, StyleSheet, Pressable, Image, ActivityIndicator } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Card } from '../components/ui/Card';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { OutlineButton } from '../components/ui/OutlineButton';
 import { SectionTitle } from '../components/ui/SectionTitle';
 import { ListRowIcon } from '../components/ui/ListRowIcon';
 import { colors, spacing } from '../theme';
+import type { RootStackParamList } from '../navigation/types';
+import { formatDateDa, type Fixture } from '../services/fixtures';
+import { fetchFixtureById } from '../services/eventsApi';
 
-type MatchDetailsRouteProp = RouteProp<{ MatchDetails: { matchId: string } }, 'MatchDetails'>;
+type MatchDetailsRouteProp = RouteProp<RootStackParamList, 'MatchDetails'>;
 
 export default function MatchDetailsScreen() {
   const navigation = useNavigation();
   const route = useRoute<MatchDetailsRouteProp>();
-  const { matchId } = route.params || { matchId: 'match-1' };
-  const tabBarHeight = useBottomTabBarHeight();
+  const { fixture: fixtureParam, fixtureId } = route.params || {};
+  const insets = useSafeAreaInsets();
+  const [fixture, setFixture] = useState<Fixture | null>(fixtureParam || null);
+  const [loading, setLoading] = useState(!fixtureParam && !!fixtureId);
+
+  // If fixtureId provided but no fixture object, fetch it
+  useEffect(() => {
+    if (fixtureId && !fixtureParam) {
+      loadFixture();
+    }
+  }, [fixtureId, fixtureParam]);
+
+  const loadFixture = async () => {
+    if (!fixtureId) return;
+    setLoading(true);
+    const data = await fetchFixtureById(fixtureId);
+    if (data) {
+      setFixture(data as any);
+    }
+    setLoading(false);
+  };
+
+  // Loading state
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color={colors.card} />
+          </Pressable>
+          <Text style={styles.headerTitle}>Kampdetaljer</Text>
+        </View>
+        <View style={styles.errorContainer}>
+          <ActivityIndicator size="large" color={colors.fcnRed} />
+          <Text style={styles.loadingText}>Henter kampdata...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Fallback if no fixture provided or found
+  if (!fixture) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color={colors.card} />
+          </Pressable>
+          <Text style={styles.headerTitle}>Kampdetaljer</Text>
+        </View>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>Kunne ikke finde kampdata</Text>
+          <PrimaryButton title="Gå tilbage" onPress={() => navigation.goBack()} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -31,28 +88,47 @@ export default function MatchDetailsScreen() {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={{ paddingBottom: tabBarHeight + spacing.lg }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + spacing.lg }}
       >
         {/* Match Card */}
         <Card style={styles.matchCard}>
           <View style={styles.matchRow}>
             <View style={styles.team}>
-              <View style={styles.teamCircle}>
-                <Text style={styles.teamText}>FCN</Text>
-              </View>
+              {fixture.home_logo_url ? (
+                <Image source={{ uri: fixture.home_logo_url }} style={styles.teamLogo} />
+              ) : (
+                <View style={styles.teamCircle}>
+                  <Text style={styles.teamText}>{fixture.home_team.substring(0, 3).toUpperCase()}</Text>
+                </View>
+              )}
+              <Text style={styles.teamName}>{fixture.home_team}</Text>
             </View>
             <Text style={styles.vs}>VS</Text>
             <View style={styles.team}>
-              <View style={styles.teamCircle}>
-                <Text style={styles.teamText}>BRØ</Text>
-              </View>
+              {fixture.away_logo_url ? (
+                <Image source={{ uri: fixture.away_logo_url }} style={styles.teamLogo} />
+              ) : (
+                <View style={styles.teamCircle}>
+                  <Text style={styles.teamText}>{fixture.away_team.substring(0, 3).toUpperCase()}</Text>
+                </View>
+              )}
+              <Text style={styles.teamName}>{fixture.away_team}</Text>
             </View>
           </View>
-          <Text style={styles.leagueText}>Superligaen - Runde 18</Text>
+          {(fixture.competition || fixture.round) && (
+            <Text style={styles.leagueText}>
+              {fixture.competition}{fixture.round ? ` - ${fixture.round}` : ''}
+            </Text>
+          )}
           <View style={styles.divider} />
-          <ListRowIcon icon="calendar" title="Lørdag 18. januar 2025, 14:00" />
-          <ListRowIcon icon="location" title="Right to Dream Park" subtitle="Farum" />
-          <ListRowIcon icon="people" title="247 deltagere" />
+          <ListRowIcon icon="calendar" title={formatDateDa(fixture.kickoff_at)} />
+          {fixture.venue && (
+            <ListRowIcon 
+              icon="location" 
+              title={fixture.venue} 
+              subtitle={fixture.venue_city || undefined} 
+            />
+          )}
         </Card>
 
         {/* CTA Buttons */}
@@ -143,6 +219,7 @@ const styles = StyleSheet.create({
   },
   team: {
     alignItems: 'center',
+    flex: 1,
   },
   teamCircle: {
     width: 80,
@@ -152,10 +229,38 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  teamLogo: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+  },
+  teamName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    marginTop: spacing.sm,
+    textAlign: 'center',
+  },
   teamText: {
     color: colors.card,
     fontSize: 20,
     fontWeight: '700',
+  },
+  errorContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.xl,
+  },
+  errorText: {
+    fontSize: 16,
+    color: colors.text,
+    marginBottom: spacing.lg,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: colors.subtext,
+    marginTop: spacing.md,
   },
   vs: {
     fontSize: 24,
