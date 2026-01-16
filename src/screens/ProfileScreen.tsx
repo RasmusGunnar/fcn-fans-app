@@ -4,7 +4,6 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../auth/AuthProvider';
-import { AppHeader } from '../components/AppHeader';
 import { Card } from '../components/ui/Card';
 import { Pill } from '../components/ui/Pill';
 import { OutlineButton } from '../components/ui/OutlineButton';
@@ -145,14 +144,13 @@ export default function ProfileScreen() {
   if (!user) {
     return (
       <View style={styles.container}>
-        <AppHeader
-          title="Min Profil"
-          subtitle="Indstillinger & fællesskaber"
-          showProfileButton={false}
-        />
+        <View style={styles.headerSection}>
+          <Text style={styles.headerTitle}>Min Profil</Text>
+          <Text style={styles.headerSubtitle}>Indstillinger & fællesskaber</Text>
+        </View>
         <View style={styles.emptyContainer}>
           <Ionicons name="person-circle-outline" size={64} color={colors.subtext} />
-          <Text style={styles.emptyText}>Du skal være logget ind</Text>
+          <Text style={styles.emptyTitle}>Du skal være logget ind</Text>
           <Text style={styles.emptySubtext}>Log ind for at se din profil</Text>
         </View>
       </View>
@@ -162,11 +160,10 @@ export default function ProfileScreen() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <AppHeader
-          title="Min Profil"
-          subtitle="Indstillinger & fællesskaber"
-          showProfileButton={false}
-        />
+        <View style={styles.headerSection}>
+          <Text style={styles.headerTitle}>Min Profil</Text>
+          <Text style={styles.headerSubtitle}>Indstillinger & fællesskaber</Text>
+        </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.fcnRed} />
           <Text style={styles.loadingText}>Henter profil...</Text>
@@ -180,11 +177,11 @@ export default function ProfileScreen() {
       style={styles.container}
       contentContainerStyle={{ padding: spacing.md, paddingBottom: insets.bottom + 24 }}
     >
-      <AppHeader
-        title="Min Profil"
-        subtitle="Indstillinger & fællesskaber"
-        showProfileButton={false}
-      />
+      {/* Simple header without red background */}
+      <View style={styles.headerSection}>
+        <Text style={styles.headerTitle}>Min Profil</Text>
+        <Text style={styles.headerSubtitle}>Indstillinger & fællesskaber</Text>
+      </View>
 
       {/* Profile Card */}
       <Card style={{ marginTop: spacing.md, marginBottom: spacing.md }}>
@@ -253,9 +250,19 @@ export default function ProfileScreen() {
       )}
 
       {/* Upcoming Events */}
-      {upcomingItems.length > 0 && (
-        <SectionCard title="DINE KOMMENDE EVENTS">
-          {upcomingItems.map((item) => (
+      <Card style={{ marginBottom: spacing.md }}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>DINE KOMMENDE EVENTS</Text>
+          <Pressable
+            style={styles.newEventButton}
+            onPress={() => (navigation as any).navigate('CreateNewEvent')}
+          >
+            <Ionicons name="add" size={16} color={colors.card} />
+            <Text style={styles.newEventButtonText}>Ny</Text>
+          </Pressable>
+        </View>
+        {upcomingItems.length > 0 ? (
+          upcomingItems.map((item) => (
             <ProfileRow
               key={item.id}
               icon={getItemIcon(item.targetType)}
@@ -263,9 +270,11 @@ export default function ProfileScreen() {
               subtitle={formatEventDate(item.date)}
               onPress={() => navigateToItem(item)}
             />
-          ))}
-        </SectionCard>
-      )}
+          ))
+        ) : (
+          <Text style={styles.emptyText}>Ingen kommende events</Text>
+        )}
+      </Card>
 
       {/* Settings */}
       <Card style={{ marginBottom: spacing.md }}>
@@ -305,6 +314,21 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bg,
   },
+  headerSection: {
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.lg,
+    paddingHorizontal: spacing.sm,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: colors.subtext,
+  },
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
@@ -323,7 +347,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xl * 2,
     paddingHorizontal: spacing.lg,
   },
-  emptyText: {
+  emptyTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: colors.text,
@@ -415,5 +439,25 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.subtext,
     textAlign: 'center',
+  },
+  newEventButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.fcnRed,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: 6,
+    gap: 4,
+  },
+  newEventButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.card,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: colors.subtext,
+    textAlign: 'center',
+    paddingVertical: spacing.md,
   },
 });

@@ -47,7 +47,6 @@ export interface Event {
   organizer_group_id: string | null;
   created_by: string | null;
   created_at: string;
-  updated_at: string;
   organizer?: FanGroup | null;
 }
 
@@ -253,26 +252,22 @@ export async function fetchFeedUpcoming(): Promise<FeedItem[]> {
  */
 export async function fetchBusTripById(id: string): Promise<BusTrip | null> {
   try {
+    console.log('[eventsApi] Fetching bus trip by id:', id);
     const { data, error } = await supabase
       .from('bus_trips')
-      .select(
-        `
-        *,
-        organizer:fan_groups!organizer_group_id(id, name, logo_url),
-        fixture:fixtures!fixture_id(id, home_team, away_team, kickoff_at, venue, venue_city, competition, round)
-      `
-      )
+      .select('*')
       .eq('id', id)
-      .maybeSingle();
+      .single();
 
     if (error) {
-      console.error('[eventsApi] Error fetching bus trip:', error);
+      console.warn('[eventsApi] Error fetching bus trip by id', error);
       return null;
     }
 
+    console.log('[eventsApi] Bus trip fetched successfully:', data);
     return data as unknown as BusTrip;
   } catch (err) {
-    console.error('[eventsApi] Unexpected error fetching bus trip:', err);
+    console.warn('[eventsApi] Error fetching bus trip by id', err);
     return null;
   }
 }
@@ -282,25 +277,22 @@ export async function fetchBusTripById(id: string): Promise<BusTrip | null> {
  */
 export async function fetchEventById(id: string): Promise<Event | null> {
   try {
+    console.log('[eventsApi] Fetching event by id:', id);
     const { data, error } = await supabase
       .from('events')
-      .select(
-        `
-        *,
-        organizer:fan_groups!organizer_group_id(id, name, logo_url, description)
-      `
-      )
+      .select('id, title, description, start_at, end_at, location_name, location_address, organizer_group_id, created_by, created_at')
       .eq('id', id)
-      .maybeSingle();
+      .single();
 
     if (error) {
-      console.error('[eventsApi] Error fetching event:', error);
+      console.warn('[eventsApi] Error fetching event by id', error);
       return null;
     }
 
+    console.log('[eventsApi] Event fetched successfully:', data);
     return data as unknown as Event;
   } catch (err) {
-    console.error('[eventsApi] Unexpected error fetching event:', err);
+    console.warn('[eventsApi] Error fetching event by id', err);
     return null;
   }
 }

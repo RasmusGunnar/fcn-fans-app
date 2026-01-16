@@ -172,6 +172,7 @@ export async function fetchMyCommunities(
  */
 export async function fetchMyUpcomingItems(userId: string): Promise<UpcomingItem[]> {
   try {
+    console.log('[profileApi] Fetching upcoming items for user:', userId);
     // Fetch user_upcoming_items
     const { data: items, error: itemsError } = await supabase
       .from('user_upcoming_items')
@@ -185,6 +186,8 @@ export async function fetchMyUpcomingItems(userId: string): Promise<UpcomingItem
       console.warn('[profileApi] Error fetching upcoming items', itemsError);
       return [];
     }
+
+    console.log('[profileApi] Found items:', items?.length || 0);
 
     if (!items || items.length === 0) {
       return [];
