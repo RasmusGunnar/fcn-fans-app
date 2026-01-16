@@ -6,12 +6,7 @@ import { AuthStack } from './AuthStack';
 import { AppTabs } from './AppTabs';
 import { useAuth } from '../auth/AuthProvider';
 import CreateScreen from '../screens/CreateScreen';
-import CommunityDetailScreen from '../screens/CommunityDetailScreen';
-import MatchDetailsScreen from '../screens/MatchDetailsScreen';
-import BusTripDetailsScreen from '../screens/BusTripDetailsScreen';
-import EventDetailsScreen from '../screens/EventDetailsScreen';
-import ProfileScreen from '../screens/ProfileScreen';
-import PostDetailScreen from '../screens/PostDetailScreen';
+import CreateNewEventScreen from '../screens/CreateNewEventScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -35,12 +30,7 @@ export function RootNavigator() {
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Main" component={Inner} />
         <Stack.Screen name="Create" component={CreateScreen} options={{ presentation: 'modal' }} />
-        <Stack.Screen name="CommunityDetail" component={CommunityDetailScreen} />
-        <Stack.Screen name="MatchDetails" component={MatchDetailsScreen} />
-        <Stack.Screen name="BusTripDetails" component={BusTripDetailsScreen} />
-        <Stack.Screen name="EventDetails" component={EventDetailsScreen} />
-        <Stack.Screen name="Profile" component={ProfileScreen} />
-        <Stack.Screen name="PostDetail" component={PostDetailScreen} />
+        <Stack.Screen name="CreateNewEvent" component={CreateNewEventScreen} options={{ presentation: 'modal' }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

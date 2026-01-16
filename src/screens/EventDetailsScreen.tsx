@@ -37,8 +37,10 @@ export default function EventDetailsScreen() {
   }, [eventId]);
 
   const loadEvent = async () => {
+    console.log('[EventDetailsScreen] Loading event:', eventId);
     setLoading(true);
     const data = await fetchEventById(eventId);
+    console.log('[EventDetailsScreen] Event data received:', data);
     setEvent(data);
     setLoading(false);
   };

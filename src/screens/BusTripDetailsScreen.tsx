@@ -36,8 +36,10 @@ export default function BusTripDetailsScreen() {
   }, [busTripId]);
 
   const loadBusTrip = async () => {
+    console.log('[BusTripDetailsScreen] Loading bus trip:', busTripId);
     setLoading(true);
     const data = await fetchBusTripById(busTripId);
+    console.log('[BusTripDetailsScreen] Bus trip data received:', data);
     setBusTrip(data);
     setLoading(false);
   };

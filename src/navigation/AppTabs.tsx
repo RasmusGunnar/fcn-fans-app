@@ -3,10 +3,11 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import HomeScreen from '../screens/HomeScreen';
-import CommunitiesScreen from '../screens/CommunitiesScreen';
-import EventsScreen from '../screens/EventsScreen';
+import { HomeStack } from './HomeStack';
+import { CommunitiesStack } from './CommunitiesStack';
+import { EventsStack } from './EventsStack';
 import SongsScreen from '../screens/SongsScreen';
+import { ProfileStack } from './ProfileStack';
 import { colors, spacing } from '../theme';
 import CreateActionSheet from '../components/CreateActionSheet';
 import { MediaAsset } from '../lib/mediaPicker';
@@ -90,10 +91,15 @@ export function AppTabs() {
         headerShown: false,
       }}
     >
-      <Tab.Screen name="Home" component={HomeScreen} />
-      <Tab.Screen name="Communities" component={CommunitiesScreen} />
-      <Tab.Screen name="Events" component={EventsScreen} />
+      <Tab.Screen name="Home" component={HomeStack} />
+      <Tab.Screen name="Communities" component={CommunitiesStack} />
+      <Tab.Screen name="Events" component={EventsStack} />
       <Tab.Screen name="Songs" component={SongsScreen} />
+      <Tab.Screen 
+        name="Profile" 
+        component={ProfileStack}
+        options={{ tabBarButton: () => null }}
+      />
     </Tab.Navigator>
   );
 }

@@ -19,6 +19,7 @@ export type RootStackParamList = {
   // event flow
   Event: { eventId: string };
   CreateEvent: { communityId?: string | null; matchId?: string | null };
+  CreateNewEvent: undefined;
 
   // events module
   BusTripDetails: { busTripId: string };
