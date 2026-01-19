@@ -9,8 +9,7 @@ import { EventsStack } from './EventsStack';
 import SongsScreen from '../screens/SongsScreen';
 import { ProfileStack } from './ProfileStack';
 import { colors, spacing } from '../theme';
-import CreateActionSheet from '../components/CreateActionSheet';
-import { MediaAsset } from '../lib/mediaPicker';
+import CreateSheet from '../screens/CreateSheet';
 
 const Tab = createBottomTabNavigator();
 
@@ -24,13 +23,15 @@ const tabData = [
 function CustomTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeAreaInsets();
   const [sheetVisible, setSheetVisible] = useState(false);
+  
   const onPlusPress = () => {
+    console.log('[AppTabs] Plus button pressed - opening CreateSheet');
     setSheetVisible(true);
   };
 
-  const handlePicked = (asset: MediaAsset) => {
+  const handleCloseSheet = () => {
+    console.log('[AppTabs] Closing CreateSheet (setSheetVisible false)');
     setSheetVisible(false);
-    navigation.navigate('Create', { initialAttachment: asset });
   };
 
   const leftTabs = tabData.slice(0, 2);
@@ -78,7 +79,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
           <Text style={styles.plusText}>+</Text>
         </Pressable>
       </View>
-      <CreateActionSheet visible={sheetVisible} onClose={() => setSheetVisible(false)} onPicked={handlePicked} />
+      <CreateSheet visible={sheetVisible} onClose={handleCloseSheet} />
     </View>
   );
 }

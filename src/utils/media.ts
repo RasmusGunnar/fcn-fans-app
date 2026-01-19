@@ -1,13 +1,16 @@
 import { supabase } from '../lib/supabase';
+import { getPublicUrl } from '../lib/storageUrl';
 
 /**
  * Unified media item type across the app.
- * Supports url, publicUrl, or path for flexibility.
+ * Now uses bucket + path structure instead of URLs.
  */
 export type MediaItem = {
+  bucket?: string;
+  path?: string;
+  // Legacy fields for backwards compatibility
   url?: string;
   publicUrl?: string;
-  path?: string;
   type?: 'image' | 'video';
   width?: number;
   height?: number;
@@ -54,10 +57,9 @@ export function normalizeMedia(media: unknown): MediaItem[] {
 
 /**
  * Resolve a media item to a usable image/video URL.
- * Tries in order: url → publicUrl → path (via supabase)
+ * Now uses bucket + path with getPublicUrl helper.
  *
- * For path, this is ASYNC and would require refactoring FanPostCard to use async.
- * In MVP, we log a warning and skip path.
+ * Priority: bucket+path → url → publicUrl (legacy)
  *
  * @param media - MediaItem to resolve
  * @returns Resolved URL string, or null if no usable URL found
@@ -67,28 +69,38 @@ export function resolveMediaUrl(media: MediaItem | undefined): string | null {
     return null;
   }
 
-  // Priority 1: Direct URL (most common from upload.ts)
+  // Priority 1: bucket + path (new structure)
+  if (media.bucket && media.path) {
+    const url = getPublicUrl(media.bucket, media.path);
+    if (__DEV__) {
+      console.log('[resolveMediaUrl] Resolved from bucket+path:', { 
+        bucket: media.bucket, 
+        path: media.path, 
+        url 
+      });
+    }
+    return url;
+  }
+
+  // Priority 2: Direct URL (legacy)
   if (media.url) {
     return media.url;
   }
 
-  // Priority 2: Public URL (from Supabase getPublicUrl response)
+  // Priority 3: Public URL (legacy)
   if (media.publicUrl) {
     return media.publicUrl;
   }
 
-  // Priority 3: Path (would require async call, not ideal in render)
+  // Priority 4: Path only (try post-media bucket)
   if (media.path) {
     if (__DEV__) {
       console.warn(
-        '[resolveMediaUrl] Media has path but no URL. For best performance, include url or publicUrl in media object.',
+        '[resolveMediaUrl] Media has path but no bucket. Assuming post-media bucket.',
         { path: media.path }
       );
     }
-    // In production, you could do:
-    // const { data } = supabase.storage.from('post-media').getPublicUrl(media.path);
-    // return data.publicUrl;
-    // But this requires async, so we skip for now.
+    return getPublicUrl('post-media', media.path);
   }
 
   return null;
