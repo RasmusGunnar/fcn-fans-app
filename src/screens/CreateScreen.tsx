@@ -35,20 +35,20 @@ export default function CreateScreen() {
         console.log('[CreateScreen] Uploading attachment for user', { userId: user.id });
         const uploaded = await uploadMediaToSupabase(user.id, attachment);
         
-        // Sanity check: path and publicUrl must exist after upload
-        if (!uploaded.path || !uploaded.publicUrl) {
-          throw new Error(`Upload returned invalid result - path: ${uploaded.path}, publicUrl: ${uploaded.publicUrl}`);
+        // Sanity check: path must exist after upload
+        if (!uploaded.path) {
+          throw new Error(`Upload returned invalid result - path: ${uploaded.path}`);
         }
         
-        // Save BOTH path and publicUrl for flexibility
+        // Save bucket + path structure (NOT URLs)
         mediaArray = [{ 
-          url: uploaded.publicUrl,
+          bucket: 'post-media',
           path: uploaded.path,
           type: uploaded.type, 
           width: uploaded.width, 
           height: uploaded.height 
         }];
-        console.log('[CreateScreen] Attachment uploaded', { url: uploaded.publicUrl, path: uploaded.path });
+        console.log('[CreateScreen] Attachment uploaded', { bucket: 'post-media', path: uploaded.path });
       } else if (attachment && !user?.id) {
         throw new Error('Vedhæftning valgt men bruger ikke logget ind');
       }

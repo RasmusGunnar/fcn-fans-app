@@ -8,7 +8,16 @@ export interface Post {
   createdAt: string;
   text: string;
   imageUri?: string;
-  media?: Array<{ url?: string; publicUrl?: string; path?: string; type?: 'image' | 'video'; width?: number; height?: number }>;
+  media?: Array<{ 
+    bucket?: string; 
+    path?: string; 
+    // Legacy fields
+    url?: string; 
+    publicUrl?: string; 
+    type?: 'image' | 'video'; 
+    width?: number; 
+    height?: number 
+  }>;
   likesCount: number;
   commentsCount: number;
   likedByMe: boolean;

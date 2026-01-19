@@ -14,7 +14,7 @@ export interface MyCommunity {
   name: string;
   type: 'community' | 'fan_faction';
   memberCount: number;
-  role: 'owner' | 'member';
+  role: 'owner' | 'admin' | 'member';
 }
 
 export interface UpcomingItem {
@@ -96,34 +96,73 @@ export async function fetchMyProfile(userId: string): Promise<UserProfile | null
 /**
  * Fetch user's communities (owned + member)
  * Returns separate arrays for owner and member communities
+ * 
+ * IMPORTANT: Uses public.community_members as authenticated user to match RLS policies
  */
 export async function fetchMyCommunities(
   userId: string
 ): Promise<{ ownerCommunities: MyCommunity[]; memberCommunities: MyCommunity[] }> {
   try {
-    // Fetch community memberships
+    console.log('\n========== DIAGNOSE: fetchMyCommunities ==========');
+    console.log('[DIAGNOSE] Current user ID:', userId);
+    
+    // Step 1: Fetch community memberships from community_members as authenticated user
+    // This matches RLS: select community_id, role from public.community_members where user_id = auth.uid()
     const { data: memberships, error: memberError } = await supabase
       .from('community_members')
-      .select('community_id, role, communities:community_id(id, name, type)')
+      .select('community_id, role')
       .eq('user_id', userId);
 
+    console.log('[DIAGNOSE] Raw rows from public.community_members:');
+    if (memberships && memberships.length > 0) {
+      memberships.forEach((m, idx) => {
+        console.log(`  Row ${idx + 1}:`, {
+          community_id: m.community_id,
+          role: m.role,
+        });
+      });
+    } else {
+      console.log('  (0 rows returned)');
+    }
+
     if (memberError) {
+      console.log('[DIAGNOSE] Query error:', memberError);
       console.warn('[profileApi] Error fetching communities', memberError);
       return { ownerCommunities: [], memberCommunities: [] };
     }
 
     if (!memberships || memberships.length === 0) {
+      console.log('[DIAGNOSE] No community memberships found - ActorSelector will show 0 communities');
       return { ownerCommunities: [], memberCommunities: [] };
     }
 
-    // Get member counts for each community
-    const communityIds = memberships
-      .map((m: any) => m.communities?.id)
-      .filter(Boolean);
+    // Filter to owner/admin only (case-insensitive)
+    const eligibleMemberships = memberships.filter(
+      (m) => m.role?.toLowerCase() === 'owner' || m.role?.toLowerCase() === 'admin'
+    );
 
+    console.log('[profileApi] Eligible memberships (owner/admin):', eligibleMemberships.length);
+
+    if (eligibleMemberships.length === 0) {
+      return { ownerCommunities: [], memberCommunities: [] };
+    }
+
+    // Step 2: Fetch community names from communities table
+    const communityIds = eligibleMemberships.map((m) => m.community_id);
+    const { data: communities, error: communitiesError } = await supabase
+      .from('communities')
+      .select('id, name, type')
+      .in('id', communityIds);
+
+    if (communitiesError) {
+      console.warn('[profileApi] Error fetching community names:', communitiesError);
+      // Fallback: use community_id as name
+    }
+
+    console.log('[profileApi] Fetched community names:', communities?.length || 0);
+
+    // Step 3: Get member counts for each community
     const countsMap: Record<string, number> = {};
-
-    // Fetch counts in parallel
     await Promise.all(
       communityIds.map(async (communityId: string) => {
         const { count, error } = await supabase
@@ -137,27 +176,46 @@ export async function fetchMyCommunities(
       })
     );
 
-    // Map to MyCommunity objects
+    // Step 4: Map to MyCommunity objects
     const ownerCommunities: MyCommunity[] = [];
     const memberCommunities: MyCommunity[] = [];
 
-    memberships.forEach((m: any) => {
-      if (!m.communities) return;
-
+    eligibleMemberships.forEach((m: any) => {
+      const communityData = communities?.find((c) => c.id === m.community_id);
+      
       const community: MyCommunity = {
-        id: m.communities.id,
-        name: m.communities.name,
-        type: m.communities.type || 'community',
-        memberCount: countsMap[m.communities.id] || 0,
-        role: m.role,
+        id: m.community_id,
+        name: communityData?.name || m.community_id, // Fallback to ID if name not found
+        type: communityData?.type || 'community',
+        memberCount: countsMap[m.community_id] || 0,
+        role: m.role?.toLowerCase() === 'owner' ? 'owner' : 'admin',
       };
 
-      if (m.role === 'owner') {
+      if (m.role?.toLowerCase() === 'owner') {
         ownerCommunities.push(community);
       } else {
         memberCommunities.push(community);
       }
     });
+
+    console.log('[profileApi] Final result:', {
+      ownerCommunities: ownerCommunities.length,
+      memberCommunities: memberCommunities.length,
+    });
+
+    console.log('[DIAGNOSE] Final owner/admin communities for dropdown:');
+    if (ownerCommunities.length > 0) {
+      ownerCommunities.forEach((c, idx) => {
+        console.log(`  Community ${idx + 1}:`, {
+          id: c.id,
+          name: c.name,
+          role: c.role,
+        });
+      });
+    } else {
+      console.log('  (0 communities - dropdown will only show "Dig")');
+    }
+    console.log('==================================================\n');
 
     return { ownerCommunities, memberCommunities };
   } catch (err) {

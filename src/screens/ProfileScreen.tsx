@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Alert, Image } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,6 +8,8 @@ import { Card } from '../components/ui/Card';
 import { Pill } from '../components/ui/Pill';
 import { OutlineButton } from '../components/ui/OutlineButton';
 import { colors, spacing } from '../theme';
+import { uploadAvatar } from '../lib/uploadAvatar';
+import { getPublicUrl } from '../lib/storageUrl';
 import {
   fetchMyProfile,
   fetchMyCommunities,
@@ -58,6 +60,7 @@ export default function ProfileScreen() {
   const [memberCommunities, setMemberCommunities] = useState<MyCommunity[]>([]);
   const [upcomingItems, setUpcomingItems] = useState<UpcomingItem[]>([]);
   const [ownedCount, setOwnedCount] = useState(0);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   const loadData = async () => {
     if (!user?.id) {
@@ -118,6 +121,22 @@ export default function ProfileScreen() {
 
   const handleEditProfile = () => {
     Alert.alert('Rediger profil', 'Denne funktion kommer snart!');
+  };
+
+  const handleUploadAvatar = async () => {
+    if (!user?.id) return;
+
+    setUploadingAvatar(true);
+    const avatarPath = await uploadAvatar(user.id);
+    setUploadingAvatar(false);
+
+    if (avatarPath) {
+      // avatarPath includes cache buster, store it directly
+      setProfile(prev => prev ? { ...prev, avatar_url: avatarPath } : null);
+      Alert.alert('Succes!', 'Profilbillede opdateret');
+    } else {
+      Alert.alert('Fejl', 'Kunne ikke uploade billede. Prøv igen.');
+    }
   };
 
   const navigateToCommunity = (communityId: string) => {
@@ -183,11 +202,54 @@ export default function ProfileScreen() {
         <Text style={styles.headerSubtitle}>Indstillinger & fællesskaber</Text>
       </View>
 
+      {/* Avatar Upload Banner */}
+      {!profile?.avatar_url && !uploadingAvatar && (
+        <Card style={[styles.avatarBanner, { marginBottom: spacing.md }]}>
+          <View style={styles.bannerContent}>
+            <Ionicons name="camera" size={24} color={colors.fcnRed} />
+            <View style={styles.bannerText}>
+              <Text style={styles.bannerTitle}>Tilføj profilbillede</Text>
+              <Text style={styles.bannerSubtitle}>Gør din profil mere personlig</Text>
+            </View>
+          </View>
+          <Pressable style={styles.bannerButton} onPress={handleUploadAvatar}>
+            <Text style={styles.bannerButtonText}>Upload</Text>
+            <Ionicons name="arrow-forward" size={16} color={colors.card} />
+          </Pressable>
+        </Card>
+      )}
+
+      {/* Uploading state */}
+      {uploadingAvatar && (
+        <Card style={{ marginBottom: spacing.md, padding: spacing.lg }}>
+          <View style={{ alignItems: 'center' }}>
+            <ActivityIndicator size="small" color={colors.fcnRed} />
+            <Text style={{ marginTop: spacing.sm, color: colors.subtext }}>Uploader billede...</Text>
+          </View>
+        </Card>
+      )}
+
       {/* Profile Card */}
       <Card style={{ marginTop: spacing.md, marginBottom: spacing.md }}>
         <View style={styles.profileSummary}>
           <View style={styles.avatar}>
-            <Ionicons name="person" size={32} color={colors.card} />
+            {profile?.avatar_url ? (
+              <Image 
+                source={{ uri: getPublicUrl('avatars', profile.avatar_url.split('?')[0]) || undefined }} 
+                style={styles.avatarImage}
+                onError={(error) => {
+                  if (__DEV__) {
+                    console.warn('[ProfileScreen] Avatar load error:', { 
+                      avatarUrl: profile.avatar_url, 
+                      publicUrl: getPublicUrl('avatars', profile.avatar_url.split('?')[0]),
+                      error 
+                    });
+                  }
+                }}
+              />
+            ) : (
+              <Ionicons name="person" size={32} color={colors.card} />
+            )}
           </View>
           <View style={styles.profileInfo}>
             <Text style={styles.profileName}>
@@ -371,6 +433,51 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+  },
+  avatarBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: spacing.md,
+  },
+  bannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  bannerText: {
+    marginLeft: spacing.sm,
+    flex: 1,
+  },
+  bannerTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  bannerSubtitle: {
+    fontSize: 12,
+    color: colors.subtext,
+    marginTop: 2,
+  },
+  bannerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.fcnRed,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: 6,
+    gap: 4,
+  },
+  bannerButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.card,
   },
   profileInfo: {
     flex: 1,
