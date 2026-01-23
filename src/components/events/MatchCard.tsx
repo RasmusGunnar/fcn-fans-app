@@ -1,9 +1,12 @@
 import React from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import { Card } from '../ui/Card';
+import { FeedCardShell } from '../feed/FeedCardShell';
+import { useAuth } from '../../auth/AuthProvider';
 import { colors, spacing } from '../../theme';
 
 interface MatchCardProps {
+  matchId: string; // Required for comments
   home: string;
   away: string;
   homeLogo: string | null;
@@ -13,10 +16,16 @@ interface MatchCardProps {
   venueCity: string | null;
   competition: string | null;
   round: string | null;
+  liked?: boolean;
+  likes?: number;
+  comments?: number;
   onPress: () => void;
+  onToggleLike?: () => void;
+  onPressShare?: () => void;
 }
 
 export function MatchCard({
+  matchId,
   home,
   away,
   homeLogo,
@@ -26,8 +35,15 @@ export function MatchCard({
   venueCity,
   competition,
   round,
+  liked = false,
+  likes = 0,
+  comments = 0,
   onPress,
+  onToggleLike = () => {},
+  onPressShare = () => {},
 }: MatchCardProps) {
+  const { user, isAppAdmin } = useAuth();
+  
   const date = new Date(kickoffAt);
   const dateStr = date.toLocaleDateString('da-DK', {
     weekday: 'short',
@@ -40,83 +56,87 @@ export function MatchCard({
   });
 
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
-      <Card style={styles.card}>
-        <View style={styles.header}>
-          <Text style={styles.badge}>KAMP</Text>
-          {competition && <Text style={styles.competition}>{competition}</Text>}
+    <FeedCardShell
+      targetType="match"
+      targetId={matchId}
+      currentUserId={user?.id}
+      isAppAdmin={isAppAdmin}
+      onOpenDetail={onPress}
+      actions={{
+        liked,
+        likes,
+        comments,
+        onToggleLike,
+        onPressShare,
+      }}
+    >
+      <View style={styles.header}>
+        <Text style={styles.badge}>KAMP</Text>
+        {competition && <Text style={styles.competition}>{competition}</Text>}
+      </View>
+
+      <View style={styles.matchRow}>
+        <View style={styles.team}>
+          {homeLogo ? (
+            <Image source={{ uri: homeLogo }} style={styles.teamLogo} />
+          ) : (
+            <View style={styles.teamCircle}>
+              <Text style={styles.teamInitials}>{home.substring(0, 3).toUpperCase()}</Text>
+            </View>
+          )}
+          <Text style={styles.teamName} numberOfLines={2}>
+            {home}
+          </Text>
         </View>
 
-        <View style={styles.matchRow}>
-          <View style={styles.team}>
-            {homeLogo ? (
-              <Image source={{ uri: homeLogo }} style={styles.teamLogo} />
-            ) : (
-              <View style={styles.teamCircle}>
-                <Text style={styles.teamInitials}>
-                  {home.substring(0, 3).toUpperCase()}
-                </Text>
-              </View>
-            )}
-            <Text style={styles.teamName} numberOfLines={2}>
-              {home}
-            </Text>
-          </View>
+        <Text style={styles.vs}>VS</Text>
 
-          <Text style={styles.vs}>VS</Text>
-
-          <View style={styles.team}>
-            {awayLogo ? (
-              <Image source={{ uri: awayLogo }} style={styles.teamLogo} />
-            ) : (
-              <View style={styles.teamCircle}>
-                <Text style={styles.teamInitials}>
-                  {away.substring(0, 3).toUpperCase()}
-                </Text>
-              </View>
-            )}
-            <Text style={styles.teamName} numberOfLines={2}>
-              {away}
-            </Text>
-          </View>
+        <View style={styles.team}>
+          {awayLogo ? (
+            <Image source={{ uri: awayLogo }} style={styles.teamLogo} />
+          ) : (
+            <View style={styles.teamCircle}>
+              <Text style={styles.teamInitials}>{away.substring(0, 3).toUpperCase()}</Text>
+            </View>
+          )}
+          <Text style={styles.teamName} numberOfLines={2}>
+            {away}
+          </Text>
         </View>
+      </View>
 
-        <View style={styles.details}>
+      <View style={styles.details}>
+        <View style={styles.detailRow}>
+          <Text style={styles.icon}>📅</Text>
+          <Text style={styles.detailText}>
+            {dateStr}, kl. {timeStr}
+          </Text>
+        </View>
+        {venue && (
           <View style={styles.detailRow}>
-            <Text style={styles.icon}>📅</Text>
+            <Text style={styles.icon}>🏟️</Text>
             <Text style={styles.detailText}>
-              {dateStr}, kl. {timeStr}
+              {venue}
+              {venueCity ? `, ${venueCity}` : ''}
             </Text>
           </View>
-          {venue && (
-            <View style={styles.detailRow}>
-              <Text style={styles.icon}>🏟️</Text>
-              <Text style={styles.detailText}>
-                {venue}
-                {venueCity ? `, ${venueCity}` : ''}
-              </Text>
-            </View>
-          )}
-          {round && (
-            <View style={styles.detailRow}>
-              <Text style={styles.icon}>🏆</Text>
-              <Text style={styles.detailText}>{round}</Text>
-            </View>
-          )}
-        </View>
+        )}
+        {round && (
+          <View style={styles.detailRow}>
+            <Text style={styles.icon}>🏆</Text>
+            <Text style={styles.detailText}>{round}</Text>
+          </View>
+        )}
+      </View>
 
-        <TouchableOpacity style={styles.button} onPress={onPress}>
-          <Text style={styles.buttonText}>Se detaljer</Text>
-        </TouchableOpacity>
-      </Card>
-    </TouchableOpacity>
+      <TouchableOpacity style={styles.button} onPress={onPress}>
+        <Text style={styles.buttonText}>Se detaljer</Text>
+      </TouchableOpacity>
+    </FeedCardShell>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    marginBottom: spacing.md,
-  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',

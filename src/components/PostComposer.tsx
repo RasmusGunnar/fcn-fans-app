@@ -1,5 +1,13 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable, Image, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  Pressable,
+  Image,
+  ActivityIndicator,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from './ui/Card';
 import { PrimaryButton } from './PrimaryButton';
@@ -69,21 +77,26 @@ export function PostComposer({ onSuccess }: PostComposerProps) {
       if (attachment && user?.id) {
         console.log('[PostComposer] Uploading attachment for user', { userId: user.id });
         const uploaded = await uploadMediaToSupabase(user.id, attachment);
-        
+
         // Sanity check: path must exist after upload
         if (!uploaded.path) {
           throw new Error(`Upload returned invalid result - path: ${uploaded.path}`);
         }
-        
+
         // Save bucket + path structure (NOT URLs) - exactly as existing code does
-        mediaArray = [{ 
+        mediaArray = [
+          {
+            bucket: 'post-media',
+            path: uploaded.path,
+            type: uploaded.type,
+            width: uploaded.width,
+            height: uploaded.height,
+          },
+        ];
+        console.log('[PostComposer] Attachment uploaded', {
           bucket: 'post-media',
           path: uploaded.path,
-          type: uploaded.type, 
-          width: uploaded.width, 
-          height: uploaded.height 
-        }];
-        console.log('[PostComposer] Attachment uploaded', { bucket: 'post-media', path: uploaded.path });
+        });
       } else if (attachment && !user?.id) {
         throw new Error('Vedhæftning valgt men bruger ikke logget ind');
       }
@@ -103,7 +116,7 @@ export function PostComposer({ onSuccess }: PostComposerProps) {
           .insert({ author_id: user.id, text: text.trim(), media: mediaArray })
           .select('id, created_at, author_id, text, media');
         if (error) throw error;
-        
+
         if (data && data[0]) {
           const dbRecord = data[0];
           // DB-returned post is the source of truth
@@ -118,10 +131,13 @@ export function PostComposer({ onSuccess }: PostComposerProps) {
             likedByMe: false,
             media: dbRecord.media, // Use DB media (may be parsed as array or string)
           };
-          console.log('[PostComposer] Post inserted and fetched from DB:', { postId: dbPost.id, media: dbPost.media });
+          console.log('[PostComposer] Post inserted and fetched from DB:', {
+            postId: dbPost.id,
+            media: dbPost.media,
+          });
         }
       }
-    } catch (e) { 
+    } catch (e) {
       console.warn('[PostComposer] Insert post error', e);
     }
 
@@ -139,7 +155,7 @@ export function PostComposer({ onSuccess }: PostComposerProps) {
     };
 
     addPost(newPost);
-    
+
     // Optional: Soft refresh to sync with DB (ensures no duplicates due to dedupe logic)
     try {
       await fetchPosts();
@@ -148,7 +164,7 @@ export function PostComposer({ onSuccess }: PostComposerProps) {
         console.log('[PostComposer] Post-creation refresh skipped:', e);
       }
     }
-    
+
     setLoading(false);
     setText('');
     setAttachment(null);
@@ -173,8 +189,8 @@ export function PostComposer({ onSuccess }: PostComposerProps) {
         {attachment && (
           <View style={styles.previewContainer}>
             <Image source={{ uri: attachment.uri }} style={styles.previewImage} />
-            <Pressable 
-              style={styles.removeAttachment} 
+            <Pressable
+              style={styles.removeAttachment}
               onPress={() => setAttachment(null)}
               disabled={loading}
             >
@@ -189,20 +205,12 @@ export function PostComposer({ onSuccess }: PostComposerProps) {
         <Card style={{ marginBottom: spacing.md }}>
           <Text style={styles.label}>Tilføj billede (valgfrit)</Text>
           <View style={styles.imageButtonsContainer}>
-            <Pressable 
-              style={styles.imageButton} 
-              onPress={handlePickCamera}
-              disabled={loading}
-            >
+            <Pressable style={styles.imageButton} onPress={handlePickCamera} disabled={loading}>
               <Ionicons name="camera" size={20} color={colors.fcnRed} />
               <Text style={styles.imageButtonText}>Tag billede</Text>
             </Pressable>
-            
-            <Pressable 
-              style={styles.imageButton} 
-              onPress={handlePickLibrary}
-              disabled={loading}
-            >
+
+            <Pressable style={styles.imageButton} onPress={handlePickLibrary} disabled={loading}>
               <Ionicons name="images" size={20} color={colors.fcnRed} />
               <Text style={styles.imageButtonText}>Vælg fra bibliotek</Text>
             </Pressable>
@@ -216,7 +224,7 @@ export function PostComposer({ onSuccess }: PostComposerProps) {
         variant="red"
         disabled={!text.trim() || loading}
       />
-      
+
       {loading && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="small" color={colors.fcnRed} />

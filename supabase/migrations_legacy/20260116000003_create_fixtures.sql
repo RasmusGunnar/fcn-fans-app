@@ -26,6 +26,13 @@ alter table public.fixtures enable row level security;
 drop policy if exists "Public read fixtures" on public.fixtures;
 
 -- Public read access for all users (anon + authenticated)
-create policy "Public read fixtures" on public.fixtures 
-  for select 
-  using (true);
+DO $$
+BEGIN
+  BEGIN
+    EXECUTE 'create policy "Public read fixtures" on public.fixtures 
+      for select 
+      using (true)';
+  EXCEPTION WHEN duplicate_object THEN
+    RAISE NOTICE 'policy "Public read fixtures" already exists, skipping';
+  END;
+END $$;

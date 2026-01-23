@@ -36,11 +36,7 @@ export function AppHeader({
         {/* Logo and text share vertical center alignment */}
         <View style={styles.contentRow}>
           <View style={styles.logoWrapper}>
-            <Image
-              source={logoSource || defaultLogo}
-              style={styles.logo}
-              resizeMode="contain"
-            />
+            <Image source={logoSource || defaultLogo} style={styles.logo} resizeMode="contain" />
           </View>
           <View style={styles.textContainer}>
             <Text style={styles.title}>{title}</Text>

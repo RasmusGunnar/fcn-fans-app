@@ -36,7 +36,11 @@ export function FanFactionCard({
 }: FanFactionCardProps) {
   return (
     <Card style={styles.card}>
-      <Pill label="Fanfraktion" variant="neutral" icon={<Ionicons name="star" size={14} color={colors.neutralPillText} />} />
+      <Pill
+        label="Fanfraktion"
+        variant="neutral"
+        icon={<Ionicons name="star" size={14} color={colors.neutralPillText} />}
+      />
       <View style={styles.header}>
         <View style={styles.avatar}>
           <Ionicons name="star" size={40} color={colors.fcnRed} />

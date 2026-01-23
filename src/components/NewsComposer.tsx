@@ -1,5 +1,13 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable, Image, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  Pressable,
+  Image,
+  ActivityIndicator,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing } from '../theme';
 import { Card } from './ui/Card';
@@ -41,9 +49,9 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
     setLoadingPreview(true);
     setPreviewError(null);
     setPreview(null);
-    
+
     console.log('[NewsComposer] Fetching preview for URL:', url.trim());
-    
+
     try {
       const previewData = await fetchLinkPreview(url.trim());
       console.log('[NewsComposer] Preview fetched successfully:', {
@@ -92,10 +100,12 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
     }
 
     setPublishing(true);
-    
+
     try {
       // Get current user ID from Supabase auth
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) {
         throw new Error('Not authenticated');
       }
@@ -125,31 +135,37 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
         // community_id only set when posting as community
         communityId: actor.type === 'community' ? actor.id : undefined,
       };
-      
+
       // ============================================================
       // REAL JSON logs for debugging (only runs on "Del nyhed" click)
       // ============================================================
       console.log('\n\n');
       console.log('###NEWSDBG### ===== START NEWS INSERT =====');
-      console.log('###NEWSDBG### selectedActor', JSON.stringify({
-        type: actor.type,
-        id: actor.id,
-        name: actor.name,
-      }));
-      console.log('###NEWSDBG### payload', JSON.stringify({
-        created_by: newsData.createdBy,
-        actor_type: newsData.actorType,
-        actor_id: newsData.actorId,
-        community_id: newsData.communityId,
-        url: newsData.url,
-        title: newsData.title,
-        description: newsData.description,
-        image_url: newsData.imageUrl,
-        site_name: newsData.siteName,
-      }));
+      console.log(
+        '###NEWSDBG### selectedActor',
+        JSON.stringify({
+          type: actor.type,
+          id: actor.id,
+          name: actor.name,
+        }),
+      );
+      console.log(
+        '###NEWSDBG### payload',
+        JSON.stringify({
+          created_by: newsData.createdBy,
+          actor_type: newsData.actorType,
+          actor_id: newsData.actorId,
+          community_id: newsData.communityId,
+          url: newsData.url,
+          title: newsData.title,
+          description: newsData.description,
+          image_url: newsData.imageUrl,
+          site_name: newsData.siteName,
+        }),
+      );
       console.log('###NEWSDBG### ===========================');
       console.log('\n');
-      
+
       await insertNewsItem(newsData);
 
       console.log('\n');
@@ -157,7 +173,7 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
       console.log('###NEWSDBG### News published successfully');
       console.log('###NEWSDBG### ===================');
       console.log('\n\n');
-      
+
       // Reset form
       setUrl('');
       setPreview(null);
@@ -166,16 +182,19 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
     } catch (error: any) {
       console.log('\n\n');
       console.log('###NEWSDBG### ===== ERROR =====');
-      console.log('###NEWSDBG### error', JSON.stringify({
-        code: error?.code,
-        message: error?.message,
-        details: error?.details,
-        hint: error?.hint,
-      }));
+      console.log(
+        '###NEWSDBG### error',
+        JSON.stringify({
+          code: error?.code,
+          message: error?.message,
+          details: error?.details,
+          hint: error?.hint,
+        }),
+      );
       console.log('###NEWSDBG### error raw', error);
       console.log('###NEWSDBG### ===============');
       console.log('\n\n');
-      
+
       const errorMsg = error?.message || 'Kunne ikke dele nyhed';
       console.error('[NewsComposer] Publish error:', {
         message: errorMsg,
@@ -205,9 +224,12 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
         editable={!loadingPreview && !publishing}
       />
 
-      <Pressable 
-        style={[styles.previewButton, (loadingPreview || !url.trim()) && styles.previewButtonDisabled]} 
-        onPress={handleFetchPreview} 
+      <Pressable
+        style={[
+          styles.previewButton,
+          (loadingPreview || !url.trim()) && styles.previewButtonDisabled,
+        ]}
+        onPress={handleFetchPreview}
         disabled={loadingPreview || !url.trim()}
       >
         {loadingPreview ? (
@@ -240,9 +262,7 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
             />
           )}
           <View style={styles.previewContent}>
-            {preview.siteName && (
-              <Text style={styles.previewSiteName}>{preview.siteName}</Text>
-            )}
+            {preview.siteName && <Text style={styles.previewSiteName}>{preview.siteName}</Text>}
             {preview.title && (
               <Text style={styles.previewTitle} numberOfLines={2}>
                 {preview.title}

@@ -72,9 +72,7 @@ export default function WelcomeScreen({ navigation }: Props) {
   return (
     <View style={{ padding: 16, gap: 14 }}>
       <Text style={{ fontSize: 24, fontWeight: '700' }}>Velkommen</Text>
-      <Text style={{ opacity: 0.8 }}>
-        Log ind for at se feed og favoritter.
-      </Text>
+      <Text style={{ opacity: 0.8 }}>Log ind for at se feed og favoritter.</Text>
 
       {/* Email */}
       <Text style={{ marginTop: 10, fontWeight: '600' }}>Mail</Text>
@@ -87,19 +85,13 @@ export default function WelcomeScreen({ navigation }: Props) {
         placeholder="din@email.dk"
         style={{ borderWidth: 1, padding: 12, borderRadius: 10 }}
       />
-      <Button
-        title={busy ? 'Sender...' : 'Send kode'}
-        onPress={sendCode}
-        disabled={!canSend}
-      />
+      <Button title={busy ? 'Sender...' : 'Send kode'} onPress={sendCode} disabled={!canSend} />
 
       {/* Separator */}
       <View style={{ height: 1, backgroundColor: '#ddd', marginVertical: 12 }} />
 
       <Text style={{ fontWeight: '700' }}>Er du ikke oprettet endnu?</Text>
-      <Text style={{ opacity: 0.8 }}>
-        Så opret dig med (det er samme flow – du får en kode):
-      </Text>
+      <Text style={{ opacity: 0.8 }}>Så opret dig med (det er samme flow – du får en kode):</Text>
 
       {/* Social options */}
       {Platform.OS === 'ios' ? (
@@ -121,12 +113,7 @@ export default function WelcomeScreen({ navigation }: Props) {
         disabled={busy}
       />
 
-      <Button
-        title="Fortsæt med Mail (send kode)"
-        onPress={sendCode}
-        disabled={!canSend}
-      />
+      <Button title="Fortsæt med Mail (send kode)" onPress={sendCode} disabled={!canSend} />
     </View>
   );
 }
-

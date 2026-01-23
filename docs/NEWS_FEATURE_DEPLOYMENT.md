@@ -1,25 +1,29 @@
 # News Feature Implementation
 
 ## Overview
+
 This feature allows users to share news articles by URL with automatic link preview generation.
 
 ## Components
 
 ### 1. Database Migration
+
 - **File**: `supabase/migrations/20260119_create_news_items.sql`
 - **Description**: Creates `news_items` table with RLS policies
 - **Run**: Execute SQL in Supabase Dashboard SQL Editor
 
 ### 2. Edge Function
+
 - **File**: `supabase/functions/parse-link/index.ts`
 - **Description**: Parses HTML and extracts Open Graph/Twitter Card metadata
 - **Features**:
   - Follows redirects
-  - Parses meta tags (og:*, twitter:*, standard meta)
+  - Parses meta tags (og:_, twitter:_, standard meta)
   - Resolves relative image URLs to absolute
   - Returns structured link preview data
 
 ### 3. Frontend Components
+
 - **NewsComposer**: URL input and preview interface
 - **NewsCard**: Displays news items in feed
 - **PostComposer**: Post creation with optional images
@@ -28,6 +32,7 @@ This feature allows users to share news articles by URL with automatic link prev
 ## Deployment Steps
 
 ### 1. Deploy Database Migration
+
 ```bash
 # Option A: Via Supabase Dashboard
 1. Go to SQL Editor in Supabase Dashboard
@@ -40,6 +45,7 @@ supabase db push
 ```
 
 ### 2. Deploy Edge Function
+
 ```bash
 # Deploy parse-link function
 supabase functions deploy parse-link
@@ -49,6 +55,7 @@ supabase functions list
 ```
 
 ### 3. Test Edge Function
+
 ```bash
 # Test locally
 supabase functions serve parse-link
@@ -60,11 +67,13 @@ curl -X POST http://localhost:54321/functions/v1/parse-link \
 ```
 
 ### 4. Frontend Updates
+
 - No manual deployment needed - React Native will hot reload
 
 ## Testing Checklist
 
 ### Posts Feature (must continue working)
+
 - [ ] Create post without image
 - [ ] Create post with image (camera)
 - [ ] Create post with image (library)
@@ -73,6 +82,7 @@ curl -X POST http://localhost:54321/functions/v1/parse-link \
 - [ ] Feed refreshes after post creation
 
 ### News Feature (new)
+
 - [ ] Enter URL and fetch preview
 - [ ] Preview shows title, description, image
 - [ ] Preview handles missing fields gracefully
@@ -82,6 +92,7 @@ curl -X POST http://localhost:54321/functions/v1/parse-link \
 - [ ] Error handling for edge function failures
 
 ### Combined Feed
+
 - [ ] Posts and news items merge correctly
 - [ ] Sorting by created_at works
 - [ ] Feed doesn't crash if news_items table missing (PGRST205 handling)
@@ -89,6 +100,7 @@ curl -X POST http://localhost:54321/functions/v1/parse-link \
 ## Troubleshooting
 
 ### Edge Function Issues
+
 ```bash
 # Check logs
 supabase functions logs parse-link
@@ -100,6 +112,7 @@ supabase functions logs parse-link
 ```
 
 ### Database Issues
+
 ```bash
 # Verify table exists
 SELECT * FROM news_items LIMIT 1;
@@ -113,6 +126,7 @@ DROP TABLE IF EXISTS news_items CASCADE;
 ```
 
 ### Frontend Issues
+
 ```bash
 # Clear Metro bundler cache
 npm start -- --reset-cache
@@ -126,9 +140,11 @@ npm start -- --reset-cache
 ## API Reference
 
 ### Edge Function: parse-link
+
 **Endpoint**: `/functions/v1/parse-link`
 
 **Request**:
+
 ```json
 {
   "url": "https://example.com/article"
@@ -136,6 +152,7 @@ npm start -- --reset-cache
 ```
 
 **Response**:
+
 ```json
 {
   "resolvedUrl": "https://example.com/article",
@@ -147,6 +164,7 @@ npm start -- --reset-cache
 ```
 
 **Errors**:
+
 ```json
 {
   "error": "Failed to fetch URL: 404 Not Found"
@@ -154,6 +172,7 @@ npm start -- --reset-cache
 ```
 
 ## Future Improvements
+
 - [ ] Add caching for link previews
 - [ ] Support more metadata formats (JSON-LD, etc)
 - [ ] Add preview refresh button

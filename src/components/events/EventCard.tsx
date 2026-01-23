@@ -1,25 +1,41 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Card } from '../ui/Card';
+import { FeedCardShell } from '../feed/FeedCardShell';
+import { useAuth } from '../../auth/AuthProvider';
 import { colors, spacing } from '../../theme';
 
 interface EventCardProps {
+  eventId: string; // Required for comments
   title: string;
   startAt: string;
   location: string | null;
   organizerName: string | null;
   description: string | null;
+  liked?: boolean;
+  likes?: number;
+  comments?: number;
   onPress: () => void;
+  onToggleLike?: () => void;
+  onPressShare?: () => void;
 }
 
 export function EventCard({
+  eventId,
   title,
   startAt,
   location,
   organizerName,
   description,
+  liked = false,
+  likes = 0,
+  comments = 0,
   onPress,
+  onToggleLike = () => {},
+  onPressShare = () => {},
 }: EventCardProps) {
+  const { user, isAppAdmin } = useAuth();
+  
   const date = new Date(startAt);
   const dateStr = date.toLocaleDateString('da-DK', {
     weekday: 'short',
@@ -32,46 +48,52 @@ export function EventCard({
   });
 
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
-      <Card style={styles.card}>
-        <View style={styles.header}>
-          <Text style={styles.badge}>EVENT</Text>
-          {organizerName && (
-            <Text style={styles.organizer}>🚩 {organizerName}</Text>
-          )}
-        </View>
+    <FeedCardShell
+      targetType="event"
+      targetId={eventId}
+      currentUserId={user?.id}
+      isAppAdmin={isAppAdmin}
+      onOpenDetail={onPress}
+      actions={{
+        liked,
+        likes,
+        comments,
+        onToggleLike,
+        onPressShare,
+      }}
+    >
+      <View style={styles.header}>
+        <Text style={styles.badge}>EVENT</Text>
+        {organizerName && <Text style={styles.organizer}>🚩 {organizerName}</Text>}
+      </View>
 
-        <Text style={styles.title}>{title}</Text>
+      <Text style={styles.title}>{title}</Text>
 
-        {description && (
-          <Text style={styles.description} numberOfLines={2}>
-            {description}
+      {description && (
+        <Text style={styles.description} numberOfLines={2}>
+          {description}
+        </Text>
+      )}
+
+      <View style={styles.details}>
+        <View style={styles.detailRow}>
+          <Text style={styles.icon}>📅</Text>
+          <Text style={styles.detailText}>
+            {dateStr}, kl. {timeStr}
           </Text>
-        )}
-
-        <View style={styles.details}>
-          <View style={styles.detailRow}>
-            <Text style={styles.icon}>📅</Text>
-            <Text style={styles.detailText}>
-              {dateStr}, kl. {timeStr}
-            </Text>
-          </View>
-          {location && (
-            <View style={styles.detailRow}>
-              <Text style={styles.icon}>📍</Text>
-              <Text style={styles.detailText}>{location}</Text>
-            </View>
-          )}
         </View>
-      </Card>
-    </TouchableOpacity>
+        {location && (
+          <View style={styles.detailRow}>
+            <Text style={styles.icon}>📍</Text>
+            <Text style={styles.detailText}>{location}</Text>
+          </View>
+        )}
+      </View>
+    </FeedCardShell>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    marginBottom: spacing.md,
-  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',

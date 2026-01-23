@@ -28,6 +28,8 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
 }
 
 export async function saveExpoPushToken(userId: string, token: string) {
-  const { error } = await supabase.from('profiles').upsert({ id: userId, expo_push_token: token }, { onConflict: 'id' });
+  const { error } = await supabase
+    .from('profiles')
+    .upsert({ id: userId, expo_push_token: token }, { onConflict: 'id' });
   if (error) throw error;
 }

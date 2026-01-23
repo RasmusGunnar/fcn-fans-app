@@ -1,13 +1,13 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, FlatList } from "react-native";
-import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { RootStackParamList } from "../navigation/types";
-import { db } from "../firebase";
-import { Community, Event } from "../types";
-import { doc, onSnapshot, collection, query, where, orderBy, limit } from "firebase/firestore";
-import { PrimaryButton } from "../components/PrimaryButton";
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, FlatList } from 'react-native';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../navigation/types';
+import { db } from '../firebase';
+import { Community, Event } from '../types';
+import { doc, onSnapshot, collection, query, where, orderBy, limit } from 'firebase/firestore';
+import { PrimaryButton } from '../components/PrimaryButton';
 
-type Props = NativeStackScreenProps<RootStackParamList, "CommunityHub">;
+type Props = NativeStackScreenProps<RootStackParamList, 'CommunityHub'>;
 
 export default function CommunityHubScreen({ route, navigation }: Props) {
   const { communityId } = route.params;
@@ -15,26 +15,31 @@ export default function CommunityHubScreen({ route, navigation }: Props) {
   const [events, setEvents] = useState<Event[]>([]);
 
   useEffect(() => {
-    const unsubC = onSnapshot(doc(db, "communities", communityId), (snap) => {
+    const unsubC = onSnapshot(doc(db, 'communities', communityId), (snap) => {
       if (snap.exists()) setCommunity({ id: snap.id, ...(snap.data() as any) });
     });
 
     const qEvents = query(
-      collection(db, "events"),
-      where("communityId", "==", communityId),
-      orderBy("startTime", "asc"),
-      limit(20)
+      collection(db, 'events'),
+      where('communityId', '==', communityId),
+      orderBy('startTime', 'asc'),
+      limit(20),
     );
 
     const unsubE = onSnapshot(qEvents, (snap) => {
-      setEvents(snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })));
+      setEvents(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })));
     });
 
-    return () => { unsubC(); unsubE(); };
+    return () => {
+      unsubC();
+      unsubE();
+    };
   }, [communityId]);
 
-  const title = useMemo(() => community?.name ?? "Fællesskab", [community]);
-  useEffect(() => { navigation.setOptions({ title }); }, [title, navigation]);
+  const title = useMemo(() => community?.name ?? 'Fællesskab', [community]);
+  useEffect(() => {
+    navigation.setOptions({ title });
+  }, [title, navigation]);
 
   return (
     <View style={styles.container}>
@@ -43,7 +48,10 @@ export default function CommunityHubScreen({ route, navigation }: Props) {
           <Text style={styles.h1}>{community.name}</Text>
           {!!community.description && <Text style={styles.muted}>{community.description}</Text>}
           <View style={{ height: 10 }} />
-          <PrimaryButton title="+ Opret event" onPress={() => navigation.navigate("CreateEvent", { communityId })} />
+          <PrimaryButton
+            title="+ Opret event"
+            onPress={() => navigation.navigate('CreateEvent', { communityId })}
+          />
         </View>
       )}
 
@@ -54,12 +62,19 @@ export default function CommunityHubScreen({ route, navigation }: Props) {
         renderItem={({ item }) => (
           <View style={styles.card}>
             <Text style={styles.bold}>{item.title}</Text>
-            <Text style={styles.muted}>{item.locationName} · {new Date(item.startTime).toLocaleString()}</Text>
+            <Text style={styles.muted}>
+              {item.locationName} · {new Date(item.startTime).toLocaleString()}
+            </Text>
             <View style={{ height: 10 }} />
-            <PrimaryButton title="Åbn" onPress={() => navigation.navigate("Event", { eventId: item.id })} />
+            <PrimaryButton
+              title="Åbn"
+              onPress={() => navigation.navigate('Event', { eventId: item.id })}
+            />
           </View>
         )}
-        ListEmptyComponent={<Text style={styles.muted}>Ingen events endnu. Opret fx “Afgang fra Ganløse”.</Text>}
+        ListEmptyComponent={
+          <Text style={styles.muted}>Ingen events endnu. Opret fx “Afgang fra Ganløse”.</Text>
+        }
       />
     </View>
   );
@@ -68,9 +83,9 @@ export default function CommunityHubScreen({ route, navigation }: Props) {
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },
   header: { borderWidth: 1, borderRadius: 14, padding: 12, marginBottom: 14 },
-  h1: { fontSize: 22, fontWeight: "800" },
-  h2: { fontSize: 16, fontWeight: "700", marginBottom: 8 },
+  h1: { fontSize: 22, fontWeight: '800' },
+  h2: { fontSize: 16, fontWeight: '700', marginBottom: 8 },
   card: { borderWidth: 1, borderRadius: 14, padding: 12, marginBottom: 12 },
-  bold: { fontWeight: "700" },
-  muted: { opacity: 0.7 }
+  bold: { fontWeight: '700' },
+  muted: { opacity: 0.7 },
 });

@@ -69,9 +69,12 @@ export default function CommunitiesScreen() {
 
   const getButtonVariant = (color: string) => {
     switch (color) {
-      case 'blue': return 'blue';
-      case 'yellow': return 'yellow';
-      default: return 'red';
+      case 'blue':
+        return 'blue';
+      case 'yellow':
+        return 'yellow';
+      default:
+        return 'red';
     }
   };
 
@@ -90,7 +93,7 @@ export default function CommunitiesScreen() {
         {/* Fan Fraktioner Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>FAN FRAKTIONER</Text>
-          {factionData.map(faction => (
+          {factionData.map((faction) => (
             <Card key={faction.id} style={styles.factionCard}>
               <View style={styles.cardHeader}>
                 <View style={styles.avatar}>
@@ -114,7 +117,7 @@ export default function CommunitiesScreen() {
         {/* Lokale Fællesskaber Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>LOKALE FÆLLESSKABER</Text>
-          {localCommunityData.map(community => (
+          {localCommunityData.map((community) => (
             <Card key={community.id} style={styles.communityCard}>
               <View style={styles.cardHeader}>
                 <View style={styles.avatar}>

@@ -1,6 +1,6 @@
-import React from "react";
-import { Pressable, Text, StyleSheet } from "react-native";
-import { colors, radius } from "../theme";
+import React from 'react';
+import { Pressable, Text, StyleSheet } from 'react-native';
+import { colors, radius } from '../theme';
 
 interface PrimaryButtonProps {
   title: string;
@@ -9,7 +9,12 @@ interface PrimaryButtonProps {
   variant?: 'red' | 'blue' | 'yellow' | 'outline';
 }
 
-export function PrimaryButton({ title, onPress, disabled = false, variant = 'red' }: PrimaryButtonProps) {
+export function PrimaryButton({
+  title,
+  onPress,
+  disabled = false,
+  variant = 'red',
+}: PrimaryButtonProps) {
   const getVariantStyles = () => {
     switch (variant) {
       case 'blue':
@@ -17,7 +22,12 @@ export function PrimaryButton({ title, onPress, disabled = false, variant = 'red
       case 'yellow':
         return { backgroundColor: '#FCD34D', textColor: colors.text };
       case 'outline':
-        return { backgroundColor: 'transparent', borderColor: colors.border, borderWidth: 1, textColor: colors.text };
+        return {
+          backgroundColor: 'transparent',
+          borderColor: colors.border,
+          borderWidth: 1,
+          textColor: colors.text,
+        };
       default:
         return { backgroundColor: colors.fcnRed, textColor: colors.card };
     }
@@ -33,7 +43,7 @@ export function PrimaryButton({ title, onPress, disabled = false, variant = 'red
         styles.btn,
         { backgroundColor, borderColor, borderWidth },
         disabled && styles.disabled,
-        pressed && !disabled && styles.pressed
+        pressed && !disabled && styles.pressed,
       ]}
     >
       <Text style={[styles.txt, { color: textColor }]}>{title}</Text>
@@ -47,9 +57,9 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 20,
     borderRadius: radius.md,
-    alignItems: "center",
+    alignItems: 'center',
   },
   pressed: { opacity: 0.85 },
   disabled: { opacity: 0.45 },
-  txt: { color: colors.card, fontSize: 16, fontWeight: "700" }
+  txt: { color: colors.card, fontSize: 16, fontWeight: '700' },
 });

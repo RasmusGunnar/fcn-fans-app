@@ -30,6 +30,12 @@ export function normalizeMedia(media: unknown): MediaItem[] {
 
   // If it's a JSON string, try to parse it
   if (typeof media === 'string') {
+    // Check if it's a direct URL (starts with http:// or https://)
+    if (media.startsWith('http://') || media.startsWith('https://')) {
+      return [{ url: media }];
+    }
+    
+    // Otherwise try to parse as JSON
     try {
       const parsed = JSON.parse(media);
       // Parsed could be an array or single object
@@ -73,10 +79,10 @@ export function resolveMediaUrl(media: MediaItem | undefined): string | null {
   if (media.bucket && media.path) {
     const url = getPublicUrl(media.bucket, media.path);
     if (__DEV__) {
-      console.log('[resolveMediaUrl] Resolved from bucket+path:', { 
-        bucket: media.bucket, 
-        path: media.path, 
-        url 
+      console.log('[resolveMediaUrl] Resolved from bucket+path:', {
+        bucket: media.bucket,
+        path: media.path,
+        url,
       });
     }
     return url;
@@ -95,10 +101,9 @@ export function resolveMediaUrl(media: MediaItem | undefined): string | null {
   // Priority 4: Path only (try post-media bucket)
   if (media.path) {
     if (__DEV__) {
-      console.warn(
-        '[resolveMediaUrl] Media has path but no bucket. Assuming post-media bucket.',
-        { path: media.path }
-      );
+      console.warn('[resolveMediaUrl] Media has path but no bucket. Assuming post-media bucket.', {
+        path: media.path,
+      });
     }
     return getPublicUrl('post-media', media.path);
   }
@@ -112,16 +117,21 @@ export function resolveMediaUrl(media: MediaItem | undefined): string | null {
  */
 export function isVideoMedia(media: MediaItem | undefined): boolean {
   if (!media) return false;
-  
+
   // Explicit type check first
   if (media.type === 'video') return true;
-  
+
   // Fallback: check URL/path extensions
   const checkableUrl = media.url || media.publicUrl || media.path || '';
   if (!checkableUrl) return false;
-  
+
   const lowerUrl = checkableUrl.toLowerCase();
-  return lowerUrl.includes('.mp4') || lowerUrl.includes('.mov') || lowerUrl.includes('.m4v') || lowerUrl.includes('video');
+  return (
+    lowerUrl.includes('.mp4') ||
+    lowerUrl.includes('.mov') ||
+    lowerUrl.includes('.m4v') ||
+    lowerUrl.includes('video')
+  );
 }
 
 /**

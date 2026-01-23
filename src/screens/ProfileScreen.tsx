@@ -1,5 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Alert, Image } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  Pressable,
+  ActivityIndicator,
+  Alert,
+} from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +18,7 @@ import { OutlineButton } from '../components/ui/OutlineButton';
 import { colors, spacing } from '../theme';
 import { uploadAvatar } from '../lib/uploadAvatar';
 import { getPublicUrl } from '../lib/storageUrl';
+import { Avatar } from '../components/Avatar';
 import {
   fetchMyProfile,
   fetchMyCommunities,
@@ -22,7 +31,15 @@ import {
   type UpcomingItem,
 } from '../services/profileApi';
 
-function SectionCard({ title, icon, children }: { title: string; icon?: string; children: React.ReactNode }) {
+function SectionCard({
+  title,
+  icon,
+  children,
+}: {
+  title: string;
+  icon?: string;
+  children: React.ReactNode;
+}) {
   return (
     <Card style={{ marginBottom: spacing.md }}>
       <View style={styles.sectionHeader}>
@@ -34,7 +51,19 @@ function SectionCard({ title, icon, children }: { title: string; icon?: string; 
   );
 }
 
-function ProfileRow({ icon, title, subtitle, onPress, isLogout }: { icon: string; title: string; subtitle?: string; onPress?: () => void; isLogout?: boolean }) {
+function ProfileRow({
+  icon,
+  title,
+  subtitle,
+  onPress,
+  isLogout,
+}: {
+  icon: string;
+  title: string;
+  subtitle?: string;
+  onPress?: () => void;
+  isLogout?: boolean;
+}) {
   return (
     <Pressable style={styles.row} onPress={onPress}>
       <View style={[styles.rowIcon, isLogout && { backgroundColor: colors.fcnRed }]}>
@@ -108,7 +137,7 @@ export default function ProfileScreen() {
   useFocusEffect(
     React.useCallback(() => {
       loadData();
-    }, [])
+    }, []),
   );
 
   const handleLogout = async () => {
@@ -132,7 +161,7 @@ export default function ProfileScreen() {
 
     if (avatarPath) {
       // avatarPath includes cache buster, store it directly
-      setProfile(prev => prev ? { ...prev, avatar_url: avatarPath } : null);
+      setProfile((prev) => (prev ? { ...prev, avatar_url: avatarPath } : null));
       Alert.alert('Succes!', 'Profilbillede opdateret');
     } else {
       Alert.alert('Fejl', 'Kunne ikke uploade billede. Prøv igen.');
@@ -202,18 +231,22 @@ export default function ProfileScreen() {
         <Text style={styles.headerSubtitle}>Indstillinger & fællesskaber</Text>
       </View>
 
-      {/* Avatar Upload Banner */}
-      {!profile?.avatar_url && !uploadingAvatar && (
+      {/* Avatar Upload Banner - Always visible */}
+      {!uploadingAvatar && (
         <Card style={[styles.avatarBanner, { marginBottom: spacing.md }]}>
           <View style={styles.bannerContent}>
             <Ionicons name="camera" size={24} color={colors.fcnRed} />
             <View style={styles.bannerText}>
-              <Text style={styles.bannerTitle}>Tilføj profilbillede</Text>
-              <Text style={styles.bannerSubtitle}>Gør din profil mere personlig</Text>
+              <Text style={styles.bannerTitle}>
+                {profile?.avatar_url ? 'Skift profilbillede' : 'Tilføj profilbillede'}
+              </Text>
+              <Text style={styles.bannerSubtitle}>
+                {profile?.avatar_url ? 'Upload nyt billede' : 'Gør din profil mere personlig'}
+              </Text>
             </View>
           </View>
           <Pressable style={styles.bannerButton} onPress={handleUploadAvatar}>
-            <Text style={styles.bannerButtonText}>Upload</Text>
+            <Text style={styles.bannerButtonText}>{profile?.avatar_url ? 'Skift' : 'Upload'}</Text>
             <Ionicons name="arrow-forward" size={16} color={colors.card} />
           </Pressable>
         </Card>
@@ -224,7 +257,9 @@ export default function ProfileScreen() {
         <Card style={{ marginBottom: spacing.md, padding: spacing.lg }}>
           <View style={{ alignItems: 'center' }}>
             <ActivityIndicator size="small" color={colors.fcnRed} />
-            <Text style={{ marginTop: spacing.sm, color: colors.subtext }}>Uploader billede...</Text>
+            <Text style={{ marginTop: spacing.sm, color: colors.subtext }}>
+              Uploader billede...
+            </Text>
           </View>
         </Card>
       )}
@@ -232,29 +267,22 @@ export default function ProfileScreen() {
       {/* Profile Card */}
       <Card style={{ marginTop: spacing.md, marginBottom: spacing.md }}>
         <View style={styles.profileSummary}>
-          <View style={styles.avatar}>
-            {profile?.avatar_url ? (
-              <Image 
-                source={{ uri: getPublicUrl('avatars', profile.avatar_url.split('?')[0]) || undefined }} 
-                style={styles.avatarImage}
-                onError={(error) => {
-                  if (__DEV__) {
-                    console.warn('[ProfileScreen] Avatar load error:', { 
-                      avatarUrl: profile.avatar_url, 
-                      publicUrl: getPublicUrl('avatars', profile.avatar_url.split('?')[0]),
-                      error 
-                    });
-                  }
-                }}
+          <Pressable onPress={handleUploadAvatar} disabled={uploadingAvatar}>
+            <View style={styles.avatar}>
+              <Avatar
+                userId={user?.id}
+                avatarUrl={profile?.avatar_url}
+                size={64}
+                label={profile?.display_name || user?.email || 'Fan'}
               />
-            ) : (
-              <Ionicons name="person" size={32} color={colors.card} />
-            )}
-          </View>
+              {/* Camera icon overlay */}
+              <View style={styles.avatarOverlay}>
+                <Ionicons name="camera" size={20} color="#FFFFFF" />
+              </View>
+            </View>
+          </Pressable>
           <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>
-              {profile?.display_name || user?.email || 'Fan'}
-            </Text>
+            <Text style={styles.profileName}>{profile?.display_name || user?.email || 'Fan'}</Text>
             <Text style={styles.profileSubtext}>
               {profile?.member_since
                 ? `Medlem siden ${formatMemberSince(profile.member_since)}`
@@ -263,19 +291,13 @@ export default function ProfileScreen() {
             <View style={styles.badges}>
               <Pill label="Fan" />
               {ownedCount > 0 && (
-                <Pill
-                  label={`Ejer af ${ownedCount} fællesskab${ownedCount > 1 ? 'er' : ''}`}
-                />
+                <Pill label={`Ejer af ${ownedCount} fællesskab${ownedCount > 1 ? 'er' : ''}`} />
               )}
             </View>
           </View>
         </View>
         <View style={{ marginTop: spacing.md }}>
-          <OutlineButton
-            title="Rediger profil"
-            icon="pencil"
-            onPress={handleEditProfile}
-          />
+          <OutlineButton title="Rediger profil" icon="pencil" onPress={handleEditProfile} />
         </View>
       </Card>
 
@@ -355,12 +377,7 @@ export default function ProfileScreen() {
           title="Hjælp & support"
           onPress={() => Alert.alert('Hjælp', 'Kontakt support@fcnfans.dk')}
         />
-        <ProfileRow
-          icon="log-out"
-          title="Log ud"
-          onPress={handleLogout}
-          isLogout
-        />
+        <ProfileRow icon="log-out" title="Log ud" onPress={handleLogout} isLogout />
       </Card>
 
       <View style={styles.footer}>
@@ -426,19 +443,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    position: 'relative',
+    marginRight: spacing.md,
+  },
+  avatarOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: colors.fcnRed,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.md,
-    overflow: 'hidden',
-  },
-  avatarImage: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    borderWidth: 2,
+    borderColor: colors.card,
   },
   avatarBanner: {
     flexDirection: 'row',

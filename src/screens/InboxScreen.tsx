@@ -1,5 +1,5 @@
-import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 
 export default function InboxScreen() {
   return (
@@ -12,6 +12,6 @@ export default function InboxScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },
-  h1: { fontSize: 24, fontWeight: "800" },
-  muted: { opacity: 0.7, marginTop: 8 }
+  h1: { fontSize: 24, fontWeight: '800' },
+  muted: { opacity: 0.7, marginTop: 8 },
 });

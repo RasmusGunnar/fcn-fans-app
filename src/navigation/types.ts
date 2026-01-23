@@ -20,6 +20,7 @@ export type RootStackParamList = {
   Event: { eventId: string };
   CreateEvent: { communityId?: string | null; matchId?: string | null };
   CreateNewEvent: undefined;
+  EditEvent: { eventId: string };
 
   // events module
   BusTripDetails: { busTripId: string };
@@ -31,7 +32,7 @@ export type RootStackParamList = {
   CommunityHub: { communityId: string };
 
   // match details
-  MatchDetails: { fixture?: Fixture; fixtureId?: string };
+  MatchDetails: { fixtureId: string };
 
   // other screens
   Matchday: undefined;

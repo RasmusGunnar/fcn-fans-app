@@ -22,7 +22,7 @@ export default function CreateSheet({ visible, onClose }: CreateSheetProps) {
   const insets = useSafeAreaInsets();
   const { fetchPosts } = useFeed();
   const { user } = useAuth();
-  
+
   const [contentType, setContentType] = useState<ContentType>(null);
   const [actor, setActor] = useState<Actor>({
     type: 'user',
@@ -87,7 +87,11 @@ export default function CreateSheet({ visible, onClose }: CreateSheetProps) {
             <Ionicons name="close" size={28} color={colors.text} />
           </Pressable>
           <Text style={styles.title}>
-            {contentType === null ? 'Hvad vil du oprette?' : contentType === 'post' ? 'Opret opslag' : 'Del nyhed'}
+            {contentType === null
+              ? 'Hvad vil du oprette?'
+              : contentType === 'post'
+                ? 'Opret opslag'
+                : 'Del nyhed'}
           </Text>
           <View style={{ width: 28 }} />
         </View>
@@ -96,10 +100,7 @@ export default function CreateSheet({ visible, onClose }: CreateSheetProps) {
           {contentType === null ? (
             // Step 1: Choose content type
             <View style={styles.choiceContainer}>
-              <Pressable
-                style={styles.choiceCard}
-                onPress={() => setContentType('post')}
-              >
+              <Pressable style={styles.choiceCard} onPress={() => setContentType('post')}>
                 <View style={styles.choiceIcon}>
                   <Ionicons name="create" size={40} color={colors.fcnRed} />
                 </View>
@@ -109,10 +110,7 @@ export default function CreateSheet({ visible, onClose }: CreateSheetProps) {
                 </Text>
               </Pressable>
 
-              <Pressable
-                style={styles.choiceCard}
-                onPress={() => setContentType('news')}
-              >
+              <Pressable style={styles.choiceCard} onPress={() => setContentType('news')}>
                 <View style={styles.choiceIcon}>
                   <Ionicons name="link" size={40} color={colors.fcnRed} />
                 </View>
@@ -123,8 +121,15 @@ export default function CreateSheet({ visible, onClose }: CreateSheetProps) {
               </Pressable>
             </View>
           ) : contentType === 'post' ? (
-            // Step 2: Post composer
-            <PostComposer onSuccess={handlePostSuccess} />
+            // Step 2: Post composer (community posting coming later)
+            <>
+              <View style={{ padding: spacing.md }}>
+                <Text style={styles.infoText}>
+                  💡 Community-posting for opslag kommer snart. Lige nu oprettes opslag som dig selv.
+                </Text>
+              </View>
+              <PostComposer onSuccess={handlePostSuccess} />
+            </>
           ) : (
             // Step 2: News composer with actor selector
             <>
@@ -197,5 +202,15 @@ const styles = StyleSheet.create({
     color: colors.subtext,
     textAlign: 'center',
     lineHeight: 20,
+  },
+  infoText: {
+    fontSize: 14,
+    color: colors.subtext,
+    backgroundColor: colors.card,
+    padding: spacing.md,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: spacing.md,
   },
 });

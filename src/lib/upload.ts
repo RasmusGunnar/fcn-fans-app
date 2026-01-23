@@ -15,12 +15,21 @@ function base64ToUint8Array(b64: string): Uint8Array {
 
 function getExtensionFromUri(uri: string, type: 'image' | 'video'): string {
   const q = uri.split('?')[0];
-  const dot = q.lastIndexOf('.')
+  const dot = q.lastIndexOf('.');
   if (dot !== -1) return q.substring(dot + 1).toLowerCase();
   return type === 'image' ? 'jpg' : 'mp4';
 }
 
-export async function uploadMediaToSupabase(userId: string, asset: MediaAsset): Promise<{ path: string; publicUrl: string; type: 'image' | 'video'; width?: number; height?: number; }> {
+export async function uploadMediaToSupabase(
+  userId: string,
+  asset: MediaAsset,
+): Promise<{
+  path: string;
+  publicUrl: string;
+  type: 'image' | 'video';
+  width?: number;
+  height?: number;
+}> {
   // Auth guard: verify user is authenticated
   if (!userId || userId.trim() === '') {
     throw new Error('uploadMediaToSupabase: Not authenticated (userId missing)');
@@ -33,16 +42,18 @@ export async function uploadMediaToSupabase(userId: string, asset: MediaAsset): 
   const fileName = `${cryptoRandom()}.${ext}`;
   const path = `${userId}/${yyyyMM}/${fileName}`;
 
-  console.log('[Upload] Starting upload to post-media bucket', { 
-    path, 
-    type: asset.type, 
+  console.log('[Upload] Starting upload to post-media bucket', {
+    path,
+    type: asset.type,
     originalMimeType: asset.mimeType,
-    uploadMimeType: asset.type === 'image' ? 'image/jpeg' : asset.mimeType || `video/${ext}` 
+    uploadMimeType: asset.type === 'image' ? 'image/jpeg' : asset.mimeType || `video/${ext}`,
   });
 
   // Check if we have base64 data
   if (!asset.base64) {
-    throw new Error('No base64 data available. Make sure to request base64 in image picker options.');
+    throw new Error(
+      'No base64 data available. Make sure to request base64 in image picker options.',
+    );
   }
 
   // Convert base64 to Uint8Array (reliable for Supabase in Expo)
@@ -55,7 +66,7 @@ export async function uploadMediaToSupabase(userId: string, asset: MediaAsset): 
   }
 
   const { data, error } = await supabase.storage.from('post-media').upload(path, bytes, {
-    contentType: asset.type === 'image' ? 'image/jpeg' : (asset.mimeType || `video/${ext}`),
+    contentType: asset.type === 'image' ? 'image/jpeg' : asset.mimeType || `video/${ext}`,
     upsert: true,
     cacheControl: '3600',
   });
@@ -83,7 +94,7 @@ export async function uploadMediaToSupabase(userId: string, asset: MediaAsset): 
         name: fileMetadata?.name,
         size: storedSize,
         contentType: fileMetadata?.metadata?.mimetype,
-        expectedLength: bytes.length
+        expectedLength: bytes.length,
       });
       if (storedSize === 0) {
         throw new Error('Upload failed: Stored file is 0 bytes. This is a Supabase Storage issue.');

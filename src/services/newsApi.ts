@@ -7,7 +7,7 @@ import { NewsItem, LinkPreview } from '../types/news';
 export async function fetchLinkPreview(url: string): Promise<LinkPreview> {
   try {
     console.log('[newsApi] fetchLinkPreview called with URL:', url);
-    
+
     const { data, error } = await supabase.functions.invoke('parse-link', {
       body: { url },
     });
@@ -83,12 +83,15 @@ export async function insertNewsItem(params: {
     if (error) {
       console.log('\n\n');
       console.log('###NEWSDBG### ===== SUPABASE ERROR =====');
-      console.log('###NEWSDBG### supabaseError', JSON.stringify({
-        code: error.code,
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-      }));
+      console.log(
+        '###NEWSDBG### supabaseError',
+        JSON.stringify({
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+        }),
+      );
       console.log('###NEWSDBG### supabaseError raw', error);
       console.log('###NEWSDBG### =======================');
       console.log('\n\n');
@@ -144,8 +147,15 @@ export async function fetchNewsItems(limit: number = 50): Promise<NewsItem[]> {
 
     if (error) {
       // Handle PGRST205: table not found - this is expected before migration
-      if (error.code === 'PGRST204' || error.code === '42P01' || error.message.includes('does not exist') || error.message.includes('not found')) {
-        console.warn('[newsApi] news_items table not found (migration not run yet). Returning empty array.');
+      if (
+        error.code === 'PGRST204' ||
+        error.code === '42P01' ||
+        error.message.includes('does not exist') ||
+        error.message.includes('not found')
+      ) {
+        console.warn(
+          '[newsApi] news_items table not found (migration not run yet). Returning empty array.',
+        );
         return [];
       }
       console.error('[newsApi] fetchNewsItems error:', error);
@@ -172,7 +182,10 @@ export async function fetchNewsItems(limit: number = 50): Promise<NewsItem[]> {
     }));
   } catch (error: any) {
     // Catch any unexpected errors and log as warning, return empty array
-    console.warn('[newsApi] fetchNewsItems failed (returning empty array):', error?.message || error);
+    console.warn(
+      '[newsApi] fetchNewsItems failed (returning empty array):',
+      error?.message || error,
+    );
     return [];
   }
 }

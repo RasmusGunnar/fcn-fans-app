@@ -16,6 +16,7 @@ export const colors = {
   actionRowBorder: '#F3F4F6',
   warningBg: '#FFF7ED',
   warningText: '#C2410C',
+  error: '#DC2626',
   spotifyGreen: '#1DB954',
   softYellowBg: '#FBF2D5',
   ctaBg: '#F7EED6',

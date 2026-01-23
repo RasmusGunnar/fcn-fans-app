@@ -17,6 +17,7 @@ supabase functions serve parse-link
 ## API
 
 **Input:**
+
 ```json
 {
   "url": "https://example.com/article"
@@ -24,6 +25,7 @@ supabase functions serve parse-link
 ```
 
 **Output:**
+
 ```json
 {
   "resolvedUrl": "https://example.com/article",
@@ -37,7 +39,7 @@ supabase functions serve parse-link
 ## Features
 
 - Følger redirects automatisk
-- Parser OpenGraph (og:*) og Twitter Card (twitter:*) meta tags
+- Parser OpenGraph (og:_) og Twitter Card (twitter:_) meta tags
 - Fallback til standard HTML meta tags og `<title>`
 - Resolver relative image URLs til absolute
 - CORS enabled for client-side requests

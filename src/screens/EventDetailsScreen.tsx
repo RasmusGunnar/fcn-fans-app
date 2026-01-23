@@ -9,19 +9,23 @@ import {
   TouchableOpacity,
   Share,
   Pressable,
+  Alert,
 } from 'react-native';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Card } from '../components/ui/Card';
 import { PrimaryButton } from '../components/PrimaryButton';
+import { OptionsMenu, OptionsMenuOption } from '../components/OptionsMenu';
+import { InlineComments } from '../components/comments/InlineComments';
 import { fetchEventById, type Event } from '../services/eventsApi';
 import { colors, spacing } from '../theme';
+import { useAuth } from '../auth/AuthProvider';
+import { canEditEvent, canDeleteEvent } from '../utils/permissions';
+import { supabase } from '../lib/supabase';
+import { useCommunityRole } from '../hooks/useCommunityRole';
 
-type EventDetailsRouteProp = RouteProp<
-  { EventDetails: { eventId: string } },
-  'EventDetails'
->;
+type EventDetailsRouteProp = RouteProp<{ EventDetails: { eventId: string } }, 'EventDetails'>;
 
 export default function EventDetailsScreen() {
   const navigation = useNavigation();
@@ -30,6 +34,10 @@ export default function EventDetailsScreen() {
   const insets = useSafeAreaInsets();
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
+  const { user, isAppAdmin } = useAuth();
+
+  // Get community role for the event's organizer group (if set)
+  const { role: communityRole } = useCommunityRole(event?.organizer_group_id);
 
   useEffect(() => {
     loadEvent();
@@ -40,7 +48,15 @@ export default function EventDetailsScreen() {
     console.log('[EventDetailsScreen] Loading event:', eventId);
     setLoading(true);
     const data = await fetchEventById(eventId);
-    console.log('[EventDetailsScreen] Event data received:', data);
+    if (__DEV__) {
+      console.log('[EventDetailsScreen] Event data received:', {
+        id: data?.id,
+        title: data?.title,
+        created_by: data?.created_by,
+        organizer_group_id: data?.organizer_group_id,
+        hasAllFields: !!(data?.created_by !== undefined && data?.organizer_group_id !== undefined),
+      });
+    }
     setEvent(data);
     setLoading(false);
   };
@@ -50,7 +66,7 @@ export default function EventDetailsScreen() {
     try {
       await Share.share({
         message: `${event.title}\n${event.description || ''}\n📅 ${new Date(
-          event.start_at
+          event.start_at,
         ).toLocaleDateString('da-DK')}`,
         title: event.title,
       });
@@ -64,14 +80,31 @@ export default function EventDetailsScreen() {
     console.log('Set reminder for event:', eventId);
   };
 
+  const handleEditEvent = () => {
+    // Navigate to edit screen
+    (navigation as any).navigate('EditEvent', { eventId });
+  };
+
+  const handleDeleteEvent = async () => {
+    const { error } = await supabase.from('events').delete().eq('id', eventId);
+    if (error) {
+      Alert.alert('Fejl', 'Kunne ikke slette eventet. Du har muligvis ikke rettigheder til dette.');
+      console.warn('Delete event error', error);
+    } else {
+      Alert.alert('Slettet', 'Eventet er blevet slettet', [
+        {
+          text: 'OK',
+          onPress: () => navigation.goBack(),
+        },
+      ]);
+    }
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
-          <Pressable
-            onPress={() => navigation.goBack()}
-            style={styles.backButton}
-          >
+          <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color={colors.card} />
           </Pressable>
           <Text style={styles.headerTitle}>Event detaljer</Text>
@@ -88,10 +121,7 @@ export default function EventDetailsScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
-          <Pressable
-            onPress={() => navigation.goBack()}
-            style={styles.backButton}
-          >
+          <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color={colors.card} />
           </Pressable>
           <Text style={styles.headerTitle}>Event detaljer</Text>
@@ -123,6 +153,54 @@ export default function EventDetailsScreen() {
       })
     : null;
 
+  // Permission checks - use isAppAdmin from context and community role
+  const showEditOption = canEditEvent(
+    user?.id,
+    isAppAdmin,
+    {
+      created_by: event.created_by,
+      organizer_group_id: event.organizer_group_id,
+    },
+    communityRole,
+  );
+  const showDeleteOption = canDeleteEvent(
+    user?.id,
+    isAppAdmin,
+    {
+      created_by: event.created_by,
+      organizer_group_id: event.organizer_group_id,
+    },
+    communityRole,
+  );
+
+  const eventMenuOptions: OptionsMenuOption[] = [];
+  if (showEditOption) {
+    eventMenuOptions.push({ label: 'Redigér', onPress: handleEditEvent, icon: 'create-outline' });
+  }
+  if (showDeleteOption) {
+    eventMenuOptions.push({
+      label: 'Slet',
+      onPress: handleDeleteEvent,
+      destructive: true,
+      icon: 'trash-outline',
+    });
+  }
+
+  // Debug logging for permissions
+  if (__DEV__) {
+    console.log('EVENT PERM', {
+      isAppAdmin,
+      created_by: event.created_by,
+      org: event.organizer_group_id,
+      showEditOption,
+      showDeleteOption,
+      menuOptionsCount: eventMenuOptions.length,
+      userId: user?.id,
+      userIdMatchesCreator: event.created_by === user?.id,
+      communityRole,
+    });
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Custom Header */}
@@ -131,6 +209,10 @@ export default function EventDetailsScreen() {
           <Ionicons name="arrow-back" size={24} color={colors.card} />
         </Pressable>
         <Text style={styles.headerTitle}>Event detaljer</Text>
+        <View style={{ flex: 1 }} />
+        {eventMenuOptions.length > 0 && (
+          <OptionsMenu options={eventMenuOptions} iconColor={colors.card} iconSize={24} />
+        )}
       </View>
 
       <ScrollView
@@ -147,9 +229,7 @@ export default function EventDetailsScreen() {
           </View>
           <Text style={styles.title}>{event.title}</Text>
           {event.organizer && (
-            <Text style={styles.subtitle}>
-              Arrangeret af {event.organizer.name}
-            </Text>
+            <Text style={styles.subtitle}>Arrangeret af {event.organizer.name}</Text>
           )}
         </Card>
 
@@ -175,9 +255,7 @@ export default function EventDetailsScreen() {
                 <Text style={styles.detailLabel}>Sted</Text>
                 <Text style={styles.detailValue}>{event.location_name}</Text>
                 {event.location_address && (
-                  <Text style={styles.detailSubvalue}>
-                    {event.location_address}
-                  </Text>
+                  <Text style={styles.detailSubvalue}>{event.location_address}</Text>
                 )}
               </View>
             </View>
@@ -202,10 +280,7 @@ export default function EventDetailsScreen() {
 
         {/* Action Buttons */}
         <View style={styles.actionsContainer}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={handleSetReminder}
-          >
+          <TouchableOpacity style={styles.actionButton} onPress={handleSetReminder}>
             <Ionicons name="notifications-outline" size={24} color={colors.fcnRed} />
             <Text style={styles.actionText}>Påmindelse</Text>
           </TouchableOpacity>
@@ -221,10 +296,7 @@ export default function EventDetailsScreen() {
             <Text style={styles.sectionTitle}>Arrangør</Text>
             <View style={styles.organizerInfo}>
               {event.organizer.logo_url ? (
-                <Image
-                  source={{ uri: event.organizer.logo_url }}
-                  style={styles.organizerLogo}
-                />
+                <Image source={{ uri: event.organizer.logo_url }} style={styles.organizerLogo} />
               ) : (
                 <View style={styles.organizerLogoPlaceholder}>
                   <Text style={styles.organizerLogoText}>
@@ -235,9 +307,7 @@ export default function EventDetailsScreen() {
               <View style={styles.organizerText}>
                 <Text style={styles.organizerName}>{event.organizer.name}</Text>
                 {event.organizer.description && (
-                  <Text style={styles.organizerDescription}>
-                    {event.organizer.description}
-                  </Text>
+                  <Text style={styles.organizerDescription}>{event.organizer.description}</Text>
                 )}
               </View>
             </View>
@@ -255,13 +325,17 @@ export default function EventDetailsScreen() {
           />
         </View>
 
-        {/* Placeholder: Comments */}
-        <Card style={styles.commentsCard}>
-          <Text style={styles.sectionTitle}>Kommentarer (0)</Text>
-          <Text style={styles.placeholderText}>
-            Ingen kommentarer endnu. Vær den første!
-          </Text>
-        </Card>
+        {/* Comments Section */}
+        {event && (
+          <View style={styles.commentsSection}>
+            <InlineComments
+              targetType="event"
+              targetId={event.id}
+              currentUserId={user?.id || ''}
+              isAppAdmin={isAppAdmin}
+            />
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -465,6 +539,10 @@ const styles = StyleSheet.create({
   ctaContainer: {
     marginHorizontal: spacing.md,
     marginBottom: spacing.md,
+  },
+  commentsSection: {
+    margin: spacing.md,
+    marginTop: 0,
   },
   commentsCard: {
     margin: spacing.md,

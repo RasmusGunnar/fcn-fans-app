@@ -1,5 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable, Image, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  Pressable,
+  Image,
+  ActivityIndicator,
+} from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,6 +16,8 @@ import { PrimaryButton } from '../components/PrimaryButton';
 import { OutlineButton } from '../components/ui/OutlineButton';
 import { SectionTitle } from '../components/ui/SectionTitle';
 import { ListRowIcon } from '../components/ui/ListRowIcon';
+import { InlineComments } from '../components/comments/InlineComments';
+import { useAuth } from '../auth/AuthProvider';
 import { colors, spacing } from '../theme';
 import type { RootStackParamList } from '../navigation/types';
 import { formatDateDa, type Fixture } from '../services/fixtures';
@@ -18,17 +28,18 @@ type MatchDetailsRouteProp = RouteProp<RootStackParamList, 'MatchDetails'>;
 export default function MatchDetailsScreen() {
   const navigation = useNavigation();
   const route = useRoute<MatchDetailsRouteProp>();
-  const { fixture: fixtureParam, fixtureId } = route.params || {};
+  const { fixtureId } = route.params || {};
   const insets = useSafeAreaInsets();
-  const [fixture, setFixture] = useState<Fixture | null>(fixtureParam || null);
-  const [loading, setLoading] = useState(!fixtureParam && !!fixtureId);
+  const { user, isAppAdmin } = useAuth();
+  const [fixture, setFixture] = useState<Fixture | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // If fixtureId provided but no fixture object, fetch it
+  // Fetch fixture by ID
   useEffect(() => {
-    if (fixtureId && !fixtureParam) {
+    if (fixtureId) {
       loadFixture();
     }
-  }, [fixtureId, fixtureParam]);
+  }, [fixtureId]);
 
   const loadFixture = async () => {
     if (!fixtureId) return;
@@ -98,7 +109,9 @@ export default function MatchDetailsScreen() {
                 <Image source={{ uri: fixture.home_logo_url }} style={styles.teamLogo} />
               ) : (
                 <View style={styles.teamCircle}>
-                  <Text style={styles.teamText}>{fixture.home_team.substring(0, 3).toUpperCase()}</Text>
+                  <Text style={styles.teamText}>
+                    {fixture.home_team.substring(0, 3).toUpperCase()}
+                  </Text>
                 </View>
               )}
               <Text style={styles.teamName}>{fixture.home_team}</Text>
@@ -109,7 +122,9 @@ export default function MatchDetailsScreen() {
                 <Image source={{ uri: fixture.away_logo_url }} style={styles.teamLogo} />
               ) : (
                 <View style={styles.teamCircle}>
-                  <Text style={styles.teamText}>{fixture.away_team.substring(0, 3).toUpperCase()}</Text>
+                  <Text style={styles.teamText}>
+                    {fixture.away_team.substring(0, 3).toUpperCase()}
+                  </Text>
                 </View>
               )}
               <Text style={styles.teamName}>{fixture.away_team}</Text>
@@ -117,16 +132,17 @@ export default function MatchDetailsScreen() {
           </View>
           {(fixture.competition || fixture.round) && (
             <Text style={styles.leagueText}>
-              {fixture.competition}{fixture.round ? ` - ${fixture.round}` : ''}
+              {fixture.competition}
+              {fixture.round ? ` - ${fixture.round}` : ''}
             </Text>
           )}
           <View style={styles.divider} />
           <ListRowIcon icon="calendar" title={formatDateDa(fixture.kickoff_at)} />
           {fixture.venue && (
-            <ListRowIcon 
-              icon="location" 
-              title={fixture.venue} 
-              subtitle={fixture.venue_city || undefined} 
+            <ListRowIcon
+              icon="location"
+              title={fixture.venue}
+              subtitle={fixture.venue_city || undefined}
             />
           )}
         </Card>
@@ -158,27 +174,12 @@ export default function MatchDetailsScreen() {
 
         {/* Fan Comments */}
         <View style={styles.section}>
-          <SectionTitle title="FRA FANS OM DENNE KAMP" />
-          <Card style={styles.commentsCard}>
-            <View style={styles.commentRow}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>M</Text>
-              </View>
-              <View style={styles.commentContent}>
-                <Text style={styles.commentAuthor}>Morten Hansen</Text>
-                <Text style={styles.commentText}>Glæder mig til at se FCN vinde!</Text>
-              </View>
-            </View>
-            <View style={styles.commentRow}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>S</Text>
-              </View>
-              <View style={styles.commentContent}>
-                <Text style={styles.commentAuthor}>Sarah Jensen</Text>
-                <Text style={styles.commentText}>Kommer med toget fra København</Text>
-              </View>
-            </View>
-          </Card>
+          <InlineComments
+            targetType="match"
+            targetId={fixture.id}
+            currentUserId={user?.id || ''}
+            isAppAdmin={isAppAdmin}
+          />
         </View>
       </ScrollView>
     </SafeAreaView>

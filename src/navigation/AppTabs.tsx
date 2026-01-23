@@ -14,16 +14,36 @@ import CreateSheet from '../screens/CreateSheet';
 const Tab = createBottomTabNavigator();
 
 const tabData = [
-  { name: 'Home', label: 'Hjem', iconActive: 'home' as const, iconInactive: 'home-outline' as const },
-  { name: 'Communities', label: 'Fællesskab', iconActive: 'people' as const, iconInactive: 'people-outline' as const },
-  { name: 'Events', label: 'Events', iconActive: 'calendar' as const, iconInactive: 'calendar-outline' as const },
-  { name: 'Songs', label: 'Sange', iconActive: 'musical-notes' as const, iconInactive: 'musical-notes-outline' as const },
+  {
+    name: 'Home',
+    label: 'Hjem',
+    iconActive: 'home' as const,
+    iconInactive: 'home-outline' as const,
+  },
+  {
+    name: 'Communities',
+    label: 'Fællesskab',
+    iconActive: 'people' as const,
+    iconInactive: 'people-outline' as const,
+  },
+  {
+    name: 'Events',
+    label: 'Events',
+    iconActive: 'calendar' as const,
+    iconInactive: 'calendar-outline' as const,
+  },
+  {
+    name: 'Songs',
+    label: 'Sange',
+    iconActive: 'musical-notes' as const,
+    iconInactive: 'musical-notes-outline' as const,
+  },
 ];
 
 function CustomTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeAreaInsets();
   const [sheetVisible, setSheetVisible] = useState(false);
-  
+
   const onPlusPress = () => {
     console.log('[AppTabs] Plus button pressed - opening CreateSheet');
     setSheetVisible(true);
@@ -37,7 +57,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
   const leftTabs = tabData.slice(0, 2);
   const rightTabs = tabData.slice(2, 4);
 
-  const renderTab = (tab: typeof tabData[0]) => {
+  const renderTab = (tab: (typeof tabData)[0]) => {
     const route = state.routes.find((r: any) => r.name === tab.name);
     if (!route) return null;
     const { options } = descriptors[route.key];
@@ -66,15 +86,11 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
   };
 
   return (
-    <View style={[styles.tabBarContainer, { height: 64 + insets.bottom }]}> 
+    <View style={[styles.tabBarContainer, { height: 64 + insets.bottom }]}>
       <View style={styles.tabBar}>
-        <View style={styles.sideGroup}>
-          {leftTabs.map(renderTab)}
-        </View>
+        <View style={styles.sideGroup}>{leftTabs.map(renderTab)}</View>
         <View style={{ width: 60 }} />
-        <View style={styles.sideGroup}>
-          {rightTabs.map(renderTab)}
-        </View>
+        <View style={styles.sideGroup}>{rightTabs.map(renderTab)}</View>
         <Pressable style={styles.centerButton} onPress={onPlusPress}>
           <Text style={styles.plusText}>+</Text>
         </Pressable>
@@ -96,11 +112,7 @@ export function AppTabs() {
       <Tab.Screen name="Communities" component={CommunitiesStack} />
       <Tab.Screen name="Events" component={EventsStack} />
       <Tab.Screen name="Songs" component={SongsScreen} />
-      <Tab.Screen 
-        name="Profile" 
-        component={ProfileStack}
-        options={{ tabBarButton: () => null }}
-      />
+      <Tab.Screen name="Profile" component={ProfileStack} options={{ tabBarButton: () => null }} />
     </Tab.Navigator>
   );
 }

@@ -4,30 +4,69 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing } from '../theme';
 import { Actor } from '../types/news';
 import { useAuth } from '../auth/AuthProvider';
-import { fetchMyCommunities, MyCommunity } from '../services/profileApi';
+import { supabase } from '../lib/supabase';
+import { getMyCommunityRoles, canPostAsCommunity } from '../services/rbac';
 
 interface ActorSelectorProps {
   selectedActor: Actor;
   onSelectActor: (actor: Actor) => void;
 }
 
+interface EligibleCommunity {
+  id: string;
+  name: string;
+  role: 'owner' | 'admin';
+}
+
 export function ActorSelector({ selectedActor, onSelectActor }: ActorSelectorProps) {
   const { user } = useAuth();
   const [showDropdown, setShowDropdown] = useState(false);
-  const [ownerCommunities, setOwnerCommunities] = useState<MyCommunity[]>([]);
+  const [eligibleCommunities, setEligibleCommunities] = useState<EligibleCommunity[]>([]);
   const [loading, setLoading] = useState(false);
 
   const loadCommunities = useCallback(async () => {
     if (!user?.id) return;
     setLoading(true);
     try {
-      const { ownerCommunities: owned } = await fetchMyCommunities(user.id);
-      // ownerCommunities already filtered to owner/admin in fetchMyCommunities
-      console.log('[ActorSelector] Loaded eligible communities (owner/admin):', owned.length);
-      setOwnerCommunities(owned);
+      // Step 1: Get user's roles in all communities
+      const roleMap = await getMyCommunityRoles();
+
+      // Step 2: Filter to only communities where user can post (owner/admin)
+      const eligibleIds = Object.entries(roleMap)
+        .filter(([_, role]) => canPostAsCommunity(role))
+        .map(([communityId]) => communityId);
+
+      console.log('[ActorSelector] Eligible community IDs (owner/admin):', eligibleIds.length);
+
+      if (eligibleIds.length === 0) {
+        setEligibleCommunities([]);
+        return;
+      }
+
+      // Step 3: Fetch community names
+      const { data: communities, error } = await supabase
+        .from('communities')
+        .select('id, name')
+        .in('id', eligibleIds);
+
+      if (error) {
+        console.error('[ActorSelector] Error fetching community names:', error);
+        setEligibleCommunities([]);
+        return;
+      }
+
+      const eligible: EligibleCommunity[] =
+        communities?.map((c) => ({
+          id: c.id,
+          name: c.name,
+          role: roleMap[c.id] as 'owner' | 'admin',
+        })) || [];
+
+      console.log('[ActorSelector] Loaded eligible communities:', eligible.length);
+      setEligibleCommunities(eligible);
     } catch (error) {
       console.error('[ActorSelector] Failed to load communities:', error);
-      setOwnerCommunities([]);
+      setEligibleCommunities([]);
     } finally {
       setLoading(false);
     }
@@ -47,7 +86,7 @@ export function ActorSelector({ selectedActor, onSelectActor }: ActorSelectorPro
     setShowDropdown(false);
   };
 
-  const handleSelectCommunity = (community: MyCommunity) => {
+  const handleSelectCommunity = (community: EligibleCommunity) => {
     onSelectActor({
       type: 'community',
       id: community.id,
@@ -56,15 +95,12 @@ export function ActorSelector({ selectedActor, onSelectActor }: ActorSelectorPro
     setShowDropdown(false);
   };
 
-  const hasOwnerCommunities = ownerCommunities.length > 0;
+  const hasEligibleCommunities = eligibleCommunities.length > 0;
 
   return (
     <View style={styles.container}>
       <Text style={styles.label}>Opret som</Text>
-      <Pressable
-        style={styles.selector}
-        onPress={() => setShowDropdown(!showDropdown)}
-      >
+      <Pressable style={styles.selector} onPress={() => setShowDropdown(!showDropdown)}>
         <View style={styles.selectedActor}>
           <Ionicons
             name={selectedActor.type === 'user' ? 'person' : 'people'}
@@ -90,16 +126,14 @@ export function ActorSelector({ selectedActor, onSelectActor }: ActorSelectorPro
             <>
               <Pressable style={styles.dropdownItem} onPress={handleSelectUser}>
                 <Ionicons name="person" size={20} color={colors.text} />
-                <Text style={styles.dropdownText}>
-                  {user?.email || 'Dig selv'}
-                </Text>
+                <Text style={styles.dropdownText}>{user?.email || 'Dig selv'}</Text>
               </Pressable>
 
-              {hasOwnerCommunities && (
+              {hasEligibleCommunities && (
                 <>
                   <View style={styles.dropdownDivider} />
                   <Text style={styles.dropdownHeader}>Dine fællesskaber</Text>
-                  {ownerCommunities.map((community) => (
+                  {eligibleCommunities.map((community) => (
                     <Pressable
                       key={community.id}
                       style={styles.dropdownItem}
@@ -107,6 +141,9 @@ export function ActorSelector({ selectedActor, onSelectActor }: ActorSelectorPro
                     >
                       <Ionicons name="people" size={20} color={colors.text} />
                       <Text style={styles.dropdownText}>{community.name}</Text>
+                      <Text style={styles.roleLabel}>
+                        {community.role === 'owner' ? 'ejer' : 'admin'}
+                      </Text>
                     </Pressable>
                   ))}
                 </>
@@ -179,5 +216,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     textTransform: 'uppercase',
+  },
+  roleLabel: {
+    fontSize: 12,
+    color: colors.subtext,
+    marginLeft: 'auto',
   },
 });
