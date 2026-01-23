@@ -9,6 +9,7 @@ type AuthContextValue = {
   session: Session | null;
   user: User | null;
   loading: boolean;
+  isAppAdmin: boolean;
   signInWithOtp: (email: string) => Promise<void>;
   verifyOtp: (email: string, token: string) => Promise<void>;
   signInWithApple: () => Promise<void>;
@@ -23,6 +24,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAppAdmin, setIsAppAdmin] = useState(false);
+
+  // Check if user is app admin via RPC (to avoid RLS issues)
+  useEffect(() => {
+    let mounted = true;
+
+    const checkAdminStatus = async (userId: string) => {
+      try {
+        // Use RPC function to check admin status (bypasses RLS)
+        const { data: isAdmin, error } = await supabase.rpc('is_app_admin');
+
+        if (error) {
+          throw error;
+        }
+
+        if (mounted) {
+          setIsAppAdmin(!!isAdmin);
+          if (__DEV__) {
+            console.log('[AuthProvider] Admin check result:', { userId, isAdmin: !!isAdmin });
+          }
+        }
+      } catch (e) {
+        console.warn('[AuthProvider] Error checking admin status:', e);
+        if (mounted) setIsAppAdmin(false);
+      }
+    };
+
+    if (user?.id) {
+      checkAdminStatus(user.id);
+    } else {
+      setIsAppAdmin(false);
+    }
+
+    return () => {
+      mounted = false;
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     let mounted = true;
@@ -47,7 +85,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       mounted = false;
-      try { listener.subscription.unsubscribe(); } catch (e) { /* ignore */ }
+      try {
+        listener.subscription.unsubscribe();
+      } catch (e) {
+        /* ignore */
+      }
     };
   }, []);
 
@@ -129,7 +171,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, loading, signInWithOtp, verifyOtp, signInWithApple, signInWithPassword, signUp, signOut }}>
+    <AuthContext.Provider
+      value={{
+        session,
+        user,
+        loading,
+        isAppAdmin,
+        signInWithOtp,
+        verifyOtp,
+        signInWithApple,
+        signInWithPassword,
+        signUp,
+        signOut,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

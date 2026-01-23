@@ -28,28 +28,49 @@ drop policy if exists "insert own news items" on public.news_items;
 drop policy if exists "delete own news items" on public.news_items;
 
 -- RLS policies
-create policy "read all news items" on public.news_items
-  for select using (true);
+DO $$
+BEGIN
+  BEGIN
+    EXECUTE 'create policy "read all news items" on public.news_items
+      for select using (true)';
+  EXCEPTION WHEN duplicate_object THEN
+    RAISE NOTICE 'policy "read all news items" already exists, skipping';
+  END;
+END $$;
 
-create policy "insert own news items" on public.news_items
-  for insert with check (
-    auth.uid() = created_by
-    and (
-      -- If posting as user, actor_type must be 'user' and actor_id must be user's id
-      (actor_type = 'user' and actor_id = auth.uid())
-      or
-      -- If posting as community, user must be owner/admin of that community
-      (actor_type = 'community' and actor_id is not null and exists (
-        select 1 from public.community_members
-        where community_id = actor_id
-        and user_id = auth.uid()
-        and role in ('owner', 'admin')
-      ))
-    )
-  );
+DO $$
+BEGIN
+  BEGIN
+    EXECUTE 'create policy "insert own news items" on public.news_items
+      for insert with check (
+        auth.uid() = created_by
+        and (
+          -- If posting as user, actor_type must be ''user'' and actor_id must be user''s id
+          (actor_type = ''user'' and actor_id = auth.uid())
+          or
+          -- If posting as community, user must be owner/admin of that community
+          (actor_type = ''community'' and actor_id is not null and exists (
+            select 1 from public.community_members
+            where community_id = actor_id
+            and user_id = auth.uid()
+            and role in (''owner'', ''admin'')
+          ))
+        )
+      )';
+  EXCEPTION WHEN duplicate_object THEN
+    RAISE NOTICE 'policy "insert own news items" already exists, skipping';
+  END;
+END $$;
 
-create policy "delete own news items" on public.news_items
-  for delete using (auth.uid() = created_by);
+DO $$
+BEGIN
+  BEGIN
+    EXECUTE 'create policy "delete own news items" on public.news_items
+      for delete using (auth.uid() = created_by)';
+  EXCEPTION WHEN duplicate_object THEN
+    RAISE NOTICE 'policy "delete own news items" already exists, skipping';
+  END;
+END $$;
 
 -- Create indexes for performance (idempotent)
 create index if not exists idx_news_items_created_at on public.news_items(created_at desc);

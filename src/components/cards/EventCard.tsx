@@ -4,10 +4,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../ui/Card';
 import { Pill } from '../ui/Pill';
 import { PrimaryButton } from '../PrimaryButton';
-import { CardActions } from './CardActions';
+import { FeedCardShell } from '../feed/FeedCardShell';
+import { useAuth } from '../../auth/AuthProvider';
 import { colors, spacing } from '../../theme';
 
 interface EventCardProps {
+  eventId: string; // Required for comments
   title: string;
   date: string;
   location: string;
@@ -22,6 +24,7 @@ interface EventCardProps {
 }
 
 export function EventCard({
+  eventId,
   title,
   date,
   location,
@@ -34,8 +37,22 @@ export function EventCard({
   onPressShare,
   onPressBook,
 }: EventCardProps) {
+  const { user, isAppAdmin } = useAuth();
+  
   return (
-    <Card style={styles.card}>
+    <FeedCardShell
+      targetType="event"
+      targetId={eventId}
+      currentUserId={user?.id}
+      isAppAdmin={isAppAdmin}
+      actions={{
+        liked,
+        likes,
+        comments,
+        onToggleLike,
+        onPressShare,
+      }}
+    >
       <Pill label="Bus til Udekamp" variant="orange" />
       <Text style={styles.title}>{title}</Text>
       <View style={styles.detailRow}>
@@ -48,22 +65,11 @@ export function EventCard({
       </View>
       <Text style={styles.spotsLeft}>{spotsLeft} pladser tilbage</Text>
       <PrimaryButton title="Book plads" onPress={onPressBook} />
-      <CardActions
-        liked={liked}
-        likes={likes}
-        comments={comments}
-        onToggleLike={onToggleLike}
-        onPressComment={onPressComment}
-        onPressShare={onPressShare}
-      />
-    </Card>
+    </FeedCardShell>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    marginBottom: spacing.md,
-  },
   title: {
     fontSize: 18,
     fontWeight: '600',

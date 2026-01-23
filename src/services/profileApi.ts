@@ -96,16 +96,16 @@ export async function fetchMyProfile(userId: string): Promise<UserProfile | null
 /**
  * Fetch user's communities (owned + member)
  * Returns separate arrays for owner and member communities
- * 
+ *
  * IMPORTANT: Uses public.community_members as authenticated user to match RLS policies
  */
 export async function fetchMyCommunities(
-  userId: string
+  userId: string,
 ): Promise<{ ownerCommunities: MyCommunity[]; memberCommunities: MyCommunity[] }> {
   try {
     console.log('\n========== DIAGNOSE: fetchMyCommunities ==========');
     console.log('[DIAGNOSE] Current user ID:', userId);
-    
+
     // Step 1: Fetch community memberships from community_members as authenticated user
     // This matches RLS: select community_id, role from public.community_members where user_id = auth.uid()
     const { data: memberships, error: memberError } = await supabase
@@ -132,13 +132,15 @@ export async function fetchMyCommunities(
     }
 
     if (!memberships || memberships.length === 0) {
-      console.log('[DIAGNOSE] No community memberships found - ActorSelector will show 0 communities');
+      console.log(
+        '[DIAGNOSE] No community memberships found - ActorSelector will show 0 communities',
+      );
       return { ownerCommunities: [], memberCommunities: [] };
     }
 
     // Filter to owner/admin only (case-insensitive)
     const eligibleMemberships = memberships.filter(
-      (m) => m.role?.toLowerCase() === 'owner' || m.role?.toLowerCase() === 'admin'
+      (m) => m.role?.toLowerCase() === 'owner' || m.role?.toLowerCase() === 'admin',
     );
 
     console.log('[profileApi] Eligible memberships (owner/admin):', eligibleMemberships.length);
@@ -173,7 +175,7 @@ export async function fetchMyCommunities(
         if (!error && count !== null) {
           countsMap[communityId] = count;
         }
-      })
+      }),
     );
 
     // Step 4: Map to MyCommunity objects
@@ -182,7 +184,7 @@ export async function fetchMyCommunities(
 
     eligibleMemberships.forEach((m: any) => {
       const communityData = communities?.find((c) => c.id === m.community_id);
-      
+
       const community: MyCommunity = {
         id: m.community_id,
         name: communityData?.name || m.community_id, // Fallback to ID if name not found
@@ -300,7 +302,7 @@ export async function fetchMyUpcomingItems(userId: string): Promise<UpcomingItem
           date: date || '',
           status: item.status,
         };
-      })
+      }),
     );
 
     // Filter out items that couldn't be resolved

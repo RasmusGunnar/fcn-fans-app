@@ -22,7 +22,9 @@ export default function CreateScreen() {
   const [audienceType, setAudienceType] = useState<'all' | 'community' | 'faction'>('all');
   const [selectedCommunity, setSelectedCommunity] = useState('Farum Fans');
   const [selectedFaction, setSelectedFaction] = useState('Farum Fighters');
-  const [attachment, setAttachment] = useState<MediaAsset | null>(route?.params?.initialAttachment ?? null);
+  const [attachment, setAttachment] = useState<MediaAsset | null>(
+    route?.params?.initialAttachment ?? null,
+  );
 
   const handlePublish = async () => {
     if (!text.trim()) {
@@ -34,21 +36,26 @@ export default function CreateScreen() {
       if (attachment && user?.id) {
         console.log('[CreateScreen] Uploading attachment for user', { userId: user.id });
         const uploaded = await uploadMediaToSupabase(user.id, attachment);
-        
+
         // Sanity check: path must exist after upload
         if (!uploaded.path) {
           throw new Error(`Upload returned invalid result - path: ${uploaded.path}`);
         }
-        
+
         // Save bucket + path structure (NOT URLs)
-        mediaArray = [{ 
+        mediaArray = [
+          {
+            bucket: 'post-media',
+            path: uploaded.path,
+            type: uploaded.type,
+            width: uploaded.width,
+            height: uploaded.height,
+          },
+        ];
+        console.log('[CreateScreen] Attachment uploaded', {
           bucket: 'post-media',
           path: uploaded.path,
-          type: uploaded.type, 
-          width: uploaded.width, 
-          height: uploaded.height 
-        }];
-        console.log('[CreateScreen] Attachment uploaded', { bucket: 'post-media', path: uploaded.path });
+        });
       } else if (attachment && !user?.id) {
         throw new Error('Vedhæftning valgt men bruger ikke logget ind');
       }
@@ -67,7 +74,7 @@ export default function CreateScreen() {
           .insert({ author_id: user.id, text: text.trim(), media: mediaArray })
           .select('id, created_at, author_id, text, media');
         if (error) throw error;
-        
+
         if (data && data[0]) {
           const dbRecord = data[0];
           // DB-returned post is the source of truth
@@ -84,10 +91,13 @@ export default function CreateScreen() {
             likedByMe: false,
             media: dbRecord.media, // Use DB media (may be parsed as array or string)
           };
-          console.log('[CreateScreen] Post inserted and fetched from DB:', { postId: dbPost.id, media: dbPost.media });
+          console.log('[CreateScreen] Post inserted and fetched from DB:', {
+            postId: dbPost.id,
+            media: dbPost.media,
+          });
         }
       }
-    } catch (e) { 
+    } catch (e) {
       console.warn('[CreateScreen] Insert post error', e);
     }
 
@@ -107,7 +117,7 @@ export default function CreateScreen() {
     };
 
     addPost(newPost);
-    
+
     // Optional: Soft refresh to sync with DB (ensures no duplicates due to dedupe logic)
     // This is safe because addPost has dedupe logic based on post.id
     try {
@@ -118,7 +128,7 @@ export default function CreateScreen() {
         console.log('[CreateScreen] Post-creation refresh skipped:', e);
       }
     }
-    
+
     setText('');
     setAudienceType('all');
     setAttachment(null);
@@ -146,10 +156,7 @@ export default function CreateScreen() {
           <Text style={styles.label}>Publikum</Text>
           <View style={styles.audienceButtonsContainer}>
             <Pressable
-              style={[
-                styles.audienceButton,
-                audienceType === 'all' && styles.audienceButtonActive,
-              ]}
+              style={[styles.audienceButton, audienceType === 'all' && styles.audienceButtonActive]}
               onPress={() => setAudienceType('all')}
             >
               <Text
@@ -228,20 +235,19 @@ export default function CreateScreen() {
         </Card>
 
         <Card style={{ marginBottom: spacing.md }}>
-          <Pressable style={styles.attachButton} onPress={async () => {
-            const a = await pickFromLibrary();
-            if (a) setAttachment(a);
-          }}>
+          <Pressable
+            style={styles.attachButton}
+            onPress={async () => {
+              const a = await pickFromLibrary();
+              if (a) setAttachment(a);
+            }}
+          >
             <Ionicons name="images" size={20} color={colors.fcnRed} />
             <Text style={styles.attachButtonText}>Vælg fra bibliotek</Text>
           </Pressable>
         </Card>
 
-        <PrimaryButton
-          title="Udgiv opslag"
-          onPress={handlePublish}
-          variant="red"
-        />
+        <PrimaryButton title="Udgiv opslag" onPress={handlePublish} variant="red" />
       </ScrollView>
     </View>
   );

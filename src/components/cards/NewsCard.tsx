@@ -1,11 +1,14 @@
 import React from 'react';
-import { View, Text, StyleSheet, Image, Pressable, Linking } from 'react-native';
+import { View, Text, StyleSheet, Image, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../ui/Card';
 import { Pill } from '../ui/Pill';
-import { CardActions } from './CardActions';
+import { FeedCardShell } from '../feed/FeedCardShell';
+import { FeedCardHeader } from '../FeedCardHeader';
 import { colors, spacing } from '../../theme';
 import { NewsItem } from '../../types/news';
+import { useAuth } from '../../auth/AuthProvider';
+import type { CommentPreview } from '../../services/likesApi';
 
 function getTimeAgo(isoDate: string): string {
   const now = new Date();
@@ -28,9 +31,12 @@ interface NewsCardProps {
   userAvatarUrl?: string; // Current user's avatar URL
   communityMap?: Record<string, string>; // Map of community ID -> name
   liked?: boolean;
+  commentsCount?: number; // Comment count from commentCountMap
   onToggleLike?: () => void;
   onPressComment?: () => void;
   onPressShare?: () => void;
+  commentPreviews?: CommentPreview[];
+  onNewComment?: (comment: CommentPreview) => void;
 }
 
 export function NewsCard({
@@ -39,15 +45,19 @@ export function NewsCard({
   userAvatarUrl,
   communityMap = {},
   liked = newsItem.likedByMe,
+  commentsCount = newsItem.commentsCount,
   onToggleLike = () => {},
   onPressComment = () => {},
   onPressShare = () => {},
+  commentPreviews = [],
+  onNewComment,
 }: NewsCardProps) {
+  const { user, isAppAdmin } = useAuth();
   const timeAgo = getTimeAgo(newsItem.createdAt);
 
   // Determine author name based on actor type and available data
   let authorName: string;
-  
+
   if (newsItem.actorType === 'community' && newsItem.actorId) {
     // Try to get community name from communityMap
     authorName = communityMap[newsItem.actorId] || `${newsItem.actorId.slice(0, 6)}…`;
@@ -63,9 +73,7 @@ export function NewsCard({
   }
 
   const isOwnPost = currentUserId && newsItem.createdBy === currentUserId;
-  const avatarSource = isOwnPost && userAvatarUrl
-    ? { uri: userAvatarUrl }
-    : null;
+  const avatarSource = isOwnPost && userAvatarUrl ? { uri: userAvatarUrl } : null;
 
   const handleOpenLink = () => {
     Linking.openURL(newsItem.url).catch((err) => {
@@ -74,38 +82,47 @@ export function NewsCard({
   };
 
   return (
-    <Card style={styles.card}>
+    <FeedCardShell
+      targetType="news"
+      targetId={newsItem.id || newsItem.url}
+      currentUserId={user?.id}
+      isAppAdmin={isAppAdmin}
+      onOpenDetail={handleOpenLink}
+      actions={{
+        liked,
+        likes: newsItem.likesCount,
+        comments: commentsCount,
+        onToggleLike,
+        onPressShare,
+      }}
+      commentPreviews={commentPreviews}
+      onNewComment={onNewComment}
+    >
       <Pill label="Nyhed" />
-      <View style={styles.header}>
-        <View style={styles.avatar}>
-          {avatarSource ? (
-            <Image source={avatarSource} style={styles.avatarImage} />
-          ) : (
-            <Ionicons
-              name={newsItem.actorType === 'user' ? 'person' : 'people'}
-              size={20}
-              color={colors.card}
-            />
-          )}
-        </View>
-        <View style={styles.headerInfo}>
-          <Text style={styles.name}>{authorName}</Text>
-          <Text style={styles.timeAgo}>{timeAgo}</Text>
-        </View>
-      </View>
+      <FeedCardHeader
+        avatarSlot={
+          <View style={styles.avatar}>
+            {avatarSource ? (
+              <Image source={avatarSource} style={styles.avatarImage} />
+            ) : (
+              <Ionicons
+                name={newsItem.actorType === 'user' ? 'person' : 'people'}
+                size={20}
+                color={colors.card}
+              />
+            )}
+          </View>
+        }
+        title={authorName}
+        subtitle={timeAgo}
+      />
 
-      <Pressable onPress={handleOpenLink} style={styles.linkCard}>
+      <View style={styles.linkCard}>
         {newsItem.imageUrl && (
-          <Image
-            source={{ uri: newsItem.imageUrl }}
-            style={styles.image}
-            resizeMode="cover"
-          />
+          <Image source={{ uri: newsItem.imageUrl }} style={styles.image} resizeMode="cover" />
         )}
         <View style={styles.linkContent}>
-          {newsItem.siteName && (
-            <Text style={styles.siteName}>{newsItem.siteName}</Text>
-          )}
+          {newsItem.siteName && <Text style={styles.siteName}>{newsItem.siteName}</Text>}
           {newsItem.title && (
             <Text style={styles.title} numberOfLines={2}>
               {newsItem.title}
@@ -121,30 +138,12 @@ export function NewsCard({
             <Text style={styles.linkText}>Åbn link</Text>
           </View>
         </View>
-      </Pressable>
-
-      <CardActions
-        liked={liked}
-        likes={newsItem.likesCount}
-        comments={newsItem.commentsCount}
-        onToggleLike={onToggleLike}
-        onPressComment={onPressComment}
-        onPressShare={onPressShare}
-      />
-    </Card>
+      </View>
+    </FeedCardShell>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    marginBottom: spacing.md,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: spacing.sm,
-    marginBottom: spacing.md,
-  },
   avatar: {
     width: 40,
     height: 40,
@@ -152,24 +151,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.fcnRed,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.sm,
     overflow: 'hidden',
   },
   avatarImage: {
     width: 40,
     height: 40,
-  },
-  headerInfo: {
-    flex: 1,
-  },
-  name: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  timeAgo: {
-    fontSize: 12,
-    color: colors.subtext,
   },
   linkCard: {
     backgroundColor: colors.border,

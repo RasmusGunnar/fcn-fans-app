@@ -36,7 +36,11 @@ export function CommunityCard({
 }: CommunityCardProps) {
   return (
     <Card style={styles.card}>
-      <Pill label="Community" variant="blue" icon={<Ionicons name="people" size={14} color={colors.card} />} />
+      <Pill
+        label="Community"
+        variant="blue"
+        icon={<Ionicons name="people" size={14} color={colors.card} />}
+      />
       <View style={styles.header}>
         <View style={styles.avatar}>
           <Ionicons name="people-circle" size={40} color={colors.fcnRed} />

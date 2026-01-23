@@ -1,7 +1,7 @@
-import React from "react";
-import { Pressable, Text, StyleSheet } from "react-native";
+import React from 'react';
+import { Pressable, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, radius } from "../../theme";
+import { colors, radius } from '../../theme';
 
 interface OutlineButtonProps {
   title: string;
@@ -18,7 +18,7 @@ export function OutlineButton({ title, onPress, disabled = false, icon }: Outlin
       style={({ pressed }) => [
         styles.btn,
         disabled && styles.disabled,
-        pressed && !disabled && styles.pressed
+        pressed && !disabled && styles.pressed,
       ]}
     >
       {icon && <Ionicons name={icon as any} size={16} color={colors.fcnRed} style={styles.icon} />}
@@ -35,13 +35,13 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 20,
     borderRadius: radius.md,
-    alignItems: "center",
-    flexDirection: "row",
+    alignItems: 'center',
+    flexDirection: 'row',
   },
   icon: {
     marginRight: 8,
   },
   pressed: { opacity: 0.85 },
   disabled: { opacity: 0.45 },
-  txt: { color: colors.fcnRed, fontSize: 16, fontWeight: "700" }
+  txt: { color: colors.fcnRed, fontSize: 16, fontWeight: '700' },
 });

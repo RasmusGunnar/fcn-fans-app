@@ -9,7 +9,10 @@ import { FanPostCard } from '../components/cards/FanPostCard';
 import { Post } from '../types/post';
 import { colors, spacing } from '../theme';
 
-type CommunityDetailRouteProp = RouteProp<{ CommunityDetail: { id: string; title: string } }, 'CommunityDetail'>;
+type CommunityDetailRouteProp = RouteProp<
+  { CommunityDetail: { id: string; title: string } },
+  'CommunityDetail'
+>;
 
 export default function CommunityDetailScreen() {
   const navigation = useNavigation();
@@ -42,7 +45,7 @@ export default function CommunityDetailScreen() {
   ]);
 
   const [postLikes, setPostLikes] = useState<Record<string, boolean>>(
-    posts.reduce((acc, post) => ({ ...acc, [post.id]: post.likedByMe }), {})
+    posts.reduce((acc, post) => ({ ...acc, [post.id]: post.likedByMe }), {}),
   );
 
   const toggleLike = (postId: string) => {
@@ -137,18 +140,14 @@ export default function CommunityDetailScreen() {
             numberOfLines={3}
           />
           <View style={styles.composerActions}>
-            <PrimaryButton
-              title="Del"
-              onPress={handleSharePost}
-              disabled={!postText.trim()}
-            />
+            <PrimaryButton title="Del" onPress={handleSharePost} disabled={!postText.trim()} />
           </View>
         </Card>
 
         {/* Latest Updates */}
         <View style={styles.updatesSection}>
           <Text style={styles.sectionTitle}>SENESTE OPDATERINGER</Text>
-          {posts.map(post => (
+          {posts.map((post) => (
             <FanPostCard
               key={post.id}
               post={post}

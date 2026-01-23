@@ -1,5 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
+import { Platform } from 'react-native';
 
 export type MediaType = 'image' | 'video';
 
@@ -35,7 +36,7 @@ export async function pickFromLibrary(): Promise<MediaAsset | null> {
   if (res.canceled) return null;
   const a = res.assets?.[0];
   if (!a) return null;
-  
+
   // Sanity check: Robustly detect video type
   // Check explicit type first, then fallback to URI extension
   let detectedType: MediaType = 'image';
@@ -43,29 +44,44 @@ export async function pickFromLibrary(): Promise<MediaAsset | null> {
     detectedType = 'video';
   } else if (a.uri) {
     const lowerUri = a.uri.toLowerCase();
-    if (lowerUri.includes('.mp4') || lowerUri.includes('.mov') || lowerUri.includes('.m4v') || lowerUri.includes('video')) {
+    if (
+      lowerUri.includes('.mp4') ||
+      lowerUri.includes('.mov') ||
+      lowerUri.includes('.m4v') ||
+      lowerUri.includes('video')
+    ) {
       detectedType = 'video';
     }
   }
-  
+
   // For images: Convert to JPEG to avoid HEIC/format issues
   if (detectedType === 'image') {
     const originalMimeType = a.mimeType || 'unknown';
-    console.log('[pickFromLibrary] Converting image to JPEG', { originalUri: a.uri, originalMimeType });
+    const isHeic = originalMimeType.toLowerCase().includes('heic') || 
+                   originalMimeType.toLowerCase().includes('heif') ||
+                   a.uri.toLowerCase().includes('.heic') ||
+                   a.uri.toLowerCase().includes('.heif');
     
+    console.log('[pickFromLibrary] Converting image to JPEG', {
+      originalUri: a.uri,
+      originalMimeType,
+      isHeic,
+      platform: Platform.OS,
+    });
+
     const manipResult = await ImageManipulator.manipulateAsync(
       a.uri,
       [], // No transformations, just format conversion
-      { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+      { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG, base64: true },
     );
-    
-    console.log('[pickFromLibrary] JPEG conversion complete', { 
+
+    console.log('[pickFromLibrary] JPEG conversion complete', {
       convertedUri: manipResult.uri,
       convertedMimeType: 'image/jpeg',
       width: manipResult.width,
-      height: manipResult.height
+      height: manipResult.height,
     });
-    
+
     return {
       uri: manipResult.uri,
       type: 'image',
@@ -75,7 +91,7 @@ export async function pickFromLibrary(): Promise<MediaAsset | null> {
       mimeType: 'image/jpeg',
     };
   }
-  
+
   // For videos: No conversion, return as-is with base64
   // Re-fetch with base64 for videos
   const videoRes = await ImagePicker.launchImageLibraryAsync({
@@ -86,7 +102,7 @@ export async function pickFromLibrary(): Promise<MediaAsset | null> {
     base64: true,
   });
   const videoAsset = videoRes.canceled ? null : videoRes.assets?.[0];
-  
+
   return {
     uri: a.uri,
     type: detectedType,
@@ -108,24 +124,27 @@ export async function pickCameraPhoto(): Promise<MediaAsset | null> {
   if (res.canceled) return null;
   const a = res.assets?.[0];
   if (!a) return null;
-  
+
   // Convert to JPEG to avoid HEIC/format issues
   const originalMimeType = a.mimeType || 'unknown';
-  console.log('[pickCameraPhoto] Converting camera image to JPEG', { originalUri: a.uri, originalMimeType });
-  
+  console.log('[pickCameraPhoto] Converting camera image to JPEG', {
+    originalUri: a.uri,
+    originalMimeType,
+  });
+
   const manipResult = await ImageManipulator.manipulateAsync(
     a.uri,
     [], // No transformations, just format conversion
-    { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+    { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG, base64: true },
   );
-  
-  console.log('[pickCameraPhoto] JPEG conversion complete', { 
+
+  console.log('[pickCameraPhoto] JPEG conversion complete', {
     convertedUri: manipResult.uri,
     convertedMimeType: 'image/jpeg',
     width: manipResult.width,
-    height: manipResult.height
+    height: manipResult.height,
   });
-  
+
   return {
     uri: manipResult.uri,
     type: 'image',

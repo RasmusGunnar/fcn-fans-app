@@ -13,7 +13,13 @@ interface SongAccordionCardProps {
   onToggle: () => void;
 }
 
-export function SongAccordionCard({ title, lyrics, spotifyUrl, isExpanded, onToggle }: SongAccordionCardProps) {
+export function SongAccordionCard({
+  title,
+  lyrics,
+  spotifyUrl,
+  isExpanded,
+  onToggle,
+}: SongAccordionCardProps) {
   return (
     <Card style={styles.card}>
       <Pressable onPress={onToggle} style={styles.header}>

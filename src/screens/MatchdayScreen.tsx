@@ -1,9 +1,14 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, FlatList, RefreshControl, Image, Pressable } from "react-native";
-import { useNavigation } from "@react-navigation/native";
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import type { RootStackParamList } from "../navigation/types";
-import { fetchUpcomingFixtures, formatShortDateDa, formatTime, type Fixture } from '../services/fixtures';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, FlatList, RefreshControl, Image, Pressable } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/types';
+import {
+  fetchUpcomingFixtures,
+  formatShortDateDa,
+  formatTime,
+  type Fixture,
+} from '../services/fixtures';
 import { colors, spacing } from '../theme';
 
 export default function MatchdayScreen() {
@@ -23,50 +28,57 @@ export default function MatchdayScreen() {
   }, []);
 
   const renderFixture = ({ item }: { item: Fixture }) => (
-    <Pressable 
-      style={styles.card}
-      onPress={() => nav.navigate('MatchDetails', { fixture: item })}
-    >
+    <Pressable style={styles.card} onPress={() => nav.navigate('MatchDetails', { fixtureId: item.id })}>
       <View style={styles.matchRow}>
         <View style={styles.teamContainer}>
           {item.home_logo_url ? (
             <Image source={{ uri: item.home_logo_url }} style={styles.teamLogo} />
           ) : (
             <View style={styles.teamCircle}>
-              <Text style={styles.teamInitials}>{item.home_team.substring(0, 3).toUpperCase()}</Text>
+              <Text style={styles.teamInitials}>
+                {item.home_team.substring(0, 3).toUpperCase()}
+              </Text>
             </View>
           )}
-          <Text style={styles.teamName} numberOfLines={1}>{item.home_team}</Text>
+          <Text style={styles.teamName} numberOfLines={1}>
+            {item.home_team}
+          </Text>
         </View>
-        
+
         <View style={styles.vsContainer}>
           <Text style={styles.vs}>VS</Text>
         </View>
-        
+
         <View style={styles.teamContainer}>
           {item.away_logo_url ? (
             <Image source={{ uri: item.away_logo_url }} style={styles.teamLogo} />
           ) : (
             <View style={styles.teamCircle}>
-              <Text style={styles.teamInitials}>{item.away_team.substring(0, 3).toUpperCase()}</Text>
+              <Text style={styles.teamInitials}>
+                {item.away_team.substring(0, 3).toUpperCase()}
+              </Text>
             </View>
           )}
-          <Text style={styles.teamName} numberOfLines={1}>{item.away_team}</Text>
+          <Text style={styles.teamName} numberOfLines={1}>
+            {item.away_team}
+          </Text>
         </View>
       </View>
-      
+
       <View style={styles.detailsContainer}>
         <Text style={styles.dateText}>
           📅 {formatShortDateDa(item.kickoff_at)}, kl. {formatTime(item.kickoff_at)}
         </Text>
         {item.venue && (
           <Text style={styles.venueText}>
-            🏟️ {item.venue}{item.venue_city ? `, ${item.venue_city}` : ''}
+            🏟️ {item.venue}
+            {item.venue_city ? `, ${item.venue_city}` : ''}
           </Text>
         )}
         {item.competition && (
           <Text style={styles.competitionText}>
-            🏆 {item.competition}{item.round ? ` - ${item.round}` : ''}
+            🏆 {item.competition}
+            {item.round ? ` - ${item.round}` : ''}
           </Text>
         )}
       </View>
@@ -76,7 +88,7 @@ export default function MatchdayScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.h1}>Kommende Kampe</Text>
-      
+
       <FlatList
         data={fixtures}
         keyExtractor={(item) => item.id}
@@ -102,22 +114,22 @@ export default function MatchdayScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
+  container: {
+    flex: 1,
     padding: spacing.md,
     backgroundColor: colors.bg,
   },
-  h1: { 
-    fontSize: 28, 
-    fontWeight: "800",
+  h1: {
+    fontSize: 28,
+    fontWeight: '800',
     color: colors.text,
     marginBottom: spacing.lg,
   },
-  card: { 
-    borderWidth: 1, 
+  card: {
+    borderWidth: 1,
     borderColor: colors.border || '#e0e0e0',
-    borderRadius: 14, 
-    padding: spacing.md, 
+    borderRadius: 14,
+    padding: spacing.md,
     marginBottom: spacing.md,
     backgroundColor: colors.card,
   },

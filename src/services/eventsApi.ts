@@ -48,6 +48,16 @@ export interface Event {
   created_by: string | null;
   created_at: string;
   organizer?: FanGroup | null;
+  // Location/geocoding fields
+  address_line1?: string | null;
+  postal_code?: string | null;
+  city?: string | null;
+  country?: string | null;
+  address_text?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  place_name?: string | null;
+  geocoded_at?: string | null;
 }
 
 export interface Fixture {
@@ -61,6 +71,11 @@ export interface Fixture {
   venue_city: string | null;
   competition: string | null;
   round: string | null;
+  // Location/geocoding fields
+  lat?: number | null;
+  lng?: number | null;
+  place_name?: string | null;
+  geocoded_at?: string | null;
 }
 
 // Feed item discriminated union
@@ -77,6 +92,8 @@ export type FeedItem =
       venueCity: string | null;
       round: string | null;
       competition: string | null;
+      lat?: number | null;
+      lng?: number | null;
     }
   | {
       kind: 'bus_trip';
@@ -99,6 +116,10 @@ export type FeedItem =
       location: string | null;
       organizerName: string | null;
       description: string | null;
+      lat?: number | null;
+      lng?: number | null;
+      created_by?: string | null;
+      organizer_group_id?: string | null;
     };
 
 // ===== API FUNCTIONS =====
@@ -134,7 +155,9 @@ export async function fetchBusTripsUpcoming(limit = 20): Promise<BusTrip[]> {
   try {
     const { data, error } = await supabase
       .from('bus_trips')
-      .select('id, title, start_at, departure_place, total_seats, seats_taken, price_dkk, fixture_id, organizer_group_id')
+      .select(
+        'id, title, start_at, departure_place, total_seats, seats_taken, price_dkk, fixture_id, organizer_group_id',
+      )
       .gte('start_at', new Date().toISOString())
       .order('start_at', { ascending: true })
       .limit(limit);
@@ -158,7 +181,7 @@ export async function fetchEventsUpcoming(limit = 20): Promise<Event[]> {
   try {
     const { data, error } = await supabase
       .from('events')
-      .select('id, title, description, start_at, end_at, location_name, location_address, organizer_group_id')
+      .select('id, title, description, start_at, end_at, location_name, location_address, organizer_group_id, created_by, created_at, lat, lng')
       .gte('start_at', new Date().toISOString())
       .order('start_at', { ascending: true })
       .limit(limit);
@@ -206,6 +229,8 @@ export async function fetchFeedUpcoming(): Promise<FeedItem[]> {
       venueCity: m.venue_city,
       round: m.round,
       competition: m.competition,
+      lat: m.lat,
+      lng: m.lng,
     }));
 
     const busTripItems: FeedItem[] = busTrips.map((bt) => ({
@@ -228,8 +253,12 @@ export async function fetchFeedUpcoming(): Promise<FeedItem[]> {
       title: e.title,
       startAt: e.start_at,
       location: e.location_name,
+      lat: e.lat,
+      lng: e.lng,
       organizerName: null,
       description: e.description,
+      created_by: e.created_by,
+      organizer_group_id: e.organizer_group_id,
     }));
 
     // Merge and sort by start time ascending
@@ -253,11 +282,7 @@ export async function fetchFeedUpcoming(): Promise<FeedItem[]> {
 export async function fetchBusTripById(id: string): Promise<BusTrip | null> {
   try {
     console.log('[eventsApi] Fetching bus trip by id:', id);
-    const { data, error } = await supabase
-      .from('bus_trips')
-      .select('*')
-      .eq('id', id)
-      .single();
+    const { data, error } = await supabase.from('bus_trips').select('*').eq('id', id).single();
 
     if (error) {
       console.warn('[eventsApi] Error fetching bus trip by id', error);
@@ -280,7 +305,9 @@ export async function fetchEventById(id: string): Promise<Event | null> {
     console.log('[eventsApi] Fetching event by id:', id);
     const { data, error } = await supabase
       .from('events')
-      .select('id, title, description, start_at, end_at, location_name, location_address, organizer_group_id, created_by, created_at')
+      .select(
+        'id, title, description, start_at, end_at, location_name, location_address, organizer_group_id, created_by, created_at',
+      )
       .eq('id', id)
       .single();
 
@@ -302,11 +329,7 @@ export async function fetchEventById(id: string): Promise<Event | null> {
  */
 export async function fetchFixtureById(id: string): Promise<Fixture | null> {
   try {
-    const { data, error } = await supabase
-      .from('fixtures')
-      .select('*')
-      .eq('id', id)
-      .maybeSingle();
+    const { data, error } = await supabase.from('fixtures').select('*').eq('id', id).maybeSingle();
 
     if (error) {
       console.error('[eventsApi] Error fetching fixture:', error);

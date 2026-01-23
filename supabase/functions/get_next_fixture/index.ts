@@ -9,10 +9,9 @@ serve(async (req) => {
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
 
     if (!supabaseUrl || !supabaseAnonKey) {
-      return new Response(
-        JSON.stringify({ error: 'Missing Supabase configuration' }),
-        { status: 500 }
-      );
+      return new Response(JSON.stringify({ error: 'Missing Supabase configuration' }), {
+        status: 500,
+      });
     }
 
     // Initialize Supabase client (no auth required - using anon key)
@@ -29,25 +28,20 @@ serve(async (req) => {
 
     if (error) {
       console.error('Database query error:', error);
-      return new Response(
-        JSON.stringify({ error: 'Database query failed', details: error }),
-        { status: 500 }
-      );
+      return new Response(JSON.stringify({ error: 'Database query failed', details: error }), {
+        status: 500,
+      });
     }
 
     // Return fixture or null if none found
-    return new Response(
-      JSON.stringify({ fixture }),
-      {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
+    return new Response(JSON.stringify({ fixture }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
   } catch (e) {
     console.error('Unexpected error:', e);
-    return new Response(
-      JSON.stringify({ error: 'Internal server error', details: String(e) }),
-      { status: 500 }
-    );
+    return new Response(JSON.stringify({ error: 'Internal server error', details: String(e) }), {
+      status: 500,
+    });
   }
 });

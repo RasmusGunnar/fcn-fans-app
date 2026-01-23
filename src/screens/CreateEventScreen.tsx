@@ -1,77 +1,267 @@
-import React, { useState } from "react";
-import { View, Text, TextInput, StyleSheet, Alert, Switch } from "react-native";
-import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { RootStackParamList } from "../navigation/types";
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
-import { db } from "../firebase";
-import { useAuth } from "../auth/AuthProvider";
-import { PrimaryButton } from "../components/PrimaryButton";
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  StyleSheet,
+  Alert,
+  ScrollView,
+  ActivityIndicator,
+} from 'react-native';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../navigation/types';
+import { useAuth } from '../auth/AuthProvider';
+import { PrimaryButton } from '../components/PrimaryButton';
+import { supabase } from '../lib/supabase';
+import { buildAddressText, geocodeAddress } from '../services/geocoding';
+import { colors, spacing } from '../theme';
 
-type Props = NativeStackScreenProps<RootStackParamList, "CreateEvent">;
+type Props = NativeStackScreenProps<RootStackParamList, 'CreateEvent'>;
 
-export default function CreateEventScreen({ route, navigation }: Props) {
-  const { communityId, matchId } = route.params ?? {};
-  const [title, setTitle] = useState(matchId ? "Mødested før kampen" : "Afgang fra Ganløse");
-  const [locationName, setLocationName] = useState(communityId ? "Ganløse (aftalt sted)" : "Farum Kro");
-  const [startTime, setStartTime] = useState(new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString().slice(0, 16)); // yyyy-mm-ddThh:mm
-  const [visibility, setVisibility] = useState<"community" | "public">(communityId ? "community" : "public");
-  const [soloWelcome, setSoloWelcome] = useState(true);
-
+export default function CreateEventScreen({ navigation }: Props) {
   const { user } = useAuth();
 
-  const create = async () => {
+  // Event basic info
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [locationName, setLocationName] = useState('');
+
+  // Address fields (required for map)
+  const [addressLine1, setAddressLine1] = useState('');
+  const [postalCode, setPostalCode] = useState('');
+  const [city, setCity] = useState('');
+  const [country, setCountry] = useState('Danmark');
+
+  // Date/time
+  const [startTime, setStartTime] = useState(
+    new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString().slice(0, 16),
+  ); // yyyy-mm-ddThh:mm
+
+  const [loading, setLoading] = useState(false);
+
+  const handleCreate = async () => {
+    // Validation
+    if (!title.trim()) {
+      Alert.alert('Fejl', 'Titel er påkrævet');
+      return;
+    }
+    if (!addressLine1.trim() || !postalCode.trim() || !city.trim()) {
+      Alert.alert('Fejl', 'Adresse, postnummer og by er påkrævet for at vise event på kortet');
+      return;
+    }
+
+    const dt = new Date(startTime);
+    if (isNaN(dt.getTime())) {
+      Alert.alert('Ugyldigt tidspunkt', 'Brug format: 2025-12-18T15:00');
+      return;
+    }
+
+    setLoading(true);
+
     try {
-      const dt = new Date(startTime);
-      if (isNaN(dt.getTime())) return Alert.alert("Ugyldigt tidspunkt", "Brug format: 2025-12-18T15:00");
-      const ref = await addDoc(collection(db, "events"), {
-        matchId: matchId ?? null,
-        communityId: communityId ?? null,
-        visibility,
-        title: title.trim(),
-        locationName: locationName.trim(),
-        startTime: dt.getTime(),
-        soloWelcome,
-        createdBy: user?.id ?? null,
-        createdAt: Date.now(),
-        createdAtServer: serverTimestamp(),
-        attendanceCount: 0
+      // Build full address text
+      const addressText = buildAddressText({
+        address_line1: addressLine1,
+        postal_code: postalCode,
+        city,
+        country,
       });
-      navigation.replace("Event", { eventId: ref.id });
-    } catch (e: any) {
-      Alert.alert("Fejl", e?.message ?? "Ukendt fejl");
+
+      // Geocode the address
+      const geoResult = await geocodeAddress(addressText);
+      if (!geoResult) {
+        Alert.alert(
+          'Kunne ikke finde adressen',
+          'Tjek stavning af adresse, postnummer og by. Adressen skal være gyldig for at vise event på kortet.',
+        );
+        setLoading(false);
+        return;
+      }
+
+      // Create event in Supabase
+      const { data, error } = await supabase
+        .from('events')
+        .insert({
+          title: title.trim(),
+          description: description.trim() || null,
+          start_at: dt.toISOString(),
+          location_name: locationName.trim() || null,
+          address_line1: addressLine1.trim(),
+          postal_code: postalCode.trim(),
+          city: city.trim(),
+          country: country.trim(),
+          address_text: addressText,
+          lat: geoResult.lat,
+          lng: geoResult.lng,
+          place_name: geoResult.place_name,
+          geocoded_at: new Date().toISOString(),
+          created_by: user?.id ?? null,
+        })
+        .select('id')
+        .single();
+
+      if (error) {
+        console.error('[CreateEvent] Error creating event:', error);
+        Alert.alert('Fejl', 'Kunne ikke oprette event');
+        setLoading(false);
+        return;
+      }
+
+      // Navigate to event details
+      navigation.replace('EventDetails', { eventId: data.id });
+    } catch (err: any) {
+      console.error('[CreateEvent] Unexpected error:', err);
+      Alert.alert('Fejl', err?.message ?? 'Ukendt fejl');
+      setLoading(false);
     }
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.label}>Titel</Text>
-      <TextInput style={styles.input} value={title} onChangeText={setTitle} />
+    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+      <Text style={styles.sectionTitle}>Event Detaljer</Text>
 
-      <Text style={styles.label}>Sted</Text>
-      <TextInput style={styles.input} value={locationName} onChangeText={setLocationName} />
+      <Text style={styles.label}>Titel *</Text>
+      <TextInput
+        style={styles.input}
+        value={title}
+        onChangeText={setTitle}
+        placeholder="Fx: Mødested før kampen"
+      />
 
-      <Text style={styles.label}>Starttid (ISO, fx 2025-12-18T15:00)</Text>
-      <TextInput style={styles.input} value={startTime} onChangeText={setStartTime} autoCapitalize="none" />
+      <Text style={styles.label}>Beskrivelse</Text>
+      <TextInput
+        style={[styles.input, styles.textArea]}
+        value={description}
+        onChangeText={setDescription}
+        placeholder="Valgfri beskrivelse..."
+        multiline
+        numberOfLines={3}
+      />
+
+      <Text style={styles.label}>Stednavn</Text>
+      <TextInput
+        style={styles.input}
+        value={locationName}
+        onChangeText={setLocationName}
+        placeholder="Fx: Farum Kro"
+      />
+
+      <Text style={styles.sectionTitle}>Adresse (påkrævet for kort)</Text>
+
+      <Text style={styles.label}>Adresse *</Text>
+      <TextInput
+        style={styles.input}
+        value={addressLine1}
+        onChangeText={setAddressLine1}
+        placeholder="Fx: Stavnsholtvej 77"
+      />
 
       <View style={styles.row}>
-        <Text style={styles.label}>Kun for fællesskab?</Text>
-        <Switch value={visibility === "community"} onValueChange={(v) => setVisibility(v ? "community" : "public")} />
+        <View style={styles.halfColumn}>
+          <Text style={styles.label}>Postnummer *</Text>
+          <TextInput
+            style={styles.input}
+            value={postalCode}
+            onChangeText={setPostalCode}
+            placeholder="3520"
+            keyboardType="numeric"
+          />
+        </View>
+
+        <View style={styles.halfColumn}>
+          <Text style={styles.label}>By *</Text>
+          <TextInput
+            style={styles.input}
+            value={city}
+            onChangeText={setCity}
+            placeholder="Farum"
+          />
+        </View>
       </View>
 
-      <View style={styles.row}>
-        <Text style={styles.label}>Velkommen hvis man kommer alene</Text>
-        <Switch value={soloWelcome} onValueChange={setSoloWelcome} />
-      </View>
+      <Text style={styles.label}>Land</Text>
+      <TextInput style={styles.input} value={country} onChangeText={setCountry} />
 
-      <View style={{ height: 16 }} />
-      <PrimaryButton title="Opret event" onPress={create} />
-    </View>
+      <Text style={styles.sectionTitle}>Tid</Text>
+
+      <Text style={styles.label}>Starttid (yyyy-mm-ddThh:mm)</Text>
+      <TextInput
+        style={styles.input}
+        value={startTime}
+        onChangeText={setStartTime}
+        autoCapitalize="none"
+        placeholder="2025-12-18T15:00"
+      />
+
+      <View style={{ height: spacing.lg }} />
+
+      <PrimaryButton
+        title={loading ? 'Opretter...' : 'Opret Event'}
+        onPress={handleCreate}
+        disabled={loading}
+      />
+
+      {loading && (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="small" color={colors.fcnRed} />
+          <Text style={styles.loadingText}>Geocoder adresse...</Text>
+        </View>
+      )}
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
-  label: { marginTop: 12, marginBottom: 6, fontWeight: "600", flex: 1 },
-  input: { borderWidth: 1, borderRadius: 12, padding: 12 },
-  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }
+  container: {
+    flex: 1,
+    backgroundColor: colors.bg,
+  },
+  contentContainer: {
+    padding: spacing.md,
+    paddingBottom: spacing.xxl,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  label: {
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: spacing.sm,
+    fontSize: 16,
+    color: colors.text,
+    backgroundColor: '#fff',
+  },
+  textArea: {
+    height: 80,
+    textAlignVertical: 'top',
+  },
+  row: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  halfColumn: {
+    flex: 1,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: spacing.md,
+    gap: spacing.sm,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: colors.subtext,
+  },
 });

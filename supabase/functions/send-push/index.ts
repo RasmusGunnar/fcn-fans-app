@@ -11,11 +11,13 @@ type Payload = {
 serve(async (req) => {
   try {
     const payload: Payload = await req.json();
-    if (!payload?.toUserId) return new Response(JSON.stringify({ error: 'missing toUserId' }), { status: 400 });
+    if (!payload?.toUserId)
+      return new Response(JSON.stringify({ error: 'missing toUserId' }), { status: 400 });
 
     const url = Deno.env.get('SUPABASE_URL');
     const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    if (!url || !key) return new Response(JSON.stringify({ error: 'missing env' }), { status: 500 });
+    if (!url || !key)
+      return new Response(JSON.stringify({ error: 'missing env' }), { status: 500 });
 
     const profileRes = await fetch(`${url}/rest/v1/profiles?id=eq.${payload.toUserId}`, {
       headers: {
@@ -26,12 +28,18 @@ serve(async (req) => {
     });
     const profiles = await profileRes.json();
     const token = profiles?.[0]?.expo_push_token;
-    if (!token) return new Response(JSON.stringify({ ok: true, skipped: 'no token' }), { status: 200 });
+    if (!token)
+      return new Response(JSON.stringify({ ok: true, skipped: 'no token' }), { status: 200 });
 
     const pushRes = await fetch('https://exp.host/--/api/v2/push/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to: token, title: payload.title, body: payload.body, data: payload.data }),
+      body: JSON.stringify({
+        to: token,
+        title: payload.title,
+        body: payload.body,
+        data: payload.data,
+      }),
     });
     const pushJson = await pushRes.json();
     return new Response(JSON.stringify({ ok: true, result: pushJson }), { status: 200 });

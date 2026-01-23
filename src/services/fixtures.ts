@@ -16,6 +16,11 @@ export interface Fixture {
   away_logo_url: string | null;
   created_at: string;
   updated_at: string;
+  // Location/geocoding fields
+  lat?: number | null;
+  lng?: number | null;
+  place_name?: string | null;
+  geocoded_at?: string | null;
 }
 
 /**
@@ -79,10 +84,10 @@ export function formatDateDa(isoString: string): string {
     const month = date.toLocaleDateString('da-DK', { month: 'long' });
     const year = date.getFullYear();
     const time = date.toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' });
-    
+
     // Capitalize first letter of weekday
     const weekdayCapitalized = weekday.charAt(0).toUpperCase() + weekday.slice(1);
-    
+
     return `${weekdayCapitalized} ${day}. ${month} ${year}, kl. ${time}`;
   } catch (err) {
     console.error('[fixtures] Error formatting date:', err);
@@ -113,7 +118,7 @@ export function formatShortDateDa(isoString: string): string {
     const day = date.getDate();
     const month = date.toLocaleDateString('da-DK', { month: 'long' });
     const year = date.getFullYear();
-    
+
     return `${day}. ${month} ${year}`;
   } catch (err) {
     return isoString;

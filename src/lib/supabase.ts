@@ -14,11 +14,15 @@ const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 
 if (!supabaseUrl || !supabaseUrl.startsWith('https://')) {
-  throw new Error('Invalid EXPO_PUBLIC_SUPABASE_URL: must be a valid https:// URL. Set EXPO_PUBLIC_SUPABASE_URL in your environment.');
+  throw new Error(
+    'Invalid EXPO_PUBLIC_SUPABASE_URL: must be a valid https:// URL. Set EXPO_PUBLIC_SUPABASE_URL in your environment.',
+  );
 }
 
 if (!supabaseAnonKey) {
-  throw new Error('Missing EXPO_PUBLIC_SUPABASE_ANON_KEY. Set EXPO_PUBLIC_SUPABASE_ANON_KEY in your environment.');
+  throw new Error(
+    'Missing EXPO_PUBLIC_SUPABASE_ANON_KEY. Set EXPO_PUBLIC_SUPABASE_ANON_KEY in your environment.',
+  );
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {

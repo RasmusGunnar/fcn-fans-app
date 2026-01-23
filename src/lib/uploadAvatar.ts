@@ -1,4 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
+import * as FileSystem from 'expo-file-system';
+import { Platform, Alert } from 'react-native';
 import { supabase } from './supabase';
 
 /**
@@ -27,22 +30,70 @@ export async function uploadAvatar(userId: string): Promise<string | null> {
       return null;
     }
 
-    // Launch image picker with base64 for reliable Expo uploads
+    // Launch image picker (without base64 initially - we'll get it after JPEG conversion)
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'], // Use new API format
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.7,
-      base64: true, // Request base64 for reliable upload
+      quality: 0.9, // High quality for avatars
+      base64: false, // Get base64 after JPEG conversion
     });
 
     if (result.canceled) {
       return null;
     }
 
-    const imageUri = result.assets[0].uri;
-    const base64 = result.assets[0].base64;
-    console.log('[uploadAvatar] Image selected:', imageUri);
+    const asset = result.assets[0];
+    
+    // Validate local file exists and has size > 0
+    try {
+      const fileInfo = await FileSystem.getInfoAsync(asset.uri);
+      if (__DEV__) {
+        console.log('[AvatarUpload] Local file info:', fileInfo);
+      }
+      
+      if (!fileInfo.exists) {
+        Alert.alert('Fejl', 'Filen kunne ikke findes');
+        return null;
+      }
+      
+      if (fileInfo.size === 0) {
+        Alert.alert('Fejl', 'Filen er tom (0 bytes)');
+        return null;
+      }
+    } catch (fsError) {
+      console.warn('[AvatarUpload] FileSystem error:', fsError);
+      Alert.alert('Fejl', 'Kunne ikke læse billedfil');
+      return null;
+    }
+
+    const originalMimeType = asset.mimeType || 'unknown';
+    const isHeic = originalMimeType.toLowerCase().includes('heic') || 
+                   originalMimeType.toLowerCase().includes('heif') ||
+                   asset.uri.toLowerCase().includes('.heic') ||
+                   asset.uri.toLowerCase().includes('.heif');
+    
+    console.log('[uploadAvatar] Converting image to JPEG', {
+      originalUri: asset.uri,
+      originalMimeType,
+      isHeic,
+      platform: Platform.OS,
+    });
+
+    // Convert to JPEG to avoid HEIC/format issues (especially on iOS)
+    const manipResult = await ImageManipulator.manipulateAsync(
+      asset.uri,
+      [{ resize: { width: 512 } }], // Resize to reasonable avatar size
+      { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG, base64: true },
+    );
+
+    console.log('[uploadAvatar] JPEG conversion complete', {
+      convertedUri: manipResult.uri,
+      width: manipResult.width,
+      height: manipResult.height,
+    });
+
+    const base64 = manipResult.base64;
 
     if (!base64) {
       throw new Error('Failed to get base64 data from image picker');
@@ -50,15 +101,24 @@ export async function uploadAvatar(userId: string): Promise<string | null> {
 
     // Convert base64 to Uint8Array (reliable for Supabase in Expo)
     const bytes = base64ToUint8Array(base64);
-    console.log('[uploadAvatar] Converted to byte array:', { length: bytes.length });
+    
+    if (__DEV__) {
+      const fileInfo = await FileSystem.getInfoAsync(asset.uri);
+      console.log('[AvatarUpload]', { 
+        localSize: fileInfo.exists && !fileInfo.isDirectory ? fileInfo.size : 'unknown',
+        blobSize: bytes.length,
+        path: `${userId}.jpg`
+      });
+    }
 
     // Verify bytes has content
     if (bytes.length === 0) {
+      Alert.alert('Fejl', 'Billedet kunne ikke konverteres (0 bytes)');
       throw new Error('Image byte array is empty (0 bytes). Cannot upload empty file.');
     }
 
-    // Create file path (just userId.jpg in root of avatars bucket)
-    const filePath = `${userId}.jpg`;
+    // Create file path: userId/avatar.jpg (RLS policies allow upload in user's own folder)
+    const filePath = `${userId}/avatar.jpg`;
 
     // Upload to Supabase Storage using byte array
     const { data: uploadData, error: uploadError } = await supabase.storage
@@ -71,6 +131,7 @@ export async function uploadAvatar(userId: string): Promise<string | null> {
 
     if (uploadError) {
       console.warn('[uploadAvatar] Upload error:', uploadError);
+      Alert.alert('Fejl', 'Upload fejlede: ' + (uploadError.message || 'Ukendt fejl'));
       return null;
     }
 
@@ -90,10 +151,12 @@ export async function uploadAvatar(userId: string): Promise<string | null> {
           name: fileMetadata?.name,
           size: storedSize,
           contentType: fileMetadata?.metadata?.mimetype,
-          expectedLength: bytes.length
+          expectedLength: bytes.length,
         });
         if (storedSize === 0) {
-          throw new Error('Upload failed: Stored file is 0 bytes. This is a Supabase Storage issue.');
+          throw new Error(
+            'Upload failed: Stored file is 0 bytes. This is a Supabase Storage issue.',
+          );
         }
       }
     } catch (verifyError) {
@@ -101,25 +164,34 @@ export async function uploadAvatar(userId: string): Promise<string | null> {
       throw verifyError; // Re-throw to fail the upload
     }
 
-    // Store ONLY the path in the database (not the full URL)
-    const storagePath = `avatars/${filePath}`;
-    console.log('[uploadAvatar] Storage path:', storagePath);
+    // Save ONLY the path in profiles.avatar_url (not "avatars/"+path)
+    // Path format: "userId/avatar.jpg"
+    if (__DEV__) {
+      console.log('[AvatarUpload] Saving path to DB:', filePath);
+    }
 
-    // Update profile with avatar path (not URL)
+    // Update profile with avatar path (not URL, not with bucket prefix)
     const { error: updateError } = await supabase
       .from('profiles')
-      .update({ avatar_url: storagePath })
+      .update({ avatar_url: filePath })
       .eq('id', userId);
 
     if (updateError) {
       console.warn('[uploadAvatar] Profile update error:', updateError);
+      Alert.alert('Advarsel', 'Billede uploadet, men profil kunne ikke opdateres');
       return null;
     }
 
-    // Return path with cache buster for immediate display update
-    return `${storagePath}?t=${Date.now()}`;
-  } catch (error) {
+    // Success!
+    if (__DEV__) {
+      console.log('[AvatarUpload] Success! Path:', filePath);
+    }
+
+    // Return path (cache buster added by component for display refresh)
+    return filePath;
+  } catch (error: any) {
     console.warn('[uploadAvatar] Unexpected error:', error);
+    Alert.alert('Fejl', error?.message || 'Kunne ikke uploade billede');
     return null;
   }
 }

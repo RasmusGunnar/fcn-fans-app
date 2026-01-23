@@ -341,7 +341,9 @@ export default function CreateNewEventScreen() {
             style={styles.input}
             value={title}
             onChangeText={setTitle}
-            placeholder={eventType === 'event' ? 'F.eks. Pre-match møde' : 'F.eks. Bustur til Silkeborg'}
+            placeholder={
+              eventType === 'event' ? 'F.eks. Pre-match møde' : 'F.eks. Bustur til Silkeborg'
+            }
             placeholderTextColor={colors.subtext}
           />
 
@@ -491,7 +493,9 @@ export default function CreateNewEventScreen() {
         {/* Submit Button */}
         <View style={styles.buttonContainer}>
           <PrimaryButton
-            title={submitting ? 'Opretter...' : eventType === 'event' ? 'Opret event' : 'Opret bustur'}
+            title={
+              submitting ? 'Opretter...' : eventType === 'event' ? 'Opret event' : 'Opret bustur'
+            }
             onPress={handleSubmit}
             disabled={submitting}
           />

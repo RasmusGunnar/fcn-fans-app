@@ -102,7 +102,7 @@ export default function BusTripDetailsScreen() {
   const handleOpenMaps = () => {
     if (busTrip.departure_address) {
       const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-        busTrip.departure_address
+        busTrip.departure_address,
       )}`;
       Linking.openURL(url);
     }
@@ -128,9 +128,7 @@ export default function BusTripDetailsScreen() {
             <Text style={styles.badgeText}>🚌 BUSTUR</Text>
           </View>
           <Text style={styles.tripTitle}>{busTrip.title}</Text>
-          {busTrip.description && (
-            <Text style={styles.description}>{busTrip.description}</Text>
-          )}
+          {busTrip.description && <Text style={styles.description}>{busTrip.description}</Text>}
 
           {/* Match Info (if linked) */}
           {busTrip.fixture && (
@@ -173,9 +171,7 @@ export default function BusTripDetailsScreen() {
                 <Text style={styles.detailValue}>{busTrip.departure_place}</Text>
                 {busTrip.departure_address && (
                   <>
-                    <Text style={styles.detailSubvalue}>
-                      {busTrip.departure_address}
-                    </Text>
+                    <Text style={styles.detailSubvalue}>{busTrip.departure_address}</Text>
                     <TouchableOpacity onPress={handleOpenMaps}>
                       <Text style={styles.mapsLink}>Åbn i Maps →</Text>
                     </TouchableOpacity>
@@ -195,9 +191,7 @@ export default function BusTripDetailsScreen() {
                     !isFull && seatsLeft < 10 && styles.warningText,
                   ]}
                 >
-                  {isFull
-                    ? 'FULDT BOOKET'
-                    : `${seatsLeft} / ${busTrip.total_seats}`}
+                  {isFull ? 'FULDT BOOKET' : `${seatsLeft} / ${busTrip.total_seats}`}
                 </Text>
               </View>
             </View>
@@ -233,10 +227,7 @@ export default function BusTripDetailsScreen() {
             <Text style={styles.sectionTitle}>Arrangør</Text>
             <View style={styles.organizerInfo}>
               {busTrip.organizer.logo_url ? (
-                <Image
-                  source={{ uri: busTrip.organizer.logo_url }}
-                  style={styles.organizerLogo}
-                />
+                <Image source={{ uri: busTrip.organizer.logo_url }} style={styles.organizerLogo} />
               ) : (
                 <View style={styles.organizerLogoPlaceholder}>
                   <Text style={styles.organizerLogoText}>
@@ -245,13 +236,9 @@ export default function BusTripDetailsScreen() {
                 </View>
               )}
               <View style={styles.organizerText}>
-                <Text style={styles.organizerName}>
-                  {busTrip.organizer.name}
-                </Text>
+                <Text style={styles.organizerName}>{busTrip.organizer.name}</Text>
                 {busTrip.organizer.description && (
-                  <Text style={styles.organizerDescription}>
-                    {busTrip.organizer.description}
-                  </Text>
+                  <Text style={styles.organizerDescription}>{busTrip.organizer.description}</Text>
                 )}
               </View>
             </View>
@@ -277,12 +264,8 @@ export default function BusTripDetailsScreen() {
 
         {/* Placeholder: Participants */}
         <Card style={styles.participantsCard}>
-          <Text style={styles.sectionTitle}>
-            Deltagere ({busTrip.seats_taken})
-          </Text>
-          <Text style={styles.placeholderText}>
-            Deltagerliste kommer snart...
-          </Text>
+          <Text style={styles.sectionTitle}>Deltagere ({busTrip.seats_taken})</Text>
+          <Text style={styles.placeholderText}>Deltagerliste kommer snart...</Text>
         </Card>
       </ScrollView>
     </SafeAreaView>

@@ -30,7 +30,11 @@ export function RootNavigator() {
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Main" component={Inner} />
         <Stack.Screen name="Create" component={CreateScreen} options={{ presentation: 'modal' }} />
-        <Stack.Screen name="CreateNewEvent" component={CreateNewEventScreen} options={{ presentation: 'modal' }} />
+        <Stack.Screen
+          name="CreateNewEvent"
+          component={CreateNewEventScreen}
+          options={{ presentation: 'modal' }}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );

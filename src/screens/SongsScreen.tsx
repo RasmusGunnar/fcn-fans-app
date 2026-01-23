@@ -80,7 +80,7 @@ export default function SongsScreen() {
       />
 
       <View style={styles.content}>
-        {songs.map(song => (
+        {songs.map((song) => (
           <SongAccordionCard
             key={song.id}
             title={song.title}

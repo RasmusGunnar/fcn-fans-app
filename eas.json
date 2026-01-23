@@ -5,6 +5,13 @@
       "developmentClient": true,
       "distribution": "internal"
     },
+    "preview": {
+      "distribution": "internal",
+      "ios": {
+        "simulator": false,
+        "buildConfiguration": "Release"
+      }
+    },
     "production": {
       "autoIncrement": true
     }

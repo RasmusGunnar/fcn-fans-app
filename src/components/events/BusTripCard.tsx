@@ -42,9 +42,7 @@ export function BusTripCard({
       <Card style={styles.card}>
         <View style={styles.header}>
           <Text style={styles.badge}>BUSTUR</Text>
-          {organizerName && (
-            <Text style={styles.organizer}>🚩 {organizerName}</Text>
-          )}
+          {organizerName && <Text style={styles.organizer}>🚩 {organizerName}</Text>}
         </View>
 
         <Text style={styles.title}>{title}</Text>
