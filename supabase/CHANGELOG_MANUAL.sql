@@ -12,6 +12,26 @@
 -- =====================================================
 
 -- =====================================================
+-- 2026-01-25: Communities RBAC + Avatars
+-- =====================================================
+-- Purpose: Add owner/admin roles, avatar support, visibility, RLS policies
+-- Status: ✅ EXECUTED
+-- SQL file: supabase/sql/2026-01-25_communities_rbac_avatars.sql
+-- Context:
+--   - Extends communities table with owner_id, avatar_path, avatar_url, avatar_kind, visibility
+--   - Adds 'admin' role to community_members (owner/admin/member)
+--   - Creates helper functions: is_community_owner(), is_community_admin()
+--   - Adds comprehensive RLS policies for public/private communities
+--   - Enables join/leave, promote/demote admin functionality
+-- Instructions:
+--   1. Open supabase/sql/2026-01-25_communities_rbac_avatars.sql
+--   2. Copy all SQL to Supabase Dashboard → SQL Editor
+--   3. Read comments carefully, run OPTION A (text constraint) or OPTION B (enum)
+--   4. Verify with verification queries at end of file
+--   5. Update this status to: ✅ EXECUTED
+-- =====================================================
+
+-- =====================================================
 -- 2026-01-20: RBAC - App Admins Table
 -- =====================================================
 -- Purpose: System admin role for full platform access
