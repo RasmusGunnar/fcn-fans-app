@@ -35,6 +35,12 @@ npm install
 npm run start
 ```
 
+**Note om expo-font:** Dette projekt anvender `expo-font` via Expo SDK's transitiv dependency.
+Hvis du får version-fejl eller dubletter, kør:
+```bash
+npx expo install expo-font
+```
+
 ## 3) Supabase opsætning
 
 **⚠️ See detailed setup guide:** [supabase/SETUP_HOSTED.md](supabase/SETUP_HOSTED.md)
