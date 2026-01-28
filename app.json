@@ -17,13 +17,13 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yourcompany.fcnfans",
+      "bundleIdentifier": "dk.rasmusgunnar.fcnfans",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
-      "package": "com.yourcompany.fcnfans"
+      "package": "dk.rasmusgunnar.fcnfans"
     },
     "web": {
       "bundler": "metro"
