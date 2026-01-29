@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { MediaAsset } from './mediaPicker';
+import * as Crypto from 'expo-crypto';
 
 /**
  * Convert base64 string to Uint8Array for reliable Supabase uploads in Expo
@@ -39,7 +40,7 @@ export async function uploadMediaToSupabase(
   const ext = asset.type === 'image' ? 'jpg' : getExtensionFromUri(asset.uri, asset.type);
   const now = new Date();
   const yyyyMM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const fileName = `${cryptoRandom()}.${ext}`;
+  const fileName = `${await cryptoRandom()}.${ext}`;
   const path = `${userId}/${yyyyMM}/${fileName}`;
 
   console.log('[Upload] Starting upload to post-media bucket', {
@@ -116,7 +117,7 @@ export async function uploadMediaToSupabase(
   };
 }
 
-function cryptoRandom(): string {
-  // Lightweight random string for path; in RN we can use Math.random()
-  return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+async function cryptoRandom(): Promise<string> {
+  // Use expo-crypto for secure random UUID generation
+  return Crypto.randomUUID();
 }

@@ -377,9 +377,4 @@ const styles = StyleSheet.create({
   editButtonTextCancel: {
     color: colors.text,
   },
-  commentDelete: {
-    fontSize: 24,
-    color: colors.subtext,
-    fontWeight: '300',
-  },
 });

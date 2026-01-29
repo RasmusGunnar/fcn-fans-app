@@ -177,14 +177,20 @@ export async function fetchBusTripsUpcoming(limit = 20): Promise<BusTrip[]> {
 /**
  * Fetch upcoming events from Supabase (simplified - no joins)
  */
-export async function fetchEventsUpcoming(limit = 20): Promise<Event[]> {
+export async function fetchEventsUpcoming(limit = 20, communityId?: string): Promise<Event[]> {
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('events')
       .select('id, title, description, start_at, end_at, location_name, location_address, organizer_group_id, created_by, created_at, lat, lng')
       .gte('start_at', new Date().toISOString())
       .order('start_at', { ascending: true })
       .limit(limit);
+
+    if (communityId) {
+      query = query.eq('organizer_group_id', communityId);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.warn('[eventsApi] Error fetching events', error);
