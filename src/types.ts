@@ -2,11 +2,16 @@ export type Community = {
   id: string;
   name: string;
   municipality?: string;
-  type: 'city' | 'area';
+  type: 'community' | 'fan_faction';
   description?: string;
   memberCount?: number;
   createdAt?: number;
   createdBy?: string;
+  owner_id?: string | null;
+  avatar_path?: string | null;
+  avatar_url?: string | null;
+  avatar_kind?: 'logo' | 'image' | null;
+  visibility?: 'public' | 'private';
 };
 
 export type Match = {

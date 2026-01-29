@@ -109,7 +109,7 @@ export async function pickFromLibrary(): Promise<MediaAsset | null> {
     width: a.width,
     height: a.height,
     duration: (a as any).duration,
-    base64: videoAsset?.base64 || a.base64,
+    base64: videoAsset?.base64 ?? a.base64 ?? undefined,
     mimeType: a.mimeType,
   };
 }
@@ -172,7 +172,7 @@ export async function pickCameraVideo(): Promise<MediaAsset | null> {
     width: a.width,
     height: a.height,
     duration: (a as any).duration,
-    base64: a.base64,
+    base64: a.base64 ?? undefined,
     mimeType: a.mimeType,
   };
 }

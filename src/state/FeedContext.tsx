@@ -8,6 +8,15 @@ import { fetchNewsItems } from '../services/newsApi';
 import { fetchLikeStates, fetchCommentCounts, fetchCommentPreviews, toggleLike as toggleLikeApi, type LikeTargetType, type CommentPreview } from '../services/likesApi';
 import { targetKey } from '../utils/targetKey';
 
+// Helper to safely extract created timestamp from FeedItem
+const getCreated = (item: FeedItem) => {
+  if (item.kind === 'post') {
+    const p = item.data as any;
+    return p.created_at ?? p.createdAt ?? p.createdAtISO ?? null;
+  }
+  return null;
+};
+
 interface FeedContextType {
   posts: Post[];
   feedItems: FeedItem[]; // Combined feed using unified FeedItem type
@@ -294,7 +303,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
 
     // Also update feedItems
     setFeedItems((prev) => {
-      const feedPost: FeedItem = { ...post, itemType: 'post' };
+      const feedPost: FeedItem = { kind: 'post', id: post.id, data: post };
       const existingIndex = prev.findIndex((item) => item.id === post.id);
       if (existingIndex >= 0) {
         const updated = [...prev];
@@ -303,7 +312,12 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       }
       // Prepend and re-sort
       const updated = [feedPost, ...prev];
-      updated.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      updated.sort((a, b) => {
+        const aTime = getCreated(a);
+        const bTime = getCreated(b);
+        if (!aTime || !bTime) return 0;
+        return new Date(bTime).getTime() - new Date(aTime).getTime();
+      });
       return updated;
     });
   }, []);
@@ -364,7 +378,8 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       value={{ 
         posts, 
         feedItems, 
-        communityMap, 
+        communityMap,
+        profileMap, 
         likeMap, 
         commentCountMap,
         commentPreviewMap,

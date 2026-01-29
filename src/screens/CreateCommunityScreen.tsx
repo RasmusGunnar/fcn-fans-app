@@ -1,77 +1,132 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, Alert } from 'react-native';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase';
-import { useAuth } from '../auth/AuthProvider';
-import { PrimaryButton } from '../components/PrimaryButton';
+import { View, Text, TextInput, StyleSheet, Alert, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { PrimaryButton } from '../components/PrimaryButton';
+import { colors, spacing } from '../theme';
+import { createCommunity } from '../services/communities';
 
 export default function CreateCommunityScreen() {
-  const nav = useNavigation();
-  const [name, setName] = useState('Ganløse');
-  const [municipality, setMunicipality] = useState('Egedal');
-  const [description, setDescription] = useState('FCN-fans i Ganløse og omegn');
-  const [type, setType] = useState<'city' | 'area'>('city');
+  const navigation = useNavigation();
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [creating, setCreating] = useState(false);
 
-  const { user } = useAuth();
+  const handleCreate = async () => {
+    if (!name.trim()) {
+      Alert.alert('Fejl', 'Navn er påkrævet');
+      return;
+    }
 
-  const create = async () => {
+    setCreating(true);
+
     try {
-      if (!name.trim()) return Alert.alert('Navn mangler');
-      const ref = await addDoc(collection(db, 'communities'), {
-        name: name.trim(),
-        municipality: municipality.trim(),
-        description: description.trim(),
-        type,
-        memberCount: 1,
-        createdBy: user?.id ?? null,
-        createdAt: Date.now(),
-        createdAtServer: serverTimestamp(),
-      });
-      // Opret medlemsskab
-      await addDoc(collection(db, 'communities', ref.id, 'members'), {
-        uid: user?.id ?? null,
-        role: 'captain',
-        joinedAt: Date.now(),
-      });
-      // @ts-ignore
-      nav.navigate('CommunityHub', { communityId: ref.id });
-    } catch (e: any) {
-      Alert.alert('Fejl', e?.message ?? 'Ukendt fejl');
+      const community = await createCommunity(name, description || null);
+
+      if (!community) {
+        Alert.alert('Fejl', 'Kunne ikke oprette fællesskab');
+        setCreating(false);
+        return;
+      }
+
+      Alert.alert('Succes', 'Fællesskabet er oprettet!', [
+        {
+          text: 'OK',
+          onPress: () => {
+            (navigation as any).navigate('CommunityDetail', {
+              id: community.id,
+              title: community.name,
+            });
+          },
+        },
+      ]);
+    } catch (err: any) {
+      console.error('[CreateCommunity] Error:', err);
+      Alert.alert('Fejl', err.message || 'Kunne ikke oprette fællesskab');
+      setCreating(false);
     }
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.label}>Navn</Text>
-      <TextInput style={styles.input} value={name} onChangeText={setName} />
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.title}>Opret fællesskab</Text>
+        <Text style={styles.subtitle}>Saml lokale fans i dit område</Text>
 
-      <Text style={styles.label}>Kommune</Text>
-      <TextInput style={styles.input} value={municipality} onChangeText={setMunicipality} />
+        <Text style={styles.label}>Navn *</Text>
+        <TextInput
+          style={styles.input}
+          value={name}
+          onChangeText={setName}
+          placeholder="F.eks. Ganløse, Egedal, eller Nordsjælland"
+          placeholderTextColor={colors.subtext}
+        />
 
-      <Text style={styles.label}>Type (MVP)</Text>
-      <TextInput
-        style={styles.input}
-        value={type}
-        onChangeText={(t) => setType(t === 'area' ? 'area' : 'city')}
-      />
+        <Text style={styles.label}>Beskrivelse</Text>
+        <TextInput
+          style={[styles.input, styles.textArea]}
+          value={description}
+          onChangeText={setDescription}
+          placeholder="Fortæl om jeres fællesskab..."
+          placeholderTextColor={colors.subtext}
+          multiline
+          numberOfLines={4}
+        />
 
-      <Text style={styles.label}>Beskrivelse</Text>
-      <TextInput
-        style={[styles.input, { height: 90 }]}
-        multiline
-        value={description}
-        onChangeText={setDescription}
-      />
+        <PrimaryButton
+          title={creating ? 'Opretter...' : 'Opret fællesskab'}
+          onPress={handleCreate}
+          disabled={creating}
+        />
 
-      <View style={{ height: 16 }} />
-      <PrimaryButton title="Opret fællesskab" onPress={create} />
-    </View>
+        <PrimaryButton
+          title="Annuller"
+          variant="blue"
+          onPress={() => navigation.goBack()}
+          disabled={creating}
+        />
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
-  label: { marginTop: 12, marginBottom: 6, fontWeight: '600' },
-  input: { borderWidth: 1, borderRadius: 12, padding: 12 },
+  container: {
+    flex: 1,
+    backgroundColor: colors.bg,
+  },
+  content: {
+    padding: spacing.lg,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: spacing.sm,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: colors.subtext,
+    marginBottom: spacing.xl,
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: spacing.sm,
+    marginTop: spacing.md,
+  },
+  input: {
+    backgroundColor: colors.card,
+    borderRadius: 8,
+    padding: spacing.md,
+    fontSize: 16,
+    color: colors.text,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  textArea: {
+    height: 100,
+    textAlignVertical: 'top',
+  },
 });
