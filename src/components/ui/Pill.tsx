@@ -1,53 +1,66 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { colors, spacing, radius } from '../../theme';
+import { View, Text, StyleSheet, ViewStyle, TextStyle } from 'react-native';
+import { useTheme, Theme } from '../../theme';
 
 interface PillProps {
   label: string;
   icon?: React.ReactNode;
-  variant?: 'red' | 'blue' | 'orange' | 'neutral';
+  variant?: 'badge' | 'subtle' | 'gold';
 }
 
-export function Pill({ label, icon, variant = 'red' }: PillProps) {
-  const getVariantStyles = () => {
+export function Pill({ label, icon, variant = 'badge' }: PillProps) {
+  const theme = useTheme();
+  const styles = createStyles(theme);
+
+  const getVariantStyles = (): { container: ViewStyle; text: TextStyle } => {
     switch (variant) {
-      case 'blue':
-        return { backgroundColor: colors.blueButton, textColor: colors.card };
-      case 'orange':
-        return { backgroundColor: colors.orangePillBg, textColor: colors.orangePillText };
-      case 'neutral':
-        return { backgroundColor: colors.neutralPillBg, textColor: colors.neutralPillText };
-      default:
-        return { backgroundColor: colors.pillBg, textColor: colors.pillText };
+      case 'subtle':
+        return {
+          container: { backgroundColor: theme.components.pill.variants.subtle.bg },
+          text: { color: theme.components.pill.variants.subtle.text },
+        };
+      case 'gold':
+        return {
+          container: { backgroundColor: theme.components.pill.variants.gold.bg },
+          text: { color: theme.components.pill.variants.gold.text },
+        };
+      default: // badge
+        return {
+          container: { backgroundColor: theme.components.pill.variants.badge.bg },
+          text: { 
+            color: theme.components.pill.variants.badge.text,
+            textTransform: 'uppercase' as const,
+          },
+        };
     }
   };
 
-  const { backgroundColor, textColor } = getVariantStyles();
+  const variantStyles = getVariantStyles();
 
   return (
-    <View style={[styles.pill, { backgroundColor }]}>
+    <View style={[styles.pill, variantStyles.container]}>
       {icon && <View style={styles.icon}>{icon}</View>}
-      <Text style={[styles.text, { color: textColor }]}>{label}</Text>
+      <Text style={[styles.text, variantStyles.text]}>{label}</Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  pill: {
-    backgroundColor: colors.pillBg,
-    borderRadius: radius.sm,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-  },
-  icon: {
-    marginRight: spacing.xs,
-  },
-  text: {
-    color: colors.pillText,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-});
+function createStyles(theme: Theme) {
+  return StyleSheet.create({
+    pill: {
+      borderRadius: theme.components.pill.radius,
+      paddingVertical: theme.components.pill.py,
+      paddingHorizontal: theme.components.pill.px,
+      flexDirection: 'row',
+      alignItems: 'center',
+      alignSelf: 'flex-start',
+    },
+    icon: {
+      marginRight: theme.spacing[1],
+    },
+    text: {
+      ...theme.typography.caption,
+      fontWeight: '600',
+    },
+  });
+}

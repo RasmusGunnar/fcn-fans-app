@@ -44,7 +44,7 @@ export function FanFactionCard({
     <Card style={styles.card}>
       <Pill
         label="Fanfraktion"
-        variant="neutral"
+        variant="subtle"
         icon={<Ionicons name="star" size={14} color={theme.colors.pill.neutral.text} />}
       />
       <View style={styles.header}>
@@ -63,7 +63,7 @@ export function FanFactionCard({
         </View>
       </View>
       <Text style={styles.description}>{description}</Text>
-      <PrimaryButton title="Se fraktion" variant="blue" onPress={onPressJoin} />
+      <PrimaryButton title="Se fraktion" onPress={onPressJoin} />
       <CardActions
         liked={liked}
         likes={likes}

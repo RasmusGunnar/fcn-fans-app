@@ -49,6 +49,39 @@ export interface Theme {
         lg: number;
       };
     };
+    button: {
+      radius: number;
+      size: {
+        lg: {
+          height: number;
+          px: number;
+          py: number;
+        };
+      };
+      variants: {
+        primary: { bg: string; text: string };
+        secondary: { bg: string; text: string };
+        ghost: { bg: string; text: string };
+        outline: { bg: string; text: string; border: string };
+      };
+      disabled: { bg: string; text: string };
+    };
+    pill: {
+      radius: number;
+      px: number;
+      py: number;
+      variants: {
+        badge: { bg: string; text: string };
+        subtle: { bg: string; text: string };
+        gold: { bg: string; text: string };
+      };
+    };
+    chip: {
+      radius: number;
+      height: number;
+      selected: { bg: string; text: string };
+      unselected: { bg: string; border: string; text: string };
+    };
   };
 }
 
@@ -83,6 +116,71 @@ export function createTheme(mode: ThemeMode = 'light'): Theme {
           sm: spacingTokens[4],
           md: spacingTokens[6],
           lg: spacingTokens[8],
+        },
+      },
+      button: {
+        radius: radiusTokens.pill,
+        size: {
+          lg: {
+            height: spacingTokens[12],
+            px: spacingTokens[5],
+            py: spacingTokens[3],
+          },
+        },
+        variants: {
+          primary: {
+            bg: colors.brand.accent,
+            text: colors.text.inverse,
+          },
+          secondary: {
+            bg: colors.bg.subtle,
+            text: colors.text.primary,
+          },
+          ghost: {
+            bg: 'transparent',
+            text: colors.brand.accent,
+          },
+          outline: {
+            bg: colors.bg.default,
+            text: colors.brand.accent,
+            border: colors.border.default,
+          },
+        },
+        disabled: {
+          bg: colors.bg.subtle,
+          text: colors.text.secondary,
+        },
+      },
+      pill: {
+        radius: radiusTokens.pill,
+        px: spacingTokens[3],
+        py: spacingTokens[1],
+        variants: {
+          badge: {
+            bg: colors.brand.accent,
+            text: colors.text.inverse,
+          },
+          subtle: {
+            bg: colors.bg.subtle,
+            text: colors.text.primary,
+          },
+          gold: {
+            bg: colors.brand.gold,
+            text: colors.text.inverse,
+          },
+        },
+      },
+      chip: {
+        radius: radiusTokens.pill,
+        height: spacingTokens[10],
+        selected: {
+          bg: colors.brand.accent,
+          text: colors.text.inverse,
+        },
+        unselected: {
+          bg: colors.bg.default,
+          border: colors.border.default,
+          text: colors.text.primary,
         },
       },
     },

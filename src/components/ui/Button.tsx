@@ -30,22 +30,22 @@ export function Button({
         return {
           container: {
             backgroundColor: 'transparent',
-            borderColor: theme.colors.primary,
+            borderColor: theme.colors.brand.accent,
             borderWidth: theme.layout.borderWidth,
           },
-          text: { color: theme.colors.primary },
+          text: { color: theme.colors.brand.accent },
         };
       case 'ghost':
         return {
           container: {
-            backgroundColor: 'transparent',
+            backgroundColor: theme.components.button.variants.ghost.bg,
           },
-          text: { color: theme.colors.primary },
+          text: { color: theme.components.button.variants.ghost.text },
         };
       default: // primary
         return {
-          container: { backgroundColor: theme.colors.primary },
-          text: { color: theme.colors.text.inverse },
+          container: { backgroundColor: theme.components.button.variants.primary.bg },
+          text: { color: theme.components.button.variants.primary.text },
         };
     }
   };
@@ -59,8 +59,9 @@ export function Button({
         };
       case 'lg':
         return {
-          paddingVertical: theme.spacing[4],
-          paddingHorizontal: theme.spacing[6],
+          paddingVertical: theme.components.button.size.lg.py,
+          paddingHorizontal: theme.components.button.size.lg.px,
+          height: theme.components.button.size.lg.height,
         };
       default: // md
         return {
@@ -94,7 +95,7 @@ export function Button({
 function createStyles(theme: Theme) {
   return StyleSheet.create({
     btn: {
-      borderRadius: theme.radius.md,
+      borderRadius: theme.components.button.radius,
       alignItems: 'center',
       justifyContent: 'center',
     },

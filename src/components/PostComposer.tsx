@@ -223,7 +223,6 @@ export function PostComposer({ onSuccess }: PostComposerProps) {
       <PrimaryButton
         title={loading ? 'Deler...' : 'Del opslag'}
         onPress={handlePublish}
-        variant="red"
         disabled={!text.trim() || loading}
       />
 

@@ -247,7 +247,7 @@ export default function CreateScreen() {
           </Pressable>
         </Card>
 
-        <PrimaryButton title="Udgiv opslag" onPress={handlePublish} variant="red" />
+        <PrimaryButton title="Udgiv opslag" onPress={handlePublish} />
       </ScrollView>
     </View>
   );

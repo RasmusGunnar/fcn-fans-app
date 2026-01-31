@@ -306,7 +306,7 @@ export default function ProfileScreen() {
           </View>
         </View>
         <View style={{ marginTop: spacing.md }}>
-          <OutlineButton title="Rediger profil" icon="pencil" onPress={handleEditProfile} />
+          <OutlineButton title="Rediger profil" onPress={handleEditProfile} />
         </View>
       </Card>
 

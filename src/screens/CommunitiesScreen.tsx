@@ -103,7 +103,6 @@ export default function CommunitiesScreen() {
                 </View>
                 <PrimaryButton
                   title="Gå til fraktion →"
-                  variant={getButtonVariant(faction.type)}
                   onPress={() => navigateToDetail(faction.id, faction.name)}
                 />
               </Card>
@@ -142,7 +141,6 @@ export default function CommunitiesScreen() {
                 </View>
                 <PrimaryButton
                   title="Gå til fællesskab →"
-                  variant="blue"
                   onPress={() => navigateToDetail(community.id, community.name)}
                 />
               </Card>

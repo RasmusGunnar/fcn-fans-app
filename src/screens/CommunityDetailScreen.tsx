@@ -398,7 +398,6 @@ export default function CommunityDetailScreen() {
                     ? 'Medlem af fællesskabet ✓'
                     : 'Bliv medlem'
             }
-            variant={isMember ? 'blue' : 'red'}
             onPress={handleJoinLeave}
             disabled={joining || effectiveRole === 'owner'}
           />

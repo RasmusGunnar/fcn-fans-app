@@ -44,7 +44,7 @@ export function CommunityCard({
     <Card style={styles.card}>
       <Pill
         label="Community"
-        variant="blue"
+        variant="badge"
         icon={<Ionicons name="people" size={14} color={theme.colors.bg.card} />}
       />
       <View style={styles.header}>
@@ -63,7 +63,7 @@ export function CommunityCard({
         </View>
       </View>
       <Text style={styles.description}>{description}</Text>
-      <PrimaryButton title="Gå til fællesskab" variant="blue" onPress={onPressJoin} />
+      <PrimaryButton title="Gå til fællesskab" onPress={onPressJoin} />
       <CardActions
         liked={liked}
         likes={likes}

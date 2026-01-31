@@ -24,3 +24,10 @@ export type { AvatarProps } from './Avatar';
 
 export { ListRow } from './ListRow';
 export type { ListRowProps } from './ListRow';
+
+export { Pill } from './Pill';
+
+export { Chip } from './Chip';
+export type { ChipProps } from './Chip';
+
+export { OutlineButton } from './OutlineButton';

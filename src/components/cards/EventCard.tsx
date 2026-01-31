@@ -58,7 +58,7 @@ export function EventCard({
         onPressShare,
       }}
     >
-      <Pill label="Bus til Udekamp" variant="orange" />
+      <Pill label="Bus til Udekamp" variant="gold" />
       <Text style={styles.title}>{title}</Text>
       <View style={styles.detailRow}>
         <Ionicons name="calendar" size={16} color={theme.colors.text.secondary} />

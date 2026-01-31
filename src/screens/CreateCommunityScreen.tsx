@@ -84,7 +84,6 @@ export default function CreateCommunityScreen() {
 
         <PrimaryButton
           title="Annuller"
-          variant="blue"
           onPress={() => navigation.goBack()}
           disabled={creating}
         />

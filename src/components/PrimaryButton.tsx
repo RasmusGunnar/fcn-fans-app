@@ -1,37 +1,69 @@
 import React from 'react';
-import { Button, ButtonVariant } from './ui';
+import { Pressable, StyleSheet } from 'react-native';
+import { useTheme, Theme } from '../theme';
+import { Text } from './ui';
 
 interface PrimaryButtonProps {
   title: string;
   onPress: () => void;
   disabled?: boolean;
-  variant?: 'red' | 'blue' | 'yellow' | 'outline';
+  fullWidth?: boolean;
 }
 
 /**
- * Legacy PrimaryButton component - wraps new Button component for backwards compatibility
- * @deprecated Use Button from './ui' instead
+ * Premium Stitch-style primary CTA button with large pill shape
  */
 export function PrimaryButton({
   title,
   onPress,
   disabled = false,
-  variant = 'red',
+  fullWidth = true,
 }: PrimaryButtonProps) {
-  // Map legacy variants to new Button variants
-  const mapVariant = (): ButtonVariant => {
-    if (variant === 'outline') return 'outline';
-    return 'primary'; // red, blue, yellow all map to primary for now
-  };
+  const theme = useTheme();
+  const styles = createStyles(theme);
 
   return (
-    <Button
-      title={title}
+    <Pressable
       onPress={onPress}
       disabled={disabled}
-      variant={mapVariant()}
-      size="md"
-      fullWidth
-    />
+      style={({ pressed }) => [
+        styles.button,
+        fullWidth && styles.fullWidth,
+        disabled && styles.disabled,
+        pressed && !disabled && styles.pressed,
+      ]}
+    >
+      <Text variant="bodyBold" style={[styles.text, disabled && styles.disabledText]}>
+        {title}
+      </Text>
+    </Pressable>
   );
+}
+
+function createStyles(theme: Theme) {
+  return StyleSheet.create({
+    button: {
+      height: theme.components.button.size.lg.height,
+      paddingHorizontal: theme.components.button.size.lg.px,
+      borderRadius: theme.components.button.radius,
+      backgroundColor: theme.components.button.variants.primary.bg,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    fullWidth: {
+      width: '100%',
+    },
+    text: {
+      color: theme.components.button.variants.primary.text,
+    },
+    disabled: {
+      backgroundColor: theme.components.button.disabled.bg,
+    },
+    disabledText: {
+      color: theme.components.button.disabled.text,
+    },
+    pressed: {
+      opacity: 0.8,
+    },
+  });
 }
