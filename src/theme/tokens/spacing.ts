@@ -19,5 +19,10 @@ export const layout = {
   borderHairline: 1,
 } as const;
 
+export const border = {
+  hairline: 1,  // Use with StyleSheet.hairlineWidth in components
+} as const;
+
 export type SpacingTokens = typeof spacing;
 export type LayoutTokens = typeof layout;
+export type BorderTokens = typeof border;

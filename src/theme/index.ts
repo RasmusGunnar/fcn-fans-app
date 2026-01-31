@@ -3,6 +3,7 @@ import {
   darkColors,
   spacing as spacingTokens,
   layout,
+  border as borderTokens,
   radius as radiusTokens,
   typography,
   elevation,
@@ -10,6 +11,7 @@ import {
   type ColorTokens,
   type SpacingTokens,
   type LayoutTokens,
+  type BorderTokens,
   type RadiusTokens,
   type TypographyTokens,
   type ElevationTokens,
@@ -23,6 +25,7 @@ export interface Theme {
   colors: ColorTokens;
   spacing: SpacingTokens;
   layout: LayoutTokens;
+  border: BorderTokens;
   radius: RadiusTokens;
   typography: TypographyTokens;
   elevation: ElevationTokens;
@@ -124,6 +127,7 @@ export function createTheme(mode: ThemeMode = 'light'): Theme {
     colors,
     spacing: spacingTokens,
     layout,
+    border: borderTokens,
     radius: radiusTokens,
     typography,
     elevation,
@@ -138,21 +142,21 @@ export function createTheme(mode: ThemeMode = 'light'): Theme {
         variants: {
           default: {
             backgroundColor: colors.bg.surface,
-            borderRadius: radiusTokens.md,
+            borderRadius: radiusTokens.lg,
             borderWidth: layout.borderHairline,
             borderColor: colors.border.default,
-            elevation: 'none',
+            elevation: 'sm',
           },
           hero: {
             backgroundColor: colors.bg.elevated,
-            borderRadius: radiusTokens.lg,
+            borderRadius: radiusTokens.xl,
             borderWidth: layout.borderHairline,
             borderColor: colors.border.subtle,
             elevation: 'md',
           },
           raised: {
             backgroundColor: colors.bg.elevated,
-            borderRadius: radiusTokens.md,
+            borderRadius: radiusTokens.lg,
             borderWidth: layout.borderHairline,
             borderColor: colors.border.subtle,
             elevation: 'sm',
@@ -166,7 +170,7 @@ export function createTheme(mode: ThemeMode = 'light'): Theme {
           },
           imageHeader: {
             backgroundColor: colors.bg.surface,
-            borderRadius: radiusTokens.md,
+            borderRadius: radiusTokens.lg,
             borderWidth: layout.borderHairline,
             borderColor: colors.border.default,
             elevation: 'sm',
