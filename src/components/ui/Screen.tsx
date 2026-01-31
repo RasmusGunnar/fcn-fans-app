@@ -30,7 +30,7 @@ export function Screen({
   
   const containerStyle = {
     flex: 1,
-    backgroundColor: theme.colors.bg.default,
+    backgroundColor: theme.colors.bg.canvas,
   };
   
   const contentStyle = {

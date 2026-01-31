@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, ViewProps, StyleSheet, ImageBackground, ImageSourcePropType } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { defaultTheme, getShadowStyle } from '../../theme';
+import { useTheme, Theme, getShadowStyle } from '../../theme';
 
 export interface CardProps extends Omit<ViewProps, 'style'> {
   variant?: 'default' | 'raised' | 'imageHeader' | 'feedItem' | 'hero';
@@ -11,15 +11,17 @@ export interface CardProps extends Omit<ViewProps, 'style'> {
 }
 
 /**
- * Themed Card component
+ * Premium Stitch-style Card component
  * 
- * DO NOT hardcode borderRadius, padding, shadows, or colors
- * Use variant prop to control elevation and appearance
+ * All styling comes from theme.components.card.variants
+ * Clean white cards on canvas background with soft premium shadows
  * 
- * Examples:
- *   <Card variant="default">Basic card</Card>
- *   <Card variant="raised">Elevated card</Card>
- *   <Card variant="imageHeader" imageSource={...}>Card with image header</Card>
+ * Variants:
+ *   - default: Clean card with subtle border, no shadow
+ *   - raised: Elevated card with soft shadow
+ *   - hero: Large rounded card with premium shadow
+ *   - feedItem: Flat card with bottom divider only
+ *   - imageHeader: Card with image header and gradient overlay
  */
 export function Card({
   variant = 'default',
@@ -28,73 +30,59 @@ export function Card({
   children,
   ...props
 }: CardProps) {
-  const theme = defaultTheme;
-  const styles = createStyles(theme);
+  const theme = useTheme();
+  const variantConfig = theme.components.card.variants[variant];
   
-  // Handle feedItem variant differently
-  if (variant === 'feedItem') {
-    return (
-      <View
-        style={[
-          {
-            backgroundColor: theme.colors.bg.card,
-            borderRadius: theme.components.card.variants.feedItem.borderRadius,
-            borderBottomWidth: StyleSheet.hairlineWidth,
-            borderBottomColor: theme.colors.border.subtle,
-            overflow: 'hidden' as const,
-          },
-          style,
-        ]}
-        {...props}
-      >
-        {children}
-      </View>
-    );
-  }
+  // Get shadow style based on variant elevation
+  const shadowStyle = variantConfig.elevation !== 'none' 
+    ? getShadowStyle(theme, variantConfig.elevation)
+    : undefined;
   
-  // Handle hero variant
-  if (variant === 'hero') {
-    const heroShadow = getShadowStyle(theme, 'md');
-    return (
-      <View
-        style={[
-          {
-            backgroundColor: theme.colors.bg.elevated,
-            borderRadius: theme.radius.lg,
-            padding: theme.layout.cardPadding,
-            marginHorizontal: theme.layout.screenPadding,
-            overflow: 'hidden' as const,
-          },
-          heroShadow,
-          style,
-        ]}
-        {...props}
-      >
-        {children}
-      </View>
-    );
-  }
-  
-  const elevationLevel = variant === 'raised' 
-    ? theme.components.card.elevationRaised 
-    : theme.components.card.elevationDefault;
-  
-  const shadowStyle = getShadowStyle(theme, elevationLevel);
-  
+  // Base card style from variant config
   const baseStyle = {
-    backgroundColor: theme.colors.bg.card,
-    borderRadius: theme.components.card.borderRadius,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.border.default,
+    backgroundColor: variantConfig.backgroundColor,
+    borderRadius: variantConfig.borderRadius,
     overflow: 'hidden' as const,
   };
   
+  // Handle feedItem variant (bottom border only)
+  if (variant === 'feedItem') {
+    const feedItemConfig = variantConfig as typeof theme.components.card.variants.feedItem;
+    return (
+      <View
+        style={[
+          baseStyle,
+          {
+            borderBottomWidth: StyleSheet.hairlineWidth,
+            borderBottomColor: feedItemConfig.borderBottomColor,
+          },
+          style,
+        ]}
+        {...props}
+      >
+        {children}
+      </View>
+    );
+  }
+  
+  // Border style for variants that use full borders
+  const borderStyle = 'borderWidth' in variantConfig && 'borderColor' in variantConfig
+    ? {
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: variantConfig.borderColor,
+      }
+    : {};
+  
+  // Handle imageHeader variant
   if (variant === 'imageHeader' && imageSource) {
     return (
-      <View style={[baseStyle, shadowStyle, style]} {...props}>
+      <View
+        style={[baseStyle, borderStyle, shadowStyle, style]}
+        {...props}
+      >
         <ImageBackground
           source={imageSource}
-          style={styles.imageHeader}
+          style={createStyles(theme).imageHeader}
           resizeMode="cover"
         >
           <LinearGradient
@@ -102,7 +90,7 @@ export function Card({
             locations={theme.gradients.imageHeaderOverlay.locations}
             start={theme.gradients.imageHeaderOverlay.start}
             end={theme.gradients.imageHeaderOverlay.end}
-            style={styles.gradient}
+            style={createStyles(theme).gradient}
           />
         </ImageBackground>
         <View style={{ padding: theme.components.card.padding }}>
@@ -112,10 +100,12 @@ export function Card({
     );
   }
   
+  // Default rendering for default/raised/hero variants
   return (
     <View
       style={[
         baseStyle,
+        borderStyle,
         shadowStyle,
         { padding: theme.components.card.padding },
         style,
@@ -127,7 +117,7 @@ export function Card({
   );
 }
 
-function createStyles(theme: typeof defaultTheme) {
+function createStyles(theme: Theme) {
   return StyleSheet.create({
     imageHeader: {
       height: 200,

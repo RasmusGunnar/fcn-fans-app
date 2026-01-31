@@ -12,6 +12,7 @@ export const lightColors = {
   bg: {
     default: '#FFFFFF',
     card: '#FFFFFF',
+    surface: '#FFFFFF',
     elevated: '#FFFFFF',
     canvas: '#F9F9F9',
     subtle: '#F0F0F0',
@@ -32,6 +33,7 @@ export const lightColors = {
     light: '#F3F4F6',
     subtle: '#F2F2F2',
     active: '#E30613',
+    hairline: '#F2F2F2',
   },
   
   // Semantic colors
@@ -94,6 +96,7 @@ export const darkColors = {
   bg: {
     default: '#111827',
     card: '#1F2937',
+    surface: '#1F2937',
     elevated: '#374151',
     canvas: '#0F172A',
     subtle: '#1F2937',
@@ -114,6 +117,7 @@ export const darkColors = {
     light: '#4B5563',
     subtle: '#4B5563',
     active: '#E30613',
+    hairline: '#4B5563',
   },
   
   // Semantic colors

@@ -36,9 +36,40 @@ export interface Theme {
       elevationDefault: keyof ElevationTokens;
       elevationRaised: keyof ElevationTokens;
       variants: {
+        default: {
+          backgroundColor: string;
+          borderRadius: number;
+          borderWidth: number;
+          borderColor: string;
+          elevation: keyof ElevationTokens;
+        };
+        hero: {
+          backgroundColor: string;
+          borderRadius: number;
+          borderWidth: number;
+          borderColor: string;
+          elevation: keyof ElevationTokens;
+        };
+        raised: {
+          backgroundColor: string;
+          borderRadius: number;
+          borderWidth: number;
+          borderColor: string;
+          elevation: keyof ElevationTokens;
+        };
         feedItem: {
+          backgroundColor: string;
           borderRadius: number;
           borderBottomWidth: number;
+          borderBottomColor: string;
+          elevation: keyof ElevationTokens;
+        };
+        imageHeader: {
+          backgroundColor: string;
+          borderRadius: number;
+          borderWidth: number;
+          borderColor: string;
+          elevation: keyof ElevationTokens;
         };
       };
     };
@@ -105,9 +136,40 @@ export function createTheme(mode: ThemeMode = 'light'): Theme {
         elevationDefault: 'sm',
         elevationRaised: 'md',
         variants: {
+          default: {
+            backgroundColor: colors.bg.surface,
+            borderRadius: radiusTokens.md,
+            borderWidth: layout.borderHairline,
+            borderColor: colors.border.default,
+            elevation: 'none',
+          },
+          hero: {
+            backgroundColor: colors.bg.elevated,
+            borderRadius: radiusTokens.lg,
+            borderWidth: layout.borderHairline,
+            borderColor: colors.border.subtle,
+            elevation: 'md',
+          },
+          raised: {
+            backgroundColor: colors.bg.elevated,
+            borderRadius: radiusTokens.md,
+            borderWidth: layout.borderHairline,
+            borderColor: colors.border.subtle,
+            elevation: 'sm',
+          },
           feedItem: {
+            backgroundColor: colors.bg.surface,
             borderRadius: spacingTokens[0],
-            borderBottomWidth: layout.borderWidth,
+            borderBottomWidth: layout.borderHairline,
+            borderBottomColor: colors.border.subtle,
+            elevation: 'none',
+          },
+          imageHeader: {
+            backgroundColor: colors.bg.surface,
+            borderRadius: radiusTokens.md,
+            borderWidth: layout.borderHairline,
+            borderColor: colors.border.default,
+            elevation: 'sm',
           },
         },
       },
