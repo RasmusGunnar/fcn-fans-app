@@ -58,6 +58,17 @@ npx expo install expo-font
 - Document in `supabase/CHANGELOG_MANUAL.sql`
 - Commit to git
 
+## 3.1) Design System Validation
+
+The project enforces strict design token usage to prevent hardcoded values.
+
+```bash
+# Check for design system violations
+npm run design:check
+```
+
+**Pre-commit hook:** A git pre-commit hook automatically runs `design:check` before each commit. To bypass (not recommended): `git commit --no-verify`
+
 ## 4) Firebase opsætning (Legacy - Not Used)
 
 1. Opret et Firebase projekt

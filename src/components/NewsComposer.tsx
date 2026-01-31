@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing } from '../theme';
+import { useTheme, Theme } from '../theme';
 import { Card } from './ui/Card';
 import { PrimaryButton } from './PrimaryButton';
 import { Actor, LinkPreview } from '../types/news';
@@ -22,6 +22,8 @@ interface NewsComposerProps {
 }
 
 export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
+  const theme = useTheme();
+  const styles = createStyles(theme);
   const [url, setUrl] = useState('');
   const [preview, setPreview] = useState<LinkPreview | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
@@ -215,7 +217,7 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
       <TextInput
         style={styles.input}
         placeholder="https://example.com/article"
-        placeholderTextColor={colors.subtext}
+        placeholderTextColor={theme.colors.text.secondary}
         value={url}
         onChangeText={setUrl}
         autoCapitalize="none"
@@ -234,12 +236,12 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
       >
         {loadingPreview ? (
           <>
-            <ActivityIndicator size="small" color={colors.fcnRed} />
+            <ActivityIndicator size="small" color={theme.colors.primary} />
             <Text style={styles.previewButtonText}>Henter preview...</Text>
           </>
         ) : (
           <>
-            <Ionicons name="link" size={20} color={colors.fcnRed} />
+            <Ionicons name="link" size={20} color={theme.colors.primary} />
             <Text style={styles.previewButtonText}>Hent preview</Text>
           </>
         )}
@@ -247,7 +249,7 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
 
       {previewError && (
         <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={20} color={colors.fcnRed} />
+          <Ionicons name="alert-circle" size={20} color={theme.colors.primary} />
           <Text style={styles.errorText}>{previewError}</Text>
         </View>
       )}
@@ -286,85 +288,87 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(theme: Theme) {
+  return StyleSheet.create({
   container: {
-    gap: spacing.md,
+    gap: theme.spacing[4],
   },
   label: {
-    fontSize: 14,
+    fontSize: theme.typography.body.fontSize,
     fontWeight: '600',
-    color: colors.text,
+    color: theme.colors.text.primary,
   },
   input: {
-    padding: spacing.md,
-    backgroundColor: colors.card,
-    borderRadius: 8,
+    padding: theme.spacing[4],
+    backgroundColor: theme.colors.bg.card,
+    borderRadius: theme.radius.sm,
     borderWidth: 1,
-    borderColor: colors.border,
-    fontSize: 16,
-    color: colors.text,
+    borderColor: theme.colors.border.default,
+    fontSize: theme.typography.body.fontSize,
+    color: theme.colors.text.primary,
   },
   previewButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
-    padding: spacing.md,
-    backgroundColor: colors.card,
-    borderRadius: 8,
+    gap: theme.spacing[2],
+    padding: theme.spacing[4],
+    backgroundColor: theme.colors.bg.card,
+    borderRadius: theme.radius.sm,
     borderWidth: 1,
-    borderColor: colors.fcnRed,
+    borderColor: theme.colors.primary,
   },
   previewButtonDisabled: {
     opacity: 0.5,
   },
   previewButtonText: {
-    fontSize: 16,
+    fontSize: theme.typography.body.fontSize,
     fontWeight: '600',
-    color: colors.fcnRed,
+    color: theme.colors.primary,
   },
   errorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    padding: spacing.md,
-    backgroundColor: colors.card,
-    borderRadius: 8,
+    gap: theme.spacing[2],
+    padding: theme.spacing[4],
+    backgroundColor: theme.colors.bg.card,
+    borderRadius: theme.radius.sm,
     borderWidth: 1,
-    borderColor: colors.fcnRed,
+    borderColor: theme.colors.primary,
   },
   errorText: {
     flex: 1,
-    fontSize: 14,
-    color: colors.fcnRed,
+    fontSize: theme.typography.body.fontSize,
+    color: theme.colors.primary,
   },
   previewCard: {
-    padding: 0,
+    padding: theme.spacing[0],
     overflow: 'hidden',
   },
   previewImage: {
     width: '100%',
     height: 180,
-    backgroundColor: colors.border,
+    backgroundColor: theme.colors.border.default,
   },
   previewContent: {
-    padding: spacing.md,
-    gap: spacing.xs,
+    padding: theme.spacing[4],
+    gap: theme.spacing[1],
   },
   previewSiteName: {
-    fontSize: 12,
+    fontSize: theme.typography.small.fontSize,
     fontWeight: '600',
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
     textTransform: 'uppercase',
   },
   previewTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.text,
+    fontSize: theme.typography.h3.fontSize,
+    fontWeight: theme.typography.h3.fontWeight as any,
+    color: theme.colors.text.primary,
   },
   previewDescription: {
-    fontSize: 14,
-    color: colors.subtext,
-    lineHeight: 20,
+    fontSize: theme.typography.body.fontSize,
+    color: theme.colors.text.secondary,
+    lineHeight: theme.typography.body.lineHeight,
   },
-});
+  });
+}

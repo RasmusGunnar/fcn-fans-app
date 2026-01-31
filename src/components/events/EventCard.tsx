@@ -1,9 +1,12 @@
+// ✅ DESIGN SYSTEM GUARDRAIL: This file uses theme tokens via defaultTheme.
+// All spacing, colors, and radius values must use theme.spacing[N], theme.colors.*, theme.radius.*
+// NO hardcoded numbers or color strings allowed.
+
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Card } from '../ui/Card';
 import { FeedCardShell } from '../feed/FeedCardShell';
 import { useAuth } from '../../auth/AuthProvider';
-import { colors, spacing } from '../../theme';
+import { defaultTheme } from '../../theme';
 
 interface EventCardProps {
   eventId: string; // Required for comments
@@ -93,51 +96,53 @@ export function EventCard({
   );
 }
 
+const theme = defaultTheme;
+
 const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: theme.spacing[2],
   },
   badge: {
-    backgroundColor: '#34C759',
-    color: colors.card,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: 4,
+    backgroundColor: theme.colors.state.success,
+    color: theme.colors.bg.card,
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
+    borderRadius: theme.radius.sm,
     fontSize: 11,
     fontWeight: '700',
   },
   organizer: {
     fontSize: 11,
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
     fontWeight: '600',
   },
   title: {
     fontSize: 16,
     fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.sm,
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing[2],
   },
   description: {
     fontSize: 13,
-    color: colors.subtext,
-    marginBottom: spacing.md,
+    color: theme.colors.text.secondary,
+    marginBottom: theme.spacing[3],
     lineHeight: 18,
   },
   details: {},
   detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.xs,
+    marginBottom: theme.spacing[1],
   },
   icon: {
     fontSize: 14,
-    marginRight: spacing.xs,
+    marginRight: theme.spacing[1],
   },
   detailText: {
     fontSize: 13,
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
   },
 });

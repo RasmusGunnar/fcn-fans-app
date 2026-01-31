@@ -1,8 +1,15 @@
+// =====================================================
+// DESIGN SYSTEM RULES:
+// DO NOT hardcode radius/spacing/colors/shadows; use theme tokens.
+// =====================================================
+
 import React, { useMemo, useState } from 'react';
-import { Alert, Button, Platform, Text, TextInput, View } from 'react-native';
+import { Alert, Platform, TextInput, View } from 'react-native';
 import { supabase } from '../lib/supabase';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { AuthStackParamList } from '../navigation/AuthStack';
+import { Screen, Text, Button, Divider } from '../components/ui';
+import { useTheme } from '../theme';
 
 let AppleAuthentication: any = null;
 if (Platform.OS === 'ios') {
@@ -14,6 +21,7 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'Welcome'>;
 export default function WelcomeScreen({ navigation }: Props) {
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
+  const theme = useTheme();
 
   const canSend = useMemo(() => email.trim().includes('@') && !busy, [email, busy]);
 
@@ -70,50 +78,59 @@ export default function WelcomeScreen({ navigation }: Props) {
   };
 
   return (
-    <View style={{ padding: 16, gap: 14 }}>
-      <Text style={{ fontSize: 24, fontWeight: '700' }}>Velkommen</Text>
-      <Text style={{ opacity: 0.8 }}>Log ind for at se feed og favoritter.</Text>
+    <Screen scrollable>
+      <View style={{ gap: theme.spacing[3] }}>
+        <Text variant="h1">Velkommen</Text>
+        <Text variant="body" color="secondary">Log ind for at se feed og favoritter.</Text>
 
-      {/* Email */}
-      <Text style={{ marginTop: 10, fontWeight: '600' }}>Mail</Text>
-      <TextInput
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        autoCorrect={false}
-        keyboardType="email-address"
-        placeholder="din@email.dk"
-        style={{ borderWidth: 1, padding: 12, borderRadius: 10 }}
-      />
-      <Button title={busy ? 'Sender...' : 'Send kode'} onPress={sendCode} disabled={!canSend} />
+        {/* Email */}
+        <Text variant="bodyBold" style={{ marginTop: theme.spacing[2] }}>Mail</Text>
+        <TextInput
+          value={email}
+          onChangeText={setEmail}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="email-address"
+          placeholder="din@email.dk"
+          style={{
+            borderWidth: theme.layout.borderWidth,
+            borderColor: theme.colors.border.default,
+            padding: theme.spacing[3],
+            borderRadius: theme.radius.sm,
+            backgroundColor: theme.colors.bg.card,
+            fontSize: theme.typography.body.fontSize,
+          }}
+        />
+        <Button title={busy ? 'Sender...' : 'Send kode'} onPress={sendCode} disabled={!canSend} />
 
-      {/* Separator */}
-      <View style={{ height: 1, backgroundColor: '#ddd', marginVertical: 12 }} />
+        {/* Separator */}
+        <Divider spacing="md" />
 
-      <Text style={{ fontWeight: '700' }}>Er du ikke oprettet endnu?</Text>
-      <Text style={{ opacity: 0.8 }}>Så opret dig med (det er samme flow – du får en kode):</Text>
+        <Text variant="bodyBold">Er du ikke oprettet endnu?</Text>
+        <Text variant="body" color="secondary">Så opret dig med (det er samme flow – du får en kode):</Text>
 
-      {/* Social options */}
-      {Platform.OS === 'ios' ? (
+        {/* Social options */}
+        {Platform.OS === 'ios' ? (
+          <Button
+            title={busy ? '...' : 'Fortsæt med Apple'}
+            onPress={signInWithApple}
+            disabled={busy}
+          />
+        ) : (
+          <Button
+            title="Apple (kun iOS)"
+            onPress={() => Alert.alert('Info', 'Apple login virker kun på iOS.')}
+          />
+        )}
+
         <Button
-          title={busy ? '...' : 'Fortsæt med Apple'}
-          onPress={signInWithApple}
+          title="Fortsæt med Facebook (kommer snart)"
+          onPress={() => Alert.alert('Kommer snart', 'Facebook login kommer efter MVP.')}
           disabled={busy}
         />
-      ) : (
-        <Button
-          title="Apple (kun iOS)"
-          onPress={() => Alert.alert('Info', 'Apple login virker kun på iOS.')}
-        />
-      )}
 
-      <Button
-        title="Fortsæt med Facebook (kommer snart)"
-        onPress={() => Alert.alert('Kommer snart', 'Facebook login kommer efter MVP.')}
-        disabled={busy}
-      />
-
-      <Button title="Fortsæt med Mail (send kode)" onPress={sendCode} disabled={!canSend} />
-    </View>
+        <Button title="Fortsæt med Mail (send kode)" onPress={sendCode} disabled={!canSend} />
+      </View>
+    </Screen>
   );
 }

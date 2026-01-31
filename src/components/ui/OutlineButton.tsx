@@ -1,47 +1,72 @@
 import React from 'react';
-import { Pressable, Text, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { colors, radius } from '../../theme';
+import { Pressable, StyleSheet } from 'react-native';
+import { useTheme, Theme } from '../../theme';
+import { Text } from './Text';
 
 interface OutlineButtonProps {
   title: string;
   onPress: () => void;
   disabled?: boolean;
-  icon?: string;
+  fullWidth?: boolean;
 }
 
-export function OutlineButton({ title, onPress, disabled = false, icon }: OutlineButtonProps) {
+/**
+ * Premium Stitch-style outline/secondary button with large pill shape
+ */
+export function OutlineButton({
+  title,
+  onPress,
+  disabled = false,
+  fullWidth = true,
+}: OutlineButtonProps) {
+  const theme = useTheme();
+  const styles = createStyles(theme);
+
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled}
       style={({ pressed }) => [
-        styles.btn,
+        styles.button,
+        fullWidth && styles.fullWidth,
         disabled && styles.disabled,
         pressed && !disabled && styles.pressed,
       ]}
     >
-      {icon && <Ionicons name={icon as any} size={16} color={colors.fcnRed} style={styles.icon} />}
-      <Text style={styles.txt}>{title}</Text>
+      <Text variant="bodyBold" style={[styles.text, disabled && styles.disabledText]}>
+        {title}
+      </Text>
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
-  btn: {
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.fcnRed,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    flexDirection: 'row',
-  },
-  icon: {
-    marginRight: 8,
-  },
-  pressed: { opacity: 0.85 },
-  disabled: { opacity: 0.45 },
-  txt: { color: colors.fcnRed, fontSize: 16, fontWeight: '700' },
-});
+function createStyles(theme: Theme) {
+  return StyleSheet.create({
+    button: {
+      height: theme.components.button.size.lg.height,
+      paddingHorizontal: theme.components.button.size.lg.px,
+      borderRadius: theme.components.button.radius,
+      backgroundColor: theme.components.button.variants.outline.bg,
+      borderWidth: theme.layout.borderWidth,
+      borderColor: theme.components.button.variants.outline.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    fullWidth: {
+      width: '100%',
+    },
+    text: {
+      color: theme.components.button.variants.outline.text,
+    },
+    disabled: {
+      backgroundColor: theme.components.button.disabled.bg,
+      borderColor: theme.colors.border.subtle,
+    },
+    disabledText: {
+      color: theme.components.button.disabled.text,
+    },
+    pressed: {
+      opacity: 0.8,
+    },
+  });
+}

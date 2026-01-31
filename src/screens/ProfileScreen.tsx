@@ -16,6 +16,7 @@ import { Card } from '../components/ui/Card';
 import { Pill } from '../components/ui/Pill';
 import { OutlineButton } from '../components/ui/OutlineButton';
 import { colors, spacing } from '../theme';
+import { useTheme } from '../theme';
 import { uploadAvatar } from '../lib/uploadAvatar';
 import { getPublicUrl } from '../lib/storageUrl';
 import { Avatar } from '../components/Avatar';
@@ -35,16 +36,19 @@ function SectionCard({
   title,
   icon,
   children,
+  styles,
 }: {
   title: string;
   icon?: string;
   children: React.ReactNode;
+  styles: ReturnType<typeof createStyles>;
 }) {
+  const theme = useTheme();
   return (
     <Card style={{ marginBottom: spacing.md }}>
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>{title}</Text>
-        {icon && <Ionicons name={icon as any} size={16} color={colors.fcnRed} />}
+        <Text style={[styles.sectionTitle, { color: theme.colors.text.primary }]}>{title}</Text>
+        {icon && <Ionicons name={icon as any} size={16} color={theme.colors.primary} />}
       </View>
       {children}
     </Card>
@@ -57,23 +61,26 @@ function ProfileRow({
   subtitle,
   onPress,
   isLogout,
+  styles,
 }: {
   icon: string;
   title: string;
   subtitle?: string;
   onPress?: () => void;
   isLogout?: boolean;
+  styles: ReturnType<typeof createStyles>;
 }) {
+  const theme = useTheme();
   return (
-    <Pressable style={styles.row} onPress={onPress}>
-      <View style={[styles.rowIcon, isLogout && { backgroundColor: colors.fcnRed }]}>
-        <Ionicons name={icon as any} size={16} color={isLogout ? colors.card : colors.card} />
+    <Pressable style={[styles.row, { borderBottomColor: theme.colors.border.default }]} onPress={onPress}>
+      <View style={[styles.rowIcon, { backgroundColor: theme.colors.primary }, isLogout && { backgroundColor: theme.colors.primary }]}>
+        <Ionicons name={icon as any} size={16} color={theme.colors.bg.card} />
       </View>
       <View style={styles.rowText}>
-        <Text style={[styles.rowTitle, isLogout && { color: colors.fcnRed }]}>{title}</Text>
-        {subtitle && <Text style={styles.rowSubtitle}>{subtitle}</Text>}
+        <Text style={[styles.rowTitle, { color: theme.colors.text.primary }, isLogout && { color: theme.colors.primary }]}>{title}</Text>
+        {subtitle && <Text style={[styles.rowSubtitle, { color: theme.colors.text.secondary }]}>{subtitle}</Text>}
       </View>
-      <Ionicons name="chevron-forward" size={16} color={colors.subtext} />
+      <Ionicons name="chevron-forward" size={16} color={theme.colors.text.secondary} />
     </Pressable>
   );
 }
@@ -82,6 +89,8 @@ export default function ProfileScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { user, signOut } = useAuth();
+  const theme = useTheme();
+  const styles = createStyles(theme);
 
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -191,15 +200,15 @@ export default function ProfileScreen() {
   // If not logged in
   if (!user) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: theme.colors.bg.default }]}>
         <View style={styles.headerSection}>
-          <Text style={styles.headerTitle}>Min Profil</Text>
-          <Text style={styles.headerSubtitle}>Indstillinger & fællesskaber</Text>
+          <Text style={[styles.headerTitle, { color: theme.colors.text.primary }]}>Min Profil</Text>
+          <Text style={[styles.headerSubtitle, { color: theme.colors.text.secondary }]}>Indstillinger & fællesskaber</Text>
         </View>
         <View style={styles.emptyContainer}>
-          <Ionicons name="person-circle-outline" size={64} color={colors.subtext} />
-          <Text style={styles.emptyTitle}>Du skal være logget ind</Text>
-          <Text style={styles.emptySubtext}>Log ind for at se din profil</Text>
+          <Ionicons name="person-circle-outline" size={64} color={theme.colors.text.secondary} />
+          <Text style={[styles.emptyTitle, { color: theme.colors.text.primary }]}>Du skal være logget ind</Text>
+          <Text style={[styles.emptySubtext, { color: theme.colors.text.secondary }]}>Log ind for at se din profil</Text>
         </View>
       </View>
     );
@@ -207,14 +216,14 @@ export default function ProfileScreen() {
 
   if (loading) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: theme.colors.bg.default }]}>
         <View style={styles.headerSection}>
-          <Text style={styles.headerTitle}>Min Profil</Text>
-          <Text style={styles.headerSubtitle}>Indstillinger & fællesskaber</Text>
+          <Text style={[styles.headerTitle, { color: theme.colors.text.primary }]}>Min Profil</Text>
+          <Text style={[styles.headerSubtitle, { color: theme.colors.text.secondary }]}>Indstillinger & fællesskaber</Text>
         </View>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.fcnRed} />
-          <Text style={styles.loadingText}>Henter profil...</Text>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={[styles.loadingText, { color: theme.colors.text.secondary }]}>Henter profil...</Text>
         </View>
       </View>
     );
@@ -222,32 +231,32 @@ export default function ProfileScreen() {
 
   return (
     <ScrollView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: theme.colors.bg.default }]}
       contentContainerStyle={{ padding: spacing.md, paddingBottom: insets.bottom + 24 }}
     >
       {/* Simple header without red background */}
       <View style={styles.headerSection}>
-        <Text style={styles.headerTitle}>Min Profil</Text>
-        <Text style={styles.headerSubtitle}>Indstillinger & fællesskaber</Text>
+        <Text style={[styles.headerTitle, { color: theme.colors.text.primary }]}>Min Profil</Text>
+        <Text style={[styles.headerSubtitle, { color: theme.colors.text.secondary }]}>Indstillinger & fællesskaber</Text>
       </View>
 
       {/* Avatar Upload Banner - Always visible */}
       {!uploadingAvatar && (
         <Card style={[styles.avatarBanner, { marginBottom: spacing.md }]}>
           <View style={styles.bannerContent}>
-            <Ionicons name="camera" size={24} color={colors.fcnRed} />
+            <Ionicons name="camera" size={24} color={theme.colors.primary} />
             <View style={styles.bannerText}>
-              <Text style={styles.bannerTitle}>
+              <Text style={[styles.bannerTitle, { color: theme.colors.text.primary }]}>
                 {profile?.avatar_url ? 'Skift profilbillede' : 'Tilføj profilbillede'}
               </Text>
-              <Text style={styles.bannerSubtitle}>
+              <Text style={[styles.bannerSubtitle, { color: theme.colors.text.secondary }]}>
                 {profile?.avatar_url ? 'Upload nyt billede' : 'Gør din profil mere personlig'}
               </Text>
             </View>
           </View>
-          <Pressable style={styles.bannerButton} onPress={handleUploadAvatar}>
-            <Text style={styles.bannerButtonText}>{profile?.avatar_url ? 'Skift' : 'Upload'}</Text>
-            <Ionicons name="arrow-forward" size={16} color={colors.card} />
+          <Pressable style={[styles.bannerButton, { backgroundColor: theme.colors.primary }]} onPress={handleUploadAvatar}>
+            <Text style={[styles.bannerButtonText, { color: theme.colors.bg.card }]}>{profile?.avatar_url ? 'Skift' : 'Upload'}</Text>
+            <Ionicons name="arrow-forward" size={16} color={theme.colors.bg.card} />
           </Pressable>
         </Card>
       )}
@@ -256,8 +265,8 @@ export default function ProfileScreen() {
       {uploadingAvatar && (
         <Card style={{ marginBottom: spacing.md, padding: spacing.lg }}>
           <View style={{ alignItems: 'center' }}>
-            <ActivityIndicator size="small" color={colors.fcnRed} />
-            <Text style={{ marginTop: spacing.sm, color: colors.subtext }}>
+            <ActivityIndicator size="small" color={theme.colors.primary} />
+            <Text style={{ marginTop: spacing.sm, color: theme.colors.text.secondary }}>
               Uploader billede...
             </Text>
           </View>
@@ -276,14 +285,14 @@ export default function ProfileScreen() {
                 label={profile?.display_name || user?.email || 'Fan'}
               />
               {/* Camera icon overlay */}
-              <View style={styles.avatarOverlay}>
-                <Ionicons name="camera" size={20} color="#FFFFFF" />
+              <View style={[styles.avatarOverlay, { backgroundColor: theme.colors.primary, borderColor: theme.colors.bg.card }]}>
+                <Ionicons name="camera" size={20} color={theme.colors.bg.card} />
               </View>
             </View>
           </Pressable>
           <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>{profile?.display_name || user?.email || 'Fan'}</Text>
-            <Text style={styles.profileSubtext}>
+            <Text style={[styles.profileName, { color: theme.colors.text.primary }]}>{profile?.display_name || user?.email || 'Fan'}</Text>
+            <Text style={[styles.profileSubtext, { color: theme.colors.text.secondary }]}>
               {profile?.member_since
                 ? `Medlem siden ${formatMemberSince(profile.member_since)}`
                 : 'Ny bruger'}
@@ -297,13 +306,13 @@ export default function ProfileScreen() {
           </View>
         </View>
         <View style={{ marginTop: spacing.md }}>
-          <OutlineButton title="Rediger profil" icon="pencil" onPress={handleEditProfile} />
+          <OutlineButton title="Rediger profil" onPress={handleEditProfile} />
         </View>
       </Card>
 
       {/* Owned Communities */}
       {ownerCommunities.length > 0 && (
-        <SectionCard title="MINE FÆLLESSKABER (EJER)" icon="crown">
+        <SectionCard title="MINE FÆLLESSKABER (EJER)" icon="crown" styles={styles}>
           {ownerCommunities.map((community) => (
             <ProfileRow
               key={community.id}
@@ -311,6 +320,7 @@ export default function ProfileScreen() {
               title={community.name}
               subtitle={`${community.memberCount} medlemmer • Du er ejer`}
               onPress={() => navigateToCommunity(community.id)}
+              styles={styles}
             />
           ))}
         </SectionCard>
@@ -318,7 +328,7 @@ export default function ProfileScreen() {
 
       {/* Member Communities */}
       {memberCommunities.length > 0 && (
-        <SectionCard title="MEDLEM AF FÆLLESSKABER">
+        <SectionCard title="MEDLEM AF FÆLLESSKABER" styles={styles}>
           {memberCommunities.map((community) => (
             <ProfileRow
               key={community.id}
@@ -328,6 +338,7 @@ export default function ProfileScreen() {
                 community.type === 'fan_faction' ? 'Fan fraktion' : 'Du er medlem'
               }`}
               onPress={() => navigateToCommunity(community.id)}
+              styles={styles}
             />
           ))}
         </SectionCard>
@@ -336,13 +347,13 @@ export default function ProfileScreen() {
       {/* Upcoming Events */}
       <Card style={{ marginBottom: spacing.md }}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>DINE KOMMENDE EVENTS</Text>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text.primary }]}>DINE KOMMENDE EVENTS</Text>
           <Pressable
-            style={styles.newEventButton}
+            style={[styles.newEventButton, { backgroundColor: theme.colors.primary }]}
             onPress={() => (navigation as any).navigate('CreateNewEvent')}
           >
-            <Ionicons name="add" size={16} color={colors.card} />
-            <Text style={styles.newEventButtonText}>Ny</Text>
+            <Ionicons name="add" size={16} color={theme.colors.bg.card} />
+            <Text style={[styles.newEventButtonText, { color: theme.colors.bg.card }]}>Ny</Text>
           </Pressable>
         </View>
         {upcomingItems.length > 0 ? (
@@ -353,10 +364,11 @@ export default function ProfileScreen() {
               title={item.title}
               subtitle={formatEventDate(item.date)}
               onPress={() => navigateToItem(item)}
+              styles={styles}
             />
           ))
         ) : (
-          <Text style={styles.emptyText}>Ingen kommende events</Text>
+          <Text style={[styles.emptyText, { color: theme.colors.text.secondary }]}>Ingen kommende events</Text>
         )}
       </Card>
 
@@ -366,32 +378,34 @@ export default function ProfileScreen() {
           icon="notifications"
           title="Notifikationer"
           onPress={() => Alert.alert('Notifikationer', 'Kommer snart!')}
+          styles={styles}
         />
         <ProfileRow
           icon="settings"
           title="Generelle indstillinger"
           onPress={() => Alert.alert('Indstillinger', 'Kommer snart!')}
+          styles={styles}
         />
         <ProfileRow
           icon="help-circle"
           title="Hjælp & support"
           onPress={() => Alert.alert('Hjælp', 'Kontakt support@fcnfans.dk')}
+          styles={styles}
         />
-        <ProfileRow icon="log-out" title="Log ud" onPress={handleLogout} isLogout />
+        <ProfileRow icon="log-out" title="Log ud" onPress={handleLogout} isLogout styles={styles} />
       </Card>
 
       <View style={styles.footer}>
-        <Text style={styles.footerText}>FCN Fans App v1.0.0</Text>
-        <Text style={styles.footerText}>Lavet af fans, til fans ❤️🔵</Text>
+        <Text style={[styles.footerText, { color: theme.colors.text.secondary }]}>FCN Fans App v1.0.0</Text>
+        <Text style={[styles.footerText, { color: theme.colors.text.secondary }]}>Lavet af fans, til fans ❤️🔵</Text>
       </View>
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.bg,
   },
   headerSection: {
     paddingTop: spacing.xl,
@@ -399,14 +413,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
   },
   headerTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: colors.text,
+    fontSize: theme.typography.h1.fontSize,
+    fontWeight: theme.typography.h1.fontWeight as any,
     marginBottom: spacing.xs,
   },
   headerSubtitle: {
-    fontSize: 14,
-    color: colors.subtext,
+    fontSize: theme.typography.body.fontSize,
   },
   loadingContainer: {
     flex: 1,
@@ -416,8 +428,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: spacing.md,
-    fontSize: 14,
-    color: colors.subtext,
+    fontSize: theme.typography.body.fontSize,
   },
   emptyContainer: {
     flex: 1,
@@ -427,15 +438,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   emptyTitle: {
-    fontSize: 18,
+    fontSize: theme.typography.h3.fontSize,
     fontWeight: '600',
-    color: colors.text,
     marginTop: spacing.md,
     marginBottom: spacing.xs,
   },
   emptySubtext: {
-    fontSize: 14,
-    color: colors.subtext,
+    fontSize: theme.typography.body.fontSize,
     textAlign: 'center',
   },
   profileSummary: {
@@ -450,14 +459,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     right: 0,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.fcnRed,
+    width: theme.spacing[6],
+    height: theme.spacing[6],
+    borderRadius: theme.radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: colors.card,
+    borderWidth: theme.layout.borderWidth * 2,
   },
   avatarBanner: {
     flexDirection: 'row',
@@ -475,40 +482,34 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   bannerTitle: {
-    fontSize: 16,
+    fontSize: theme.typography.body.fontSize,
     fontWeight: '600',
-    color: colors.text,
   },
   bannerSubtitle: {
-    fontSize: 12,
-    color: colors.subtext,
-    marginTop: 2,
+    fontSize: theme.typography.small.fontSize,
+    marginTop: theme.spacing[0],
   },
   bannerButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.fcnRed,
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.sm,
-    borderRadius: 6,
-    gap: 4,
+    borderRadius: theme.radius.sm,
+    gap: theme.spacing[1],
   },
   bannerButtonText: {
-    fontSize: 14,
+    fontSize: theme.typography.body.fontSize,
     fontWeight: '600',
-    color: colors.card,
   },
   profileInfo: {
     flex: 1,
   },
   profileName: {
-    fontSize: 18,
+    fontSize: theme.typography.h3.fontSize,
     fontWeight: '700',
-    color: colors.text,
   },
   profileSubtext: {
-    fontSize: 14,
-    color: colors.subtext,
+    fontSize: theme.typography.body.fontSize,
     marginTop: spacing.xs,
     marginBottom: spacing.sm,
   },
@@ -524,23 +525,20 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   sectionTitle: {
-    fontSize: 14,
+    fontSize: theme.typography.body.fontSize,
     fontWeight: '700',
-    color: colors.text,
     textTransform: 'uppercase',
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomWidth: theme.layout.borderWidth,
   },
   rowIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.fcnRed,
+    width: theme.spacing[8],
+    height: theme.spacing[8],
+    borderRadius: theme.radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.sm,
@@ -550,12 +548,10 @@ const styles = StyleSheet.create({
   },
   rowTitle: {
     fontSize: 16,
-    color: colors.text,
   },
   rowSubtitle: {
     fontSize: 14,
-    color: colors.subtext,
-    marginTop: 2,
+    marginTop: theme.spacing[0],
   },
   footer: {
     alignItems: 'center',
@@ -563,26 +559,22 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 12,
-    color: colors.subtext,
     textAlign: 'center',
   },
   newEventButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.fcnRed,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
-    borderRadius: 6,
-    gap: 4,
+    borderRadius: theme.radius.sm,
+    gap: theme.spacing[1],
   },
   newEventButtonText: {
-    fontSize: 12,
+    fontSize: theme.typography.small.fontSize,
     fontWeight: '600',
-    color: colors.card,
   },
   emptyText: {
-    fontSize: 14,
-    color: colors.subtext,
+    fontSize: theme.typography.body.fontSize,
     textAlign: 'center',
     paddingVertical: spacing.md,
   },

@@ -6,7 +6,7 @@ import { useFeed } from '../state/FeedContext';
 import { NewsComposer } from '../components/NewsComposer';
 import { PostComposer } from '../components/PostComposer';
 import { ActorSelector } from '../components/ActorSelector';
-import { colors, spacing, radius } from '../theme';
+import { useTheme } from '../theme';
 import { useAuth } from '../auth/AuthProvider';
 import { Actor } from '../types/news';
 
@@ -22,6 +22,7 @@ export default function CreateSheet({ visible, onClose }: CreateSheetProps) {
   const insets = useSafeAreaInsets();
   const { fetchPosts } = useFeed();
   const { user } = useAuth();
+  const theme = useTheme();
 
   const [contentType, setContentType] = useState<ContentType>(null);
   const [actor, setActor] = useState<Actor>({
@@ -72,6 +73,8 @@ export default function CreateSheet({ visible, onClose }: CreateSheetProps) {
     onClose();
   };
 
+  const styles = makeStyles(theme);
+
   if (!visible) return null;
 
   return (
@@ -84,7 +87,7 @@ export default function CreateSheet({ visible, onClose }: CreateSheetProps) {
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <Pressable onPress={handleClose} style={styles.closeButton}>
-            <Ionicons name="close" size={28} color={colors.text} />
+            <Ionicons name="close" size={28} color={theme.colors.text.primary} />
           </Pressable>
           <Text style={styles.title}>
             {contentType === null
@@ -102,7 +105,7 @@ export default function CreateSheet({ visible, onClose }: CreateSheetProps) {
             <View style={styles.choiceContainer}>
               <Pressable style={styles.choiceCard} onPress={() => setContentType('post')}>
                 <View style={styles.choiceIcon}>
-                  <Ionicons name="create" size={40} color={colors.fcnRed} />
+                  <Ionicons name="create" size={40} color={theme.colors.primary} />
                 </View>
                 <Text style={styles.choiceTitle}>Opret opslag</Text>
                 <Text style={styles.choiceDescription}>
@@ -112,7 +115,7 @@ export default function CreateSheet({ visible, onClose }: CreateSheetProps) {
 
               <Pressable style={styles.choiceCard} onPress={() => setContentType('news')}>
                 <View style={styles.choiceIcon}>
-                  <Ionicons name="link" size={40} color={colors.fcnRed} />
+                  <Ionicons name="link" size={40} color={theme.colors.primary} />
                 </View>
                 <Text style={styles.choiceTitle}>Del nyhed</Text>
                 <Text style={styles.choiceDescription}>
@@ -123,7 +126,7 @@ export default function CreateSheet({ visible, onClose }: CreateSheetProps) {
           ) : contentType === 'post' ? (
             // Step 2: Post composer (community posting coming later)
             <>
-              <View style={{ padding: spacing.md }}>
+              <View style={{ padding: theme.spacing[4] }}>
                 <Text style={styles.infoText}>
                   💡 Community-posting for opslag kommer snart. Lige nu oprettes opslag som dig selv.
                 </Text>
@@ -133,7 +136,7 @@ export default function CreateSheet({ visible, onClose }: CreateSheetProps) {
           ) : (
             // Step 2: News composer with actor selector
             <>
-              <View style={{ padding: spacing.md }}>
+              <View style={{ padding: theme.spacing[4] }}>
                 <ActorSelector selectedActor={actor} onSelectActor={setActor} />
               </View>
               <NewsComposer actor={actor} onSuccess={handleNewsSuccess} />
@@ -145,72 +148,72 @@ export default function CreateSheet({ visible, onClose }: CreateSheetProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: theme.colors.bg.default,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingHorizontal: theme.spacing[6],
+    paddingVertical: theme.spacing[4],
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: theme.colors.border.default,
   },
   closeButton: {
-    padding: spacing.xs,
+    padding: theme.spacing[1],
   },
   title: {
     fontSize: 20,
     fontWeight: '700',
-    color: colors.text,
+    color: theme.colors.text.primary,
   },
   content: {
     flex: 1,
   },
   choiceContainer: {
-    padding: spacing.lg,
-    gap: spacing.lg,
+    padding: theme.spacing[6],
+    gap: theme.spacing[6],
   },
   choiceCard: {
-    backgroundColor: colors.card,
-    padding: spacing.xl,
-    borderRadius: radius.md,
+    backgroundColor: theme.colors.bg.card,
+    padding: theme.spacing[8],
+    borderRadius: theme.radius.md,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: theme.colors.border.default,
   },
   choiceIcon: {
     width: 80,
     height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.bg,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.bg.default,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.md,
+    marginBottom: theme.spacing[4],
   },
   choiceTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.sm,
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing[2],
   },
   choiceDescription: {
     fontSize: 14,
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
     textAlign: 'center',
     lineHeight: 20,
   },
   infoText: {
     fontSize: 14,
-    color: colors.subtext,
-    backgroundColor: colors.card,
-    padding: spacing.md,
-    borderRadius: radius.sm,
+    color: theme.colors.text.secondary,
+    backgroundColor: theme.colors.bg.card,
+    padding: theme.spacing[4],
+    borderRadius: theme.radius.sm,
     borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: spacing.md,
+    borderColor: theme.colors.border.default,
+    marginBottom: theme.spacing[4],
   },
 });

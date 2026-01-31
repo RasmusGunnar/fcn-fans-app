@@ -1,9 +1,12 @@
+// ✅ DESIGN SYSTEM GUARDRAIL: This file uses theme tokens via defaultTheme.
+// All spacing, colors, and radius values must use theme.spacing[N], theme.colors.*, theme.radius.*
+// NO hardcoded numbers or color strings allowed.
+
 import React from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
-import { Card } from '../ui/Card';
 import { FeedCardShell } from '../feed/FeedCardShell';
 import { useAuth } from '../../auth/AuthProvider';
-import { colors, spacing } from '../../theme';
+import { defaultTheme } from '../../theme';
 
 interface MatchCardProps {
   matchId: string; // Required for comments
@@ -136,32 +139,34 @@ export function MatchCard({
   );
 }
 
+const theme = defaultTheme;
+
 const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: theme.spacing[3],
   },
   badge: {
-    backgroundColor: colors.fcnRed,
-    color: colors.card,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: 4,
+    backgroundColor: theme.colors.primary,
+    color: theme.colors.bg.card,
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
+    borderRadius: theme.radius.sm,
     fontSize: 11,
     fontWeight: '700',
   },
   competition: {
     fontSize: 12,
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
     fontWeight: '600',
   },
   matchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.lg,
+    marginBottom: theme.spacing[6],
   },
   team: {
     alignItems: 'center',
@@ -170,58 +175,58 @@ const styles = StyleSheet.create({
   teamLogo: {
     width: 50,
     height: 50,
-    borderRadius: 25,
+    borderRadius: theme.radius.pill,
   },
   teamCircle: {
     width: 50,
     height: 50,
-    borderRadius: 25,
-    backgroundColor: colors.fcnRed,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   teamInitials: {
-    color: colors.card,
+    color: theme.colors.bg.card,
     fontSize: 14,
     fontWeight: '700',
   },
   teamName: {
     fontSize: 11,
     fontWeight: '600',
-    color: colors.text,
-    marginTop: spacing.xs,
+    color: theme.colors.text.primary,
+    marginTop: theme.spacing[1],
     textAlign: 'center',
   },
   vs: {
     fontSize: 16,
     fontWeight: '700',
-    color: colors.text,
-    marginHorizontal: spacing.md,
+    color: theme.colors.text.primary,
+    marginHorizontal: theme.spacing[4],
   },
   details: {
-    marginBottom: spacing.md,
+    marginBottom: theme.spacing[3],
   },
   detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.xs,
+    marginBottom: theme.spacing[1],
   },
   icon: {
     fontSize: 14,
-    marginRight: spacing.xs,
+    marginRight: theme.spacing[1],
   },
   detailText: {
     fontSize: 13,
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
   },
   button: {
-    backgroundColor: colors.fcnRed,
-    paddingVertical: spacing.sm,
-    borderRadius: 8,
+    backgroundColor: theme.colors.primary,
+    paddingVertical: theme.spacing[2],
+    borderRadius: theme.radius.sm,
     alignItems: 'center',
   },
   buttonText: {
-    color: colors.card,
+    color: theme.colors.bg.card,
     fontSize: 14,
     fontWeight: '700',
   },

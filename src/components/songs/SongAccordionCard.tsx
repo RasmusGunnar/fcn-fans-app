@@ -3,7 +3,7 @@ import { View, Text, Pressable, StyleSheet, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../ui/Card';
 import { SpotifyButton } from '../ui/SpotifyButton';
-import { colors, spacing, radius } from '../../theme';
+import { defaultTheme } from '../../theme';
 
 interface SongAccordionCardProps {
   title: string;
@@ -20,19 +20,21 @@ export function SongAccordionCard({
   isExpanded,
   onToggle,
 }: SongAccordionCardProps) {
+  const theme = defaultTheme;
+  
   return (
     <Card style={styles.card}>
       <Pressable onPress={onToggle} style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={styles.iconContainer}>
-            <Ionicons name="musical-notes" size={20} color={colors.fcnRed} />
+            <Ionicons name="musical-notes" size={20} color={theme.colors.primary} />
           </View>
           <Text style={styles.title}>{title}</Text>
         </View>
         <Ionicons
           name={isExpanded ? 'chevron-up' : 'chevron-down'}
           size={20}
-          color={colors.subtext}
+          color={theme.colors.text.secondary}
         />
       </Pressable>
 
@@ -48,16 +50,18 @@ export function SongAccordionCard({
   );
 }
 
+const theme = defaultTheme;
+
 const styles = StyleSheet.create({
   card: {
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.sm,
+    marginHorizontal: theme.spacing[4],
+    marginBottom: theme.spacing[2],
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: spacing.sm,
+    paddingVertical: theme.spacing[2],
   },
   headerLeft: {
     flexDirection: 'row',
@@ -67,30 +71,30 @@ const styles = StyleSheet.create({
   iconContainer: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.softYellowBg,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.pill.yellow.bg,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.sm,
+    marginRight: theme.spacing[2],
   },
   title: {
     fontSize: 18,
     fontWeight: '600',
-    color: colors.text,
+    color: theme.colors.text.primary,
     flex: 1,
   },
   expandedContent: {
-    marginTop: spacing.sm,
+    marginTop: theme.spacing[2],
   },
   lyricsContainer: {
-    backgroundColor: colors.bg,
-    borderRadius: radius.sm,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
+    backgroundColor: theme.colors.bg.default,
+    borderRadius: theme.radius.sm,
+    padding: theme.spacing[4],
+    marginBottom: theme.spacing[2],
   },
   lyrics: {
     fontSize: 14,
-    color: colors.text,
+    color: theme.colors.text.primary,
     lineHeight: 20,
   },
 });

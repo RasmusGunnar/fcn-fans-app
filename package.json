@@ -12,7 +12,8 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier . --write",
     "format:check": "prettier . --check",
-    "db:hosted": "echo \"⚠️  Use Supabase Dashboard SQL Editor + supabase/CHANGELOG_MANUAL.sql for hosted DB changes. Do NOT run 'db push' without Docker setup.\""
+    "db:hosted": "echo \"⚠️  Use Supabase Dashboard SQL Editor + supabase/CHANGELOG_MANUAL.sql for hosted DB changes. Do NOT run 'db push' without Docker setup.\"",
+    "design:check": "node scripts/design-check.js"
   },
   "dependencies": {
     "@gorhom/bottom-sheet": "^5.2.8",

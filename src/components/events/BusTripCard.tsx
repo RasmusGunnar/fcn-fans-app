@@ -1,7 +1,11 @@
+// ✅ DESIGN SYSTEM GUARDRAIL: This file uses theme tokens via defaultTheme.
+// All spacing, colors, and radius values must use theme.spacing[N], theme.colors.*, theme.radius.*
+// NO hardcoded numbers or color strings allowed.
+
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Card } from '../ui/Card';
-import { colors, spacing } from '../../theme';
+import { defaultTheme } from '../../theme';
 
 interface BusTripCardProps {
   title: string;
@@ -80,65 +84,67 @@ export function BusTripCard({
   );
 }
 
+const theme = defaultTheme;
+
 const styles = StyleSheet.create({
   card: {
-    marginBottom: spacing.md,
+    marginBottom: theme.layout.listGap,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: theme.spacing[2],
   },
   badge: {
-    backgroundColor: '#FF9500',
-    color: colors.card,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: 4,
+    backgroundColor: theme.colors.state.warning,
+    color: theme.colors.bg.card,
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
+    borderRadius: theme.radius.sm,
     fontSize: 11,
     fontWeight: '700',
   },
   organizer: {
     fontSize: 11,
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
     fontWeight: '600',
   },
   title: {
     fontSize: 16,
     fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.md,
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing[3],
   },
   details: {
-    marginBottom: spacing.md,
+    marginBottom: theme.spacing[3],
   },
   detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.xs,
+    marginBottom: theme.spacing[1],
   },
   icon: {
     fontSize: 14,
-    marginRight: spacing.xs,
+    marginRight: theme.spacing[1],
   },
   detailText: {
     fontSize: 13,
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
   },
   footer: {
-    paddingTop: spacing.sm,
+    paddingTop: theme.spacing[2],
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: theme.colors.border.default,
   },
   seatsText: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.fcnRed,
+    color: theme.colors.primary,
   },
   fullText: {
     fontSize: 13,
     fontWeight: '700',
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
   },
 });

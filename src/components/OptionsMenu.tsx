@@ -11,7 +11,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing } from '../theme';
+import { useTheme, Theme } from '../theme';
 
 export interface OptionsMenuOption {
   label: string;
@@ -30,7 +30,10 @@ interface OptionsMenuProps {
  * A 3-dot menu component that shows edit/delete actions.
  * Uses ActionSheetIOS on iOS and a custom modal on Android.
  */
-export function OptionsMenu({ options, iconColor = colors.subtext, iconSize = 20 }: OptionsMenuProps) {
+export function OptionsMenu({ options, iconColor, iconSize = 20 }: OptionsMenuProps) {
+  const theme = useTheme();
+  const styles = createStyles(theme);
+  const resolvedIconColor = iconColor ?? theme.colors.text.secondary;
   const [modalVisible, setModalVisible] = useState(false);
 
   const handlePress = () => {
@@ -82,7 +85,7 @@ export function OptionsMenu({ options, iconColor = colors.subtext, iconSize = 20
   return (
     <>
       <TouchableOpacity onPress={handlePress} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-        <Ionicons name="ellipsis-horizontal" size={iconSize} color={iconColor} />
+        <Ionicons name="ellipsis-horizontal" size={iconSize} color={resolvedIconColor} />
       </TouchableOpacity>
 
       {/* Android Modal */}
@@ -105,7 +108,7 @@ export function OptionsMenu({ options, iconColor = colors.subtext, iconSize = 20
                     <Ionicons
                       name={option.icon}
                       size={20}
-                      color={option.destructive ? colors.error : colors.text}
+                      color={option.destructive ? theme.colors.error : theme.colors.text.primary}
                       style={styles.modalOptionIcon}
                     />
                   )}
@@ -127,45 +130,47 @@ export function OptionsMenu({ options, iconColor = colors.subtext, iconSize = 20
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(theme: Theme) {
+  return StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: theme.colors.overlay.heavy,
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: colors.card,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.lg,
+    backgroundColor: theme.colors.bg.card,
+    borderTopLeftRadius: theme.radius.lg,
+    borderTopRightRadius: theme.radius.lg,
+    paddingTop: theme.spacing[4],
+    paddingBottom: theme.spacing[6],
   },
   modalOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
+    paddingVertical: theme.spacing[4],
+    paddingHorizontal: theme.spacing[6],
   },
   modalOptionIcon: {
-    marginRight: spacing.sm,
+    marginRight: theme.spacing[2],
   },
   modalOptionText: {
-    fontSize: 16,
-    color: colors.text,
+    fontSize: theme.typography.body.fontSize,
+    color: theme.colors.text.primary,
   },
   modalOptionTextDestructive: {
-    color: colors.error,
+    color: theme.colors.error,
   },
   modalCancel: {
-    marginTop: spacing.sm,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
+    marginTop: theme.spacing[2],
+    paddingVertical: theme.spacing[4],
+    paddingHorizontal: theme.spacing[6],
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: theme.colors.border.default,
   },
   modalCancelText: {
-    fontSize: 16,
-    color: colors.subtext,
+    fontSize: theme.typography.body.fontSize,
+    color: theme.colors.text.secondary,
     textAlign: 'center',
   },
-});
+  });
+}

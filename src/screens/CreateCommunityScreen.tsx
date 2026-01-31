@@ -3,11 +3,12 @@ import { View, Text, TextInput, StyleSheet, Alert, ScrollView } from 'react-nati
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PrimaryButton } from '../components/PrimaryButton';
-import { colors, spacing } from '../theme';
+import { useTheme } from '../theme';
 import { createCommunity } from '../services/communities';
 
 export default function CreateCommunityScreen() {
   const navigation = useNavigation();
+  const theme = useTheme();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [creating, setCreating] = useState(false);
@@ -47,6 +48,8 @@ export default function CreateCommunityScreen() {
     }
   };
 
+  const styles = makeStyles(theme);
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -59,7 +62,7 @@ export default function CreateCommunityScreen() {
           value={name}
           onChangeText={setName}
           placeholder="F.eks. Ganløse, Egedal, eller Nordsjælland"
-          placeholderTextColor={colors.subtext}
+          placeholderTextColor={theme.colors.text.secondary}
         />
 
         <Text style={styles.label}>Beskrivelse</Text>
@@ -68,7 +71,7 @@ export default function CreateCommunityScreen() {
           value={description}
           onChangeText={setDescription}
           placeholder="Fortæl om jeres fællesskab..."
-          placeholderTextColor={colors.subtext}
+          placeholderTextColor={theme.colors.text.secondary}
           multiline
           numberOfLines={4}
         />
@@ -81,7 +84,6 @@ export default function CreateCommunityScreen() {
 
         <PrimaryButton
           title="Annuller"
-          variant="blue"
           onPress={() => navigation.goBack()}
           disabled={creating}
         />
@@ -90,40 +92,40 @@ export default function CreateCommunityScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: theme.colors.bg.default,
   },
   content: {
-    padding: spacing.lg,
+    padding: theme.spacing[6],
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: spacing.sm,
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing[2],
   },
   subtitle: {
     fontSize: 16,
-    color: colors.subtext,
-    marginBottom: spacing.xl,
+    color: theme.colors.text.secondary,
+    marginBottom: theme.spacing[8],
   },
   label: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.sm,
-    marginTop: spacing.md,
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing[2],
+    marginTop: theme.spacing[4],
   },
   input: {
-    backgroundColor: colors.card,
-    borderRadius: 8,
-    padding: spacing.md,
+    backgroundColor: theme.colors.bg.card,
+    borderRadius: theme.radius.sm,
+    padding: theme.spacing[4],
     fontSize: 16,
-    color: colors.text,
+    color: theme.colors.text.primary,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: theme.colors.border.default,
   },
   textArea: {
     height: 100,

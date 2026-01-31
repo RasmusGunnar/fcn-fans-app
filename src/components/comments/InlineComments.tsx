@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
-import { colors, spacing } from '../../theme';
+import { defaultTheme } from '../../theme';
 import { Avatar } from '../Avatar';
 
 export type CommentTargetType = 'post' | 'news' | 'event' | 'match';
@@ -214,9 +214,10 @@ export function InlineComments({
   };
 
   if (loading) {
+    const theme = defaultTheme;
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="small" color={colors.fcnRed} />
+        <ActivityIndicator size="small" color={theme.colors.primary} />
         <Text style={styles.loadingText}>Henter kommentarer...</Text>
       </View>
     );
@@ -273,7 +274,7 @@ export function InlineComments({
                           onPress={() => handleDeleteComment(comment.id, comment.author_id)}
                           hitSlop={8}
                         >
-                          <Ionicons name="close-circle" size={16} color={colors.subtext} />
+                          <Ionicons name="close-circle" size={16} color={defaultTheme.colors.text.secondary} />
                         </Pressable>
                       )}
                     </View>
@@ -290,7 +291,7 @@ export function InlineComments({
         <TextInput
           style={styles.input}
           placeholder="Skriv en kommentar..."
-          placeholderTextColor={colors.subtext}
+          placeholderTextColor={defaultTheme.colors.text.secondary}
           value={commentText}
           onChangeText={setCommentText}
           multiline
@@ -303,9 +304,9 @@ export function InlineComments({
           disabled={!commentText.trim() || submitting}
         >
           {submitting ? (
-            <ActivityIndicator size="small" color={colors.card} />
+            <ActivityIndicator size="small" color={defaultTheme.colors.bg.card} />
           ) : (
-            <Ionicons name="send" size={18} color={colors.card} />
+            <Ionicons name="send" size={18} color={defaultTheme.colors.bg.card} />
           )}
         </Pressable>
       </View>
@@ -317,70 +318,72 @@ export function InlineComments({
   );
 }
 
+const theme = defaultTheme;
+
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: colors.card,
+    backgroundColor: theme.colors.bg.card,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
+    borderTopColor: theme.colors.border.default,
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[4],
   },
   loadingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.lg,
-    backgroundColor: colors.card,
+    paddingVertical: theme.spacing[6],
+    backgroundColor: theme.colors.bg.card,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: theme.colors.border.default,
   },
   loadingText: {
     fontSize: 14,
-    color: colors.subtext,
-    marginLeft: spacing.sm,
+    color: theme.colors.text.secondary,
+    marginLeft: theme.spacing[2],
   },
   errorContainer: {
     alignItems: 'center',
-    paddingVertical: spacing.lg,
-    backgroundColor: colors.card,
+    paddingVertical: theme.spacing[6],
+    backgroundColor: theme.colors.bg.card,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: theme.colors.border.default,
   },
   errorText: {
     fontSize: 14,
-    color: colors.fcnRed,
-    marginBottom: spacing.sm,
+    color: theme.colors.primary,
+    marginBottom: theme.spacing[2],
   },
   retryText: {
     fontSize: 14,
-    color: colors.fcnRed,
+    color: theme.colors.primary,
     fontWeight: '600',
   },
   header: {
-    marginBottom: spacing.md,
+    marginBottom: theme.spacing[3],
   },
   headerText: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.text,
+    color: theme.colors.text.primary,
   },
   noCommentsText: {
     fontSize: 14,
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
     textAlign: 'center',
-    paddingVertical: spacing.md,
+    paddingVertical: theme.spacing[3],
     fontStyle: 'italic',
   },
   commentsList: {
-    marginBottom: spacing.md,
+    marginBottom: theme.spacing[3],
   },
   commentItem: {
-    marginBottom: spacing.md,
+    marginBottom: theme.spacing[3],
   },
   commentRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: spacing.sm,
+    gap: theme.spacing[2],
   },
   commentContent: {
     flex: 1,
@@ -388,60 +391,60 @@ const styles = StyleSheet.create({
   commentHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.xs,
+    marginBottom: theme.spacing[1],
   },
   commentAuthor: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.text,
-    marginRight: spacing.xs,
+    color: theme.colors.text.primary,
+    marginRight: theme.spacing[1],
   },
   commentTime: {
     fontSize: 12,
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
     flex: 1,
   },
   commentText: {
     fontSize: 14,
-    color: colors.text,
+    color: theme.colors.text.primary,
     lineHeight: 20,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    backgroundColor: colors.bg,
-    borderRadius: 20,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    backgroundColor: theme.colors.bg.default,
+    borderRadius: theme.radius.pill,
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: theme.colors.border.default,
   },
   input: {
     flex: 1,
     fontSize: 14,
-    color: colors.text,
+    color: theme.colors.text.primary,
     maxHeight: 80,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
+    paddingVertical: theme.spacing[1],
+    paddingHorizontal: theme.spacing[2],
   },
   sendButton: {
     width: 36,
     height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.fcnRed,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: spacing.xs,
+    marginLeft: theme.spacing[1],
   },
   sendButtonDisabled: {
-    backgroundColor: colors.subtext,
+    backgroundColor: theme.colors.text.secondary,
     opacity: 0.5,
   },
   loginPrompt: {
     fontSize: 12,
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
     textAlign: 'center',
-    marginTop: spacing.sm,
+    marginTop: theme.spacing[2],
     fontStyle: 'italic',
   },
 });

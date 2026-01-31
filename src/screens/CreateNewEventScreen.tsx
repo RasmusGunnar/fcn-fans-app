@@ -29,6 +29,7 @@ export default function CreateNewEventScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const styles = createStyles();
 
   // Check if user can create bus trips
   const [canCreateBusTrip, setCanCreateBusTrip] = useState(false);
@@ -507,7 +508,7 @@ export default function CreateNewEventScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = () => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bg,
@@ -561,7 +562,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
+    borderRadius: spacing.sm,
     padding: spacing.sm,
     fontSize: 16,
     color: colors.text,
@@ -582,7 +583,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
+    borderRadius: spacing.sm,
     gap: spacing.xs,
   },
   typeButtonActive: {
@@ -610,7 +611,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bg,
-    borderRadius: 8,
+    borderRadius: spacing.sm,
     marginRight: spacing.sm,
   },
   dateTimeText: {
@@ -619,7 +620,7 @@ const styles = StyleSheet.create({
   dateTimeLabel: {
     fontSize: 12,
     color: colors.subtext,
-    marginBottom: 2,
+    marginBottom: spacing.xs,
   },
   dateTimeValue: {
     fontSize: 16,

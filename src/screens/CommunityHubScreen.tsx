@@ -6,11 +6,13 @@ import { db } from '../firebase';
 import { Community, Event } from '../types';
 import { doc, onSnapshot, collection, query, where, orderBy, limit } from 'firebase/firestore';
 import { PrimaryButton } from '../components/PrimaryButton';
+import { useTheme } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CommunityHub'>;
 
 export default function CommunityHubScreen({ route, navigation }: Props) {
   const { communityId } = route.params;
+  const theme = useTheme();
   const [community, setCommunity] = useState<Community | null>(null);
   const [events, setEvents] = useState<Event[]>([]);
 
@@ -40,6 +42,8 @@ export default function CommunityHubScreen({ route, navigation }: Props) {
   useEffect(() => {
     navigation.setOptions({ title });
   }, [title, navigation]);
+
+  const styles = makeStyles(theme);
 
   return (
     <View style={styles.container}>
@@ -80,12 +84,12 @@ export default function CommunityHubScreen({ route, navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
-  header: { borderWidth: 1, borderRadius: 14, padding: 12, marginBottom: 14 },
+const makeStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
+  container: { flex: 1, padding: theme.spacing[4] },
+  header: { borderWidth: 1, borderRadius: theme.radius.md, padding: theme.spacing[3], marginBottom: theme.spacing[4] },
   h1: { fontSize: 22, fontWeight: '800' },
-  h2: { fontSize: 16, fontWeight: '700', marginBottom: 8 },
-  card: { borderWidth: 1, borderRadius: 14, padding: 12, marginBottom: 12 },
+  h2: { fontSize: 16, fontWeight: '700', marginBottom: theme.spacing[2] },
+  card: { borderWidth: 1, borderRadius: theme.radius.md, padding: theme.spacing[3], marginBottom: theme.spacing[3] },
   bold: { fontWeight: '700' },
   muted: { opacity: 0.7 },
 });

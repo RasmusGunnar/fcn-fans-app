@@ -16,6 +16,7 @@ import {
 import { useAuth } from '../auth/AuthProvider';
 import { Event, Message } from '../types';
 import { PrimaryButton } from '../components/PrimaryButton';
+import { defaultTheme as theme } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Event'>;
 
@@ -26,6 +27,7 @@ export default function EventScreen({ route, navigation }: Props) {
   const [text, setText] = useState('');
   const [going, setGoing] = useState(false);
   const { user } = useAuth();
+  const styles = createStyles();
 
   useEffect(() => {
     const unsubE = onSnapshot(doc(db, 'events', eventId), (snap) => {
@@ -126,23 +128,23 @@ export default function EventScreen({ route, navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = () => StyleSheet.create({
   container: { flex: 1 },
-  header: { padding: 16, borderBottomWidth: 1 },
+  header: { padding: theme.layout.screenPadding, borderBottomWidth: 1 },
   bold: { fontWeight: '800', fontSize: 16 },
   muted: { opacity: 0.7 },
   badge: {
-    marginTop: 10,
+    marginTop: theme.spacing[2],
     alignSelf: 'flex-start',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
+    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[2],
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: theme.radius.pill,
     fontSize: 12,
   },
-  msg: { padding: 12, borderBottomWidth: 1 },
+  msg: { padding: theme.spacing[3], borderBottomWidth: 1 },
   msgText: { fontSize: 15 },
-  msgMeta: { marginTop: 4, fontSize: 11, opacity: 0.6 },
-  composer: { flexDirection: 'row', gap: 10, padding: 12, borderTopWidth: 1, alignItems: 'center' },
-  input: { flex: 1, borderWidth: 1, borderRadius: 12, padding: 12 },
+  msgMeta: { marginTop: theme.spacing[1], fontSize: 11, opacity: 0.6 },
+  composer: { flexDirection: 'row', gap: theme.spacing[2], padding: theme.spacing[3], borderTopWidth: 1, alignItems: 'center' },
+  input: { flex: 1, borderWidth: 1, borderRadius: theme.radius.md, padding: theme.spacing[3] },
 });

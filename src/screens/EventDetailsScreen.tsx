@@ -19,7 +19,7 @@ import { PrimaryButton } from '../components/PrimaryButton';
 import { OptionsMenu, OptionsMenuOption } from '../components/OptionsMenu';
 import { InlineComments } from '../components/comments/InlineComments';
 import { fetchEventById, type Event } from '../services/eventsApi';
-import { colors, spacing } from '../theme';
+import { defaultTheme as theme } from '../theme';
 import { useAuth } from '../auth/AuthProvider';
 import { canEditEvent, canDeleteEvent } from '../utils/permissions';
 import { supabase } from '../lib/supabase';
@@ -105,12 +105,12 @@ export default function EventDetailsScreen() {
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
           <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={colors.card} />
+            <Ionicons name="arrow-back" size={24} color={theme.colors.bg.card} />
           </Pressable>
           <Text style={styles.headerTitle}>Event detaljer</Text>
         </View>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.fcnRed} />
+          <ActivityIndicator size="large" color={theme.colors.primary} />
           <Text style={styles.loadingText}>Henter event...</Text>
         </View>
       </SafeAreaView>
@@ -122,7 +122,7 @@ export default function EventDetailsScreen() {
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
           <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={colors.card} />
+            <Ionicons name="arrow-back" size={24} color={theme.colors.bg.card} />
           </Pressable>
           <Text style={styles.headerTitle}>Event detaljer</Text>
         </View>
@@ -206,18 +206,18 @@ export default function EventDetailsScreen() {
       {/* Custom Header */}
       <View style={styles.header}>
         <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.card} />
+          <Ionicons name="arrow-back" size={24} color={theme.colors.bg.card} />
         </Pressable>
         <Text style={styles.headerTitle}>Event detaljer</Text>
         <View style={{ flex: 1 }} />
         {eventMenuOptions.length > 0 && (
-          <OptionsMenu options={eventMenuOptions} iconColor={colors.card} iconSize={24} />
+          <OptionsMenu options={eventMenuOptions} iconColor={theme.colors.bg.card} iconSize={24} />
         )}
       </View>
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={{ paddingBottom: insets.bottom + spacing.lg }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + theme.spacing[6] }}
       >
         {/* Header Card with Icon */}
         <Card style={styles.headerCard}>
@@ -238,7 +238,7 @@ export default function EventDetailsScreen() {
           <Text style={styles.sectionTitle}>Detaljer</Text>
 
           <View style={styles.detailRow}>
-            <Ionicons name="calendar" size={20} color={colors.fcnRed} />
+            <Ionicons name="calendar" size={20} color={theme.colors.primary} />
             <View style={styles.detailText}>
               <Text style={styles.detailLabel}>Dato og tidspunkt</Text>
               <Text style={styles.detailValue}>
@@ -250,7 +250,7 @@ export default function EventDetailsScreen() {
 
           {event.location_name && (
             <View style={styles.detailRow}>
-              <Ionicons name="location" size={20} color={colors.fcnRed} />
+              <Ionicons name="location" size={20} color={theme.colors.primary} />
               <View style={styles.detailText}>
                 <Text style={styles.detailLabel}>Sted</Text>
                 <Text style={styles.detailValue}>{event.location_name}</Text>
@@ -262,7 +262,7 @@ export default function EventDetailsScreen() {
           )}
 
           <View style={styles.detailRow}>
-            <Ionicons name="people" size={20} color={colors.fcnRed} />
+            <Ionicons name="people" size={20} color={theme.colors.primary} />
             <View style={styles.detailText}>
               <Text style={styles.detailLabel}>Deltagere</Text>
               <Text style={styles.detailValue}>42 interesserede</Text>
@@ -281,11 +281,11 @@ export default function EventDetailsScreen() {
         {/* Action Buttons */}
         <View style={styles.actionsContainer}>
           <TouchableOpacity style={styles.actionButton} onPress={handleSetReminder}>
-            <Ionicons name="notifications-outline" size={24} color={colors.fcnRed} />
+            <Ionicons name="notifications-outline" size={24} color={theme.colors.primary} />
             <Text style={styles.actionText}>Påmindelse</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.actionButton} onPress={handleShare}>
-            <Ionicons name="share-outline" size={24} color={colors.fcnRed} />
+            <Ionicons name="share-outline" size={24} color={theme.colors.primary} />
             <Text style={styles.actionText}>Del</Text>
           </TouchableOpacity>
         </View>
@@ -344,160 +344,160 @@ export default function EventDetailsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.fcnRed,
+    backgroundColor: theme.colors.primary,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.fcnRed,
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[4],
+    backgroundColor: theme.colors.primary,
   },
   backButton: {
-    padding: spacing.xs,
-    marginRight: spacing.sm,
+    padding: theme.spacing[1],
+    marginRight: theme.spacing[2],
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: colors.card,
+    color: theme.colors.bg.card,
   },
   scrollView: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: theme.colors.bg.default,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.bg,
+    backgroundColor: theme.colors.bg.default,
   },
   loadingText: {
-    marginTop: spacing.md,
+    marginTop: theme.spacing[4],
     fontSize: 14,
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.bg,
+    backgroundColor: theme.colors.bg.default,
   },
   errorIcon: {
     fontSize: 64,
-    marginBottom: spacing.md,
+    marginBottom: theme.spacing[4],
   },
   errorText: {
     fontSize: 16,
-    color: colors.text,
+    color: theme.colors.text.primary,
   },
   headerCard: {
-    margin: spacing.md,
+    margin: theme.spacing[4],
     alignItems: 'center',
   },
   iconCircle: {
     width: 80,
     height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.fcnRed + '15',
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.primary + '15',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.md,
+    marginBottom: theme.spacing[4],
   },
   iconEmoji: {
     fontSize: 40,
   },
   badge: {
-    backgroundColor: '#34C759',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: 6,
-    marginBottom: spacing.sm,
+    backgroundColor: theme.colors.state.success,
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
+    borderRadius: theme.radius.sm,
+    marginBottom: theme.spacing[2],
   },
   badgeText: {
-    color: colors.card,
+    color: theme.colors.bg.card,
     fontSize: 12,
     fontWeight: '700',
   },
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: colors.text,
+    color: theme.colors.text.primary,
     textAlign: 'center',
-    marginBottom: spacing.xs,
+    marginBottom: theme.spacing[1],
   },
   subtitle: {
     fontSize: 14,
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
     textAlign: 'center',
   },
   detailsCard: {
-    margin: spacing.md,
-    marginTop: 0,
+    margin: theme.spacing[4],
+    marginTop: theme.spacing[0],
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.md,
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing[4],
   },
   detailRow: {
     flexDirection: 'row',
-    marginBottom: spacing.md,
+    marginBottom: theme.spacing[4],
   },
   detailText: {
     flex: 1,
-    marginLeft: spacing.sm,
+    marginLeft: theme.spacing[2],
   },
   detailLabel: {
     fontSize: 12,
-    color: colors.subtext,
-    marginBottom: 2,
+    color: theme.colors.text.secondary,
+    marginBottom: theme.spacing[0],
   },
   detailValue: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.text,
+    color: theme.colors.text.primary,
   },
   detailSubvalue: {
     fontSize: 13,
-    color: colors.subtext,
-    marginTop: 2,
+    color: theme.colors.text.secondary,
+    marginTop: theme.spacing[0],
   },
   descriptionCard: {
-    margin: spacing.md,
-    marginTop: 0,
+    margin: theme.spacing[4],
+    marginTop: theme.spacing[0],
   },
   description: {
     fontSize: 14,
-    color: colors.text,
+    color: theme.colors.text.primary,
     lineHeight: 22,
   },
   actionsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.md,
+    marginHorizontal: theme.spacing[4],
+    marginBottom: theme.spacing[4],
   },
   actionButton: {
     alignItems: 'center',
-    padding: spacing.md,
+    padding: theme.spacing[4],
     flex: 1,
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    marginHorizontal: spacing.xs,
+    backgroundColor: theme.colors.bg.card,
+    borderRadius: theme.radius.md,
+    marginHorizontal: theme.spacing[1],
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: theme.colors.border.default,
   },
   actionText: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.text,
-    marginTop: spacing.xs,
+    color: theme.colors.text.primary,
+    marginTop: theme.spacing[1],
   },
   organizerCard: {
-    margin: spacing.md,
-    marginTop: 0,
+    margin: theme.spacing[4],
+    marginTop: theme.spacing[0],
   },
   organizerInfo: {
     flexDirection: 'row',
@@ -506,20 +506,20 @@ const styles = StyleSheet.create({
   organizerLogo: {
     width: 50,
     height: 50,
-    borderRadius: 25,
-    marginRight: spacing.md,
+    borderRadius: theme.radius.pill,
+    marginRight: theme.spacing[4],
   },
   organizerLogoPlaceholder: {
     width: 50,
     height: 50,
-    borderRadius: 25,
-    backgroundColor: colors.fcnRed,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.md,
+    marginRight: theme.spacing[4],
   },
   organizerLogoText: {
-    color: colors.card,
+    color: theme.colors.bg.card,
     fontSize: 16,
     fontWeight: '700',
   },
@@ -529,28 +529,28 @@ const styles = StyleSheet.create({
   organizerName: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.text,
-    marginBottom: 4,
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing[1],
   },
   organizerDescription: {
     fontSize: 13,
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
   },
   ctaContainer: {
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.md,
+    marginHorizontal: theme.spacing[4],
+    marginBottom: theme.spacing[4],
   },
   commentsSection: {
-    margin: spacing.md,
-    marginTop: 0,
+    margin: theme.spacing[4],
+    marginTop: theme.spacing[0],
   },
   commentsCard: {
-    margin: spacing.md,
-    marginTop: 0,
+    margin: theme.spacing[4],
+    marginTop: theme.spacing[0],
   },
   placeholderText: {
     fontSize: 14,
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
     fontStyle: 'italic',
   },
 });

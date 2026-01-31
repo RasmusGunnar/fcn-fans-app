@@ -19,7 +19,7 @@ import { BusTripCard } from '../components/events/BusTripCard';
 import { EventCard as GenericEventCard } from '../components/events/EventCard';
 import { MapMarkerIcon } from '../components/MapMarkerIcon';
 import { fetchFeedUpcoming, type FeedItem } from '../services/eventsApi';
-import { colors, spacing } from '../theme';
+import { defaultTheme as theme } from '../theme';
 
 type ViewMode = 'list' | 'map';
 type FilterMode = 'all' | 'matches' | 'events';
@@ -307,7 +307,7 @@ export default function EventsScreen() {
 
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.fcnRed} />
+          <ActivityIndicator size="large" color={theme.colors.primary} />
           <Text style={styles.loadingText}>Henter events...</Text>
         </View>
       ) : viewMode === 'list' ? (
@@ -316,15 +316,15 @@ export default function EventsScreen() {
           renderItem={renderListItem}
           keyExtractor={(item) => `${item.kind}-${item.id}`}
           contentContainerStyle={{
-            padding: spacing.md,
-            paddingBottom: tabBarHeight + spacing.lg,
+            padding: theme.spacing[4],
+            paddingBottom: tabBarHeight + theme.spacing[6],
           }}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor={colors.fcnRed}
-              colors={[colors.fcnRed]}
+              tintColor={theme.colors.primary}
+              colors={[theme.colors.primary]}
             />
           }
           ListEmptyComponent={
@@ -420,101 +420,97 @@ export default function EventsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: theme.colors.bg.default,
   },
   filterContainer: {
     flexDirection: 'row',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.xs,
-    gap: spacing.sm,
+    paddingHorizontal: theme.spacing[4],
+    paddingTop: theme.spacing[2],
+    paddingBottom: theme.spacing[1],
+    gap: theme.spacing[2],
   },
   chip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: 20,
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[1],
+    borderRadius: theme.radius.pill,
     borderWidth: 1.5,
-    borderColor: colors.border,
-    backgroundColor: '#fff',
+    borderColor: theme.colors.border.default,
+    backgroundColor: theme.colors.bg.elevated,
   },
   chipActive: {
-    backgroundColor: colors.fcnRed,
-    borderColor: colors.fcnRed,
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
   },
   chipText: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.text,
+    color: theme.colors.text.primary,
   },
   chipTextActive: {
-    color: '#fff',
+    color: theme.colors.bg.elevated,
   },
   toggleContainer: {
     flexDirection: 'row',
-    marginHorizontal: spacing.md,
-    marginVertical: spacing.sm,
-    borderRadius: 10,
-    backgroundColor: '#f5f5f5',
-    padding: 4,
+    marginHorizontal: theme.spacing[4],
+    marginVertical: theme.spacing[2],
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.border.light,
+    padding: theme.spacing[1],
   },
   toggleButton: {
     flex: 1,
-    paddingVertical: spacing.sm,
+    paddingVertical: theme.spacing[2],
     alignItems: 'center',
-    borderRadius: 8,
+    borderRadius: theme.radius.sm,
   },
   toggleButtonActive: {
-    backgroundColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
+    backgroundColor: theme.colors.bg.elevated,
+    // Shadow removed per design system rules
   },
   toggleText: {
     fontSize: 15,
     fontWeight: '600',
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
   },
   toggleTextActive: {
-    color: colors.text,
+    color: theme.colors.text.primary,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: spacing.xl,
+    paddingTop: theme.spacing[8],
   },
   loadingText: {
-    marginTop: spacing.md,
+    marginTop: theme.spacing[4],
     fontSize: 14,
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
   },
   emptyContainer: {
     alignItems: 'center',
-    paddingTop: spacing.xl,
-    paddingHorizontal: spacing.lg,
+    paddingTop: theme.spacing[8],
+    paddingHorizontal: theme.spacing[6],
   },
   emptyIcon: {
     fontSize: 48,
-    marginBottom: spacing.md,
+    marginBottom: theme.spacing[4],
   },
   emptyText: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.xs,
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing[1],
   },
   emptySubtext: {
     fontSize: 14,
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
     textAlign: 'center',
   },
   emptyHint: {
     fontSize: 13,
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
     textAlign: 'center',
-    marginTop: spacing.xs,
+    marginTop: theme.spacing[1],
     fontStyle: 'italic',
   },
   mapContainer: {
@@ -525,41 +521,37 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   bottomSheetContainer: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 8,
+    // Shadow removed per design system rules
   },
   bottomSheetContent: {
-    padding: spacing.lg,
-    paddingBottom: spacing.xl,
+    padding: theme.spacing[6],
+    paddingBottom: theme.spacing[8],
   },
   bottomSheetTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.xs,
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing[1],
   },
   bottomSheetSubtitle: {
     fontSize: 14,
-    color: colors.subtext,
-    marginBottom: spacing.xs,
+    color: theme.colors.text.secondary,
+    marginBottom: theme.spacing[1],
   },
   bottomSheetLocation: {
     fontSize: 14,
-    color: colors.subtext,
-    marginBottom: spacing.md,
+    color: theme.colors.text.secondary,
+    marginBottom: theme.spacing[4],
   },
   bottomSheetButton: {
-    backgroundColor: colors.fcnRed,
-    paddingVertical: spacing.md,
-    borderRadius: 10,
+    backgroundColor: theme.colors.primary,
+    paddingVertical: theme.spacing[4],
+    borderRadius: theme.radius.md,
     alignItems: 'center',
-    marginTop: spacing.md,
+    marginTop: theme.spacing[4],
   },
   bottomSheetButtonText: {
-    color: '#fff',
+    color: theme.colors.bg.elevated,
     fontSize: 16,
     fontWeight: '600',
   },

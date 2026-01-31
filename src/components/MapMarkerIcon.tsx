@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Image, StyleSheet } from 'react-native';
-import { colors } from '../theme';
+import { useTheme, Theme } from '../theme';
 
 interface MapMarkerIconProps {
   logoUrl?: string | null;
@@ -8,6 +8,9 @@ interface MapMarkerIconProps {
 }
 
 export function MapMarkerIcon({ logoUrl, type }: MapMarkerIconProps) {
+  const theme = useTheme();
+  const styles = createStyles(theme);
+  
   return (
     <View style={styles.container}>
       {/* Pin body */}
@@ -33,61 +36,59 @@ export function MapMarkerIcon({ logoUrl, type }: MapMarkerIconProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    alignItems: 'center',
-    width: 54,
-    height: 60,
-  },
-  pin: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.fcnRed,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  badge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#fff',
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  logo: {
-    width: 28,
-    height: 28,
-  },
-  fallback: {
-    width: 28,
-    height: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  fallbackDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: colors.fcnRed,
-  },
-  point: {
-    width: 0,
-    height: 0,
-    borderLeftWidth: 8,
-    borderRightWidth: 8,
-    borderTopWidth: 12,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: colors.fcnRed,
-    marginTop: -3,
-  },
-});
+function createStyles(theme: Theme) {
+  return StyleSheet.create({
+    container: {
+      alignItems: 'center',
+      width: 54,
+      height: 60,
+    },
+    pin: {
+      width: 44,
+      height: 44,
+      borderRadius: theme.radius.pill,
+      backgroundColor: theme.colors.primary,
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderWidth: 3,
+      borderColor: theme.colors.bg.elevated,
+      // Shadow removed per design system rules
+    },
+    badge: {
+      width: theme.spacing[8],
+      height: theme.spacing[8],
+      borderRadius: theme.radius.pill,
+      backgroundColor: theme.colors.bg.elevated,
+      justifyContent: 'center',
+      alignItems: 'center',
+      overflow: 'hidden',
+    },
+    logo: {
+      width: 28,
+      height: 28,
+    },
+    fallback: {
+      width: 28,
+      height: 28,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    fallbackDot: {
+      width: theme.spacing[3],
+      height: theme.spacing[3],
+      borderRadius: theme.radius.sm,
+      backgroundColor: theme.colors.primary,
+    },
+    point: {
+      width: 0,
+      height: 0,
+      borderLeftWidth: theme.spacing[2],
+      borderRightWidth: theme.spacing[2],
+      borderTopWidth: theme.spacing[3],
+      borderLeftColor: 'transparent',
+      borderRightColor: 'transparent',
+      borderTopColor: theme.colors.primary,
+      marginTop: -3,
+    },
+  });
+}

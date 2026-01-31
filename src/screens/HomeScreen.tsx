@@ -13,7 +13,7 @@ import { FanPostCard } from '../components/cards/FanPostCard';
 import { FanFactionCard } from '../components/cards/FanFactionCard';
 import { useFeed } from '../state/FeedContext';
 import { useAuth } from '../auth/AuthProvider';
-import { colors, spacing } from '../theme';
+import { colors, spacing, defaultTheme as theme } from '../theme';
 import { getFeedItemKey } from '../types/feed';
 import {
   fetchNextFixture,
@@ -26,6 +26,7 @@ export default function HomeScreen() {
   const navigation = useNavigation();
   const tabBarHeight = useBottomTabBarHeight();
   const { user, isAppAdmin } = useAuth();
+  const styles = createStyles();
   const { 
     feedItems, 
     communityMap,
@@ -290,7 +291,7 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = () => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { padding: spacing.md },
   card: { marginBottom: spacing.md },
@@ -304,12 +305,12 @@ const styles = StyleSheet.create({
   teamCircle: {
     width: 60,
     height: 60,
-    borderRadius: 30,
+    borderRadius: theme.radius.pill,
     backgroundColor: colors.fcnRed,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  teamLogo: { width: 60, height: 60, borderRadius: 30 },
+  teamLogo: { width: 60, height: 60, borderRadius: theme.radius.pill },
   teamName: {
     fontSize: 12,
     fontWeight: '600',
