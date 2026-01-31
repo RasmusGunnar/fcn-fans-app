@@ -2,26 +2,36 @@ export const lightColors = {
   // Brand colors
   primary: '#D8001D',
   primaryDark: '#B00016',
+  brand: {
+    gold: '#B89C59',
+    accent: '#E30613',
+    muted: '#F0F0F0',
+  },
   
   // Background colors
   bg: {
-    default: '#F6F7F9',
+    default: '#FFFFFF',
     card: '#FFFFFF',
     elevated: '#FFFFFF',
+    canvas: '#F9F9F9',
+    subtle: '#F0F0F0',
   },
   
   // Text colors
   text: {
-    primary: '#111827',
-    secondary: '#6B7280',
+    primary: '#1A1A1A',
+    secondary: '#666666',
     muted: '#9CA3AF',
     inverse: '#FFFFFF',
+    error: '#E30613',
   },
   
   // Border colors
   border: {
-    default: '#E5E7EB',
+    default: '#EBEBEB',
     light: '#F3F4F6',
+    subtle: '#F2F2F2',
+    active: '#E30613',
   },
   
   // Semantic colors
@@ -74,12 +84,19 @@ export const darkColors = {
   // Brand colors
   primary: '#D8001D',
   primaryDark: '#B00016',
+  brand: {
+    gold: '#B89C59',
+    accent: '#E30613',
+    muted: '#374151',
+  },
   
   // Background colors
   bg: {
     default: '#111827',
     card: '#1F2937',
     elevated: '#374151',
+    canvas: '#0F172A',
+    subtle: '#1F2937',
   },
   
   // Text colors
@@ -88,12 +105,15 @@ export const darkColors = {
     secondary: '#D1D5DB',
     muted: '#9CA3AF',
     inverse: '#111827',
+    error: '#E30613',
   },
   
   // Border colors
   border: {
     default: '#374151',
     light: '#4B5563',
+    subtle: '#4B5563',
+    active: '#E30613',
   },
   
   // Semantic colors

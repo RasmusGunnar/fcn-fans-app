@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { defaultTheme, getShadowStyle } from '../../theme';
 
 export interface CardProps extends Omit<ViewProps, 'style'> {
-  variant?: 'default' | 'raised' | 'imageHeader' | 'feedItem';
+  variant?: 'default' | 'raised' | 'imageHeader' | 'feedItem' | 'hero';
   imageSource?: ImageSourcePropType;
   style?: ViewProps['style'];
   children?: React.ReactNode;
@@ -39,10 +39,33 @@ export function Card({
           {
             backgroundColor: theme.colors.bg.card,
             borderRadius: theme.components.card.variants.feedItem.borderRadius,
-            borderBottomWidth: theme.components.card.variants.feedItem.borderBottomWidth,
-            borderBottomColor: theme.colors.border.light,
+            borderBottomWidth: StyleSheet.hairlineWidth,
+            borderBottomColor: theme.colors.border.subtle,
             overflow: 'hidden' as const,
           },
+          style,
+        ]}
+        {...props}
+      >
+        {children}
+      </View>
+    );
+  }
+  
+  // Handle hero variant
+  if (variant === 'hero') {
+    const heroShadow = getShadowStyle(theme, 'md');
+    return (
+      <View
+        style={[
+          {
+            backgroundColor: theme.colors.bg.elevated,
+            borderRadius: theme.radius.lg,
+            padding: theme.layout.cardPadding,
+            marginHorizontal: theme.layout.screenPadding,
+            overflow: 'hidden' as const,
+          },
+          heroShadow,
           style,
         ]}
         {...props}
@@ -61,6 +84,8 @@ export function Card({
   const baseStyle = {
     backgroundColor: theme.colors.bg.card,
     borderRadius: theme.components.card.borderRadius,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.border.default,
     overflow: 'hidden' as const,
   };
   

@@ -4,6 +4,7 @@ export const spacing = {
   2: 8,
   3: 12,
   4: 16,
+  5: 20,
   6: 24,
   8: 32,
   10: 40,
@@ -11,10 +12,11 @@ export const spacing = {
 } as const;
 
 export const layout = {
-  screenPadding: 16,
-  cardPadding: 16,
-  listGap: 12,
+  screenPadding: 16,  // space.4
+  cardPadding: 12,    // space.3
+  listGap: 8,         // space.2
   borderWidth: 1,
+  borderHairline: 1,
 } as const;
 
 export type SpacingTokens = typeof spacing;
