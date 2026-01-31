@@ -151,14 +151,14 @@ export function createTheme(mode: ThemeMode = 'light'): Theme {
             backgroundColor: colors.bg.elevated,
             borderRadius: radiusTokens.xl,
             borderWidth: layout.borderHairline,
-            borderColor: colors.border.subtle,
+            borderColor: colors.border.default,
             elevation: 'md',
           },
           raised: {
             backgroundColor: colors.bg.elevated,
             borderRadius: radiusTokens.lg,
             borderWidth: layout.borderHairline,
-            borderColor: colors.border.subtle,
+            borderColor: colors.border.default,
             elevation: 'sm',
           },
           feedItem: {

@@ -14,7 +14,7 @@ export const lightColors = {
     card: '#FFFFFF',
     surface: '#FFFFFF',
     elevated: '#FFFFFF',
-    canvas: '#F9F9F9',
+    canvas: '#F5F5F5',
     subtle: '#F0F0F0',
   },
   
