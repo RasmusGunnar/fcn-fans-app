@@ -20,6 +20,7 @@ export default function CommunitiesScreen() {
   const navigation = useNavigation();
   const tabBarHeight = useBottomTabBarHeight();
   const theme = useTheme();
+  const styles = createStyles(theme);
   
   const [communities, setCommunities] = useState<CommunityData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -191,7 +192,7 @@ export default function CommunitiesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',

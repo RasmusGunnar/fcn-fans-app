@@ -223,15 +223,15 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
     flex: 1,
   },
   teamCircle: {
-    width: theme.spacing[20],
-    height: theme.spacing[20],
+    width: theme.spacing[12],
+    height: theme.spacing[12],
     borderRadius: theme.radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
   teamLogo: {
-    width: theme.spacing[20],
-    height: theme.spacing[20],
+    width: theme.spacing[12],
+    height: theme.spacing[12],
     borderRadius: theme.radius.pill,
   },
   teamName: {

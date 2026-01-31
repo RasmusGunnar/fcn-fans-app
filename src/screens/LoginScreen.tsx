@@ -27,6 +27,7 @@ export default function LoginScreen() {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const { signInWithPassword, signUp, loading } = useAuth();
   const theme = useTheme();
+  const styles = createStyles(theme);
 
   const onSubmit = async () => {
     const e = email.trim().toLowerCase();
@@ -69,7 +70,7 @@ export default function LoginScreen() {
 
   return (
     <ImageBackground source={bg ?? undefined} style={[styles.bg, { backgroundColor: theme.colors.bg.default }]} resizeMode="cover">
-      <View style={[styles.bgOverlay, { backgroundColor: theme.colors.overlay }]} />
+      <View style={[styles.bgOverlay, { backgroundColor: theme.colors.overlay.medium }]} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.flex}
@@ -250,14 +251,14 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
   flex: { flex: 1 },
   bg: { flex: 1 },
   bgOverlay: { ...StyleSheet.absoluteFillObject },
   card: {
     borderWidth: theme.layout.borderWidth,
   },
-  logo: { width: theme.spacing[35], height: theme.spacing[17], alignSelf: 'center', marginBottom: theme.spacing[2] },
+  logo: { width: 140, height: 68, alignSelf: 'center', marginBottom: theme.spacing[2] },
   modeToggleRow: { flexDirection: 'row', justifyContent: 'center', marginBottom: theme.spacing[2] },
   modeBtn: {
     borderWidth: 1,

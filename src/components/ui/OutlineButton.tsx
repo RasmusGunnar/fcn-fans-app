@@ -16,4 +16,3 @@ export function OutlineButton({ title, onPress, disabled = false, icon }: Outlin
   // Note: icon prop is ignored in new Button - consider using IconButton instead
   return <Button title={title} onPress={onPress} disabled={disabled} variant="outline" />;
 }
-});

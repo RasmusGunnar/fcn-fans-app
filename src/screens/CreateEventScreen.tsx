@@ -14,12 +14,13 @@ import { useAuth } from '../auth/AuthProvider';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { supabase } from '../lib/supabase';
 import { buildAddressText, geocodeAddress } from '../services/geocoding';
-import { defaultTheme as theme } from '../theme';
+import { defaultTheme as theme, spacing } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CreateEvent'>;
 
 export default function CreateEventScreen({ navigation }: Props) {
   const { user } = useAuth();
+  const styles = createStyles(theme);
 
   // Event basic info
   const [title, setTitle] = useState('');
@@ -211,7 +212,7 @@ export default function CreateEventScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: typeof import('../theme').defaultTheme) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.bg.default,

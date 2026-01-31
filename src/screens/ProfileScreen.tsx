@@ -36,10 +36,12 @@ function SectionCard({
   title,
   icon,
   children,
+  styles,
 }: {
   title: string;
   icon?: string;
   children: React.ReactNode;
+  styles: ReturnType<typeof createStyles>;
 }) {
   const theme = useTheme();
   return (
@@ -59,12 +61,14 @@ function ProfileRow({
   subtitle,
   onPress,
   isLogout,
+  styles,
 }: {
   icon: string;
   title: string;
   subtitle?: string;
   onPress?: () => void;
   isLogout?: boolean;
+  styles: ReturnType<typeof createStyles>;
 }) {
   const theme = useTheme();
   return (
@@ -308,7 +312,7 @@ export default function ProfileScreen() {
 
       {/* Owned Communities */}
       {ownerCommunities.length > 0 && (
-        <SectionCard title="MINE FÆLLESSKABER (EJER)" icon="crown">
+        <SectionCard title="MINE FÆLLESSKABER (EJER)" icon="crown" styles={styles}>
           {ownerCommunities.map((community) => (
             <ProfileRow
               key={community.id}
@@ -316,6 +320,7 @@ export default function ProfileScreen() {
               title={community.name}
               subtitle={`${community.memberCount} medlemmer • Du er ejer`}
               onPress={() => navigateToCommunity(community.id)}
+              styles={styles}
             />
           ))}
         </SectionCard>
@@ -323,7 +328,7 @@ export default function ProfileScreen() {
 
       {/* Member Communities */}
       {memberCommunities.length > 0 && (
-        <SectionCard title="MEDLEM AF FÆLLESSKABER">
+        <SectionCard title="MEDLEM AF FÆLLESSKABER" styles={styles}>
           {memberCommunities.map((community) => (
             <ProfileRow
               key={community.id}
@@ -333,6 +338,7 @@ export default function ProfileScreen() {
                 community.type === 'fan_faction' ? 'Fan fraktion' : 'Du er medlem'
               }`}
               onPress={() => navigateToCommunity(community.id)}
+              styles={styles}
             />
           ))}
         </SectionCard>
@@ -358,6 +364,7 @@ export default function ProfileScreen() {
               title={item.title}
               subtitle={formatEventDate(item.date)}
               onPress={() => navigateToItem(item)}
+              styles={styles}
             />
           ))
         ) : (
@@ -371,18 +378,21 @@ export default function ProfileScreen() {
           icon="notifications"
           title="Notifikationer"
           onPress={() => Alert.alert('Notifikationer', 'Kommer snart!')}
+          styles={styles}
         />
         <ProfileRow
           icon="settings"
           title="Generelle indstillinger"
           onPress={() => Alert.alert('Indstillinger', 'Kommer snart!')}
+          styles={styles}
         />
         <ProfileRow
           icon="help-circle"
           title="Hjælp & support"
           onPress={() => Alert.alert('Hjælp', 'Kontakt support@fcnfans.dk')}
+          styles={styles}
         />
-        <ProfileRow icon="log-out" title="Log ud" onPress={handleLogout} isLogout />
+        <ProfileRow icon="log-out" title="Log ud" onPress={handleLogout} isLogout styles={styles} />
       </Card>
 
       <View style={styles.footer}>
@@ -449,8 +459,8 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     right: 0,
-    width: theme.spacing[7],
-    height: theme.spacing[7],
+    width: theme.spacing[6],
+    height: theme.spacing[6],
     borderRadius: theme.radius.pill,
     alignItems: 'center',
     justifyContent: 'center',

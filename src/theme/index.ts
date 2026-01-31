@@ -1,9 +1,9 @@
 import {
   lightColors,
   darkColors,
-  spacing,
+  spacing as spacingTokens,
   layout,
-  radius,
+  radius as radiusTokens,
   typography,
   elevation,
   gradients,
@@ -35,6 +35,19 @@ export interface Theme {
       padding: number;
       elevationDefault: keyof ElevationTokens;
       elevationRaised: keyof ElevationTokens;
+      variants: {
+        feedItem: {
+          borderRadius: number;
+          borderBottomWidth: number;
+        };
+      };
+    };
+    icon: {
+      size: {
+        sm: number;
+        md: number;
+        lg: number;
+      };
     };
   };
 }
@@ -45,19 +58,32 @@ export function createTheme(mode: ThemeMode = 'light'): Theme {
   return {
     mode,
     colors,
-    spacing,
+    spacing: spacingTokens,
     layout,
-    radius,
+    radius: radiusTokens,
     typography,
     elevation,
     gradients,
     
     components: {
       card: {
-        borderRadius: radius.lg,
+        borderRadius: radiusTokens.lg,
         padding: layout.cardPadding,
         elevationDefault: 'sm',
         elevationRaised: 'md',
+        variants: {
+          feedItem: {
+            borderRadius: spacingTokens[0],
+            borderBottomWidth: layout.borderWidth,
+          },
+        },
+      },
+      icon: {
+        size: {
+          sm: spacingTokens[4],
+          md: spacingTokens[6],
+          lg: spacingTokens[8],
+        },
       },
     },
   };

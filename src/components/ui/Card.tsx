@@ -1,10 +1,10 @@
 import React from 'react';
 import { View, ViewProps, StyleSheet, ImageBackground, ImageSourcePropType } from 'react-native';
-import LinearGradient from 'react-native-linear-gradient';
+import { LinearGradient } from 'expo-linear-gradient';
 import { defaultTheme, getShadowStyle } from '../../theme';
 
 export interface CardProps extends Omit<ViewProps, 'style'> {
-  variant?: 'default' | 'raised' | 'imageHeader';
+  variant?: 'default' | 'raised' | 'imageHeader' | 'feedItem';
   imageSource?: ImageSourcePropType;
   style?: ViewProps['style'];
   children?: React.ReactNode;
@@ -29,6 +29,28 @@ export function Card({
   ...props
 }: CardProps) {
   const theme = defaultTheme;
+  const styles = createStyles(theme);
+  
+  // Handle feedItem variant differently
+  if (variant === 'feedItem') {
+    return (
+      <View
+        style={[
+          {
+            backgroundColor: theme.colors.bg.card,
+            borderRadius: theme.components.card.variants.feedItem.borderRadius,
+            borderBottomWidth: theme.components.card.variants.feedItem.borderBottomWidth,
+            borderBottomColor: theme.colors.border.light,
+            overflow: 'hidden' as const,
+          },
+          style,
+        ]}
+        {...props}
+      >
+        {children}
+      </View>
+    );
+  }
   
   const elevationLevel = variant === 'raised' 
     ? theme.components.card.elevationRaised 
@@ -51,7 +73,7 @@ export function Card({
           resizeMode="cover"
         >
           <LinearGradient
-            colors={theme.gradients.imageHeaderOverlay.colors as string[]}
+            colors={theme.gradients.imageHeaderOverlay.colors}
             locations={theme.gradients.imageHeaderOverlay.locations}
             start={theme.gradients.imageHeaderOverlay.start}
             end={theme.gradients.imageHeaderOverlay.end}
@@ -80,12 +102,14 @@ export function Card({
   );
 }
 
-const styles = StyleSheet.create({
-  imageHeader: {
-    height: 200,
-    width: '100%',
-  },
-  gradient: {
-    flex: 1,
-  },
-});
+function createStyles(theme: typeof defaultTheme) {
+  return StyleSheet.create({
+    imageHeader: {
+      height: 200,
+      width: '100%',
+    },
+    gradient: {
+      flex: 1,
+    },
+  });
+}

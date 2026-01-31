@@ -28,7 +28,7 @@ export function FeedCardHeader({
     <View style={styles.header}>
       {avatarSlot}
       <View style={styles.headerInfo}>
-        <Text variant="body" weight="semibold">{title}</Text>
+        <Text variant="body" style={{ fontWeight: '600' }}>{title}</Text>
         {subtitle && <Text variant="small" color="secondary">{subtitle}</Text>}
       </View>
       {rightSlot && <View style={styles.rightSlot}>{rightSlot}</View>}

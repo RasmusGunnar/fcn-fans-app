@@ -16,6 +16,7 @@ import {
 import { useAuth } from '../auth/AuthProvider';
 import { Event, Message } from '../types';
 import { PrimaryButton } from '../components/PrimaryButton';
+import { defaultTheme as theme } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Event'>;
 
@@ -26,6 +27,7 @@ export default function EventScreen({ route, navigation }: Props) {
   const [text, setText] = useState('');
   const [going, setGoing] = useState(false);
   const { user } = useAuth();
+  const styles = createStyles();
 
   useEffect(() => {
     const unsubE = onSnapshot(doc(db, 'events', eventId), (snap) => {
@@ -126,7 +128,7 @@ export default function EventScreen({ route, navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = () => StyleSheet.create({
   container: { flex: 1 },
   header: { padding: theme.layout.screenPadding, borderBottomWidth: 1 },
   bold: { fontWeight: '800', fontSize: 16 },

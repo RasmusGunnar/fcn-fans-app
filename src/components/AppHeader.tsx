@@ -62,7 +62,7 @@ function createStyles(theme: Theme) {
     overflow: 'visible' as const,
   },
   innerContainer: {
-    minHeight: theme.spacing[22],
+    minHeight: theme.spacing[12],
     paddingHorizontal: theme.layout.screenPadding,
     paddingVertical: theme.spacing[2],
     flexDirection: 'row',
@@ -77,16 +77,16 @@ function createStyles(theme: Theme) {
     overflow: 'visible' as const,
   },
   logoWrapper: {
-    width: theme.spacing[19],
-    height: theme.spacing[19],
+    width: theme.spacing[10],
+    height: theme.spacing[10],
     marginRight: theme.spacing[1],
     overflow: 'visible' as const,
     justifyContent: 'center',
     alignItems: 'center',
   },
   logo: {
-    width: theme.spacing[19],
-    height: theme.spacing[19],
+    width: theme.spacing[10],
+    height: theme.spacing[10],
   },
   textContainer: {
     flex: 1,
@@ -103,8 +103,8 @@ function createStyles(theme: Theme) {
     opacity: 0.9,
   },
   profileButton: {
-    width: theme.spacing[9],
-    height: theme.spacing[9],
+    width: theme.spacing[8],
+    height: theme.spacing[8],
     borderRadius: theme.radius.pill,
     backgroundColor: theme.colors.primary,
     opacity: 0.8,

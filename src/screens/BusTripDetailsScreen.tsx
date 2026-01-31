@@ -25,6 +25,7 @@ type BusTripDetailsRouteProp = RouteProp<
 
 export default function BusTripDetailsScreen() {
   const theme = useTheme();
+  const styles = createStyles(theme);
   const navigation = useNavigation();
   const route = useRoute<BusTripDetailsRouteProp>();
   const { busTripId } = route.params;
@@ -273,7 +274,7 @@ export default function BusTripDetailsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.primary,
@@ -352,7 +353,7 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing[4],
   },
   matchInfoBanner: {
-    backgroundColor: theme.colors.surface.default,
+    backgroundColor: theme.colors.bg.elevated,
     padding: theme.spacing[4],
     borderRadius: theme.radius.sm,
     marginBottom: theme.spacing[4],
@@ -484,7 +485,7 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing[4],
   },
   fullBanner: {
-    backgroundColor: theme.colors.surface.default,
+    backgroundColor: theme.colors.bg.elevated,
     padding: theme.spacing[4],
     borderRadius: theme.radius.sm,
     alignItems: 'center',
