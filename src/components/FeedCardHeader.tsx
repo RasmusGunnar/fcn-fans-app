@@ -1,6 +1,7 @@
 import React, { ReactNode } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { colors, spacing } from '../theme';
+import { View, StyleSheet } from 'react-native';
+import { useTheme, Theme } from '../theme';
+import { Text } from './ui';
 
 interface FeedCardHeaderProps {
   badgeText?: string;
@@ -20,40 +21,35 @@ export function FeedCardHeader({
   subtitle,
   rightSlot,
 }: FeedCardHeaderProps) {
+  const theme = useTheme();
+  const styles = createStyles(theme);
+  
   return (
     <View style={styles.header}>
       {avatarSlot}
       <View style={styles.headerInfo}>
-        <Text style={styles.title}>{title}</Text>
-        {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+        <Text variant="body" weight="semibold">{title}</Text>
+        {subtitle && <Text variant="small" color="secondary">{subtitle}</Text>}
       </View>
       {rightSlot && <View style={styles.rightSlot}>{rightSlot}</View>}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  headerInfo: {
-    flex: 1,
-    marginLeft: spacing.sm,
-  },
-  title: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  subtitle: {
-    fontSize: 12,
-    color: colors.subtext,
-    marginTop: 2,
-  },
-  rightSlot: {
-    marginLeft: spacing.xs,
-  },
-});
+function createStyles(theme: Theme) {
+  return StyleSheet.create({
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: theme.spacing[2],
+      marginBottom: theme.spacing[4],
+    },
+    headerInfo: {
+      flex: 1,
+      marginLeft: theme.spacing[2],
+    },
+    rightSlot: {
+      marginLeft: theme.spacing[1],
+    },
+  });
+}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Image } from 'react-native';
 import { supabase } from '../lib/supabase';
+import { useTheme, Theme } from '../theme';
 
 interface AvatarProps {
   userId?: string;
@@ -13,6 +14,8 @@ interface AvatarProps {
 const pathCache = new Map<string, string>();
 
 export function Avatar({ userId, avatarUrl, size = 32, label }: AvatarProps) {
+  const theme = useTheme();
+  const styles = createStyles(theme);
   const [resolvedUri, setResolvedUri] = useState<string | null>(null);
   const [currentCandidateIndex, setCurrentCandidateIndex] = useState(0);
 
@@ -141,14 +144,16 @@ export function Avatar({ userId, avatarUrl, size = 32, label }: AvatarProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  fallback: {
-    backgroundColor: '#E53935',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  initials: {
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-});
+function createStyles(theme: Theme) {
+  return StyleSheet.create({
+    fallback: {
+      backgroundColor: theme.colors.state.error,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    initials: {
+      color: theme.colors.bg.elevated,
+      fontWeight: 'bold',
+    },
+  });
+}

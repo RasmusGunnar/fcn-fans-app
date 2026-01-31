@@ -1,6 +1,5 @@
 import React from 'react';
-import { Pressable, Text, StyleSheet } from 'react-native';
-import { colors, radius } from '../theme';
+import { Button, ButtonVariant } from './ui';
 
 interface PrimaryButtonProps {
   title: string;
@@ -9,57 +8,30 @@ interface PrimaryButtonProps {
   variant?: 'red' | 'blue' | 'yellow' | 'outline';
 }
 
+/**
+ * Legacy PrimaryButton component - wraps new Button component for backwards compatibility
+ * @deprecated Use Button from './ui' instead
+ */
 export function PrimaryButton({
   title,
   onPress,
   disabled = false,
   variant = 'red',
 }: PrimaryButtonProps) {
-  const getVariantStyles = () => {
-    switch (variant) {
-      case 'blue':
-        return { backgroundColor: colors.blueButton, textColor: colors.card };
-      case 'yellow':
-        return { backgroundColor: '#FCD34D', textColor: colors.text };
-      case 'outline':
-        return {
-          backgroundColor: 'transparent',
-          borderColor: colors.border,
-          borderWidth: 1,
-          textColor: colors.text,
-        };
-      default:
-        return { backgroundColor: colors.fcnRed, textColor: colors.card };
-    }
+  // Map legacy variants to new Button variants
+  const mapVariant = (): ButtonVariant => {
+    if (variant === 'outline') return 'outline';
+    return 'primary'; // red, blue, yellow all map to primary for now
   };
 
-  const { backgroundColor, textColor, borderColor, borderWidth } = getVariantStyles();
-
   return (
-    <Pressable
+    <Button
+      title={title}
       onPress={onPress}
       disabled={disabled}
-      style={({ pressed }) => [
-        styles.btn,
-        { backgroundColor, borderColor, borderWidth },
-        disabled && styles.disabled,
-        pressed && !disabled && styles.pressed,
-      ]}
-    >
-      <Text style={[styles.txt, { color: textColor }]}>{title}</Text>
-    </Pressable>
+      variant={mapVariant()}
+      size="md"
+      fullWidth
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  btn: {
-    backgroundColor: colors.fcnRed,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: radius.md,
-    alignItems: 'center',
-  },
-  pressed: { opacity: 0.85 },
-  disabled: { opacity: 0.45 },
-  txt: { color: colors.card, fontSize: 16, fontWeight: '700' },
-});

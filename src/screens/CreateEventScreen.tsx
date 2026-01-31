@@ -14,7 +14,7 @@ import { useAuth } from '../auth/AuthProvider';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { supabase } from '../lib/supabase';
 import { buildAddressText, geocodeAddress } from '../services/geocoding';
-import { colors, spacing } from '../theme';
+import { defaultTheme as theme } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CreateEvent'>;
 
@@ -203,7 +203,7 @@ export default function CreateEventScreen({ navigation }: Props) {
 
       {loading && (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="small" color={colors.fcnRed} />
+          <ActivityIndicator size="small" color={theme.colors.primary} />
           <Text style={styles.loadingText}>Geocoder adresse...</Text>
         </View>
       )}
@@ -214,33 +214,33 @@ export default function CreateEventScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: theme.colors.bg.default,
   },
   contentContainer: {
-    padding: spacing.md,
-    paddingBottom: spacing.xl,
+    padding: theme.spacing[4],
+    paddingBottom: theme.spacing[8],
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: colors.text,
-    marginTop: spacing.lg,
-    marginBottom: spacing.sm,
+    color: theme.colors.text.primary,
+    marginTop: theme.spacing[6],
+    marginBottom: theme.spacing[2],
   },
   label: {
-    marginTop: spacing.sm,
-    marginBottom: spacing.xs,
+    marginTop: theme.spacing[2],
+    marginBottom: theme.spacing[1],
     fontWeight: '600',
-    color: colors.text,
+    color: theme.colors.text.primary,
   },
   input: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: spacing.sm,
+    borderColor: theme.colors.border.default,
+    borderRadius: theme.radius.md,
+    padding: theme.spacing[2],
     fontSize: 16,
-    color: colors.text,
-    backgroundColor: '#fff',
+    color: theme.colors.text.primary,
+    backgroundColor: theme.colors.bg.elevated,
   },
   textArea: {
     height: 80,
@@ -248,7 +248,7 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: theme.spacing[2],
   },
   halfColumn: {
     flex: 1,
@@ -257,11 +257,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: spacing.md,
-    gap: spacing.sm,
+    marginTop: theme.spacing[4],
+    gap: theme.spacing[2],
   },
   loadingText: {
     fontSize: 14,
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
   },
 });

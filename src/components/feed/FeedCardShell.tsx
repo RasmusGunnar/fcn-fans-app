@@ -1,9 +1,13 @@
+// ✅ DESIGN SYSTEM GUARDRAIL: This file uses theme tokens via defaultTheme.
+// All spacing, colors, and radius values must use theme.spacing[N], theme.colors.*, theme.radius.*
+// NO hardcoded numbers or color strings allowed.
+
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, View, Text } from 'react-native';
 import { Card } from '../ui/Card';
 import { CardActions } from '../cards/CardActions';
 import { InlineComments, CommentTargetType } from '../comments/InlineComments';
-import { colors, spacing } from '../../theme';
+import { defaultTheme } from '../../theme';
 import type { CommentPreview } from '../../services/likesApi';
 import { targetKey } from '../../utils/targetKey';
 import { Avatar } from '../Avatar';
@@ -154,28 +158,30 @@ export function FeedCardShell({
   );
 }
 
+const theme = defaultTheme;
+
 const styles = StyleSheet.create({
   card: {
-    marginBottom: 12, // spacing.md
+    marginBottom: theme.layout.listGap,
   },
   pressableContent: {
     // Allows tapping card content to navigate
   },
   previewContainer: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.xs,
+    paddingHorizontal: theme.spacing[4],
+    paddingTop: theme.spacing[2],
+    paddingBottom: theme.spacing[1],
   },
   viewAllText: {
     fontSize: 13,
-    color: colors.subtext,
-    marginBottom: spacing.xs,
+    color: theme.colors.text.secondary,
+    marginBottom: theme.spacing[1],
   },
   previewComment: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: spacing.xs,
-    gap: spacing.xs,
+    marginBottom: theme.spacing[1],
+    gap: theme.spacing[1],
   },
   previewTextContainer: {
     flex: 1,
@@ -185,10 +191,10 @@ const styles = StyleSheet.create({
   previewAuthor: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.text,
+    color: theme.colors.text.primary,
   },
   previewText: {
     fontSize: 13,
-    color: colors.text,
+    color: theme.colors.text.primary,
   },
 });

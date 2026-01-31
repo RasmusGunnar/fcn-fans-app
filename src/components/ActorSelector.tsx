@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing } from '../theme';
+import { useTheme, Theme } from '../theme';
 import { Actor } from '../types/news';
 import { useAuth } from '../auth/AuthProvider';
 import { supabase } from '../lib/supabase';
@@ -19,6 +19,8 @@ interface EligibleCommunity {
 }
 
 export function ActorSelector({ selectedActor, onSelectActor }: ActorSelectorProps) {
+  const theme = useTheme();
+  const styles = createStyles(theme);
   const { user } = useAuth();
   const [showDropdown, setShowDropdown] = useState(false);
   const [eligibleCommunities, setEligibleCommunities] = useState<EligibleCommunity[]>([]);
@@ -105,14 +107,14 @@ export function ActorSelector({ selectedActor, onSelectActor }: ActorSelectorPro
           <Ionicons
             name={selectedActor.type === 'user' ? 'person' : 'people'}
             size={20}
-            color={colors.text}
+            color={theme.colors.text.primary}
           />
           <Text style={styles.selectedText}>{selectedActor.name}</Text>
         </View>
         <Ionicons
           name={showDropdown ? 'chevron-up' : 'chevron-down'}
           size={20}
-          color={colors.subtext}
+          color={theme.colors.text.secondary}
         />
       </Pressable>
 
@@ -120,12 +122,12 @@ export function ActorSelector({ selectedActor, onSelectActor }: ActorSelectorPro
         <View style={styles.dropdown}>
           {loading ? (
             <View style={styles.dropdownItem}>
-              <ActivityIndicator size="small" color={colors.fcnRed} />
+              <ActivityIndicator size="small" color={theme.colors.primary} />
             </View>
           ) : (
             <>
               <Pressable style={styles.dropdownItem} onPress={handleSelectUser}>
-                <Ionicons name="person" size={20} color={colors.text} />
+                <Ionicons name="person" size={20} color={theme.colors.text.primary} />
                 <Text style={styles.dropdownText}>{user?.email || 'Dig selv'}</Text>
               </Pressable>
 
@@ -139,7 +141,7 @@ export function ActorSelector({ selectedActor, onSelectActor }: ActorSelectorPro
                       style={styles.dropdownItem}
                       onPress={() => handleSelectCommunity(community)}
                     >
-                      <Ionicons name="people" size={20} color={colors.text} />
+                      <Ionicons name="people" size={20} color={theme.colors.text.primary} />
                       <Text style={styles.dropdownText}>{community.name}</Text>
                       <Text style={styles.roleLabel}>
                         {community.role === 'owner' ? 'ejer' : 'admin'}
@@ -156,70 +158,72 @@ export function ActorSelector({ selectedActor, onSelectActor }: ActorSelectorPro
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(theme: Theme) {
+  return StyleSheet.create({
   container: {
-    marginBottom: spacing.md,
+    marginBottom: theme.spacing[4],
   },
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.xs,
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing[1],
   },
   selector: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: spacing.md,
-    backgroundColor: colors.card,
-    borderRadius: 8,
+    padding: theme.spacing[4],
+    backgroundColor: theme.colors.bg.card,
+    borderRadius: theme.radius.sm,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: theme.colors.border.default,
   },
   selectedActor: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: theme.spacing[2],
   },
   selectedText: {
     fontSize: 16,
-    color: colors.text,
+    color: theme.colors.text.primary,
   },
   dropdown: {
-    marginTop: spacing.xs,
-    backgroundColor: colors.card,
-    borderRadius: 8,
+    marginTop: theme.spacing[1],
+    backgroundColor: theme.colors.bg.card,
+    borderRadius: theme.radius.sm,
     borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.xs,
+    borderColor: theme.colors.border.default,
+    padding: theme.spacing[1],
   },
   dropdownItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    padding: spacing.md,
-    borderRadius: 8,
+    gap: theme.spacing[2],
+    padding: theme.spacing[4],
+    borderRadius: theme.radius.sm,
   },
   dropdownText: {
     fontSize: 16,
-    color: colors.text,
+    color: theme.colors.text.primary,
   },
   dropdownDivider: {
     height: 1,
-    backgroundColor: colors.border,
-    marginVertical: spacing.xs,
+    backgroundColor: theme.colors.border.default,
+    marginVertical: theme.spacing[1],
   },
   dropdownHeader: {
     fontSize: 12,
     fontWeight: '600',
-    color: colors.subtext,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
+    color: theme.colors.text.secondary,
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[1],
     textTransform: 'uppercase',
   },
   roleLabel: {
     fontSize: 12,
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
     marginLeft: 'auto',
   },
-});
+  });
+}

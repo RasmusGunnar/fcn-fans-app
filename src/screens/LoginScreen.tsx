@@ -1,7 +1,11 @@
+// =====================================================
+// DESIGN SYSTEM RULES:
+// DO NOT hardcode radius/spacing/colors/shadows; use theme tokens.
+// =====================================================
+
 import React, { useState } from 'react';
 import {
   View,
-  Text,
   TextInput,
   StyleSheet,
   Alert,
@@ -13,7 +17,8 @@ import {
   Platform,
 } from 'react-native';
 import { PrimaryButton } from '../components/PrimaryButton';
-import { spacing } from '../theme';
+import { Text, Card } from '../components/ui';
+import { useTheme } from '../theme';
 import { useAuth } from '../auth/AuthProvider';
 
 export default function LoginScreen() {
@@ -21,6 +26,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const { signInWithPassword, signUp, loading } = useAuth();
+  const theme = useTheme();
 
   const onSubmit = async () => {
     const e = email.trim().toLowerCase();
@@ -62,68 +68,110 @@ export default function LoginScreen() {
   const primaryDisabled = loading || !email.trim().includes('@') || password.length < 6;
 
   return (
-    <ImageBackground source={bg ?? undefined} style={styles.bg} resizeMode="cover">
-      <View style={styles.bgOverlay} />
+    <ImageBackground source={bg ?? undefined} style={[styles.bg, { backgroundColor: theme.colors.bg.default }]} resizeMode="cover">
+      <View style={[styles.bgOverlay, { backgroundColor: theme.colors.overlay }]} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.flex}
       >
-        <View style={styles.wrapper}>
-          <View style={styles.card}>
+        <View style={{ flex: 1, justifyContent: 'center', padding: theme.spacing[4] }}>
+          <Card style={[styles.card, { backgroundColor: theme.colors.bg.card, borderColor: theme.colors.border.default }]}>
             {logo ? (
               <Image source={logo} style={styles.logo} resizeMode="contain" />
             ) : (
-              <Text style={styles.logoFallback}>FCN Fans</Text>
+              <Text variant="h1" color="inverse" style={{ textAlign: 'center', marginBottom: theme.spacing[2] }}>
+                FCN Fans
+              </Text>
             )}
 
             <View style={styles.modeToggleRow}>
               <Pressable
                 onPress={() => setMode('login')}
-                style={[styles.modeBtn, mode === 'login' && styles.modeBtnActive]}
+                style={[
+                  styles.modeBtn,
+                  {
+                    paddingVertical: theme.spacing[2],
+                    paddingHorizontal: theme.spacing[4],
+                    borderRadius: theme.radius.sm,
+                    marginHorizontal: theme.spacing[1],
+                  },
+                  mode === 'login' && [styles.modeBtnActive, { backgroundColor: theme.colors.bg.elevated }],
+                ]}
               >
-                <Text style={[styles.modeBtnText, mode === 'login' && styles.modeBtnTextActive]}>
+                <Text style={[styles.modeBtnText, { color: theme.colors.text.secondary }, mode === 'login' && [styles.modeBtnTextActive, { color: theme.colors.text.primary }]]}>
                   Log ind
                 </Text>
               </Pressable>
               <Pressable
                 onPress={() => setMode('signup')}
-                style={[styles.modeBtn, mode === 'signup' && styles.modeBtnActive]}
+                style={[
+                  styles.modeBtn,
+                  {
+                    paddingVertical: theme.spacing[2],
+                    paddingHorizontal: theme.spacing[4],
+                    borderRadius: theme.radius.sm,
+                    marginHorizontal: theme.spacing[1],
+                  },
+                  mode === 'signup' && [styles.modeBtnActive, { backgroundColor: theme.colors.bg.elevated }],
+                ]}
               >
-                <Text style={[styles.modeBtnText, mode === 'signup' && styles.modeBtnTextActive]}>
+                <Text style={[styles.modeBtnText, { color: theme.colors.text.secondary }, mode === 'signup' && [styles.modeBtnTextActive, { color: theme.colors.text.primary }]]}>
                   Opret
                 </Text>
               </Pressable>
             </View>
 
-            <Text style={styles.sub}>
+            <Text variant="body" color="secondary" style={{ textAlign: 'center', marginBottom: theme.spacing[3] }}>
               {mode === 'login'
                 ? 'Log ind for at fortsætte til FCN Fans'
                 : 'Opret en konto for at komme i gang'}
             </Text>
 
-            <View style={styles.form}>
-              <Text style={styles.label}>Email</Text>
+            <View style={{ marginTop: theme.spacing[1] }}>
+              <Text variant="bodyBold" color="secondary" style={{ marginBottom: theme.spacing[1] }}>Email</Text>
               <TextInput
-                style={styles.input}
+                style={[
+                  styles.input,
+                  {
+                    borderColor: theme.colors.border.default,
+                    color: theme.colors.text.primary,
+                    backgroundColor: theme.colors.bg.elevated,
+                    borderRadius: theme.radius.sm,
+                    padding: theme.spacing[3],
+                    fontSize: theme.typography.body.fontSize,
+                  },
+                ]}
                 autoCapitalize="none"
                 value={email}
                 onChangeText={setEmail}
                 placeholder="navn@mail.dk"
-                placeholderTextColor="#aab3be"
+                placeholderTextColor={theme.colors.text.secondary}
                 keyboardType="email-address"
               />
 
-              <Text style={[styles.label, { marginTop: spacing.sm }]}>Kodeord</Text>
+              <Text variant="bodyBold" color="secondary" style={{ marginTop: theme.spacing[2], marginBottom: theme.spacing[1] }}>
+                Kodeord
+              </Text>
               <TextInput
-                style={styles.input}
+                style={[
+                  styles.input,
+                  {
+                    borderColor: theme.colors.border.default,
+                    color: theme.colors.text.primary,
+                    backgroundColor: theme.colors.bg.elevated,
+                    borderRadius: theme.radius.sm,
+                    padding: theme.spacing[3],
+                    fontSize: theme.typography.body.fontSize,
+                  },
+                ]}
                 secureTextEntry
                 value={password}
                 onChangeText={setPassword}
                 placeholder="Min. 6 tegn"
-                placeholderTextColor="#aab3be"
+                placeholderTextColor={theme.colors.text.secondary}
               />
 
-              <View style={{ height: spacing.md }} />
+              <View style={{ height: theme.spacing[4] }} />
               <PrimaryButton
                 title={
                   loading
@@ -138,41 +186,64 @@ export default function LoginScreen() {
                 disabled={primaryDisabled}
               />
 
-              <View style={{ height: spacing.sm }} />
+              <View style={{ height: theme.spacing[2] }} />
               <View style={styles.signupRow}>
                 {mode === 'login' ? (
-                  <Text style={styles.infoText}>Er du ikke oprettet endnu? </Text>
+                  <Text variant="body" color="secondary">Er du ikke oprettet endnu? </Text>
                 ) : (
-                  <Text style={styles.infoText}>Har du allerede en konto? </Text>
+                  <Text variant="body" color="secondary">Har du allerede en konto? </Text>
                 )}
                 {mode === 'login' ? (
                   <Pressable onPress={() => setMode('signup')}>
-                    <Text style={styles.linkText}>Opret her</Text>
+                    <Text style={[styles.linkText, { color: theme.colors.info }]}>Opret her</Text>
                   </Pressable>
                 ) : (
                   <Pressable onPress={() => setMode('login')}>
-                    <Text style={styles.linkText}>Log ind</Text>
+                    <Text style={[styles.linkText, { color: theme.colors.info }]}>Log ind</Text>
                   </Pressable>
                 )}
               </View>
             </View>
 
-            <View style={styles.socialArea}>
-              <Text style={styles.socialText}>Du kan også oprette dig med:</Text>
+            <View style={{ marginTop: theme.spacing[3], alignItems: 'center' }}>
+              <Text variant="body" color="secondary" style={{ textAlign: 'center', marginBottom: theme.spacing[2] }}>
+                Du kan også oprette dig med:
+              </Text>
 
-              <View style={styles.socialButtons}>
-                <TouchableOpacity style={[styles.socialBtn, styles.disabledBtn]} onPress={onApple}>
-                  <Text style={styles.socialBtnText}>Apple</Text>
+              <View style={{ flexDirection: 'row', gap: theme.spacing[3] }}>
+                <TouchableOpacity
+                  style={[
+                    styles.socialBtn,
+                    {
+                      borderColor: theme.colors.border.default,
+                      paddingVertical: theme.spacing[2],
+                      paddingHorizontal: theme.spacing[4],
+                      borderRadius: theme.radius.sm,
+                      marginHorizontal: theme.spacing[1],
+                    },
+                  ]}
+                  onPress={onApple}
+                >
+                  <Text style={[styles.socialBtnText, { color: theme.colors.text.secondary }]}>Apple</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.socialBtn, styles.disabledBtn]}
+                  style={[
+                    styles.socialBtn,
+                    {
+                      borderColor: theme.colors.border.default,
+                      paddingVertical: theme.spacing[2],
+                      paddingHorizontal: theme.spacing[4],
+                      borderRadius: theme.radius.sm,
+                      marginHorizontal: theme.spacing[1],
+                    },
+                  ]}
                   onPress={onFacebook}
                 >
-                  <Text style={styles.socialBtnText}>Facebook</Text>
+                  <Text style={[styles.socialBtnText, { color: theme.colors.text.secondary }]}>Facebook</Text>
                 </TouchableOpacity>
               </View>
             </View>
-          </View>
+          </Card>
         </View>
       </KeyboardAvoidingView>
     </ImageBackground>
@@ -181,70 +252,32 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  bg: { flex: 1, backgroundColor: '#07101a' },
-  bgOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(2,6,12,0.6)' },
-  wrapper: { flex: 1, justifyContent: 'center', padding: 20 },
+  bg: { flex: 1 },
+  bgOverlay: { ...StyleSheet.absoluteFillObject },
   card: {
-    backgroundColor: '#0b1722',
-    borderRadius: 16,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: '#12202a',
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
+    borderWidth: theme.layout.borderWidth,
   },
-  logo: { width: 140, height: 70, alignSelf: 'center', marginBottom: 8 },
-  logoFallback: {
-    color: '#fff',
-    fontSize: 22,
-    fontWeight: '800',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  modeToggleRow: { flexDirection: 'row', justifyContent: 'center', marginBottom: 8 },
+  logo: { width: theme.spacing[35], height: theme.spacing[17], alignSelf: 'center', marginBottom: theme.spacing[2] },
+  modeToggleRow: { flexDirection: 'row', justifyContent: 'center', marginBottom: theme.spacing[2] },
   modeBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    marginHorizontal: 6,
     borderWidth: 1,
     borderColor: 'transparent',
   },
-  modeBtnActive: { backgroundColor: '#123243' },
-  modeBtnText: { color: '#9fb4d6', fontWeight: '700' },
-  modeBtnTextActive: { color: '#fff' },
-  heading: { color: '#fff', fontSize: 22, fontWeight: '800', textAlign: 'center' },
-  sub: { color: '#9fb4d6', textAlign: 'center', marginBottom: 12 },
-  form: { marginTop: 6 },
-  label: { color: '#cbd5e1', fontWeight: '600', marginBottom: 6 },
+  modeBtnActive: {},
+  modeBtnText: { fontWeight: '700' },
+  modeBtnTextActive: {},
   input: {
-    borderWidth: 1,
-    borderColor: '#20323b',
-    borderRadius: 10,
-    padding: 12,
-    color: '#fff',
-    backgroundColor: 'rgba(6,12,16,0.4)',
+    borderWidth: theme.layout.borderWidth,
   },
-  toggle: { color: '#9fb4d6', textAlign: 'center' },
   signupRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: spacing.xs,
   },
-  infoText: { color: '#9fb4d6' },
-  linkText: { color: '#cfe7ff', fontWeight: '700', marginLeft: 4 },
-  socialArea: { marginTop: 14, alignItems: 'center' },
-  socialText: { color: '#9fb4d6', textAlign: 'center', marginBottom: 8 },
-  socialButtons: { flexDirection: 'row', gap: 12 },
+  linkText: { fontWeight: '700', marginLeft: theme.spacing[1] },
   socialBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#233544',
-    marginHorizontal: 6,
+    borderWidth: theme.layout.borderWidth,
+    opacity: 0.6,
   },
-  disabledBtn: { opacity: 0.6 },
-  socialBtnText: { color: '#cbd5e1', fontWeight: '700' },
+  socialBtnText: { fontWeight: '700' },
 });

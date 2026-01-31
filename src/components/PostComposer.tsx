@@ -11,7 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from './ui/Card';
 import { PrimaryButton } from './PrimaryButton';
-import { colors, spacing, radius } from '../theme';
+import { useTheme, Theme } from '../theme';
 import { MediaAsset, pickFromLibrary, pickCameraPhoto } from '../lib/mediaPicker';
 import { uploadMediaToSupabase } from '../lib/upload';
 import { useAuth } from '../auth/AuthProvider';
@@ -25,6 +25,8 @@ interface PostComposerProps {
 
 export function PostComposer({ onSuccess }: PostComposerProps) {
   console.log('[PostComposer] Component mounted');
+  const theme = useTheme();
+  const styles = createStyles(theme);
   const { user } = useAuth();
   const { addPost, fetchPosts } = useFeed();
   const [text, setText] = useState('');
@@ -174,12 +176,12 @@ export function PostComposer({ onSuccess }: PostComposerProps) {
 
   return (
     <View style={styles.container}>
-      <Card style={{ marginBottom: spacing.md }}>
+      <Card style={{ marginBottom: theme.spacing[4] }}>
         <Text style={styles.label}>Dit opslag</Text>
         <TextInput
           style={styles.textInput}
           placeholder="Hvad er på dit hjerte?"
-          placeholderTextColor={colors.subtext}
+          placeholderTextColor={theme.colors.text.secondary}
           multiline
           numberOfLines={6}
           value={text}
@@ -194,7 +196,7 @@ export function PostComposer({ onSuccess }: PostComposerProps) {
               onPress={() => setAttachment(null)}
               disabled={loading}
             >
-              <Ionicons name="close-circle" size={22} color={colors.fcnRed} />
+              <Ionicons name="close-circle" size={22} color={theme.colors.primary} />
               <Text style={styles.removeAttachmentText}>Fjern billede</Text>
             </Pressable>
           </View>
@@ -202,16 +204,16 @@ export function PostComposer({ onSuccess }: PostComposerProps) {
       </Card>
 
       {!attachment && (
-        <Card style={{ marginBottom: spacing.md }}>
+        <Card style={{ marginBottom: theme.spacing[4] }}>
           <Text style={styles.label}>Tilføj billede (valgfrit)</Text>
           <View style={styles.imageButtonsContainer}>
             <Pressable style={styles.imageButton} onPress={handlePickCamera} disabled={loading}>
-              <Ionicons name="camera" size={20} color={colors.fcnRed} />
+              <Ionicons name="camera" size={20} color={theme.colors.primary} />
               <Text style={styles.imageButtonText}>Tag billede</Text>
             </Pressable>
 
             <Pressable style={styles.imageButton} onPress={handlePickLibrary} disabled={loading}>
-              <Ionicons name="images" size={20} color={colors.fcnRed} />
+              <Ionicons name="images" size={20} color={theme.colors.primary} />
               <Text style={styles.imageButtonText}>Vælg fra bibliotek</Text>
             </Pressable>
           </View>
@@ -227,75 +229,77 @@ export function PostComposer({ onSuccess }: PostComposerProps) {
 
       {loading && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="small" color={colors.fcnRed} />
+          <ActivityIndicator size="small" color={theme.colors.primary} />
         </View>
       )}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(theme: Theme) {
+  return StyleSheet.create({
   container: {
-    padding: spacing.md,
+    padding: theme.layout.screenPadding,
   },
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.sm,
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing[2],
   },
   textInput: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.sm,
-    padding: spacing.md,
+    borderColor: theme.colors.border.default,
+    borderRadius: theme.radius.sm,
+    padding: theme.spacing[4],
     minHeight: 120,
     fontSize: 14,
-    color: colors.text,
+    color: theme.colors.text.primary,
     textAlignVertical: 'top',
   },
   previewContainer: {
-    marginTop: spacing.md,
-    gap: spacing.sm,
+    marginTop: theme.spacing[4],
+    gap: theme.spacing[2],
   },
   previewImage: {
     width: '100%',
     height: 200,
-    borderRadius: radius.sm,
-    backgroundColor: colors.border,
+    borderRadius: theme.radius.sm,
+    backgroundColor: theme.colors.border.default,
   },
   removeAttachment: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: theme.spacing[1],
   },
   removeAttachmentText: {
-    color: colors.fcnRed,
+    color: theme.colors.primary,
     fontSize: 14,
   },
   imageButtonsContainer: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: theme.spacing[2],
   },
   imageButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
+    paddingVertical: theme.spacing[4],
+    paddingHorizontal: theme.spacing[2],
     borderWidth: 1,
-    borderColor: colors.fcnRed,
-    borderRadius: radius.sm,
-    gap: spacing.xs,
+    borderColor: theme.colors.primary,
+    borderRadius: theme.radius.sm,
+    gap: theme.spacing[1],
   },
   imageButtonText: {
     fontSize: 14,
-    color: colors.fcnRed,
+    color: theme.colors.primary,
     fontWeight: '500',
   },
   loadingOverlay: {
-    marginTop: spacing.sm,
+    marginTop: theme.spacing[2],
     alignItems: 'center',
   },
-});
+  });
+}

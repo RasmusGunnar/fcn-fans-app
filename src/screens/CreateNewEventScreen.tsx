@@ -561,7 +561,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
+    borderRadius: theme.radius.sm,
     padding: spacing.sm,
     fontSize: 16,
     color: colors.text,
@@ -582,7 +582,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
+    borderRadius: theme.radius.sm,
     gap: spacing.xs,
   },
   typeButtonActive: {
@@ -610,7 +610,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bg,
-    borderRadius: 8,
+    borderRadius: theme.radius.sm,
     marginRight: spacing.sm,
   },
   dateTimeText: {
@@ -619,7 +619,7 @@ const styles = StyleSheet.create({
   dateTimeLabel: {
     fontSize: 12,
     color: colors.subtext,
-    marginBottom: 2,
+    marginBottom: theme.spacing[0],
   },
   dateTimeValue: {
     fontSize: 16,

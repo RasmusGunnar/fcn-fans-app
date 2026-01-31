@@ -10,11 +10,14 @@ import {
   type Fixture,
 } from '../services/fixtures';
 import { colors, spacing } from '../theme';
+import { useTheme } from '../theme';
 
 export default function MatchdayScreen() {
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [fixtures, setFixtures] = useState<Fixture[]>([]);
   const [loading, setLoading] = useState(false);
+  const theme = useTheme();
+  const styles = createStyles(theme);
 
   const loadFixtures = async () => {
     setLoading(true);
@@ -28,55 +31,64 @@ export default function MatchdayScreen() {
   }, []);
 
   const renderFixture = ({ item }: { item: Fixture }) => (
-    <Pressable style={styles.card} onPress={() => nav.navigate('MatchDetails', { fixtureId: item.id })}>
+    <Pressable 
+      style={[
+        styles.card, 
+        { 
+          backgroundColor: theme.colors.bg.card, 
+          borderColor: theme.colors.border.default 
+        }
+      ]} 
+      onPress={() => nav.navigate('MatchDetails', { fixtureId: item.id })}
+    >
       <View style={styles.matchRow}>
         <View style={styles.teamContainer}>
           {item.home_logo_url ? (
             <Image source={{ uri: item.home_logo_url }} style={styles.teamLogo} />
           ) : (
-            <View style={styles.teamCircle}>
-              <Text style={styles.teamInitials}>
+            <View style={[styles.teamCircle, { backgroundColor: theme.colors.primary }]}>
+              <Text style={[styles.teamInitials, { color: theme.colors.bg.card }]}>
                 {item.home_team.substring(0, 3).toUpperCase()}
               </Text>
             </View>
           )}
-          <Text style={styles.teamName} numberOfLines={1}>
+          <Text style={[styles.teamName, { color: theme.colors.text.primary }]} numberOfLines={1}>
             {item.home_team}
           </Text>
         </View>
 
         <View style={styles.vsContainer}>
-          <Text style={styles.vs}>VS</Text>
+          <Text style={[styles.vs, { color: theme.colors.text.primary }]}>VS</Text>
         </View>
 
         <View style={styles.teamContainer}>
           {item.away_logo_url ? (
             <Image source={{ uri: item.away_logo_url }} style={styles.teamLogo} />
           ) : (
-            <View style={styles.teamCircle}>
-              <Text style={styles.teamInitials}>
+            <View style={[styles.teamCircle, { backgroundColor: theme.colors.primary }]}>
+              <Text style={[styles.teamInitials, { color: theme.colors.bg.card }]}>
                 {item.away_team.substring(0, 3).toUpperCase()}
               </Text>
             </View>
           )}
-          <Text style={styles.teamName} numberOfLines={1}>
+          <Text style={[styles.teamName, { color: theme.colors.text.primary }]} numberOfLines={1}>
             {item.away_team}
           </Text>
         </View>
       </View>
 
-      <View style={styles.detailsContainer}>
-        <Text style={styles.dateText}>
+      <View style={[styles.detailsContainer, { borderTopColor: theme.colors.border.default }]}>
+        <Text style={[styles.dateText, { color: theme.colors.text.primary }]}>
           📅 {formatShortDateDa(item.kickoff_at)}, kl. {formatTime(item.kickoff_at)}
         </Text>
         {item.venue && (
-          <Text style={styles.venueText}>
+          <Text style={[styles.venueText, { color: theme.colors.text.secondary }]}>
             🏟️ {item.venue}
             {item.venue_city ? `, ${item.venue_city}` : ''}
           </Text>
         )}
         {item.competition && (
-          <Text style={styles.competitionText}>
+          <Text style={[styles.competitionText, { color: theme.colors.text.secondary }]}>
             🏆 {item.competition}
             {item.round ? ` - ${item.round}` : ''}
           </Text>
@@ -86,8 +98,8 @@ export default function MatchdayScreen() {
   );
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.h1}>Kommende Kampe</Text>
+    <View style={[styles.container, { backgroundColor: theme.colors.bg.default }]}>
+      <Text style={[styles.h1, { color: theme.colors.text.primary }]}>Kommende Kampe</Text>
 
       <FlatList
         data={fixtures}
@@ -97,14 +109,14 @@ export default function MatchdayScreen() {
           <RefreshControl
             refreshing={loading}
             onRefresh={loadFixtures}
-            tintColor={colors.fcnRed}
-            colors={[colors.fcnRed]}
+            tintColor={theme.colors.primary}
+            colors={[theme.colors.primary]}
           />
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>Ingen kommende kampe endnu</Text>
-            <Text style={styles.emptySubtext}>Tjek tilbage senere</Text>
+            <Text style={[styles.emptyText, { color: theme.colors.text.primary }]}>Ingen kommende kampe endnu</Text>
+            <Text style={[styles.emptySubtext, { color: theme.colors.text.secondary }]}>Tjek tilbage senere</Text>
           </View>
         }
         contentContainerStyle={fixtures.length === 0 ? styles.emptyList : undefined}
@@ -113,25 +125,21 @@ export default function MatchdayScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
   container: {
     flex: 1,
     padding: spacing.md,
-    backgroundColor: colors.bg,
   },
   h1: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: colors.text,
+    fontSize: theme.typography.h1.fontSize,
+    fontWeight: theme.typography.h1.fontWeight as any,
     marginBottom: spacing.lg,
   },
   card: {
-    borderWidth: 1,
-    borderColor: colors.border || '#e0e0e0',
-    borderRadius: 14,
+    borderWidth: theme.layout.borderWidth,
+    borderRadius: theme.radius.lg,
     padding: spacing.md,
     marginBottom: spacing.md,
-    backgroundColor: colors.card,
   },
   matchRow: {
     flexDirection: 'row',
@@ -144,27 +152,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   teamLogo: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: theme.spacing[12],
+    height: theme.spacing[12],
+    borderRadius: theme.radius.pill,
   },
   teamCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: colors.fcnRed,
+    width: theme.spacing[12],
+    height: theme.spacing[12],
+    borderRadius: theme.radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
   teamInitials: {
-    color: colors.card,
-    fontSize: 14,
+    fontSize: theme.typography.body.fontSize,
     fontWeight: '700',
   },
   teamName: {
-    fontSize: 12,
+    fontSize: theme.typography.small.fontSize,
     fontWeight: '600',
-    color: colors.text,
     marginTop: spacing.xs,
     textAlign: 'center',
   },
@@ -172,28 +177,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
   },
   vs: {
-    fontSize: 16,
+    fontSize: theme.typography.body.fontSize,
     fontWeight: '700',
-    color: colors.text,
   },
   detailsContainer: {
-    borderTopWidth: 1,
-    borderTopColor: colors.border || '#e0e0e0',
+    borderTopWidth: theme.layout.borderWidth,
     paddingTop: spacing.sm,
   },
   dateText: {
-    fontSize: 13,
-    color: colors.text,
+    fontSize: theme.typography.small.fontSize,
     marginBottom: spacing.xs,
   },
   venueText: {
-    fontSize: 13,
-    color: colors.subtext,
+    fontSize: theme.typography.small.fontSize,
     marginBottom: spacing.xs,
   },
   competitionText: {
-    fontSize: 13,
-    color: colors.subtext,
+    fontSize: theme.typography.small.fontSize,
   },
   emptyContainer: {
     flex: 1,
@@ -202,14 +202,12 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xl * 2,
   },
   emptyText: {
-    fontSize: 16,
+    fontSize: theme.typography.body.fontSize,
     fontWeight: '600',
-    color: colors.text,
     marginBottom: spacing.xs,
   },
   emptySubtext: {
-    fontSize: 14,
-    color: colors.subtext,
+    fontSize: theme.typography.body.fontSize,
   },
   emptyList: {
     flexGrow: 1,

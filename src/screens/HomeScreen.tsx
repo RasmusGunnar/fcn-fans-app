@@ -304,12 +304,12 @@ const styles = StyleSheet.create({
   teamCircle: {
     width: 60,
     height: 60,
-    borderRadius: 30,
+    borderRadius: theme.radius.pill,
     backgroundColor: colors.fcnRed,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  teamLogo: { width: 60, height: 60, borderRadius: 30 },
+  teamLogo: { width: 60, height: 60, borderRadius: theme.radius.pill },
   teamName: {
     fontSize: 12,
     fontWeight: '600',

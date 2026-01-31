@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 import { Alert, Button, Text, TextInput, View } from 'react-native';
 import { supabase } from '../lib/supabase';
+import { useTheme } from '../theme';
+
 export default function EmailOtpScreen({ route }: any) {
   const { email } = route.params ?? {};
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
+  const theme = useTheme();
 
   const resend = async () => {
     try {
@@ -44,16 +47,24 @@ export default function EmailOtpScreen({ route }: any) {
   };
 
   return (
-    <View style={{ padding: 16, gap: 12 }}>
-      <Text style={{ fontSize: 16 }}>Indtast koden sendt til:</Text>
-      <Text style={{ fontSize: 16, fontWeight: '700' }}>{email}</Text>
+    <View style={{ padding: theme.spacing[4], gap: theme.spacing[3] }}>
+      <Text style={{ fontSize: theme.typography.body.fontSize }}>Indtast koden sendt til:</Text>
+      <Text style={{ fontSize: theme.typography.body.fontSize, fontWeight: '700' }}>{email}</Text>
 
       <TextInput
         value={code}
         onChangeText={setCode}
         placeholder="Kode"
         keyboardType="number-pad"
-        style={{ borderWidth: 1, padding: 12, borderRadius: 10 }}
+        style={{ 
+          borderWidth: theme.layout.borderWidth, 
+          borderColor: theme.colors.border.default,
+          padding: theme.spacing[3], 
+          borderRadius: theme.radius.md,
+          fontSize: theme.typography.body.fontSize,
+          color: theme.colors.text.primary,
+          backgroundColor: theme.colors.bg.elevated
+        }}
       />
 
       <Button title={busy ? 'Tjekker...' : 'Bekræft'} onPress={verify} disabled={busy} />

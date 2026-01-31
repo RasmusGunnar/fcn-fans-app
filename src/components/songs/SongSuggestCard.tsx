@@ -2,17 +2,19 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { PrimaryButton } from '../PrimaryButton';
-import { colors, spacing, radius } from '../../theme';
+import { defaultTheme } from '../../theme';
 
 interface SongSuggestCardProps {
   onPressSuggest: () => void;
 }
 
 export function SongSuggestCard({ onPressSuggest }: SongSuggestCardProps) {
+  const theme = defaultTheme;
+  
   return (
     <View style={styles.card}>
       <View style={styles.iconContainer}>
-        <Ionicons name="musical-notes" size={24} color={colors.fcnRed} />
+        <Ionicons name="musical-notes" size={24} color={theme.colors.primary} />
       </View>
       <Text style={styles.title}>Kender du en sang vi mangler?</Text>
       <Text style={styles.subtitle}>Del den med resten af fællesskabet</Text>
@@ -21,38 +23,40 @@ export function SongSuggestCard({ onPressSuggest }: SongSuggestCardProps) {
   );
 }
 
+const theme = defaultTheme;
+
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.ctaBg,
+    backgroundColor: theme.colors.ctaBg,
     borderWidth: 2,
-    borderColor: colors.fcnRed,
+    borderColor: theme.colors.primary,
     borderStyle: 'dashed',
-    borderRadius: radius.md,
-    padding: spacing.lg,
+    borderRadius: theme.radius.md,
+    padding: theme.spacing[6],
     alignItems: 'center',
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.md,
+    marginHorizontal: theme.spacing[4],
+    marginBottom: theme.spacing[3],
   },
   iconContainer: {
     width: 48,
     height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.card,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.bg.card,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: theme.spacing[2],
   },
   title: {
     fontSize: 18,
     fontWeight: '600',
-    color: colors.text,
+    color: theme.colors.text.primary,
     textAlign: 'center',
-    marginBottom: spacing.xs,
+    marginBottom: theme.spacing[1],
   },
   subtitle: {
     fontSize: 14,
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
     textAlign: 'center',
-    marginBottom: spacing.lg,
+    marginBottom: theme.spacing[6],
   },
 });

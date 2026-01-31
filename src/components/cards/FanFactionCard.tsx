@@ -1,3 +1,7 @@
+// ✅ DESIGN SYSTEM GUARDRAIL: This file uses theme tokens via defaultTheme.
+// All spacing, colors, and radius values must use theme.spacing[N], theme.colors.*, theme.radius.*
+// NO hardcoded numbers or color strings allowed.
+
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -5,7 +9,7 @@ import { Card } from '../ui/Card';
 import { Pill } from '../ui/Pill';
 import { PrimaryButton } from '../PrimaryButton';
 import { CardActions } from './CardActions';
-import { colors, spacing } from '../../theme';
+import { defaultTheme } from '../../theme';
 
 interface FanFactionCardProps {
   name: string;
@@ -34,24 +38,26 @@ export function FanFactionCard({
   onPressShare,
   onPressJoin,
 }: FanFactionCardProps) {
+  const theme = defaultTheme;
+  
   return (
     <Card style={styles.card}>
       <Pill
         label="Fanfraktion"
         variant="neutral"
-        icon={<Ionicons name="star" size={14} color={colors.neutralPillText} />}
+        icon={<Ionicons name="star" size={14} color={theme.colors.pill.neutral.text} />}
       />
       <View style={styles.header}>
         <View style={styles.avatar}>
-          <Ionicons name="star" size={40} color={colors.fcnRed} />
+          <Ionicons name="star" size={40} color={theme.colors.primary} />
         </View>
         <View style={styles.headerInfo}>
           <Text style={styles.title}>{name}</Text>
           <View style={styles.metaRow}>
-            <Ionicons name="people" size={12} color={colors.subtext} />
+            <Ionicons name="people" size={12} color={theme.colors.text.secondary} />
             <Text style={styles.metaText}>{members} medlemmer</Text>
             <Text style={styles.metaSeparator}>•</Text>
-            <Ionicons name="time" size={12} color={colors.subtext} />
+            <Ionicons name="time" size={12} color={theme.colors.text.secondary} />
             <Text style={styles.metaText}>{timeAgo}</Text>
           </View>
         </View>
@@ -70,18 +76,20 @@ export function FanFactionCard({
   );
 }
 
+const theme = defaultTheme;
+
 const styles = StyleSheet.create({
   card: {
-    marginBottom: spacing.md,
+    marginBottom: theme.spacing[4],
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: spacing.sm,
-    marginBottom: spacing.md,
+    marginTop: theme.spacing[2],
+    marginBottom: theme.spacing[4],
   },
   avatar: {
-    marginRight: spacing.sm,
+    marginRight: theme.spacing[2],
   },
   headerInfo: {
     flex: 1,
@@ -89,8 +97,8 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.xs,
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing[1],
   },
   metaRow: {
     flexDirection: 'row',
@@ -98,18 +106,18 @@ const styles = StyleSheet.create({
   },
   metaText: {
     fontSize: 12,
-    color: colors.subtext,
-    marginLeft: spacing.xs,
+    color: theme.colors.text.secondary,
+    marginLeft: theme.spacing[1],
   },
   metaSeparator: {
     fontSize: 12,
-    color: colors.subtext,
-    marginHorizontal: spacing.xs,
+    color: theme.colors.text.secondary,
+    marginHorizontal: theme.spacing[1],
   },
   description: {
     fontSize: 14,
-    color: colors.text,
+    color: theme.colors.text.primary,
     lineHeight: 20,
-    marginBottom: spacing.lg,
+    marginBottom: theme.spacing[6],
   },
 });

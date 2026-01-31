@@ -1,3 +1,7 @@
+// ✅ DESIGN SYSTEM GUARDRAIL: This file uses theme tokens via defaultTheme.
+// All spacing, colors, and radius values must use theme.spacing[N], theme.colors.*, theme.radius.*
+// NO hardcoded numbers or color strings allowed.
+
 import React, { useState, useMemo } from 'react';
 import {
   View,
@@ -15,7 +19,7 @@ import { OptionsMenu, OptionsMenuOption } from '../OptionsMenu';
 import { FeedCardShell } from '../feed/FeedCardShell';
 import { FeedCardHeader } from '../FeedCardHeader';
 import { Avatar } from '../Avatar';
-import { colors, spacing } from '../../theme';
+import { defaultTheme } from '../../theme';
 import { Post } from '../../types/post';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../auth/AuthProvider';
@@ -248,107 +252,109 @@ export function FanPostCard({
   );
 }
 
+const theme = defaultTheme;
+
 const styles = StyleSheet.create({
   text: {
     fontSize: 14,
-    color: colors.text,
+    color: theme.colors.text.primary,
     lineHeight: 20,
-    marginBottom: spacing.md,
+    marginBottom: theme.spacing[3],
   },
   imagePlaceholder: {
     height: 120,
-    backgroundColor: colors.border,
-    borderRadius: spacing.sm,
+    backgroundColor: theme.colors.border.default,
+    borderRadius: theme.radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: theme.spacing[2],
   },
   image: {
     width: '100%',
     height: 220,
-    borderRadius: 12,
-    marginBottom: spacing.sm,
-    backgroundColor: colors.border,
+    borderRadius: theme.radius.md,
+    marginBottom: theme.spacing[2],
+    backgroundColor: theme.colors.border.default,
   },
   imageErrorContainer: {
-    padding: spacing.sm,
-    marginVertical: spacing.xs,
-    backgroundColor: colors.border,
-    borderRadius: 8,
+    padding: theme.spacing[2],
+    marginVertical: theme.spacing[1],
+    backgroundColor: theme.colors.border.default,
+    borderRadius: theme.radius.sm,
   },
   imageErrorText: {
     fontSize: 12,
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
     textAlign: 'center',
   },
   videoPlaceholder: {
     height: 120,
-    backgroundColor: colors.border,
-    borderRadius: spacing.sm,
+    backgroundColor: theme.colors.border.default,
+    borderRadius: theme.radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: theme.spacing[2],
   },
   placeholderText: {
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
     fontSize: 14,
   },
   commentsContainer: {
     borderTopWidth: 1,
-    borderTopColor: colors.actionRowBorder,
-    paddingTop: spacing.sm,
-    gap: spacing.sm,
+    borderTopColor: theme.colors.border.light,
+    paddingTop: theme.spacing[2],
+    gap: theme.spacing[2],
   },
   commentRow: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: theme.spacing[2],
     alignItems: 'flex-start',
   },
   commentAvatar: {
     width: 28,
     height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.border,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.border.default,
   },
   commentBody: { flex: 1 },
-  commentText: { color: colors.text, fontSize: 14 },
-  commentMeta: { color: colors.subtext, fontSize: 12 },
+  commentText: { color: theme.colors.text.primary, fontSize: 14 },
+  commentMeta: { color: theme.colors.text.secondary, fontSize: 12 },
   commentDelete: {
-    color: colors.fcnRed,
+    color: theme.colors.primary,
     fontSize: 24,
     fontWeight: '700',
   },
   composerRow: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: theme.spacing[2],
     alignItems: 'center',
   },
   composerInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    color: colors.text,
+    borderColor: theme.colors.border.default,
+    borderRadius: theme.radius.sm,
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
+    color: theme.colors.text.primary,
     fontSize: 14,
   },
   composerSend: {
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.fcnRed,
-    borderRadius: spacing.sm,
+    paddingVertical: theme.spacing[1],
+    paddingHorizontal: theme.spacing[3],
+    backgroundColor: theme.colors.primary,
+    borderRadius: theme.radius.sm,
   },
-  composerSendText: { color: colors.card, fontWeight: '600' },
+  composerSendText: { color: theme.colors.bg.card, fontWeight: '600' },
   editContainer: {
-    marginBottom: spacing.md,
+    marginBottom: theme.spacing[3],
   },
   editInput: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.sm,
-    padding: spacing.sm,
-    color: colors.text,
+    borderColor: theme.colors.border.default,
+    borderRadius: theme.radius.sm,
+    padding: theme.spacing[2],
+    color: theme.colors.text.primary,
     fontSize: 14,
     minHeight: 80,
     textAlignVertical: 'top',
@@ -356,25 +362,25 @@ const styles = StyleSheet.create({
   editActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    marginTop: spacing.sm,
-    gap: spacing.sm,
+    marginTop: theme.spacing[2],
+    gap: theme.spacing[2],
   },
   editButton: {
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
-    borderRadius: spacing.sm,
+    paddingVertical: theme.spacing[1],
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.radius.sm,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: theme.colors.border.default,
   },
   editButtonSave: {
-    backgroundColor: colors.fcnRed,
-    borderColor: colors.fcnRed,
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
   },
   editButtonText: {
-    color: colors.card,
+    color: theme.colors.bg.card,
     fontWeight: '600',
   },
   editButtonTextCancel: {
-    color: colors.text,
+    color: theme.colors.text.primary,
   },
 });

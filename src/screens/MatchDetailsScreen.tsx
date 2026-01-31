@@ -19,6 +19,7 @@ import { ListRowIcon } from '../components/ui/ListRowIcon';
 import { InlineComments } from '../components/comments/InlineComments';
 import { useAuth } from '../auth/AuthProvider';
 import { colors, spacing } from '../theme';
+import { useTheme } from '../theme';
 import type { RootStackParamList } from '../navigation/types';
 import { formatDateDa, type Fixture } from '../services/fixtures';
 import { fetchFixtureById } from '../services/eventsApi';
@@ -31,6 +32,8 @@ export default function MatchDetailsScreen() {
   const { fixtureId } = route.params || {};
   const insets = useSafeAreaInsets();
   const { user, isAppAdmin } = useAuth();
+  const theme = useTheme();
+  const styles = createStyles(theme);
   const [fixture, setFixture] = useState<Fixture | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -54,16 +57,16 @@ export default function MatchDetailsScreen() {
   // Loading state
   if (loading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.header}>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.bg.default }]} edges={['top']}>
+        <View style={[styles.header, { backgroundColor: theme.colors.primary }]}>
           <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={colors.card} />
+            <Ionicons name="arrow-back" size={24} color={theme.colors.bg.card} />
           </Pressable>
-          <Text style={styles.headerTitle}>Kampdetaljer</Text>
+          <Text style={[styles.headerTitle, { color: theme.colors.bg.card }]}>Kampdetaljer</Text>
         </View>
         <View style={styles.errorContainer}>
-          <ActivityIndicator size="large" color={colors.fcnRed} />
-          <Text style={styles.loadingText}>Henter kampdata...</Text>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={[styles.loadingText, { color: theme.colors.text.secondary }]}>Henter kampdata...</Text>
         </View>
       </SafeAreaView>
     );
@@ -72,15 +75,15 @@ export default function MatchDetailsScreen() {
   // Fallback if no fixture provided or found
   if (!fixture) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.header}>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.bg.default }]} edges={['top']}>
+        <View style={[styles.header, { backgroundColor: theme.colors.primary }]}>
           <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={colors.card} />
+            <Ionicons name="arrow-back" size={24} color={theme.colors.bg.card} />
           </Pressable>
-          <Text style={styles.headerTitle}>Kampdetaljer</Text>
+          <Text style={[styles.headerTitle, { color: theme.colors.bg.card }]}>Kampdetaljer</Text>
         </View>
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>Kunne ikke finde kampdata</Text>
+          <Text style={[styles.errorText, { color: theme.colors.text.primary }]}>Kunne ikke finde kampdata</Text>
           <PrimaryButton title="Gå tilbage" onPress={() => navigation.goBack()} />
         </View>
       </SafeAreaView>
@@ -88,13 +91,13 @@ export default function MatchDetailsScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.bg.default }]} edges={['top']}>
       {/* Custom Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: theme.colors.primary }]}>
         <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.card} />
+          <Ionicons name="arrow-back" size={24} color={theme.colors.bg.card} />
         </Pressable>
-        <Text style={styles.headerTitle}>Kampdetaljer</Text>
+        <Text style={[styles.headerTitle, { color: theme.colors.bg.card }]}>Kampdetaljer</Text>
       </View>
 
       <ScrollView
@@ -108,35 +111,35 @@ export default function MatchDetailsScreen() {
               {fixture.home_logo_url ? (
                 <Image source={{ uri: fixture.home_logo_url }} style={styles.teamLogo} />
               ) : (
-                <View style={styles.teamCircle}>
-                  <Text style={styles.teamText}>
+                <View style={[styles.teamCircle, { backgroundColor: theme.colors.primary }]}>
+                  <Text style={[styles.teamText, { color: theme.colors.bg.card }]}>
                     {fixture.home_team.substring(0, 3).toUpperCase()}
                   </Text>
                 </View>
               )}
-              <Text style={styles.teamName}>{fixture.home_team}</Text>
+              <Text style={[styles.teamName, { color: theme.colors.text.primary }]}>{fixture.home_team}</Text>
             </View>
-            <Text style={styles.vs}>VS</Text>
+            <Text style={[styles.vs, { color: theme.colors.text.primary }]}>VS</Text>
             <View style={styles.team}>
               {fixture.away_logo_url ? (
                 <Image source={{ uri: fixture.away_logo_url }} style={styles.teamLogo} />
               ) : (
-                <View style={styles.teamCircle}>
-                  <Text style={styles.teamText}>
+                <View style={[styles.teamCircle, { backgroundColor: theme.colors.primary }]}>
+                  <Text style={[styles.teamText, { color: theme.colors.bg.card }]}>
                     {fixture.away_team.substring(0, 3).toUpperCase()}
                   </Text>
                 </View>
               )}
-              <Text style={styles.teamName}>{fixture.away_team}</Text>
+              <Text style={[styles.teamName, { color: theme.colors.text.primary }]}>{fixture.away_team}</Text>
             </View>
           </View>
           {(fixture.competition || fixture.round) && (
-            <Text style={styles.leagueText}>
+            <Text style={[styles.leagueText, { color: theme.colors.text.secondary }]}>
               {fixture.competition}
               {fixture.round ? ` - ${fixture.round}` : ''}
             </Text>
           )}
-          <View style={styles.divider} />
+          <View style={[styles.divider, { backgroundColor: theme.colors.border.default }]} />
           <ListRowIcon icon="calendar" title={formatDateDa(fixture.kickoff_at)} />
           {fixture.venue && (
             <ListRowIcon
@@ -158,9 +161,9 @@ export default function MatchDetailsScreen() {
         </View>
 
         {/* Join CTA */}
-        <Pressable style={styles.joinCta}>
-          <Ionicons name="person-add" size={24} color={colors.fcnRed} />
-          <Text style={styles.joinText}>Deltag (247)</Text>
+        <Pressable style={[styles.joinCta, { backgroundColor: theme.colors.bg.card, borderColor: theme.colors.primary }]}>
+          <Ionicons name="person-add" size={24} color={theme.colors.primary} />
+          <Text style={[styles.joinText, { color: theme.colors.primary }]}>Deltag (247)</Text>
         </Pressable>
 
         {/* Fan Activities */}
@@ -186,13 +189,11 @@ export default function MatchDetailsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.bg,
   },
   header: {
-    backgroundColor: colors.fcnRed,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.md,
@@ -202,9 +203,8 @@ const styles = StyleSheet.create({
     marginRight: spacing.sm,
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.card,
+    fontSize: theme.typography.h3.fontSize,
+    fontWeight: theme.typography.h3.fontWeight as any,
   },
   scrollView: {
     flex: 1,
@@ -223,28 +223,25 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   teamCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.fcnRed,
+    width: theme.spacing[20],
+    height: theme.spacing[20],
+    borderRadius: theme.radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
   teamLogo: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: theme.spacing[20],
+    height: theme.spacing[20],
+    borderRadius: theme.radius.pill,
   },
   teamName: {
-    fontSize: 14,
+    fontSize: theme.typography.body.fontSize,
     fontWeight: '600',
-    color: colors.text,
     marginTop: spacing.sm,
     textAlign: 'center',
   },
   teamText: {
-    color: colors.card,
-    fontSize: 20,
+    fontSize: theme.typography.h2.fontSize,
     fontWeight: '700',
   },
   errorContainer: {
@@ -254,30 +251,25 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
   },
   errorText: {
-    fontSize: 16,
-    color: colors.text,
+    fontSize: theme.typography.body.fontSize,
     marginBottom: spacing.lg,
   },
   loadingText: {
-    fontSize: 14,
-    color: colors.subtext,
+    fontSize: theme.typography.body.fontSize,
     marginTop: spacing.md,
   },
   vs: {
-    fontSize: 24,
+    fontSize: theme.typography.h2.fontSize,
     fontWeight: '700',
-    color: colors.text,
     marginHorizontal: spacing.md,
   },
   leagueText: {
-    fontSize: 16,
-    color: colors.subtext,
+    fontSize: theme.typography.body.fontSize,
     textAlign: 'center',
     marginBottom: spacing.md,
   },
   divider: {
-    height: 1,
-    backgroundColor: colors.border,
+    height: theme.layout.borderWidth,
     marginBottom: spacing.md,
   },
   ctaRow: {
@@ -293,18 +285,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.fcnRed,
-    borderRadius: spacing.md,
+    borderWidth: theme.layout.borderWidth,
+    borderRadius: theme.radius.md,
     paddingVertical: spacing.lg,
     marginHorizontal: spacing.md,
     marginBottom: spacing.md,
   },
   joinText: {
-    fontSize: 18,
+    fontSize: theme.typography.h3.fontSize,
     fontWeight: '600',
-    color: colors.fcnRed,
     marginLeft: spacing.sm,
   },
   section: {
@@ -321,34 +310,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomWidth: theme.layout.borderWidth,
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.fcnRed,
+    width: theme.spacing[10],
+    height: theme.spacing[10],
+    borderRadius: theme.radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.sm,
   },
   avatarText: {
-    color: colors.card,
-    fontSize: 16,
+    fontSize: theme.typography.body.fontSize,
     fontWeight: '700',
   },
   commentContent: {
     flex: 1,
   },
   commentAuthor: {
-    fontSize: 16,
+    fontSize: theme.typography.body.fontSize,
     fontWeight: '600',
-    color: colors.text,
   },
   commentText: {
-    fontSize: 14,
-    color: colors.subtext,
-    marginTop: 2,
+    fontSize: theme.typography.body.fontSize,
+    marginTop: theme.spacing[0],
   },
 });

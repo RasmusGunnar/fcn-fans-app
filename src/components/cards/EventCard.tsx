@@ -1,3 +1,7 @@
+// ✅ DESIGN SYSTEM GUARDRAIL: This file uses theme tokens via defaultTheme.
+// All spacing, colors, and radius values must use theme.spacing[N], theme.colors.*, theme.radius.*
+// NO hardcoded numbers or color strings allowed.
+
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,7 +10,7 @@ import { Pill } from '../ui/Pill';
 import { PrimaryButton } from '../PrimaryButton';
 import { FeedCardShell } from '../feed/FeedCardShell';
 import { useAuth } from '../../auth/AuthProvider';
-import { colors, spacing } from '../../theme';
+import { defaultTheme } from '../../theme';
 
 interface EventCardProps {
   eventId: string; // Required for comments
@@ -38,6 +42,7 @@ export function EventCard({
   onPressBook,
 }: EventCardProps) {
   const { user, isAppAdmin } = useAuth();
+  const theme = defaultTheme;
   
   return (
     <FeedCardShell
@@ -56,11 +61,11 @@ export function EventCard({
       <Pill label="Bus til Udekamp" variant="orange" />
       <Text style={styles.title}>{title}</Text>
       <View style={styles.detailRow}>
-        <Ionicons name="calendar" size={16} color={colors.subtext} />
+        <Ionicons name="calendar" size={16} color={theme.colors.text.secondary} />
         <Text style={styles.detailText}>{date}</Text>
       </View>
       <View style={styles.detailRow}>
-        <Ionicons name="location" size={16} color={colors.subtext} />
+        <Ionicons name="location" size={16} color={theme.colors.text.secondary} />
         <Text style={styles.detailText}>{location}</Text>
       </View>
       <Text style={styles.spotsLeft}>{spotsLeft} pladser tilbage</Text>
@@ -69,28 +74,30 @@ export function EventCard({
   );
 }
 
+const theme = defaultTheme;
+
 const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '600',
-    color: colors.text,
-    marginTop: spacing.sm,
-    marginBottom: spacing.md,
+    color: theme.colors.text.primary,
+    marginTop: theme.spacing[2],
+    marginBottom: theme.spacing[4],
   },
   detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: theme.spacing[2],
   },
   detailText: {
     fontSize: 14,
-    color: colors.subtext,
-    marginLeft: spacing.sm,
+    color: theme.colors.text.secondary,
+    marginLeft: theme.spacing[2],
   },
   spotsLeft: {
     fontSize: 14,
-    color: colors.orangePillText,
+    color: theme.colors.pill.orange.text,
     fontWeight: '600',
-    marginBottom: spacing.lg,
+    marginBottom: theme.spacing[6],
   },
 });

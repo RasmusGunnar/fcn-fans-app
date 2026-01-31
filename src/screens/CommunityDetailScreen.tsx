@@ -17,7 +17,7 @@ import { Card } from '../components/ui/Card';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { FanPostCard } from '../components/cards/FanPostCard';
 import { Post } from '../types/post';
-import { colors, spacing } from '../theme';
+import { useTheme } from '../theme';
 import {
   getCommunity,
   getMembership,
@@ -49,6 +49,7 @@ export default function CommunityDetailScreen() {
   const route = useRoute<CommunityDetailRouteProp>();
   const { id } = route.params || {};
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
 
   const [community, setCommunity] = useState<CommunityData | null>(null);
   const [membership, setMembership] = useState<any>(null);
@@ -250,19 +251,21 @@ export default function CommunityDetailScreen() {
   const canManage = effectiveRole === 'owner' || effectiveRole === 'admin';
   const isMember = !!effectiveRole;
 
+  const styles = makeStyles(theme);
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
           <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={colors.card} />
+            <Ionicons name="arrow-back" size={24} color={theme.colors.bg.card} />
           </Pressable>
           <View style={styles.headerContent}>
             <Text style={styles.headerTitle}>Indlæser...</Text>
           </View>
         </View>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.fcnRed} />
+          <ActivityIndicator size="large" color={theme.colors.primary} />
         </View>
       </SafeAreaView>
     );
@@ -273,7 +276,7 @@ export default function CommunityDetailScreen() {
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
           <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={colors.card} />
+            <Ionicons name="arrow-back" size={24} color={theme.colors.bg.card} />
           </Pressable>
           <View style={styles.headerContent}>
             <Text style={styles.headerTitle}>Fællesskab ikke fundet</Text>
@@ -285,11 +288,11 @@ export default function CommunityDetailScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <Text style={{ fontSize: 12, opacity: 0.7, padding: 4 }}>DEBUG: Community Detail v2</Text>
+      <Text style={{ fontSize: 12, opacity: 0.7, padding: theme.spacing[1] }}>DEBUG: Community Detail v2</Text>
       {/* Custom Header */}
       <View style={styles.header}>
         <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.card} />
+          <Ionicons name="arrow-back" size={24} color={theme.colors.bg.card} />
         </Pressable>
         <View style={styles.headerContent}>
           <Text style={styles.headerTitle}>{community.name}</Text>
@@ -301,7 +304,7 @@ export default function CommunityDetailScreen() {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={{ paddingBottom: insets.bottom + spacing.lg }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + theme.spacing[6] }}
       >
         {/* Community Info Card */}
         <Card style={styles.infoCard}>
@@ -317,12 +320,12 @@ export default function CommunityDetailScreen() {
                 <Ionicons
                   name={community.type === 'fan_faction' ? 'star' : 'people-circle'}
                   size={60}
-                  color={colors.fcnRed}
+                  color={theme.colors.primary}
                 />
               )}
               {canManage && (
                 <View style={styles.avatarBadge}>
-                  <Ionicons name="camera" size={16} color={colors.card} />
+                  <Ionicons name="camera" size={16} color={theme.colors.bg.card} />
                 </View>
               )}
             </Pressable>
@@ -333,7 +336,7 @@ export default function CommunityDetailScreen() {
                     <Text style={styles.infoTitle}>{community.name}</Text>
                     {canManage && (
                       <Pressable onPress={handleStartEdit} style={styles.editButton}>
-                        <Ionicons name="create-outline" size={20} color={colors.fcnRed} />
+                        <Ionicons name="create-outline" size={20} color={theme.colors.primary} />
                       </Pressable>
                     )}
                   </View>
@@ -348,14 +351,14 @@ export default function CommunityDetailScreen() {
                     value={editName}
                     onChangeText={setEditName}
                     placeholder="Navn"
-                    placeholderTextColor={colors.subtext}
+                    placeholderTextColor={theme.colors.text.secondary}
                   />
                   <TextInput
                     style={[styles.editInput, styles.editInputMultiline]}
                     value={editDescription}
                     onChangeText={setEditDescription}
                     placeholder="Beskrivelse"
-                    placeholderTextColor={colors.subtext}
+                    placeholderTextColor={theme.colors.text.secondary}
                     multiline
                     numberOfLines={3}
                   />
@@ -370,7 +373,7 @@ export default function CommunityDetailScreen() {
                 </>
               )}
               <View style={styles.metaRow}>
-                <Ionicons name="people" size={14} color={colors.subtext} />
+                <Ionicons name="people" size={14} color={theme.colors.text.secondary} />
                 <Text style={styles.metaText}>
                   {memberCount > 0 ? `${memberCount} medlem${memberCount !== 1 ? 'mer' : ''}` : 'Ingen medlemmer'}
                 </Text>
@@ -409,13 +412,13 @@ export default function CommunityDetailScreen() {
               onPress={() => setShowMembers(!showMembers)}
             >
               <View style={styles.adminHeaderLeft}>
-                <Ionicons name="shield-checkmark" size={20} color={colors.fcnRed} />
+                <Ionicons name="shield-checkmark" size={20} color={theme.colors.primary} />
                 <Text style={styles.sectionTitle}>ADMIN PANEL</Text>
               </View>
               <Ionicons
                 name={showMembers ? 'chevron-up' : 'chevron-down'}
                 size={20}
-                color={colors.subtext}
+                color={theme.colors.text.secondary}
               />
             </Pressable>
 
@@ -432,7 +435,7 @@ export default function CommunityDetailScreen() {
                         />
                       ) : (
                         <View style={styles.memberAvatarPlaceholder}>
-                          <Ionicons name="person" size={20} color={colors.subtext} />
+                          <Ionicons name="person" size={20} color={theme.colors.text.secondary} />
                         </View>
                       )}
                       <View style={styles.memberDetails}>
@@ -459,7 +462,7 @@ export default function CommunityDetailScreen() {
                         <Ionicons
                           name={member.role === 'admin' ? 'shield-checkmark' : 'shield-outline'}
                           size={20}
-                          color={member.role === 'admin' ? colors.fcnRed : colors.subtext}
+                          color={member.role === 'admin' ? theme.colors.primary : theme.colors.text.secondary}
                         />
                       </Pressable>
                     )}
@@ -481,7 +484,7 @@ export default function CommunityDetailScreen() {
                 onPress={() => (navigation as any).navigate('MatchDetails', { fixtureId: fixture.id })}
               >
                 <View style={styles.eventIcon}>
-                  <Ionicons name="football" size={20} color={colors.fcnRed} />
+                  <Ionicons name="football" size={20} color={theme.colors.primary} />
                 </View>
                 <View style={styles.eventContent}>
                   <Text style={styles.eventTitle}>
@@ -489,7 +492,7 @@ export default function CommunityDetailScreen() {
                   </Text>
                   <Text style={styles.eventMeta}>{formatDateDa(fixture.kickoff_at)}</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={20} color={colors.subtext} />
+                <Ionicons name="chevron-forward" size={20} color={theme.colors.text.secondary} />
               </Pressable>
             ))}
           </Card>
@@ -506,7 +509,7 @@ export default function CommunityDetailScreen() {
                 onPress={() => (navigation as any).navigate('EventDetails', { eventId: event.id })}
               >
                 <View style={styles.eventIcon}>
-                  <Ionicons name="calendar" size={20} color={colors.fcnRed} />
+                  <Ionicons name="calendar" size={20} color={theme.colors.primary} />
                 </View>
                 <View style={styles.eventContent}>
                   <Text style={styles.eventTitle}>{event.title}</Text>
@@ -515,7 +518,7 @@ export default function CommunityDetailScreen() {
                     <Text style={styles.eventLocation}>{event.location_name}</Text>
                   )}
                 </View>
-                <Ionicons name="chevron-forward" size={20} color={colors.subtext} />
+                <Ionicons name="chevron-forward" size={20} color={theme.colors.text.secondary} />
               </Pressable>
             ))}
           </Card>
@@ -553,20 +556,20 @@ export default function CommunityDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: theme.colors.bg.default,
   },
   header: {
-    backgroundColor: colors.blueButton,
+    backgroundColor: theme.colors.info,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[2],
   },
   backButton: {
-    marginRight: spacing.sm,
+    marginRight: theme.spacing[2],
   },
   headerContent: {
     flex: 1,
@@ -574,11 +577,11 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: colors.card,
+    color: theme.colors.bg.card,
   },
   headerSubtitle: {
     fontSize: 14,
-    color: colors.card,
+    color: theme.colors.bg.card,
     opacity: 0.8,
   },
   loadingContainer: {
@@ -590,18 +593,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   infoCard: {
-    margin: spacing.md,
+    margin: theme.spacing[4],
   },
   infoHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: theme.spacing[4],
   },
   avatar: {
-    marginRight: spacing.md,
+    marginRight: theme.spacing[4],
     width: 80,
     height: 80,
-    borderRadius: 40,
+    borderRadius: theme.radius.pill,
     overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
@@ -610,20 +613,20 @@ const styles = StyleSheet.create({
   avatarImage: {
     width: 80,
     height: 80,
-    borderRadius: 40,
+    borderRadius: theme.radius.pill,
   },
   avatarBadge: {
     position: 'absolute',
     bottom: 0,
     right: 0,
-    backgroundColor: colors.fcnRed,
+    backgroundColor: theme.colors.primary,
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: theme.radius.pill,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: colors.card,
+    borderColor: theme.colors.bg.card,
   },
   infoContent: {
     flex: 1,
@@ -631,14 +634,14 @@ const styles = StyleSheet.create({
   infoTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.sm,
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing[2],
   },
   infoDescription: {
     fontSize: 14,
-    color: colors.text,
+    color: theme.colors.text.primary,
     lineHeight: 20,
-    marginBottom: spacing.sm,
+    marginBottom: theme.spacing[2],
   },
   metaRow: {
     flexDirection: 'row',
@@ -647,45 +650,45 @@ const styles = StyleSheet.create({
   },
   metaText: {
     fontSize: 12,
-    color: colors.subtext,
-    marginLeft: spacing.xs,
+    color: theme.colors.text.secondary,
+    marginLeft: theme.spacing[1],
   },
   metaSeparator: {
     fontSize: 12,
-    color: colors.subtext,
-    marginHorizontal: spacing.xs,
+    color: theme.colors.text.secondary,
+    marginHorizontal: theme.spacing[1],
   },
   adminCard: {
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.md,
+    marginHorizontal: theme.spacing[4],
+    marginBottom: theme.spacing[4],
   },
   adminHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: spacing.sm,
+    paddingVertical: theme.spacing[2],
   },
   adminHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: theme.spacing[2],
   },
   membersList: {
-    marginTop: spacing.md,
+    marginTop: theme.spacing[4],
   },
   membersTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.sm,
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing[2],
   },
   memberRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: spacing.sm,
+    paddingVertical: theme.spacing[2],
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: theme.colors.border.default,
   },
   memberInfo: {
     flexDirection: 'row',
@@ -695,17 +698,17 @@ const styles = StyleSheet.create({
   memberAvatar: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    marginRight: spacing.sm,
+    borderRadius: theme.radius.pill,
+    marginRight: theme.spacing[2],
   },
   memberAvatarPlaceholder: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.bg,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.bg.default,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: spacing.sm,
+    marginRight: theme.spacing[2],
   },
   memberDetails: {
     flex: 1,
@@ -713,44 +716,44 @@ const styles = StyleSheet.create({
   memberName: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.text,
+    color: theme.colors.text.primary,
   },
   memberRole: {
     fontSize: 12,
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
   },
   roleToggle: {
-    padding: spacing.sm,
+    padding: theme.spacing[2],
   },
   roleToggleActive: {
-    backgroundColor: '#FFE8E8',
-    borderRadius: spacing.sm,
+    backgroundColor: theme.colors.bg.elevated,
+    borderRadius: theme.radius.sm,
   },
   eventsCard: {
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.md,
+    marginHorizontal: theme.spacing[4],
+    marginBottom: theme.spacing[4],
   },
   sectionTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.md,
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing[4],
   },
   eventRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.sm,
+    paddingVertical: theme.spacing[2],
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: theme.colors.border.default,
   },
   eventIcon: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.bg,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.bg.default,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.sm,
+    marginRight: theme.spacing[2],
   },
   eventContent: {
     flex: 1,
@@ -758,56 +761,56 @@ const styles = StyleSheet.create({
   eventTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.text,
+    color: theme.colors.text.primary,
   },
   eventMeta: {
     fontSize: 12,
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
   },
   eventLocation: {
     fontSize: 11,
-    color: colors.subtext,
-    marginTop: 2,
+    color: theme.colors.text.secondary,
+    marginTop: theme.spacing[0],
   },
   composerCard: {
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.md,
+    marginHorizontal: theme.spacing[4],
+    marginBottom: theme.spacing[4],
   },
   composerTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.sm,
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing[2],
   },
   composerInput: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.sm,
-    padding: spacing.sm,
+    borderColor: theme.colors.border.default,
+    borderRadius: theme.radius.sm,
+    padding: theme.spacing[2],
     fontSize: 14,
-    color: colors.text,
+    color: theme.colors.text.primary,
     minHeight: 80,
     textAlignVertical: 'top',
   },
   composerActions: {
     alignItems: 'flex-end',
-    marginTop: spacing.sm,
+    marginTop: theme.spacing[2],
   },
   updatesSection: {
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: theme.spacing[4],
   },
   editButton: {
-    padding: spacing.xs,
-    marginLeft: spacing.xs,
+    padding: theme.spacing[1],
+    marginLeft: theme.spacing[1],
   },
   editInput: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.sm,
-    padding: spacing.sm,
+    borderColor: theme.colors.border.default,
+    borderRadius: theme.spacing[2],
+    padding: theme.spacing[2],
     fontSize: 14,
-    color: colors.text,
-    marginBottom: spacing.sm,
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing[2],
   },
   editInputMultiline: {
     minHeight: 80,
@@ -816,30 +819,30 @@ const styles = StyleSheet.create({
   editActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    gap: spacing.sm,
-    marginTop: spacing.xs,
+    gap: theme.spacing[2],
+    marginTop: theme.spacing[1],
   },
   cancelButton: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: spacing.sm,
+    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[4],
+    borderRadius: theme.spacing[2],
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: theme.colors.border.default,
   },
   cancelButtonText: {
     fontSize: 14,
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
     fontWeight: '600',
   },
   saveButton: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: spacing.sm,
-    backgroundColor: colors.fcnRed,
+    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[4],
+    borderRadius: theme.spacing[2],
+    backgroundColor: theme.colors.primary,
   },
   saveButtonText: {
     fontSize: 14,
-    color: colors.card,
+    color: theme.colors.bg.card,
     fontWeight: '600',
   },
 });

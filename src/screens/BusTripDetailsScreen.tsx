@@ -16,7 +16,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Card } from '../components/ui/Card';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { fetchBusTripById, type BusTrip } from '../services/eventsApi';
-import { colors, spacing } from '../theme';
+import { useTheme, defaultTheme as theme } from '../theme';
 
 type BusTripDetailsRouteProp = RouteProp<
   { BusTripDetails: { busTripId: string } },
@@ -24,6 +24,7 @@ type BusTripDetailsRouteProp = RouteProp<
 >;
 
 export default function BusTripDetailsScreen() {
+  const theme = useTheme();
   const navigation = useNavigation();
   const route = useRoute<BusTripDetailsRouteProp>();
   const { busTripId } = route.params;
@@ -49,12 +50,12 @@ export default function BusTripDetailsScreen() {
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
           <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={colors.card} />
+            <Ionicons name="arrow-back" size={24} color={theme.colors.bg.card} />
           </Pressable>
           <Text style={styles.headerTitle}>Bustur detaljer</Text>
         </View>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.fcnRed} />
+          <ActivityIndicator size="large" color={theme.colors.primary} />
           <Text style={styles.loadingText}>Henter bustur...</Text>
         </View>
       </SafeAreaView>
@@ -66,7 +67,7 @@ export default function BusTripDetailsScreen() {
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
           <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={colors.card} />
+            <Ionicons name="arrow-back" size={24} color={theme.colors.bg.card} />
           </Pressable>
           <Text style={styles.headerTitle}>Bustur detaljer</Text>
         </View>
@@ -113,14 +114,14 @@ export default function BusTripDetailsScreen() {
       {/* Custom Header */}
       <View style={styles.header}>
         <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.card} />
+          <Ionicons name="arrow-back" size={24} color={theme.colors.bg.card} />
         </Pressable>
         <Text style={styles.headerTitle}>Bustur detaljer</Text>
       </View>
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={{ paddingBottom: insets.bottom + spacing.lg }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + theme.spacing[6] }}
       >
         {/* Trip Details Card */}
         <Card style={styles.detailsCard}>
@@ -145,7 +146,7 @@ export default function BusTripDetailsScreen() {
 
           <View style={styles.detailsList}>
             <View style={styles.detailRow}>
-              <Ionicons name="calendar" size={20} color={colors.fcnRed} />
+              <Ionicons name="calendar" size={20} color={theme.colors.primary} />
               <View style={styles.detailText}>
                 <Text style={styles.detailLabel}>Dato og afgang</Text>
                 <Text style={styles.detailValue}>
@@ -156,7 +157,7 @@ export default function BusTripDetailsScreen() {
 
             {returnStr && (
               <View style={styles.detailRow}>
-                <Ionicons name="home" size={20} color={colors.fcnRed} />
+                <Ionicons name="home" size={20} color={theme.colors.primary} />
                 <View style={styles.detailText}>
                   <Text style={styles.detailLabel}>Forventet hjemkomst</Text>
                   <Text style={styles.detailValue}>Ca. kl. {returnStr}</Text>
@@ -165,7 +166,7 @@ export default function BusTripDetailsScreen() {
             )}
 
             <View style={styles.detailRow}>
-              <Ionicons name="location" size={20} color={colors.fcnRed} />
+              <Ionicons name="location" size={20} color={theme.colors.primary} />
               <View style={styles.detailText}>
                 <Text style={styles.detailLabel}>Mødested</Text>
                 <Text style={styles.detailValue}>{busTrip.departure_place}</Text>
@@ -181,7 +182,7 @@ export default function BusTripDetailsScreen() {
             </View>
 
             <View style={styles.detailRow}>
-              <Ionicons name="people" size={20} color={colors.fcnRed} />
+              <Ionicons name="people" size={20} color={theme.colors.primary} />
               <View style={styles.detailText}>
                 <Text style={styles.detailLabel}>Ledige pladser</Text>
                 <Text
@@ -198,7 +199,7 @@ export default function BusTripDetailsScreen() {
 
             {busTrip.price_dkk !== null && (
               <View style={styles.detailRow}>
-                <Ionicons name="cash" size={20} color={colors.fcnRed} />
+                <Ionicons name="cash" size={20} color={theme.colors.primary} />
                 <View style={styles.detailText}>
                   <Text style={styles.detailLabel}>Pris</Text>
                   <Text style={styles.detailValue}>{busTrip.price_dkk} kr.</Text>
@@ -275,171 +276,171 @@ export default function BusTripDetailsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.fcnRed,
+    backgroundColor: theme.colors.primary,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.fcnRed,
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[4],
+    backgroundColor: theme.colors.primary,
   },
   backButton: {
-    padding: spacing.xs,
-    marginRight: spacing.sm,
+    padding: theme.spacing[1],
+    marginRight: theme.spacing[2],
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: colors.card,
+    color: theme.colors.bg.card,
   },
   scrollView: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: theme.colors.bg.default,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.bg,
+    backgroundColor: theme.colors.bg.default,
   },
   loadingText: {
-    marginTop: spacing.md,
+    marginTop: theme.spacing[4],
     fontSize: 14,
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.bg,
+    backgroundColor: theme.colors.bg.default,
   },
   errorIcon: {
     fontSize: 64,
-    marginBottom: spacing.md,
+    marginBottom: theme.spacing[4],
   },
   errorText: {
     fontSize: 16,
-    color: colors.text,
+    color: theme.colors.text.primary,
   },
   detailsCard: {
-    margin: spacing.md,
+    margin: theme.spacing[4],
   },
   badge: {
-    backgroundColor: '#FF9500',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: 6,
+    backgroundColor: theme.colors.state.warning,
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
+    borderRadius: theme.radius.sm,
     alignSelf: 'flex-start',
-    marginBottom: spacing.sm,
+    marginBottom: theme.spacing[2],
   },
   badgeText: {
-    color: colors.card,
+    color: theme.colors.bg.card,
     fontSize: 12,
     fontWeight: '700',
   },
   tripTitle: {
     fontSize: 22,
     fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.sm,
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing[2],
   },
   description: {
     fontSize: 14,
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
     lineHeight: 20,
-    marginBottom: spacing.md,
+    marginBottom: theme.spacing[4],
   },
   matchInfoBanner: {
-    backgroundColor: colors.fcnRed + '10',
-    padding: spacing.md,
-    borderRadius: 8,
-    marginBottom: spacing.md,
+    backgroundColor: theme.colors.surface.default,
+    padding: theme.spacing[4],
+    borderRadius: theme.radius.sm,
+    marginBottom: theme.spacing[4],
   },
   matchLabel: {
     fontSize: 11,
-    color: colors.subtext,
-    marginBottom: 4,
+    color: theme.colors.text.secondary,
+    marginBottom: theme.spacing[1],
     textTransform: 'uppercase',
     fontWeight: '600',
   },
   matchTeams: {
     fontSize: 15,
     fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.xs,
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing[1],
   },
   matchVenue: {
     fontSize: 13,
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
   },
   detailsList: {
-    marginTop: spacing.sm,
+    marginTop: theme.spacing[2],
   },
   detailRow: {
     flexDirection: 'row',
-    marginBottom: spacing.md,
+    marginBottom: theme.spacing[4],
   },
   detailText: {
     flex: 1,
-    marginLeft: spacing.sm,
+    marginLeft: theme.spacing[2],
   },
   detailLabel: {
     fontSize: 12,
-    color: colors.subtext,
-    marginBottom: 2,
+    color: theme.colors.text.secondary,
+    marginBottom: theme.spacing[0],
   },
   detailValue: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.text,
+    color: theme.colors.text.primary,
   },
   detailSubvalue: {
     fontSize: 13,
-    color: colors.subtext,
-    marginTop: 2,
+    color: theme.colors.text.secondary,
+    marginTop: theme.spacing[0],
   },
   mapsLink: {
     fontSize: 13,
-    color: colors.fcnRed,
+    color: theme.colors.primary,
     fontWeight: '600',
-    marginTop: spacing.xs,
+    marginTop: theme.spacing[1],
   },
   fullText: {
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
   },
   warningText: {
-    color: '#FF9500',
+    color: theme.colors.state.warning,
   },
   includesCard: {
-    margin: spacing.md,
-    marginTop: 0,
+    margin: theme.spacing[4],
+    marginTop: theme.spacing[0],
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.md,
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing[4],
   },
   includeItem: {
     flexDirection: 'row',
-    marginBottom: spacing.sm,
+    marginBottom: theme.spacing[2],
   },
   includeBullet: {
     fontSize: 16,
-    color: colors.fcnRed,
-    marginRight: spacing.sm,
+    color: theme.colors.primary,
+    marginRight: theme.spacing[2],
     fontWeight: '700',
   },
   includeText: {
     flex: 1,
     fontSize: 14,
-    color: colors.text,
+    color: theme.colors.text.primary,
     lineHeight: 20,
   },
   organizerCard: {
-    margin: spacing.md,
-    marginTop: 0,
+    margin: theme.spacing[4],
+    marginTop: theme.spacing[0],
   },
   organizerInfo: {
     flexDirection: 'row',
@@ -448,20 +449,20 @@ const styles = StyleSheet.create({
   organizerLogo: {
     width: 50,
     height: 50,
-    borderRadius: 25,
-    marginRight: spacing.md,
+    borderRadius: theme.radius.pill,
+    marginRight: theme.spacing[4],
   },
   organizerLogoPlaceholder: {
     width: 50,
     height: 50,
-    borderRadius: 25,
-    backgroundColor: colors.fcnRed,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.md,
+    marginRight: theme.spacing[4],
   },
   organizerLogoText: {
-    color: colors.card,
+    color: theme.colors.bg.card,
     fontSize: 16,
     fontWeight: '700',
   },
@@ -471,35 +472,35 @@ const styles = StyleSheet.create({
   organizerName: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.text,
-    marginBottom: 4,
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing[1],
   },
   organizerDescription: {
     fontSize: 13,
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
   },
   ctaContainer: {
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.md,
+    marginHorizontal: theme.spacing[4],
+    marginBottom: theme.spacing[4],
   },
   fullBanner: {
-    backgroundColor: colors.subtext + '20',
-    padding: spacing.md,
-    borderRadius: 8,
+    backgroundColor: theme.colors.surface.default,
+    padding: theme.spacing[4],
+    borderRadius: theme.radius.sm,
     alignItems: 'center',
   },
   fullBannerText: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
   },
   participantsCard: {
-    margin: spacing.md,
-    marginTop: 0,
+    margin: theme.spacing[4],
+    marginTop: theme.spacing[0],
   },
   placeholderText: {
     fontSize: 14,
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
     fontStyle: 'italic',
   },
 });

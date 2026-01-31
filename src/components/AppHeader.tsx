@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, Image, StyleSheet, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing } from '../theme';
+import { useTheme, Theme } from '../theme';
 
 interface AppHeaderProps {
   title: string;
@@ -19,6 +19,8 @@ export function AppHeader({
   showProfileButton = true,
   onPressProfile,
 }: AppHeaderProps) {
+  const theme = useTheme();
+  const styles = createStyles(theme);
   const insets = useSafeAreaInsets();
   const defaultLogo = require('../../assets/NewLogo.png');
 
@@ -45,7 +47,7 @@ export function AppHeader({
         </View>
         {showProfileButton && (
           <Pressable style={styles.profileButton} onPress={handleProfilePress}>
-            <Ionicons name="person-outline" size={20} color={colors.card} />
+            <Ionicons name="person-outline" size={20} color={theme.colors.bg.card} />
           </Pressable>
         )}
       </View>
@@ -53,15 +55,16 @@ export function AppHeader({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(theme: Theme) {
+  return StyleSheet.create({
   outerContainer: {
-    backgroundColor: colors.fcnRed,
+    backgroundColor: theme.colors.primary,
     overflow: 'visible' as const,
   },
   innerContainer: {
-    minHeight: 90,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    minHeight: theme.spacing[22],
+    paddingHorizontal: theme.layout.screenPadding,
+    paddingVertical: theme.spacing[2],
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -74,37 +77,39 @@ const styles = StyleSheet.create({
     overflow: 'visible' as const,
   },
   logoWrapper: {
-    width: 78,
-    height: 78,
-    marginRight: spacing.xs,
+    width: theme.spacing[19],
+    height: theme.spacing[19],
+    marginRight: theme.spacing[1],
     overflow: 'visible' as const,
     justifyContent: 'center',
     alignItems: 'center',
   },
   logo: {
-    width: 78,
-    height: 78,
+    width: theme.spacing[19],
+    height: theme.spacing[19],
   },
   textContainer: {
     flex: 1,
-    marginLeft: 0,
+    marginLeft: theme.spacing[0],
   },
   title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.card,
+    fontSize: theme.typography.h3.fontSize,
+    fontWeight: theme.typography.h3.fontWeight as any,
+    color: theme.colors.bg.card,
   },
   subtitle: {
-    fontSize: 12,
-    color: colors.card,
+    fontSize: theme.typography.small.fontSize,
+    color: theme.colors.bg.card,
     opacity: 0.9,
   },
   profileButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.fcnRedDark,
+    width: theme.spacing[9],
+    height: theme.spacing[9],
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.primary,
+    opacity: 0.8,
     alignItems: 'center',
     justifyContent: 'center',
   },
-});
+  });
+}

@@ -1,3 +1,7 @@
+// ✅ DESIGN SYSTEM GUARDRAIL: This file uses theme tokens via defaultTheme.
+// All spacing, colors, and radius values must use theme.spacing[N], theme.colors.*, theme.radius.*
+// NO hardcoded numbers or color strings allowed.
+
 import React from 'react';
 import { View, Text, StyleSheet, Image, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -5,7 +9,7 @@ import { Card } from '../ui/Card';
 import { Pill } from '../ui/Pill';
 import { FeedCardShell } from '../feed/FeedCardShell';
 import { FeedCardHeader } from '../FeedCardHeader';
-import { colors, spacing } from '../../theme';
+import { defaultTheme } from '../../theme';
 import { NewsItem } from '../../types/news';
 import { useAuth } from '../../auth/AuthProvider';
 import type { CommentPreview } from '../../services/likesApi';
@@ -81,6 +85,8 @@ export function NewsCard({
     });
   };
 
+  const theme = defaultTheme;
+
   return (
     <FeedCardShell
       targetType="news"
@@ -108,7 +114,7 @@ export function NewsCard({
               <Ionicons
                 name={newsItem.actorType === 'user' ? 'person' : 'people'}
                 size={20}
-                color={colors.card}
+                color={theme.colors.bg.card}
               />
             )}
           </View>
@@ -134,7 +140,7 @@ export function NewsCard({
             </Text>
           )}
           <View style={styles.linkIndicator}>
-            <Ionicons name="open-outline" size={14} color={colors.fcnRed} />
+            <Ionicons name="open-outline" size={14} color={theme.colors.primary} />
             <Text style={styles.linkText}>Åbn link</Text>
           </View>
         </View>
@@ -143,12 +149,14 @@ export function NewsCard({
   );
 }
 
+const theme = defaultTheme;
+
 const styles = StyleSheet.create({
   avatar: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.fcnRed,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -158,45 +166,45 @@ const styles = StyleSheet.create({
     height: 40,
   },
   linkCard: {
-    backgroundColor: colors.border,
-    borderRadius: 12,
+    backgroundColor: theme.colors.border.default,
+    borderRadius: theme.radius.md,
     overflow: 'hidden',
-    marginBottom: spacing.sm,
+    marginBottom: theme.spacing[2],
   },
   image: {
     width: '100%',
     height: 180,
-    backgroundColor: colors.border,
+    backgroundColor: theme.colors.border.default,
   },
   linkContent: {
-    padding: spacing.md,
-    gap: spacing.xs,
+    padding: theme.spacing[4],
+    gap: theme.spacing[1],
   },
   siteName: {
     fontSize: 12,
     fontWeight: '600',
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
     textTransform: 'uppercase',
   },
   title: {
     fontSize: 16,
     fontWeight: '700',
-    color: colors.text,
+    color: theme.colors.text.primary,
   },
   description: {
     fontSize: 14,
-    color: colors.subtext,
+    color: theme.colors.text.secondary,
     lineHeight: 20,
   },
   linkIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: spacing.xs,
+    gap: theme.spacing[1],
+    marginTop: theme.spacing[1],
   },
   linkText: {
     fontSize: 12,
     fontWeight: '600',
-    color: colors.fcnRed,
+    color: theme.colors.primary,
   },
 });
