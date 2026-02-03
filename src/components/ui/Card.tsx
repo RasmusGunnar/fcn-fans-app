@@ -66,7 +66,7 @@ export function Card({
   }
   
   // Border style for variants that use full borders
-  const borderStyle = 'borderWidth' in variantConfig && 'borderColor' in variantConfig
+  const borderStyle = 'borderWidth' in variantConfig && 'borderColor' in variantConfig && variantConfig.borderWidth > 0
     ? {
         borderWidth: StyleSheet.hairlineWidth,
         borderColor: variantConfig.borderColor,
