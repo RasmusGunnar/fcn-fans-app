@@ -1,6 +1,7 @@
 // ✅ DESIGN SYSTEM GUARDRAIL: This file uses theme tokens via defaultTheme.
 // All spacing, colors, and radius values must use theme.spacing[N], theme.colors.*, theme.radius.*
 // NO hardcoded numbers or color strings allowed.
+// Do not import FeedCardShell directly. Use CardRoot from src/components/cards/CardRoot.tsx
 
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, View, Text } from 'react-native';
@@ -40,6 +41,9 @@ interface FeedCardShellProps {
  * - Inline comments toggle and rendering
  * - Comment preview display (Instagram style)
  */
+// NOTE: Do not import FeedCardShell directly in cards. Use CardRoot from src/components/cards/CardRoot.tsx.
+// NOTE: Do not import FeedCardShell directly in card variants.
+// Use CardRoot from src/components/cards/CardRoot.tsx.
 export function FeedCardShell({
   targetType,
   targetId,

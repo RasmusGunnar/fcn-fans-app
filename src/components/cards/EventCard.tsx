@@ -7,9 +7,8 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { Card } from '../ui/Card';
-import { Pill } from '../ui/Pill';
-import { FeedCardShell } from '../feed/FeedCardShell';
-import { FeedCardHeader } from '../FeedCardHeader';
+import { CardRoot } from './CardRoot';
+import { CardHeader } from './CardHeader';
 import { useAuth } from '../../auth/AuthProvider';
 import { defaultTheme } from '../../theme';
 import { buildCardBehaviorModel } from './cardBehaviorModel';
@@ -75,7 +74,7 @@ export function EventCard({
   };
   
   return (
-    <FeedCardShell
+    <CardRoot
       targetType={targetType}
       targetId={eventId}
       currentUserId={user?.id}
@@ -91,18 +90,17 @@ export function EventCard({
       commentPreviews={commentPreviews}
       onNewComment={onNewComment}
     >
-      <Pill label={cardModel.categoryLabel} variant="gold" />
-      {cardModel.nameLine && (
-        <FeedCardHeader
-          avatarSlot={
-            <View style={styles.communityAvatar}>
-              <Ionicons name="people" size={20} color={theme.colors.bg.card} />
-            </View>
-          }
-          title={cardModel.nameLine}
-          subtitle={null}
-        />
-      )}
+      <CardHeader
+        categoryLabel={cardModel.categoryLabel}
+        nameLine={cardModel.nameLine}
+        subtitle={null}
+        avatarSlot={
+          <View style={styles.communityAvatar}>
+            <Ionicons name="people" size={20} color={theme.colors.bg.card} />
+          </View>
+        }
+        pillVariant="gold"
+      />
       <Text style={styles.title}>{title}</Text>
       <View style={styles.detailRow}>
         <Ionicons name="calendar" size={16} color={theme.colors.text.secondary} />
@@ -113,7 +111,7 @@ export function EventCard({
         <Text style={styles.detailText}>{location}</Text>
       </View>
       <Text style={styles.spotsLeft}>{spotsLeft} pladser tilbage</Text>
-    </FeedCardShell>
+    </CardRoot>
   );
 }
 

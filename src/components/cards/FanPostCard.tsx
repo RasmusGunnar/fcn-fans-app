@@ -14,10 +14,9 @@ import {
   Alert,
 } from 'react-native';
 import { Card } from '../ui/Card';
-import { Pill } from '../ui/Pill';
 import { OptionsMenu, OptionsMenuOption } from '../OptionsMenu';
-import { FeedCardShell } from '../feed/FeedCardShell';
-import { FeedCardHeader } from '../FeedCardHeader';
+import { CardRoot } from './CardRoot';
+import { CardHeader } from './CardHeader';
 import { Avatar } from '../Avatar';
 import { defaultTheme } from '../../theme';
 import { Post } from '../../types/post';
@@ -189,7 +188,7 @@ export function FanPostCard({
     : onOpenDetail;
 
   return (
-    <FeedCardShell
+    <CardRoot
       targetType="post"
       targetId={post.id}
       currentUserId={user?.id}
@@ -205,8 +204,11 @@ export function FanPostCard({
         onPressShare: handleShare,
       }}
     >
-      <Pill label={cardModel.categoryLabel} />
-      <FeedCardHeader
+      <CardHeader
+        categoryLabel={cardModel.categoryLabel}
+        nameLine={cardModel.nameLine}
+        fallbackTitle={authorProfile?.display_name || post.authorName || 'Ukendt'}
+        subtitle={groupDisplay ? `${groupDisplay} · ${timeAgo}` : timeAgo}
         avatarSlot={
           <Avatar
             userId={post.authorId}
@@ -215,14 +217,10 @@ export function FanPostCard({
             label={authorProfile?.display_name || post.authorName || 'Fan'}
           />
         }
-        title={cardModel.nameLine || authorProfile?.display_name || post.authorName || 'Ukendt'}
-        subtitle={groupDisplay ? `${groupDisplay} · ${timeAgo}` : timeAgo}
-        rightSlot={
-          (showEditOption || showDeleteOption) && postMenuOptions.length > 0 ? (
-            <OptionsMenu options={postMenuOptions} />
-          ) : undefined
-        }
       />
+      {((showEditOption || showDeleteOption) && postMenuOptions.length > 0) ? (
+        <OptionsMenu options={postMenuOptions} />
+      ) : null}
       {isEditing ? (
         <View style={styles.editContainer}>
           <TextInput
@@ -269,7 +267,7 @@ export function FanPostCard({
           <Text style={styles.imageErrorText}>⚠️ Billede kunne ikke indlæses</Text>
         </View>
       ) : null}
-    </FeedCardShell>
+    </CardRoot>
   );
 }
 

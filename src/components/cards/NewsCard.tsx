@@ -6,9 +6,8 @@ import React from 'react';
 import { View, Text, StyleSheet, Image, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../ui/Card';
-import { Pill } from '../ui/Pill';
-import { FeedCardShell } from '../feed/FeedCardShell';
-import { FeedCardHeader } from '../FeedCardHeader';
+import { CardRoot } from './CardRoot';
+import { CardHeader } from './CardHeader';
 import { defaultTheme } from '../../theme';
 import { NewsItem } from '../../types/news';
 import { useAuth } from '../../auth/AuthProvider';
@@ -97,7 +96,7 @@ export function NewsCard({
   });
 
   return (
-    <FeedCardShell
+    <CardRoot
       targetType="news"
       targetId={newsItem.id || newsItem.url}
       currentUserId={user?.id}
@@ -117,8 +116,11 @@ export function NewsCard({
       commentPreviews={commentPreviews}
       onNewComment={onNewComment}
     >
-      <Pill label={cardModel.categoryLabel} />
-      <FeedCardHeader
+      <CardHeader
+        categoryLabel={cardModel.categoryLabel}
+        nameLine={cardModel.nameLine}
+        fallbackTitle={authorName}
+        subtitle={timeAgo}
         avatarSlot={
           <View style={styles.avatar}>
             {avatarSource ? (
@@ -132,8 +134,6 @@ export function NewsCard({
             )}
           </View>
         }
-        title={cardModel.nameLine || authorName}
-        subtitle={timeAgo}
       />
 
       <View style={styles.linkCard}>
@@ -158,7 +158,7 @@ export function NewsCard({
           </View>
         </View>
       </View>
-    </FeedCardShell>
+    </CardRoot>
   );
 }
 
