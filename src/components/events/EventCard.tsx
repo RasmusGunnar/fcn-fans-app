@@ -4,7 +4,7 @@
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { FeedCardShell } from '../feed/FeedCardShell';
+import { CardRoot, CardHeader } from '../cards';
 import { useAuth } from '../../auth/AuthProvider';
 import { defaultTheme } from '../../theme';
 
@@ -18,6 +18,7 @@ interface EventCardProps {
   liked?: boolean;
   likes?: number;
   comments?: number;
+  eventType?: 'event' | 'bustur' | string | null;
   onPress: () => void;
   onToggleLike?: () => void;
   onPressShare?: () => void;
@@ -33,11 +34,15 @@ export function EventCard({
   liked = false,
   likes = 0,
   comments = 0,
+  eventType,
   onPress,
   onToggleLike = () => {},
   onPressShare = () => {},
 }: EventCardProps) {
   const { user, isAppAdmin } = useAuth();
+  const normalizedEventType = (eventType ?? '').toLowerCase();
+  const isBusTrip = normalizedEventType === 'bustur' || normalizedEventType === 'bus_trip';
+  const categoryLabel = isBusTrip ? 'Bustur' : 'Event';
   
   const date = new Date(startAt);
   const dateStr = date.toLocaleDateString('da-DK', {
@@ -51,8 +56,8 @@ export function EventCard({
   });
 
   return (
-    <FeedCardShell
-      targetType="event"
+    <CardRoot
+      targetType={isBusTrip ? 'bus_trip' : 'event'}
       targetId={eventId}
       currentUserId={user?.id}
       isAppAdmin={isAppAdmin}
@@ -65,10 +70,7 @@ export function EventCard({
         onPressShare,
       }}
     >
-      <View style={styles.header}>
-        <Text style={styles.badge}>EVENT</Text>
-        {organizerName && <Text style={styles.organizer}>🚩 {organizerName}</Text>}
-      </View>
+      <CardHeader categoryLabel={categoryLabel} nameLine={organizerName} subtitle={null} />
 
       <Text style={styles.title}>{title}</Text>
 
@@ -92,7 +94,7 @@ export function EventCard({
           </View>
         )}
       </View>
-    </FeedCardShell>
+    </CardRoot>
   );
 }
 

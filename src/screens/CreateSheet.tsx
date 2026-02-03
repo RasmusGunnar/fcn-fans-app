@@ -127,11 +127,9 @@ export default function CreateSheet({ visible, onClose }: CreateSheetProps) {
             // Step 2: Post composer (community posting coming later)
             <>
               <View style={{ padding: theme.spacing[4] }}>
-                <Text style={styles.infoText}>
-                  💡 Community-posting for opslag kommer snart. Lige nu oprettes opslag som dig selv.
-                </Text>
+                <ActorSelector selectedActor={actor} onSelectActor={setActor} />
               </View>
-              <PostComposer onSuccess={handlePostSuccess} />
+              <PostComposer actor={actor} onSuccess={handlePostSuccess} />
             </>
           ) : (
             // Step 2: News composer with actor selector

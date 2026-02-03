@@ -45,6 +45,9 @@ const FARUM_REGION: Region = {
   longitudeDelta: 0.5,
 };
 
+const isEventLike = (kind: string) => kind === 'event' || kind === 'bus_trip';
+const toEventType = (kind: string) => (kind === 'bus_trip' ? 'bustur' : 'event');
+
 export default function EventsScreen() {
   const navigation = useNavigation();
   const tabBarHeight = useBottomTabBarHeight();
@@ -100,7 +103,7 @@ export default function EventsScreen() {
   const filteredFeed = feed.filter((item) => {
     if (filterMode === 'all') return true;
     if (filterMode === 'matches') return item.kind === 'match';
-    if (filterMode === 'events') return item.kind === 'event' || item.kind === 'bus_trip';
+    if (filterMode === 'events') return isEventLike(item.kind);
     return true;
   });
 
@@ -185,7 +188,7 @@ export default function EventsScreen() {
       );
     }
 
-    if (item.kind === 'event') {
+    if (isEventLike(item.kind)) {
       return (
         <GenericEventCard
           eventId={item.id}
@@ -194,6 +197,7 @@ export default function EventsScreen() {
           location={item.location}
           organizerName={item.organizerName}
           description={item.description}
+          eventType={toEventType(item.kind)}
           onPress={() => (navigation as any).navigate('EventDetails', { eventId: item.id })}
         />
       );

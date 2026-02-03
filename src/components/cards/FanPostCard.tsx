@@ -14,10 +14,9 @@ import {
   Alert,
 } from 'react-native';
 import { Card } from '../ui/Card';
-import { Pill } from '../ui/Pill';
 import { OptionsMenu, OptionsMenuOption } from '../OptionsMenu';
-import { FeedCardShell } from '../feed/FeedCardShell';
-import { FeedCardHeader } from '../FeedCardHeader';
+import { CardRoot } from './CardRoot';
+import { CardHeader } from './CardHeader';
 import { Avatar } from '../Avatar';
 import { defaultTheme } from '../../theme';
 import { Post } from '../../types/post';
@@ -27,6 +26,7 @@ import * as Linking from 'expo-linking';
 import { normalizeMedia, resolveMediaUrl, isVideoMedia } from '../../utils/media';
 import { canEditPost, canDeletePost } from '../../utils/permissions';
 import type { CommentPreview } from '../../services/likesApi';
+import { buildCardBehaviorModel } from './cardBehaviorModel';
 
 function getTimeAgo(isoDate: string): string {
   const now = new Date();
@@ -167,13 +167,33 @@ export function FanPostCard({
     });
   }
 
+  // Build card behavior model to determine category, name line, and press behavior
+  const actorType = post.communityName ? 'community' : 'fan';
+  const actorName = actorType === 'community' 
+    ? (post.communityName || 'Fællesskab')
+    : (authorProfile?.display_name || post.authorName || 'Fan');
+  
+  const cardModel = buildCardBehaviorModel({
+    kind: 'post',
+    actorType,
+    actorName,
+    postLinkUrl: undefined, // Posts don't have embedded links in current data model
+  });
+
+  // Compute onOpenDetail based on model
+  const computedOnOpenDetail = cardModel.pressBehavior === 'open_external' && cardModel.externalUrl
+    ? () => Linking.openURL(cardModel.externalUrl!)
+    : cardModel.pressBehavior === 'none'
+    ? undefined
+    : onOpenDetail;
+
   return (
-    <FeedCardShell
+    <CardRoot
       targetType="post"
       targetId={post.id}
       currentUserId={user?.id}
       isAppAdmin={isAppAdmin}
-      onOpenDetail={onOpenDetail}
+      onOpenDetail={computedOnOpenDetail}
       commentPreviews={commentPreviews}
       onNewComment={onNewComment}
       actions={{
@@ -184,8 +204,11 @@ export function FanPostCard({
         onPressShare: handleShare,
       }}
     >
-      <Pill label="Fra Fans" />
-      <FeedCardHeader
+      <CardHeader
+        categoryLabel={cardModel.categoryLabel}
+        nameLine={cardModel.nameLine}
+        fallbackTitle={authorProfile?.display_name || post.authorName || 'Ukendt'}
+        subtitle={groupDisplay ? `${groupDisplay} · ${timeAgo}` : timeAgo}
         avatarSlot={
           <Avatar
             userId={post.authorId}
@@ -194,14 +217,10 @@ export function FanPostCard({
             label={authorProfile?.display_name || post.authorName || 'Fan'}
           />
         }
-        title={authorProfile?.display_name || post.authorName || 'Ukendt'}
-        subtitle={groupDisplay ? `${groupDisplay} · ${timeAgo}` : timeAgo}
-        rightSlot={
-          (showEditOption || showDeleteOption) && postMenuOptions.length > 0 ? (
-            <OptionsMenu options={postMenuOptions} />
-          ) : undefined
-        }
       />
+      {((showEditOption || showDeleteOption) && postMenuOptions.length > 0) ? (
+        <OptionsMenu options={postMenuOptions} />
+      ) : null}
       {isEditing ? (
         <View style={styles.editContainer}>
           <TextInput
@@ -248,7 +267,7 @@ export function FanPostCard({
           <Text style={styles.imageErrorText}>⚠️ Billede kunne ikke indlæses</Text>
         </View>
       ) : null}
-    </FeedCardShell>
+    </CardRoot>
   );
 }
 

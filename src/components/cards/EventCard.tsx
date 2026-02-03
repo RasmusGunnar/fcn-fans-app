@@ -5,12 +5,14 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { Card } from '../ui/Card';
-import { Pill } from '../ui/Pill';
-import { PrimaryButton } from '../PrimaryButton';
-import { FeedCardShell } from '../feed/FeedCardShell';
+import { CardRoot } from './CardRoot';
+import { CardHeader } from './CardHeader';
 import { useAuth } from '../../auth/AuthProvider';
 import { defaultTheme } from '../../theme';
+import { buildCardBehaviorModel } from './cardBehaviorModel';
+import type { CommentPreview } from '../../services/likesApi';
 
 interface EventCardProps {
   eventId: string; // Required for comments
@@ -24,7 +26,12 @@ interface EventCardProps {
   onToggleLike: () => void;
   onPressComment: () => void;
   onPressShare: () => void;
-  onPressBook: () => void;
+  communityName?: string | null; // Community/organizer name if event is linked to community
+  communityId?: string | null; // Community/organizer ID
+  eventType?: 'event' | 'bustur' | string | null;
+  targetType?: 'event' | 'bus_trip';
+  commentPreviews?: CommentPreview[];
+  onNewComment?: (comment: CommentPreview) => void;
 }
 
 export function EventCard({
@@ -39,17 +46,40 @@ export function EventCard({
   onToggleLike,
   onPressComment,
   onPressShare,
-  onPressBook,
+  communityName,
+  communityId,
+  eventType,
+  targetType = 'event',
+  commentPreviews,
+  onNewComment,
 }: EventCardProps) {
   const { user, isAppAdmin } = useAuth();
+  const navigation = useNavigation();
   const theme = defaultTheme;
+
+  // Build card behavior model
+  const cardModel = buildCardBehaviorModel({
+    kind: 'event',
+    actorType: communityId ? 'community' : 'fan',
+    actorName: communityName || 'Event',
+    eventId: eventId,
+    eventType: eventType ?? undefined,
+    eventCommunityName: communityName || null,
+  });
+
+  const handleOpenDetail = () => {
+    if (cardModel.pressBehavior === 'open_internal' && cardModel.internalEventId) {
+      (navigation as any).navigate('EventDetails', { eventId: cardModel.internalEventId });
+    }
+  };
   
   return (
-    <FeedCardShell
-      targetType="event"
+    <CardRoot
+      targetType={targetType}
       targetId={eventId}
       currentUserId={user?.id}
       isAppAdmin={isAppAdmin}
+      onOpenDetail={cardModel.pressBehavior === 'open_internal' ? handleOpenDetail : undefined}
       actions={{
         liked,
         likes,
@@ -57,8 +87,20 @@ export function EventCard({
         onToggleLike,
         onPressShare,
       }}
+      commentPreviews={commentPreviews}
+      onNewComment={onNewComment}
     >
-      <Pill label="Bus til Udekamp" variant="gold" />
+      <CardHeader
+        categoryLabel={cardModel.categoryLabel}
+        nameLine={cardModel.nameLine}
+        subtitle={null}
+        avatarSlot={
+          <View style={styles.communityAvatar}>
+            <Ionicons name="people" size={20} color={theme.colors.bg.card} />
+          </View>
+        }
+        pillVariant="gold"
+      />
       <Text style={styles.title}>{title}</Text>
       <View style={styles.detailRow}>
         <Ionicons name="calendar" size={16} color={theme.colors.text.secondary} />
@@ -69,14 +111,22 @@ export function EventCard({
         <Text style={styles.detailText}>{location}</Text>
       </View>
       <Text style={styles.spotsLeft}>{spotsLeft} pladser tilbage</Text>
-      <PrimaryButton title="Book plads" onPress={onPressBook} />
-    </FeedCardShell>
+    </CardRoot>
   );
 }
 
 const theme = defaultTheme;
 
 const styles = StyleSheet.create({
+  communityAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
   title: {
     fontSize: 18,
     fontWeight: '600',

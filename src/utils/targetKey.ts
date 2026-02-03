@@ -2,7 +2,7 @@
  * Standardized target key generation for likes, comments, and previews
  */
 
-export type TargetType = 'post' | 'news' | 'event' | 'match';
+export type TargetType = 'post' | 'news' | 'event' | 'match' | 'bus_trip';
 
 /**
  * Generate a unique key for a target item

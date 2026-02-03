@@ -18,6 +18,10 @@ import { PrimaryButton } from '../components/PrimaryButton';
 import { FanPostCard } from '../components/cards/FanPostCard';
 import { Post } from '../types/post';
 import { useTheme } from '../theme';
+import { useAuth } from '../auth/AuthProvider';
+import { useFeed } from '../state/FeedContext';
+import { FeedItemRenderer } from '../components/feed/FeedItemRenderer';
+import { getFeedItemKey } from '../types/feed';
 import {
   getCommunity,
   getMembership,
@@ -50,6 +54,20 @@ export default function CommunityDetailScreen() {
   const { id } = route.params || {};
   const insets = useSafeAreaInsets();
   const theme = useTheme();
+  const USE_UNIFIED_COMMUNITY_FEED = true;
+  const { user, isAppAdmin } = useAuth();
+  const {
+    feedItems,
+    profileMap,
+    communityMap,
+    likeMap,
+    commentCountMap,
+    commentPreviewMap,
+    toggleLike,
+    removePost,
+    incrementCommentCount,
+    addCommentPreview,
+  } = useFeed();
 
   const [community, setCommunity] = useState<CommunityData | null>(null);
   const [membership, setMembership] = useState<any>(null);
@@ -69,6 +87,20 @@ export default function CommunityDetailScreen() {
   const [postText, setPostText] = useState('');
   const [posts, setPosts] = useState<Post[]>([]);
   const [postLikes, setPostLikes] = useState<Record<string, boolean>>({});
+
+  const safeFeedItems = (Array.isArray(feedItems) ? feedItems : []).filter(Boolean);
+  const safeProfileMap = profileMap || {};
+  const safeCommunityMap = communityMap || {};
+  const safeLikeMap = likeMap || {};
+  const safeCommentCountMap = commentCountMap || {};
+  const safeCommentPreviewMap = commentPreviewMap || {};
+
+  const communityFeedItems = safeFeedItems.filter((item) => {
+    if (item.kind === 'post') return (item.data as any).communityId === id;
+    if (item.kind === 'news') return item.data.actorType === 'community' && item.data.actorId === id;
+    if (item.kind === 'event' || item.kind === 'bus_trip') return item.data.organizerGroupId === id;
+    return false;
+  });
 
   useFocusEffect(
     React.useCallback(() => {
@@ -198,7 +230,7 @@ export default function CommunityDetailScreen() {
     ]);
   };
 
-  const toggleLike = (postId: string) => {
+  const toggleLegacyPostLike = (postId: string) => {
     setPostLikes((prev) => ({
       ...prev,
       [postId]: !prev[postId],
@@ -498,7 +530,7 @@ export default function CommunityDetailScreen() {
         )}
 
         {/* Community Events Section */}
-        {events.length > 0 && (
+        {!USE_UNIFIED_COMMUNITY_FEED && events.length > 0 && (
           <Card style={styles.eventsCard}>
             <Text style={styles.sectionTitle}>KOMMENDE ARRANGEMENTER</Text>
             {events.map((event) => (
@@ -523,6 +555,35 @@ export default function CommunityDetailScreen() {
           </Card>
         )}
 
+        <View style={styles.updatesSection}>
+          <Text style={styles.sectionTitle}>FEED</Text>
+          {communityFeedItems.map((item) => {
+            const key = getFeedItemKey(item);
+            const likeState = safeLikeMap[key] || { liked: false, likes: 0 };
+            const commentCount = safeCommentCountMap[key] || 0;
+            const commentPreviews = safeCommentPreviewMap[key] || [];
+
+            return (
+              <FeedItemRenderer
+                key={key}
+                item={item}
+                itemKey={key}
+                user={user}
+                isAppAdmin={isAppAdmin}
+                likeState={likeState}
+                commentCount={commentCount}
+                commentPreviews={commentPreviews}
+                safeProfileMap={safeProfileMap}
+                communityMap={safeCommunityMap}
+                toggleLike={toggleLike}
+                removePost={removePost}
+                incrementCommentCount={incrementCommentCount}
+                addCommentPreview={addCommentPreview}
+              />
+            );
+          })}
+        </View>
+
         {/* Composer Card - Only for members */}
         {isMember && (
           <Card style={styles.composerCard}>
@@ -536,7 +597,7 @@ export default function CommunityDetailScreen() {
 
         {/* Old text composer removed - PostComposer handles everything */}
         {/* Latest Updates */}
-        {posts.length > 0 && (
+        {!USE_UNIFIED_COMMUNITY_FEED && posts.length > 0 && (
           <View style={styles.updatesSection}>
             <Text style={styles.sectionTitle}>SENESTE OPDATERINGER</Text>
             {posts.map((post) => (
@@ -544,7 +605,7 @@ export default function CommunityDetailScreen() {
                 key={post.id}
                 post={post}
                 liked={postLikes[post.id] || false}
-                onToggleLike={() => toggleLike(post.id)}
+                onToggleLike={() => toggleLegacyPostLike(post.id)}
                 onPressShare={() => console.log('Share post', post.id)}
               />
             ))}

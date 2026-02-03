@@ -1,15 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, RefreshControl, Image, Alert } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, RefreshControl, Image } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { AppHeader } from '../components/AppHeader';
 import { Card } from '../components/ui/Card';
 import { Pill } from '../components/ui/Pill';
 import { PrimaryButton } from '../components/PrimaryButton';
-import { CommunityCard } from '../components/cards/CommunityCard';
-import { EventCard } from '../components/cards/EventCard';
-import { NewsCard } from '../components/cards/NewsCard';
-import { FanPostCard } from '../components/cards/FanPostCard';
+import { FeedItemRenderer } from '../components/feed/FeedItemRenderer';
 import { FanFactionCard } from '../components/cards/FanFactionCard';
 import { useFeed } from '../state/FeedContext';
 import { useAuth } from '../auth/AuthProvider';
@@ -214,63 +211,24 @@ export default function HomeScreen() {
           const commentCount = safeCommentCountMap[key] || 0;
           const commentPreviews = safeCommentPreviewMap[key] || [];
 
-          switch (item.kind) {
-            case 'post':
-              const authorProfile = item.data.authorId ? safeProfileMap[item.data.authorId] : undefined;
-              return (
-                <FanPostCard
-                  key={key}
-                  post={item.data}
-                  authorProfile={authorProfile}
-                  liked={likeState.liked}
-                  likes={likeState.likes}
-                  commentsCount={commentCount}
-                  commentPreviews={commentPreviews}
-                  onToggleLike={() => {
-                    if (user?.id) {
-                      toggleLike('post', item.id, user.id);
-                    }
-                  }}
-                  onOpenDetail={() => {
-                    // Navigate to PostDetailScreen on card tap
-                    (navigation as any).navigate('PostDetail', { postId: item.id });
-                  }}
-                  onDeleted={(postId) => removePost(postId)}
-                  onNewComment={(comment) => {
-                    incrementCommentCount('post', item.id);
-                    addCommentPreview('post', item.id, comment);
-                  }}
-                />
-              );
-
-            case 'news':
-              const newsCommentPreviews = safeCommentPreviewMap[key] || [];
-              return (
-                <NewsCard
-                  key={key}
-                  newsItem={item.data}
-                  currentUserId={user?.id}
-                  userAvatarUrl={user?.user_metadata?.avatar_url}
-                  communityMap={communityMap || {}}
-                  liked={likeState.liked}
-                  commentsCount={commentCount}
-                  onToggleLike={() => {
-                    if (user?.id) {
-                      toggleLike('news', item.id, user.id);
-                    }
-                  }}
-                  onPressShare={() => Alert.alert('Info', 'Del-funktionen kommer snart')}
-                  commentPreviews={newsCommentPreviews}
-                  onNewComment={(comment) => {
-                    incrementCommentCount('news', item.id);
-                    addCommentPreview('news', item.id, comment);
-                  }}
-                />
-              );
-
-            default:
-              return null;
-          }
+          return (
+            <FeedItemRenderer
+              key={key}
+              item={item}
+              itemKey={key}
+              user={user}
+              isAppAdmin={isAppAdmin}
+              likeState={likeState}
+              commentCount={commentCount}
+              commentPreviews={commentPreviews}
+              safeProfileMap={safeProfileMap}
+              communityMap={communityMap || {}}
+              toggleLike={toggleLike}
+              removePost={removePost}
+              incrementCommentCount={incrementCommentCount}
+              addCommentPreview={addCommentPreview}
+            />
+          );
         })}
 
         <FanFactionCard

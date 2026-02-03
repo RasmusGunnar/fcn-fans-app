@@ -6,13 +6,13 @@ import React from 'react';
 import { View, Text, StyleSheet, Image, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../ui/Card';
-import { Pill } from '../ui/Pill';
-import { FeedCardShell } from '../feed/FeedCardShell';
-import { FeedCardHeader } from '../FeedCardHeader';
+import { CardRoot } from './CardRoot';
+import { CardHeader } from './CardHeader';
 import { defaultTheme } from '../../theme';
 import { NewsItem } from '../../types/news';
 import { useAuth } from '../../auth/AuthProvider';
 import type { CommentPreview } from '../../services/likesApi';
+import { buildCardBehaviorModel } from './cardBehaviorModel';
 
 function getTimeAgo(isoDate: string): string {
   const now = new Date();
@@ -87,13 +87,25 @@ export function NewsCard({
 
   const theme = defaultTheme;
 
+  // Build card behavior model
+  const cardModel = buildCardBehaviorModel({
+    kind: 'news',
+    actorType: newsItem.actorType === 'community' ? 'community' : 'fan',
+    actorName: authorName,
+    newsUrl: newsItem.url,
+  });
+
   return (
-    <FeedCardShell
+    <CardRoot
       targetType="news"
       targetId={newsItem.id || newsItem.url}
       currentUserId={user?.id}
       isAppAdmin={isAppAdmin}
-      onOpenDetail={handleOpenLink}
+      onOpenDetail={
+        cardModel.pressBehavior === 'open_external'
+          ? () => Linking.openURL(cardModel.externalUrl!)
+          : undefined
+      }
       actions={{
         liked,
         likes: newsItem.likesCount,
@@ -104,8 +116,11 @@ export function NewsCard({
       commentPreviews={commentPreviews}
       onNewComment={onNewComment}
     >
-      <Pill label="Nyhed" />
-      <FeedCardHeader
+      <CardHeader
+        categoryLabel={cardModel.categoryLabel}
+        nameLine={cardModel.nameLine}
+        fallbackTitle={authorName}
+        subtitle={timeAgo}
         avatarSlot={
           <View style={styles.avatar}>
             {avatarSource ? (
@@ -119,8 +134,6 @@ export function NewsCard({
             )}
           </View>
         }
-        title={authorName}
-        subtitle={timeAgo}
       />
 
       <View style={styles.linkCard}>
@@ -145,7 +158,7 @@ export function NewsCard({
           </View>
         </View>
       </View>
-    </FeedCardShell>
+    </CardRoot>
   );
 }
 
