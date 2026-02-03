@@ -5,6 +5,7 @@ export interface Post {
   authorAvatarColor?: string;
   communityName?: string;
   factionName?: string;
+  communityId?: string | null;
   createdAt: string;
   text: string;
   imageUri?: string;

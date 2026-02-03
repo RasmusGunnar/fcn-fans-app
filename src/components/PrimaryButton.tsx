@@ -1,11 +1,11 @@
 import React from 'react';
-import { Pressable, StyleSheet } from 'react-native';
+import { Pressable, StyleSheet, GestureResponderEvent } from 'react-native';
 import { useTheme, Theme } from '../theme';
 import { Text } from './ui';
 
 interface PrimaryButtonProps {
   title: string;
-  onPress: () => void;
+  onPress: ((e?: GestureResponderEvent) => void) | (() => void);
   disabled?: boolean;
   fullWidth?: boolean;
 }
@@ -24,7 +24,10 @@ export function PrimaryButton({
 
   return (
     <Pressable
-      onPress={onPress}
+      onPress={(e) => {
+        e?.stopPropagation?.();
+        onPress?.(e);
+      }}
       disabled={disabled}
       style={({ pressed }) => [
         styles.button,

@@ -37,6 +37,7 @@ npm run start
 
 **Note om expo-font:** Dette projekt anvender `expo-font` via Expo SDK's transitiv dependency.
 Hvis du får version-fejl eller dubletter, kør:
+
 ```bash
 npx expo install expo-font
 ```
@@ -46,6 +47,7 @@ npx expo install expo-font
 **⚠️ See detailed setup guide:** [supabase/SETUP_HOSTED.md](supabase/SETUP_HOSTED.md)
 
 ### Quick checklist:
+
 1. Run migrations manually in Supabase Dashboard SQL Editor
 2. Create storage buckets: `post-media`, `avatars`
 3. Configure storage policies in Dashboard
@@ -54,6 +56,7 @@ npx expo install expo-font
 6. Update environment variables in `src/lib/supabase.ts`
 
 ### Database changes workflow:
+
 - All changes via Dashboard → SQL Editor
 - Document in `supabase/CHANGELOG_MANUAL.sql`
 - Commit to git
