@@ -13,6 +13,7 @@ import { defaultTheme } from '../../theme';
 import { NewsItem } from '../../types/news';
 import { useAuth } from '../../auth/AuthProvider';
 import type { CommentPreview } from '../../services/likesApi';
+import { buildCardBehaviorModel } from './cardBehaviorModel';
 
 function getTimeAgo(isoDate: string): string {
   const now = new Date();
@@ -87,13 +88,25 @@ export function NewsCard({
 
   const theme = defaultTheme;
 
+  // Build card behavior model
+  const cardModel = buildCardBehaviorModel({
+    kind: 'news',
+    actorType: newsItem.actorType === 'community' ? 'community' : 'fan',
+    actorName: authorName,
+    newsUrl: newsItem.url,
+  });
+
   return (
     <FeedCardShell
       targetType="news"
       targetId={newsItem.id || newsItem.url}
       currentUserId={user?.id}
       isAppAdmin={isAppAdmin}
-      onOpenDetail={handleOpenLink}
+      onOpenDetail={
+        cardModel.pressBehavior === 'open_external'
+          ? () => Linking.openURL(cardModel.externalUrl!)
+          : undefined
+      }
       actions={{
         liked,
         likes: newsItem.likesCount,
@@ -104,7 +117,7 @@ export function NewsCard({
       commentPreviews={commentPreviews}
       onNewComment={onNewComment}
     >
-      <Pill label="Nyhed" />
+      <Pill label={cardModel.categoryLabel} />
       <FeedCardHeader
         avatarSlot={
           <View style={styles.avatar}>
@@ -119,7 +132,7 @@ export function NewsCard({
             )}
           </View>
         }
-        title={authorName}
+        title={cardModel.nameLine || authorName}
         subtitle={timeAgo}
       />
 

@@ -5,6 +5,7 @@ import { FeedItem } from '../types/feed';
 import { supabase } from '../lib/supabase';
 import { normalizeMedia } from '../utils/media';
 import { fetchNewsItems } from '../services/newsApi';
+import { fetchBusTripsUpcoming, fetchEventsUpcoming, type BusTrip, type Event } from '../services/eventsApi';
 import { fetchLikeStates, fetchCommentCounts, fetchCommentPreviews, toggleLike as toggleLikeApi, type LikeTargetType, type CommentPreview } from '../services/likesApi';
 import { targetKey } from '../utils/targetKey';
 
@@ -13,6 +14,14 @@ const getCreated = (item: FeedItem) => {
   if (item.kind === 'post') {
     const p = item.data as any;
     return p.created_at ?? p.createdAt ?? p.createdAtISO ?? null;
+  }
+  if (item.kind === 'news') {
+    const n = item.data as any;
+    return n.created_at ?? n.createdAt ?? n.createdAtISO ?? n.publishedAt ?? null;
+  }
+  if (item.kind === 'event' || item.kind === 'bus_trip') {
+    const e = item.data as any;
+    return e.createdAt ?? e.created_at ?? e.startAt ?? e.start_at ?? null;
   }
   return null;
 };
@@ -54,6 +63,8 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
 
     let transformedPosts: Post[] = [];
     let newsItems: NewsItem[] = [];
+    let upcomingEvents: Event[] = [];
+    let upcomingBusTrips: BusTrip[] = [];
 
     // Fetch posts in separate try/catch so news_items errors don't block posts
     try {
@@ -167,10 +178,31 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       newsItems = [];
     }
 
-    // Merge posts and news into combined feed with new FeedItem type
+    // Fetch events + bus trips in separate try/catch
+    try {
+      const results = await Promise.allSettled([
+        fetchEventsUpcoming(20),
+        fetchBusTripsUpcoming(20),
+      ]);
+      upcomingEvents = results[0].status === 'fulfilled' ? results[0].value : [];
+      upcomingBusTrips = results[1].status === 'fulfilled' ? results[1].value : [];
+
+      if (__DEV__) {
+        console.log('[FeedProvider] Upcoming events fetched:', upcomingEvents.length);
+        console.log('[FeedProvider] Upcoming bus trips fetched:', upcomingBusTrips.length);
+      }
+    } catch (e: any) {
+      console.warn('[FeedProvider] fetchEventsUpcoming/busTrips failed:', e?.message || e);
+      upcomingEvents = [];
+      upcomingBusTrips = [];
+    }
+
+    // Merge posts, news, events, and bus trips into combined feed
     try {
       const safePostsArray = transformedPosts ?? [];
       const safeNewsArray = newsItems ?? [];
+      const safeEventsArray = upcomingEvents ?? [];
+      const safeBusTripsArray = upcomingBusTrips ?? [];
 
       const combinedFeed: FeedItem[] = [
         ...safePostsArray.map(
@@ -179,13 +211,47 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         ...safeNewsArray.map(
           (news): FeedItem => ({ kind: 'news', id: news.id, data: news }),
         ),
+        ...safeEventsArray.map(
+          (event): FeedItem => ({
+            kind: 'event',
+            id: event.id,
+            data: {
+              id: event.id,
+              title: event.title,
+              startAt: event.start_at ?? null,
+              location: event.location_name ?? event.location_address ?? null,
+              description: event.description ?? null,
+              organizerName: event.organizer?.name ?? null,
+              organizerGroupId: event.organizer_group_id ?? null,
+              createdAt: event.created_at ?? null,
+              eventType: 'event',
+            },
+          }),
+        ),
+        ...safeBusTripsArray.map(
+          (busTrip): FeedItem => ({
+            kind: 'bus_trip',
+            id: busTrip.id,
+            data: {
+              id: busTrip.id,
+              title: busTrip.title,
+              startAt: busTrip.start_at ?? null,
+              location: busTrip.departure_place ?? null,
+              description: busTrip.description ?? null,
+              organizerName: busTrip.organizer?.name ?? null,
+              organizerGroupId: busTrip.organizer_group_id ?? null,
+              createdAt: busTrip.created_at ?? null,
+              eventType: 'bus_trip',
+            },
+          }),
+        ),
       ];
 
-      // Sort by created_at descending with guard for missing created_at
+      // Sort by timestamp descending with guard for missing timestamps
       combinedFeed.sort((a, b) => {
-        const aTime = a.data.createdAt ? new Date(a.data.createdAt).getTime() : 0;
-        const bTime = b.data.createdAt ? new Date(b.data.createdAt).getTime() : 0;
-        return bTime - aTime;
+        const aTime = getCreated(a) ?? new Date().toISOString();
+        const bTime = getCreated(b) ?? new Date().toISOString();
+        return new Date(bTime).getTime() - new Date(aTime).getTime();
       });
 
       setFeedItems(combinedFeed);
@@ -197,16 +263,37 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       // Group items by kind
       const postIds = safePostsArray.map(p => p.id);
       const newsIds = safeNewsArray.map(n => n.id);
+      const eventIds = safeEventsArray.map(e => e.id);
+      const busTripIds = safeBusTripsArray.map(b => b.id);
 
       // Fetch likes, comments, and previews for each kind in parallel
       // Wrap each in try-catch to ensure we get Maps even if individual fetch fails
-      const [postLikes, postComments, postPreviews, newsLikes, newsComments, newsPreviews] = await Promise.all([
+      const [
+        postLikes,
+        postComments,
+        postPreviews,
+        newsLikes,
+        newsComments,
+        newsPreviews,
+        eventLikes,
+        eventComments,
+        eventPreviews,
+        busTripLikes,
+        busTripComments,
+        busTripPreviews,
+      ] = await Promise.all([
         fetchLikeStates('post', postIds).catch(err => { console.warn('[FeedProvider] postLikes failed:', err); return new Map(); }),
         fetchCommentCounts('post', postIds).catch(err => { console.warn('[FeedProvider] postComments failed:', err); return new Map(); }),
         fetchCommentPreviews('post', postIds).catch(err => { console.warn('[FeedProvider] postPreviews failed:', err); return new Map(); }),
         fetchLikeStates('news', newsIds).catch(err => { console.warn('[FeedProvider] newsLikes failed:', err); return new Map(); }),
         fetchCommentCounts('news', newsIds).catch(err => { console.warn('[FeedProvider] newsComments failed:', err); return new Map(); }),
         fetchCommentPreviews('news', newsIds).catch(err => { console.warn('[FeedProvider] newsPreviews failed:', err); return new Map(); }),
+        fetchLikeStates('event', eventIds).catch(err => { console.warn('[FeedProvider] eventLikes failed:', err); return new Map(); }),
+        fetchCommentCounts('event', eventIds).catch(err => { console.warn('[FeedProvider] eventComments failed:', err); return new Map(); }),
+        fetchCommentPreviews('event', eventIds).catch(err => { console.warn('[FeedProvider] eventPreviews failed:', err); return new Map(); }),
+        fetchLikeStates('bus_trip', busTripIds).catch(err => { console.warn('[FeedProvider] busTripLikes failed:', err); return new Map(); }),
+        fetchCommentCounts('bus_trip', busTripIds).catch(err => { console.warn('[FeedProvider] busTripComments failed:', err); return new Map(); }),
+        fetchCommentPreviews('bus_trip', busTripIds).catch(err => { console.warn('[FeedProvider] busTripPreviews failed:', err); return new Map(); }),
       ]);
 
       // Ensure all Maps are valid (in case catch returns undefined)
@@ -216,6 +303,12 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       const safeNewsLikes = newsLikes || new Map();
       const safeNewsComments = newsComments || new Map();
       const safeNewsPreviews = newsPreviews || new Map();
+      const safeEventLikes = eventLikes || new Map();
+      const safeEventComments = eventComments || new Map();
+      const safeEventPreviews = eventPreviews || new Map();
+      const safeBusTripLikes = busTripLikes || new Map();
+      const safeBusTripComments = busTripComments || new Map();
+      const safeBusTripPreviews = busTripPreviews || new Map();
 
       if (__DEV__) {
         console.log('[FeedProvider] combine inputs', {
@@ -245,6 +338,20 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         newLikeMap[key] = safeNewsLikes.get(id) || { liked: false, likes: 0 };
         newCommentCountMap[key] = safeNewsComments.get(id) || 0;
         newCommentPreviewMap[key] = safeNewsPreviews.get(id) || [];
+      });
+
+      eventIds.forEach(id => {
+        const key = targetKey('event', id);
+        newLikeMap[key] = safeEventLikes.get(id) || { liked: false, likes: 0 };
+        newCommentCountMap[key] = safeEventComments.get(id) || 0;
+        newCommentPreviewMap[key] = safeEventPreviews.get(id) || [];
+      });
+
+      busTripIds.forEach(id => {
+        const key = targetKey('bus_trip', id);
+        newLikeMap[key] = safeBusTripLikes.get(id) || { liked: false, likes: 0 };
+        newCommentCountMap[key] = safeBusTripComments.get(id) || 0;
+        newCommentPreviewMap[key] = safeBusTripPreviews.get(id) || [];
       });
 
       setLikeMap(newLikeMap);
@@ -341,9 +448,20 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
     }));
 
     // Persist to DB
-    const success = await toggleLikeApi(kind, id, userId, currentState.liked);
-    
-    if (!success) {
+    try {
+      const success = await toggleLikeApi(kind, id, userId, currentState.liked);
+      if (!success) {
+        console.warn('[toggleLike failed]', { targetType: kind, targetId: id, error: 'unknown' });
+        // Revert on failure
+        setLikeMap(prev => ({
+          ...prev,
+          [key]: currentState
+        }));
+        return;
+      }
+      console.log('[toggleLike ok]', { targetType: kind, targetId: id });
+    } catch (error) {
+      console.warn('[toggleLike failed]', { targetType: kind, targetId: id, error });
       // Revert on failure
       setLikeMap(prev => ({
         ...prev,

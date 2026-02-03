@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase';
 
-export type LikeTargetType = 'post' | 'news' | 'event' | 'match';
+export type LikeTargetType = 'post' | 'news' | 'event' | 'match' | 'bus_trip';
 
 interface LikeState {
   target_id: string;

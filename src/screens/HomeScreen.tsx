@@ -231,10 +231,6 @@ export default function HomeScreen() {
                       toggleLike('post', item.id, user.id);
                     }
                   }}
-                  onOpenDetail={() => {
-                    // Navigate to PostDetailScreen on card tap
-                    (navigation as any).navigate('PostDetail', { postId: item.id });
-                  }}
                   onDeleted={(postId) => removePost(postId)}
                   onNewComment={(comment) => {
                     incrementCommentCount('post', item.id);
@@ -264,6 +260,38 @@ export default function HomeScreen() {
                   onNewComment={(comment) => {
                     incrementCommentCount('news', item.id);
                     addCommentPreview('news', item.id, comment);
+                  }}
+                />
+              );
+
+            case 'event':
+            case 'bus_trip':
+              return (
+                <EventCard
+                  key={key}
+                  eventId={item.id}
+                  title={item.data.title}
+                  date={item.data.startAt ?? ''}
+                  location={item.data.location ?? ''}
+                  spotsLeft={0}
+                  liked={likeState.liked}
+                  likes={likeState.likes}
+                  comments={commentCount}
+                  onToggleLike={() => {
+                    if (user?.id) {
+                      toggleLike(item.kind, item.id, user.id);
+                    }
+                  }}
+                  onPressComment={() => {}}
+                  onPressShare={() => {}}
+                  communityName={item.data.organizerName ?? null}
+                  communityId={item.data.organizerGroupId ?? null}
+                  eventType={item.kind === 'bus_trip' ? 'bustur' : 'event'}
+                  targetType={item.kind}
+                  commentPreviews={commentPreviews}
+                  onNewComment={(comment) => {
+                    incrementCommentCount(item.kind, item.id);
+                    addCommentPreview(item.kind, item.id, comment);
                   }}
                 />
               );

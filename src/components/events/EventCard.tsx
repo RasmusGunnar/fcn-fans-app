@@ -18,6 +18,7 @@ interface EventCardProps {
   liked?: boolean;
   likes?: number;
   comments?: number;
+  eventType?: 'event' | 'bustur' | string | null;
   onPress: () => void;
   onToggleLike?: () => void;
   onPressShare?: () => void;
@@ -33,11 +34,13 @@ export function EventCard({
   liked = false,
   likes = 0,
   comments = 0,
+  eventType,
   onPress,
   onToggleLike = () => {},
   onPressShare = () => {},
 }: EventCardProps) {
   const { user, isAppAdmin } = useAuth();
+  const categoryLabel = (eventType ?? '').toLowerCase() === 'bustur' ? 'Bustur' : 'Event';
   
   const date = new Date(startAt);
   const dateStr = date.toLocaleDateString('da-DK', {
@@ -66,7 +69,7 @@ export function EventCard({
       }}
     >
       <View style={styles.header}>
-        <Text style={styles.badge}>EVENT</Text>
+        <Text style={styles.badge}>{categoryLabel}</Text>
         {organizerName && <Text style={styles.organizer}>🚩 {organizerName}</Text>}
       </View>
 

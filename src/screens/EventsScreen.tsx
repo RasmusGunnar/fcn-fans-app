@@ -185,7 +185,7 @@ export default function EventsScreen() {
       );
     }
 
-    if (item.kind === 'event') {
+    if (item.kind === 'event' || item.kind === 'bus_trip') {
       return (
         <GenericEventCard
           eventId={item.id}
@@ -194,6 +194,7 @@ export default function EventsScreen() {
           location={item.location}
           organizerName={item.organizerName}
           description={item.description}
+          eventType={item.kind === 'bus_trip' ? 'bustur' : 'event'}
           onPress={() => (navigation as any).navigate('EventDetails', { eventId: item.id })}
         />
       );
