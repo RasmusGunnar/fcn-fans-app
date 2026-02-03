@@ -43,6 +43,7 @@ export function FeedItemRenderer({
           key={itemKey}
           post={item.data}
           authorProfile={authorProfile}
+          communityMap={communityMap}
           liked={likeState.liked}
           likes={likeState.likes}
           commentsCount={commentCount}

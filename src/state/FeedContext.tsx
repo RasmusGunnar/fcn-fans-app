@@ -70,7 +70,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
     try {
       const { data: postsData, error: fetchError } = await supabase
         .from('posts')
-        .select('id, created_at, author_id, text, media')
+        .select('id, created_at, author_id, text, media, community_id')
         .order('created_at', { ascending: false })
         .limit(50);
 
@@ -112,6 +112,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         id: dbPost.id,
         authorName: newProfileMap[dbPost.author_id]?.display_name || 'Fan',
         authorId: dbPost.author_id,
+        communityId: dbPost.community_id ?? null,
         createdAt: dbPost.created_at,
         text: dbPost.text,
         likesCount: 0, // TODO: Add likes support

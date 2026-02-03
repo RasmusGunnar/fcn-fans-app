@@ -18,12 +18,14 @@ import { useAuth } from '../auth/AuthProvider';
 import { supabase } from '../lib/supabase';
 import { useFeed } from '../state/FeedContext';
 import { Post } from '../types/post';
+import type { Actor } from '../types/news';
 
 interface PostComposerProps {
   onSuccess?: () => void;
+  actor?: Actor;
 }
 
-export function PostComposer({ onSuccess }: PostComposerProps) {
+export function PostComposer({ onSuccess, actor }: PostComposerProps) {
   console.log('[PostComposer] Component mounted');
   const theme = useTheme();
   const styles = createStyles(theme);
@@ -115,7 +117,12 @@ export function PostComposer({ onSuccess }: PostComposerProps) {
       if (user?.id) {
         const { data, error } = await supabase
           .from('posts')
-          .insert({ author_id: user.id, text: text.trim(), media: mediaArray })
+          .insert({
+            author_id: user.id,
+            text: text.trim(),
+            media: mediaArray,
+            ...(actor?.type === 'community' ? { community_id: actor.id } : {}),
+          })
           .select('id, created_at, author_id, text, media');
         if (error) throw error;
 
