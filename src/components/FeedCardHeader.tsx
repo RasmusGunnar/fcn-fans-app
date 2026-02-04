@@ -17,7 +17,13 @@ interface FeedCardHeaderProps {
  * Shared header component for feed cards (posts, news, etc.)
  * Ensures consistent layout: badge → avatar → title/subtitle → menu
  */
-export function FeedCardHeader({ avatarSlot, title, subtitle, rightSlot }: FeedCardHeaderProps) {
+export function FeedCardHeader({
+  categoryKey,
+  avatarSlot,
+  title,
+  subtitle,
+  rightSlot,
+}: FeedCardHeaderProps) {
   const theme = useTheme();
   const styles = createStyles(theme);
   const showHeaderRow = Boolean(avatarSlot || title || subtitle || rightSlot);

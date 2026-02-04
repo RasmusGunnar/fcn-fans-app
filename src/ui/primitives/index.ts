@@ -1,8 +1,8 @@
-export { Card } from './Card';
-export type { CardProps, CardVariant, CardPadding } from './Card';
+export { Card } from '../../components/ui/Card';
+export type { CardProps } from '../../components/ui/Card';
 
-export { Badge } from './Badge';
-export type { BadgeProps, BadgeTone, BadgeSize } from './Badge';
+export { Badge } from '../../components/ui/Badge';
+export type { BadgeProps, BadgeVariant } from '../../components/ui/Badge';
 
-export { Button } from './Button';
-export type { ButtonProps, ButtonVariant, ButtonSize } from './Button';
+export { Button } from '../../components/ui/Button';
+export type { ButtonProps, ButtonVariant } from '../../components/ui/Button';
