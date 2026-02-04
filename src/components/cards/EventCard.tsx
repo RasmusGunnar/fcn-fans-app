@@ -56,6 +56,10 @@ export function EventCard({
   const { user, isAppAdmin } = useAuth();
   const navigation = useNavigation();
   const theme = defaultTheme;
+  const normalizedEventType = (eventType ?? targetType ?? '').toString().toLowerCase();
+  const categoryKey = normalizedEventType === 'bustur' || normalizedEventType === 'bus_trip'
+    ? 'bus_trip'
+    : 'event';
 
   // Build card behavior model
   const cardModel = buildCardBehaviorModel({
@@ -91,7 +95,7 @@ export function EventCard({
       onNewComment={onNewComment}
     >
       <CardHeader
-        categoryLabel={cardModel.categoryLabel}
+        categoryKey={categoryKey}
         nameLine={cardModel.nameLine}
         subtitle={null}
         avatarSlot={
@@ -99,7 +103,6 @@ export function EventCard({
             <Ionicons name="people" size={20} color={theme.colors.bg.card} />
           </View>
         }
-        pillVariant="gold"
       />
       <Text style={styles.title}>{title}</Text>
       <View style={styles.detailRow}>

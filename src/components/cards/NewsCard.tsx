@@ -6,7 +6,6 @@ import React from 'react';
 import { View, Text, StyleSheet, Image, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../../ui/primitives/Card';
-import { CategoryBadge } from '../../ui/components/CategoryBadge';
 import { FeedCardHeader } from '../FeedCardHeader';
 import { CardRoot } from './CardRoot';
 import { defaultTheme } from '../../theme';
@@ -117,8 +116,8 @@ export function NewsCard({
       commentPreviews={commentPreviews}
       onNewComment={onNewComment}
     >
-      <CategoryBadge categoryKey="news" />
       <FeedCardHeader
+        categoryKey="news"
         avatarSlot={
           <View style={styles.avatar}>
             {avatarSource ? (

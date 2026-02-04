@@ -7,7 +7,6 @@ import { View, Text, StyleSheet, Image, TextInput, Pressable, Share, Alert } fro
 import { Card } from '../ui/Card';
 import { OptionsMenu, OptionsMenuOption } from '../OptionsMenu';
 import { CardRoot } from './CardRoot';
-import { Pill } from '../ui/Pill';
 import { FeedCardHeader } from '../FeedCardHeader';
 import { Avatar } from '../Avatar';
 import { defaultTheme } from '../../theme';
@@ -184,6 +183,18 @@ export function FanPostCard({
         ? undefined
         : onOpenDetail;
 
+  const categoryKey = isCommunityPost ? 'community' : 'post';
+  const headerTitle =
+    cardModel.nameLine ??
+    (isCommunityPost
+      ? communityName ?? 'Fællesskab'
+      : authorProfile?.display_name || (post as any).authorName || 'Ukendt');
+  const headerSubtitle = isCommunityPost
+    ? timeAgo
+    : groupDisplay
+      ? `${groupDisplay} · ${timeAgo}`
+      : timeAgo;
+
   return (
     <CardRoot
       targetType="post"
@@ -201,21 +212,19 @@ export function FanPostCard({
         onPressShare: handleShare,
       }}
     >
-      <Pill label={cardModel.categoryLabel} />
-      {cardModel.nameLine ? (
-        <FeedCardHeader
-          avatarSlot={
-            <Avatar
-              userId={post.authorId}
-              avatarUrl={authorProfile?.avatar_url}
-              size={40}
-              label={authorProfile?.display_name || post.authorName || 'Fan'}
-            />
-          }
-          title={cardModel.nameLine}
-          subtitle={groupDisplay ? `${groupDisplay} · ${timeAgo}` : timeAgo}
-        />
-      ) : null}
+      <FeedCardHeader
+        categoryKey={categoryKey}
+        avatarSlot={
+          <Avatar
+            userId={post.authorId}
+            avatarUrl={authorProfile?.avatar_url}
+            size={40}
+            label={authorProfile?.display_name || post.authorName || 'Fan'}
+          />
+        }
+        title={headerTitle}
+        subtitle={headerSubtitle}
+      />
       {(showEditOption || showDeleteOption) && postMenuOptions.length > 0 ? (
         <OptionsMenu options={postMenuOptions} />
       ) : null}

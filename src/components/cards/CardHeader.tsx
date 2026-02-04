@@ -1,10 +1,9 @@
 import React from 'react';
 import { FeedCardHeader } from '../FeedCardHeader';
-import { Pill } from '../ui/Pill';
+import type { CategoryKey } from '../../theme/categories';
 
 export type CardHeaderProps = {
-  categoryLabel: string;
-  pillVariant?: any;
+  categoryKey: CategoryKey;
   nameLine?: string | null;
   fallbackTitle?: string;
   subtitle?: string | null;
@@ -12,8 +11,7 @@ export type CardHeaderProps = {
 };
 
 export function CardHeader({
-  categoryLabel,
-  pillVariant,
+  categoryKey,
   nameLine,
   fallbackTitle,
   subtitle,
@@ -22,15 +20,11 @@ export function CardHeader({
   const title = nameLine ?? fallbackTitle;
 
   return (
-    <>
-      {pillVariant ? (
-        <Pill label={categoryLabel} variant={pillVariant} />
-      ) : (
-        <Pill label={categoryLabel} />
-      )}
-      {title ? (
-        <FeedCardHeader title={title} subtitle={subtitle ?? undefined} avatarSlot={avatarSlot} />
-      ) : null}
-    </>
+    <FeedCardHeader
+      categoryKey={categoryKey}
+      title={title ?? undefined}
+      subtitle={subtitle ?? undefined}
+      avatarSlot={avatarSlot}
+    />
   );
 }
