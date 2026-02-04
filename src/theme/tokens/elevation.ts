@@ -10,8 +10,8 @@ export const elevation = {
   sm: {
     ios: {
       shadowColor: '#000',
-      shadowOpacity: 0.08,
-      shadowRadius: 8,
+      shadowOpacity: 0.06,
+      shadowRadius: 6,
       shadowOffset: { width: 0, height: 2 },
     },
     android: 2,
@@ -19,8 +19,8 @@ export const elevation = {
   md: {
     ios: {
       shadowColor: '#000',
-      shadowOpacity: 0.12,
-      shadowRadius: 16,
+      shadowOpacity: 0.1,
+      shadowRadius: 12,
       shadowOffset: { width: 0, height: 4 },
     },
     android: 3,
@@ -28,8 +28,8 @@ export const elevation = {
   lg: {
     ios: {
       shadowColor: '#000',
-      shadowOpacity: 0.16,
-      shadowRadius: 20,
+      shadowOpacity: 0.14,
+      shadowRadius: 18,
       shadowOffset: { width: 0, height: 6 },
     },
     android: 4,

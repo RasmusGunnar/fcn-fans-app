@@ -1,13 +1,13 @@
 export const typography = {
   h1: {
-    fontSize: 32,
-    lineHeight: 40,
+    fontSize: 34,
+    lineHeight: 42,
     fontWeight: '700' as const,
   },
   h2: {
-    fontSize: 24,
-    lineHeight: 32,
-    fontWeight: '600' as const,
+    fontSize: 26,
+    lineHeight: 34,
+    fontWeight: '700' as const,
   },
   h3: {
     fontSize: 20,
@@ -25,14 +25,14 @@ export const typography = {
     fontWeight: '600' as const,
   },
   caption: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: '400' as const,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '500' as const,
   },
   small: {
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '400' as const,
+    fontWeight: '500' as const,
   },
 } as const;
 
