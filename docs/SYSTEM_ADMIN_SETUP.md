@@ -3,6 +3,7 @@
 ## 📋 Oversigt
 
 Global system admin detection er implementeret via:
+
 1. ✅ Supabase RPC funktion `is_app_admin()`
 2. ✅ Global state i `AuthProvider`
 3. ✅ Eksponeret via `useAuth()` hook
@@ -14,12 +15,14 @@ Global system admin detection er implementeret via:
 **Lokation:** [src/auth/AuthProvider.tsx](../src/auth/AuthProvider.tsx)
 
 Dette er det centrale sted hvor:
+
 - Supabase session håndteres
 - User state administreres
 - Admin status hentes og caches
 - Auth context eksponeres til hele appen
 
 ### Auth Flow
+
 ```typescript
 1. App starter → AuthProvider loader
 2. getSession() → sætter user/session
@@ -53,12 +56,14 @@ $$;
 ```
 
 **Hvorfor RPC?**
+
 - ✅ Bypasser RLS restrictions
 - ✅ `SECURITY DEFINER` giver funktionen elevated privileges
 - ✅ Sikker måde at tjekke admin status på
 - ✅ Hurtigere end join queries
 
 **Deploy til Supabase:**
+
 ```bash
 # Via Supabase CLI
 supabase db push
@@ -72,14 +77,16 @@ supabase db push
 **Fil:** [src/auth/AuthProvider.tsx](../src/auth/AuthProvider.tsx)
 
 **Tilføjede felter til context:**
+
 ```typescript
 type AuthContextValue = {
   // ... existing fields
-  isAppAdmin: boolean;  // ✅ NEW
+  isAppAdmin: boolean; // ✅ NEW
 };
 ```
 
 **Admin check logic:**
+
 ```typescript
 useEffect(() => {
   let mounted = true;
@@ -88,15 +95,15 @@ useEffect(() => {
     try {
       // Use RPC to bypass RLS
       const { data: isAdmin, error } = await supabase.rpc('is_app_admin');
-      
+
       if (error) throw error;
-      
+
       if (mounted) {
         setIsAppAdmin(!!isAdmin);
         if (__DEV__) {
-          console.log('[AuthProvider] Admin check result:', { 
-            userId, 
-            isAdmin: !!isAdmin 
+          console.log('[AuthProvider] Admin check result:', {
+            userId,
+            isAdmin: !!isAdmin,
           });
         }
       }
@@ -119,6 +126,7 @@ useEffect(() => {
 ```
 
 **Nøgle features:**
+
 - ✅ Kører automatisk ved session change
 - ✅ Cleaner ved unmount (memory leak prevention)
 - ✅ Sætter false hvis user er null
@@ -134,17 +142,18 @@ Alle permissions funktioner starter med admin bypass:
 ```typescript
 export function canEditPost(
   userId: string | undefined,
-  isAppAdmin: boolean,  // ✅ Parameter
+  isAppAdmin: boolean, // ✅ Parameter
   post: PostPermissionObject,
   communityRole?: CommunityRole,
 ): boolean {
-  if (isAppAdmin) return true;  // ✅ FIRST CHECK
+  if (isAppAdmin) return true; // ✅ FIRST CHECK
   if (!userId) return false;
   // ... rest of logic
 }
 ```
 
 **Implementeret i:**
+
 - ✅ `canEditPost()`
 - ✅ `canDeletePost()`
 - ✅ `canEditComment()`
@@ -155,10 +164,11 @@ export function canEditPost(
 ### Del 4: UI Integration
 
 #### FanPostCard
+
 **Fil:** [src/components/cards/FanPostCard.tsx](../src/components/cards/FanPostCard.tsx)
 
 ```typescript
-const { user, isAppAdmin } = useAuth();  // ✅ Hent fra context
+const { user, isAppAdmin } = useAuth(); // ✅ Hent fra context
 
 // Post menu
 const showEditOption = canEditPost(user?.id, isAppAdmin, { author_id: post.authorId });
@@ -169,21 +179,23 @@ const canDelete = c.author_id === user?.id || post.authorId === user?.id || isAp
 ```
 
 #### EventDetailsScreen
+
 **Fil:** [src/screens/EventDetailsScreen.tsx](../src/screens/EventDetailsScreen.tsx)
 
 ```typescript
-const { user, isAppAdmin } = useAuth();  // ✅ Hent fra context
+const { user, isAppAdmin } = useAuth(); // ✅ Hent fra context
 const { role: communityRole } = useCommunityRole(event?.organizer_group_id);
 
 const showEditOption = canEditEvent(
   user?.id,
-  isAppAdmin,  // ✅ Passes til permission check
+  isAppAdmin, // ✅ Passes til permission check
   { created_by: event.created_by, organizer_group_id: event.organizer_group_id },
   communityRole,
 );
 ```
 
 #### HomeScreen
+
 **Fil:** [src/screens/HomeScreen.tsx](../src/screens/HomeScreen.tsx)
 
 ```typescript
@@ -200,18 +212,20 @@ if (__DEV__) {
 ### 1. Setup Test Admin User
 
 **I Supabase Dashboard eller via SQL:**
+
 ```sql
 -- Find din user_id fra auth.users
 SELECT id, email FROM auth.users;
 
 -- Tilføj som admin
-INSERT INTO public.app_admins (user_id) 
+INSERT INTO public.app_admins (user_id)
 VALUES ('din-user-id-her');
 ```
 
 ### 2. Verificer RPC Function
 
 **Test i Supabase SQL Editor:**
+
 ```sql
 -- Som admin user
 SELECT public.is_app_admin();
@@ -225,12 +239,14 @@ SELECT public.is_app_admin();
 ### 3. Test i App
 
 **Start app og tjek console:**
+
 ```
 [AuthProvider] Admin check result: { userId: '...', isAdmin: true }
 [HomeScreen] { userId: '...', isAppAdmin: true }
 ```
 
 **Verificer UI:**
+
 - ✅ 3-prik menu vises på ALT indhold (også andres)
 - ✅ Kan åbne edit screens for andres events
 - ✅ Kan slette andres posts/comments
@@ -239,12 +255,14 @@ SELECT public.is_app_admin();
 ### 4. Test Non-Admin User
 
 **Log ind som almindelig bruger:**
+
 ```
 [AuthProvider] Admin check result: { userId: '...', isAdmin: false }
 [HomeScreen] { userId: '...', isAppAdmin: false }
 ```
 
 **Verificer UI:**
+
 - ✅ Ingen menu på andres indhold
 - ✅ Kun menu på eget indhold
 - ✅ Kan ikke slette andres posts
@@ -254,13 +272,16 @@ SELECT public.is_app_admin();
 ### Problem: isAppAdmin er altid false
 
 **Løsning:**
+
 1. Tjek at RPC function er deployed:
+
    ```sql
-   SELECT routine_name FROM information_schema.routines 
+   SELECT routine_name FROM information_schema.routines
    WHERE routine_schema = 'public' AND routine_name = 'is_app_admin';
    ```
 
 2. Tjek at user findes i app_admins:
+
    ```sql
    SELECT * FROM public.app_admins WHERE user_id = auth.uid();
    ```
@@ -273,6 +294,7 @@ SELECT public.is_app_admin();
 ### Problem: RPC function ikke fundet
 
 **Løsning:**
+
 ```sql
 -- Deploy manuelt via SQL Editor
 -- Kopiér indhold fra migration file og kør
@@ -281,6 +303,7 @@ SELECT public.is_app_admin();
 ### Problem: Console viser ikke logs
 
 **Løsning:**
+
 ```typescript
 // Sikr at __DEV__ er true
 console.log('__DEV__:', __DEV__);

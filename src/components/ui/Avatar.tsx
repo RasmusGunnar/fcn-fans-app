@@ -32,22 +32,22 @@ export function Avatar({ userId, avatarUrl, size = 'md', label }: AvatarProps) {
   // Build candidate paths
   const candidatePaths = React.useMemo(() => {
     const paths: string[] = [];
-    
+
     // If avatarUrl starts with http, use it directly
     if (avatarUrl && avatarUrl.startsWith('http')) {
       return [avatarUrl];
     }
-    
+
     // Otherwise, build candidate paths in the avatars bucket
     if (avatarUrl) {
       paths.push(avatarUrl);
     }
-    
+
     if (userId) {
       paths.push(`${userId}/avatar.jpg`);
       paths.push(`${userId}.jpg`);
     }
-    
+
     // De-duplicate
     return [...new Set(paths)];
   }, [userId, avatarUrl]);
@@ -64,7 +64,7 @@ export function Avatar({ userId, avatarUrl, size = 'md', label }: AvatarProps) {
   useEffect(() => {
     setCurrentCandidateIndex(0);
     setResolvedUri(null);
-    
+
     // Check cache first
     const cacheKey = candidatePaths.join('|');
     if (pathCache.has(cacheKey)) {
@@ -72,7 +72,7 @@ export function Avatar({ userId, avatarUrl, size = 'md', label }: AvatarProps) {
       setResolvedUri(cachedUri);
       return;
     }
-    
+
     // Try first candidate
     if (candidatePaths.length > 0) {
       const uri = getPublicUrl(candidatePaths[0]);
@@ -83,7 +83,7 @@ export function Avatar({ userId, avatarUrl, size = 'md', label }: AvatarProps) {
   // Handle image load errors
   const handleError = () => {
     const nextIndex = currentCandidateIndex + 1;
-    
+
     if (nextIndex < candidatePaths.length) {
       // Try next candidate
       setCurrentCandidateIndex(nextIndex);
@@ -106,17 +106,20 @@ export function Avatar({ userId, avatarUrl, size = 'md', label }: AvatarProps) {
 
   // Render fallback initials
   if (!resolvedUri) {
-    const initials = label 
-      ? label.substring(0, 2).toUpperCase() 
-      : userId 
-        ? userId.substring(0, 2).toUpperCase() 
+    const initials = label
+      ? label.substring(0, 2).toUpperCase()
+      : userId
+        ? userId.substring(0, 2).toUpperCase()
         : '??';
-    
+
     return (
-      <View style={[styles.fallback, { width: pixelSize, height: pixelSize, borderRadius: pixelSize / 2 }]}>
-        <Text style={[styles.initials, { fontSize: pixelSize * 0.4 }]}>
-          {initials}
-        </Text>
+      <View
+        style={[
+          styles.fallback,
+          { width: pixelSize, height: pixelSize, borderRadius: pixelSize / 2 },
+        ]}
+      >
+        <Text style={[styles.initials, { fontSize: pixelSize * 0.4 }]}>{initials}</Text>
       </View>
     );
   }

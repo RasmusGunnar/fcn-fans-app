@@ -181,7 +181,9 @@ export async function fetchEventsUpcoming(limit = 20, communityId?: string): Pro
   try {
     let query = supabase
       .from('events')
-      .select('id, title, description, start_at, end_at, location_name, location_address, organizer_group_id, created_by, created_at, lat, lng')
+      .select(
+        'id, title, description, start_at, end_at, location_name, location_address, organizer_group_id, created_by, created_at, lat, lng',
+      )
       .gte('start_at', new Date().toISOString())
       .order('start_at', { ascending: true })
       .limit(limit);

@@ -46,7 +46,7 @@ export function MatchCard({
   onPressShare = () => {},
 }: MatchCardProps) {
   const { user, isAppAdmin } = useAuth();
-  
+
   const date = new Date(kickoffAt);
   const dateStr = date.toLocaleDateString('da-DK', {
     weekday: 'short',

@@ -62,11 +62,7 @@ export function FCNPost({
 
         {/* Action Bar */}
         <View style={styles.actionBar}>
-          <Pressable
-            style={styles.actionButton}
-            onPress={onPressLike}
-            disabled={!onPressLike}
-          >
+          <Pressable style={styles.actionButton} onPress={onPressLike} disabled={!onPressLike}>
             <Ionicons
               name={liked ? 'heart' : 'heart-outline'}
               size={theme.components.icon.size.md}
@@ -92,11 +88,7 @@ export function FCNPost({
             </Text>
           </Pressable>
 
-          <Pressable
-            style={styles.actionButton}
-            onPress={onPressShare}
-            disabled={!onPressShare}
-          >
+          <Pressable style={styles.actionButton} onPress={onPressShare} disabled={!onPressShare}>
             <Ionicons
               name="share-outline"
               size={theme.components.icon.size.md}

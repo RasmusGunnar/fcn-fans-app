@@ -71,7 +71,10 @@ export function InlineComments({
             .single();
 
           if (__DEV__ && profileError) {
-            console.warn(`[InlineComments] Profile fetch error for ${comment.author_id.substring(0, 8)}:`, profileError.message);
+            console.warn(
+              `[InlineComments] Profile fetch error for ${comment.author_id.substring(0, 8)}:`,
+              profileError.message,
+            );
           }
 
           // Guard against undefined profile
@@ -88,7 +91,7 @@ export function InlineComments({
             author_display_name: profile.display_name || null,
             author_avatar_url: profile.avatar_url || null,
           };
-        })
+        }),
       );
 
       setComments(commentsWithAuthors);
@@ -153,7 +156,7 @@ export function InlineComments({
 
       setComments([...comments, newComment]); // Add to bottom (Instagram-style)
       setCommentText('');
-      
+
       // Notify parent of new comment for preview update
       if (onNewComment) {
         onNewComment(newComment);
@@ -237,9 +240,7 @@ export function InlineComments({
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerText}>
-          Kommentarer ({comments.length})
-        </Text>
+        <Text style={styles.headerText}>Kommentarer ({comments.length})</Text>
       </View>
 
       {comments.length === 0 ? (
@@ -249,9 +250,7 @@ export function InlineComments({
           {comments.map((comment) => {
             const isOwnComment = currentUserId === comment.author_id;
             const canDelete = isOwnComment || isAppAdmin;
-            const displayName = isOwnComment
-              ? 'Dig'
-              : comment.author_display_name || 'Ukendt';
+            const displayName = isOwnComment ? 'Dig' : comment.author_display_name || 'Ukendt';
 
             return (
               <View key={comment.id} style={styles.commentItem}>
@@ -274,7 +273,11 @@ export function InlineComments({
                           onPress={() => handleDeleteComment(comment.id, comment.author_id)}
                           hitSlop={8}
                         >
-                          <Ionicons name="close-circle" size={16} color={defaultTheme.colors.text.secondary} />
+                          <Ionicons
+                            name="close-circle"
+                            size={16}
+                            color={defaultTheme.colors.text.secondary}
+                          />
                         </Pressable>
                       )}
                     </View>
@@ -299,7 +302,10 @@ export function InlineComments({
           editable={!submitting && !!currentUserId}
         />
         <Pressable
-          style={[styles.sendButton, (!commentText.trim() || submitting) && styles.sendButtonDisabled]}
+          style={[
+            styles.sendButton,
+            (!commentText.trim() || submitting) && styles.sendButtonDisabled,
+          ]}
           onPress={handleSubmitComment}
           disabled={!commentText.trim() || submitting}
         >
@@ -311,9 +317,7 @@ export function InlineComments({
         </Pressable>
       </View>
 
-      {!currentUserId && (
-        <Text style={styles.loginPrompt}>Log ind for at kommentere</Text>
-      )}
+      {!currentUserId && <Text style={styles.loginPrompt}>Log ind for at kommentere</Text>}
     </View>
   );
 }

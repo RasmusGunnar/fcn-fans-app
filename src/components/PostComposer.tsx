@@ -245,68 +245,68 @@ export function PostComposer({ onSuccess, actor }: PostComposerProps) {
 
 function createStyles(theme: Theme) {
   return StyleSheet.create({
-  container: {
-    padding: theme.layout.screenPadding,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.colors.text.primary,
-    marginBottom: theme.spacing[2],
-  },
-  textInput: {
-    borderWidth: 1,
-    borderColor: theme.colors.border.default,
-    borderRadius: theme.radius.sm,
-    padding: theme.spacing[4],
-    minHeight: 120,
-    fontSize: 14,
-    color: theme.colors.text.primary,
-    textAlignVertical: 'top',
-  },
-  previewContainer: {
-    marginTop: theme.spacing[4],
-    gap: theme.spacing[2],
-  },
-  previewImage: {
-    width: '100%',
-    height: 200,
-    borderRadius: theme.radius.sm,
-    backgroundColor: theme.colors.border.default,
-  },
-  removeAttachment: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing[1],
-  },
-  removeAttachmentText: {
-    color: theme.colors.primary,
-    fontSize: 14,
-  },
-  imageButtonsContainer: {
-    flexDirection: 'row',
-    gap: theme.spacing[2],
-  },
-  imageButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: theme.spacing[4],
-    paddingHorizontal: theme.spacing[2],
-    borderWidth: 1,
-    borderColor: theme.colors.primary,
-    borderRadius: theme.radius.sm,
-    gap: theme.spacing[1],
-  },
-  imageButtonText: {
-    fontSize: 14,
-    color: theme.colors.primary,
-    fontWeight: '500',
-  },
-  loadingOverlay: {
-    marginTop: theme.spacing[2],
-    alignItems: 'center',
-  },
+    container: {
+      padding: theme.layout.screenPadding,
+    },
+    label: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: theme.colors.text.primary,
+      marginBottom: theme.spacing[2],
+    },
+    textInput: {
+      borderWidth: 1,
+      borderColor: theme.colors.border.default,
+      borderRadius: theme.radius.sm,
+      padding: theme.spacing[4],
+      minHeight: 120,
+      fontSize: 14,
+      color: theme.colors.text.primary,
+      textAlignVertical: 'top',
+    },
+    previewContainer: {
+      marginTop: theme.spacing[4],
+      gap: theme.spacing[2],
+    },
+    previewImage: {
+      width: '100%',
+      height: 200,
+      borderRadius: theme.radius.sm,
+      backgroundColor: theme.colors.border.default,
+    },
+    removeAttachment: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing[1],
+    },
+    removeAttachmentText: {
+      color: theme.colors.primary,
+      fontSize: 14,
+    },
+    imageButtonsContainer: {
+      flexDirection: 'row',
+      gap: theme.spacing[2],
+    },
+    imageButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: theme.spacing[4],
+      paddingHorizontal: theme.spacing[2],
+      borderWidth: 1,
+      borderColor: theme.colors.primary,
+      borderRadius: theme.radius.sm,
+      gap: theme.spacing[1],
+    },
+    imageButtonText: {
+      fontSize: 14,
+      color: theme.colors.primary,
+      fontWeight: '500',
+    },
+    loadingOverlay: {
+      marginTop: theme.spacing[2],
+      alignItems: 'center',
+    },
   });
 }

@@ -31,7 +31,7 @@ export function CategoryBadge({ categoryKey }: CategoryBadgeProps) {
   const textColor = theme.colors.text.inverse;
 
   return (
-    <View style={[styles.badge, { backgroundColor: bgColor }]}> 
+    <View style={[styles.badge, { backgroundColor: bgColor }]}>
       <Ionicons name={definition.iconName as any} size={14} color={textColor} />
       <Text style={[styles.text, { color: textColor }]}>{definition.label}</Text>
     </View>

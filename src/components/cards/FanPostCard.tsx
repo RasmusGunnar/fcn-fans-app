@@ -3,16 +3,7 @@
 // NO hardcoded numbers or color strings allowed.
 
 import React, { useState, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Image,
-  TextInput,
-  Pressable,
-  Share,
-  Alert,
-} from 'react-native';
+import { View, Text, StyleSheet, Image, TextInput, Pressable, Share, Alert } from 'react-native';
 import { Card } from '../ui/Card';
 import { OptionsMenu, OptionsMenuOption } from '../OptionsMenu';
 import { CardRoot } from './CardRoot';
@@ -173,23 +164,25 @@ export function FanPostCard({
   // Build card behavior model to determine category, name line, and press behavior
   const communityId = (post as any).communityId ?? (post as any).community_id ?? null;
   const isCommunityPost = !!communityId;
-  const communityName = communityId && communityMap?.[communityId] ? communityMap[communityId] : null;
+  const communityName =
+    communityId && communityMap?.[communityId] ? communityMap[communityId] : null;
 
   const cardModel = buildCardBehaviorModel({
     kind: 'post',
     actorType: isCommunityPost ? 'community' : 'fan',
     actorName: isCommunityPost
       ? (communityName ?? 'Fællesskab')
-      : (authorProfile?.display_name || (post as any).authorName || 'Ukendt'),
+      : authorProfile?.display_name || (post as any).authorName || 'Ukendt',
     postLinkUrl: undefined, // Posts don't have embedded links in current data model
   });
 
   // Compute onOpenDetail based on model
-  const computedOnOpenDetail = cardModel.pressBehavior === 'open_external' && cardModel.externalUrl
-    ? () => Linking.openURL(cardModel.externalUrl!)
-    : cardModel.pressBehavior === 'none'
-    ? undefined
-    : onOpenDetail;
+  const computedOnOpenDetail =
+    cardModel.pressBehavior === 'open_external' && cardModel.externalUrl
+      ? () => Linking.openURL(cardModel.externalUrl!)
+      : cardModel.pressBehavior === 'none'
+        ? undefined
+        : onOpenDetail;
 
   return (
     <CardRoot
@@ -223,7 +216,7 @@ export function FanPostCard({
           subtitle={groupDisplay ? `${groupDisplay} · ${timeAgo}` : timeAgo}
         />
       ) : null}
-      {((showEditOption || showDeleteOption) && postMenuOptions.length > 0) ? (
+      {(showEditOption || showDeleteOption) && postMenuOptions.length > 0 ? (
         <OptionsMenu options={postMenuOptions} />
       ) : null}
       {isEditing ? (

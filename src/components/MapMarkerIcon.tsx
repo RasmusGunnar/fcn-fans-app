@@ -10,7 +10,7 @@ interface MapMarkerIconProps {
 export function MapMarkerIcon({ logoUrl, type }: MapMarkerIconProps) {
   const theme = useTheme();
   const styles = createStyles(theme);
-  
+
   return (
     <View style={styles.container}>
       {/* Pin body */}
@@ -18,11 +18,7 @@ export function MapMarkerIcon({ logoUrl, type }: MapMarkerIconProps) {
         {/* Logo badge at top */}
         <View style={styles.badge}>
           {logoUrl ? (
-            <Image
-              source={{ uri: logoUrl }}
-              style={styles.logo}
-              resizeMode="contain"
-            />
+            <Image source={{ uri: logoUrl }} style={styles.logo} resizeMode="contain" />
           ) : (
             <View style={styles.fallback}>
               <View style={styles.fallbackDot} />

@@ -72,7 +72,7 @@ export function EventCard({
       (navigation as any).navigate('EventDetails', { eventId: cardModel.internalEventId });
     }
   };
-  
+
   return (
     <CardRoot
       targetType={targetType}

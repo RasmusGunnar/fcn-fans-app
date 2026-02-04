@@ -81,10 +81,14 @@ export default function WelcomeScreen({ navigation }: Props) {
     <Screen scrollable>
       <View style={{ gap: theme.spacing[3] }}>
         <Text variant="h1">Velkommen</Text>
-        <Text variant="body" color="secondary">Log ind for at se feed og favoritter.</Text>
+        <Text variant="body" color="secondary">
+          Log ind for at se feed og favoritter.
+        </Text>
 
         {/* Email */}
-        <Text variant="bodyBold" style={{ marginTop: theme.spacing[2] }}>Mail</Text>
+        <Text variant="bodyBold" style={{ marginTop: theme.spacing[2] }}>
+          Mail
+        </Text>
         <TextInput
           value={email}
           onChangeText={setEmail}
@@ -107,7 +111,9 @@ export default function WelcomeScreen({ navigation }: Props) {
         <Divider spacing="md" />
 
         <Text variant="bodyBold">Er du ikke oprettet endnu?</Text>
-        <Text variant="body" color="secondary">Så opret dig med (det er samme flow – du får en kode):</Text>
+        <Text variant="body" color="secondary">
+          Så opret dig med (det er samme flow – du får en kode):
+        </Text>
 
         {/* Social options */}
         {Platform.OS === 'ios' ? (

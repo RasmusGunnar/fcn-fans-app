@@ -10,12 +10,15 @@ Denne mappe indeholder SQL-filer til manual eksekvering i Supabase Dashboard.
 ## 🚀 Sådan Kører Du SQL Manuelt
 
 ### Trin 1: Åbn SQL-filen
+
 Find den relevante SQL-fil (fx `2026-01-25_communities_rbac_avatars.sql`)
 
 ### Trin 2: Kopier indhold
+
 Åbn filen og kopier alt SQL-indhold
 
 ### Trin 3: Kør i Supabase Dashboard
+
 1. Log ind på [Supabase Dashboard](https://supabase.com/dashboard)
 2. Vælg dit projekt
 3. Gå til **SQL Editor** i sidebaren
@@ -25,6 +28,7 @@ Find den relevante SQL-fil (fx `2026-01-25_communities_rbac_avatars.sql`)
 7. Klik **Run** for at eksekvere
 
 ### Trin 4: Verificer & Opdater Changelog
+
 1. Kør verification queries i bunden af SQL-filen
 2. Tjek at alle ændringer er korrekte
 3. Opdater `../CHANGELOG_MANUAL.sql`:
@@ -61,14 +65,17 @@ git commit -m "chore: executed communities RBAC + avatars migration"
 ## 🔍 Troubleshooting
 
 **Fejl: "must be owner of table"**
+
 - Du mangler rettigheder i Supabase
 - Brug service role credentials eller kontakt admin
 
 **Fejl: "constraint already exists"**
+
 - SQL er idempotent, men du forsøger at tilføje noget der findes
 - Check eksisterende constraints med introspection queries
 
 **Fejl: "policy already exists"**
+
 - Normalt OK - `DROP POLICY IF EXISTS` skulle håndtere det
 - Hvis ikke: kør `DROP POLICY` manuelt først
 

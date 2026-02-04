@@ -84,7 +84,10 @@ export function OptionsMenu({ options, iconColor, iconSize = 20 }: OptionsMenuPr
 
   return (
     <>
-      <TouchableOpacity onPress={handlePress} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+      <TouchableOpacity
+        onPress={handlePress}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      >
         <Ionicons name="ellipsis-horizontal" size={iconSize} color={resolvedIconColor} />
       </TouchableOpacity>
 
@@ -113,7 +116,10 @@ export function OptionsMenu({ options, iconColor, iconSize = 20 }: OptionsMenuPr
                     />
                   )}
                   <Text
-                    style={[styles.modalOptionText, option.destructive && styles.modalOptionTextDestructive]}
+                    style={[
+                      styles.modalOptionText,
+                      option.destructive && styles.modalOptionTextDestructive,
+                    ]}
                   >
                     {option.label}
                   </Text>
@@ -132,45 +138,45 @@ export function OptionsMenu({ options, iconColor, iconSize = 20 }: OptionsMenuPr
 
 function createStyles(theme: Theme) {
   return StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: theme.colors.overlay.heavy,
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: theme.colors.bg.card,
-    borderTopLeftRadius: theme.radius.lg,
-    borderTopRightRadius: theme.radius.lg,
-    paddingTop: theme.spacing[4],
-    paddingBottom: theme.spacing[6],
-  },
-  modalOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: theme.spacing[4],
-    paddingHorizontal: theme.spacing[6],
-  },
-  modalOptionIcon: {
-    marginRight: theme.spacing[2],
-  },
-  modalOptionText: {
-    fontSize: theme.typography.body.fontSize,
-    color: theme.colors.text.primary,
-  },
-  modalOptionTextDestructive: {
-    color: theme.colors.error,
-  },
-  modalCancel: {
-    marginTop: theme.spacing[2],
-    paddingVertical: theme.spacing[4],
-    paddingHorizontal: theme.spacing[6],
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border.default,
-  },
-  modalCancelText: {
-    fontSize: theme.typography.body.fontSize,
-    color: theme.colors.text.secondary,
-    textAlign: 'center',
-  },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: theme.colors.overlay.heavy,
+      justifyContent: 'flex-end',
+    },
+    modalContent: {
+      backgroundColor: theme.colors.bg.card,
+      borderTopLeftRadius: theme.radius.lg,
+      borderTopRightRadius: theme.radius.lg,
+      paddingTop: theme.spacing[4],
+      paddingBottom: theme.spacing[6],
+    },
+    modalOption: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: theme.spacing[4],
+      paddingHorizontal: theme.spacing[6],
+    },
+    modalOptionIcon: {
+      marginRight: theme.spacing[2],
+    },
+    modalOptionText: {
+      fontSize: theme.typography.body.fontSize,
+      color: theme.colors.text.primary,
+    },
+    modalOptionTextDestructive: {
+      color: theme.colors.error,
+    },
+    modalCancel: {
+      marginTop: theme.spacing[2],
+      paddingVertical: theme.spacing[4],
+      paddingHorizontal: theme.spacing[6],
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.border.default,
+    },
+    modalCancelText: {
+      fontSize: theme.typography.body.fontSize,
+      color: theme.colors.text.secondary,
+      textAlign: 'center',
+    },
   });
 }

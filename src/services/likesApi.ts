@@ -18,7 +18,7 @@ interface CommentMeta {
  */
 export async function fetchLikeStates(
   targetType: LikeTargetType,
-  targetIds: string[]
+  targetIds: string[],
 ): Promise<Map<string, { liked: boolean; likes: number }>> {
   if (targetIds.length === 0) {
     return new Map();
@@ -37,8 +37,8 @@ export async function fetchLikeStates(
   }
 
   const resultMap = new Map<string, { liked: boolean; likes: number }>();
-  
-  (data as LikeState[] || []).forEach((item) => {
+
+  ((data as LikeState[]) || []).forEach((item) => {
     resultMap.set(item.target_id, {
       liked: item.liked,
       likes: item.likes_count,
@@ -53,7 +53,7 @@ export async function fetchLikeStates(
  */
 export async function fetchCommentCounts(
   targetType: LikeTargetType,
-  targetIds: string[]
+  targetIds: string[],
 ): Promise<Map<string, number>> {
   if (targetIds.length === 0) {
     return new Map();
@@ -72,8 +72,8 @@ export async function fetchCommentCounts(
   }
 
   const resultMap = new Map<string, number>();
-  
-  (data as CommentMeta[] || []).forEach((item) => {
+
+  ((data as CommentMeta[]) || []).forEach((item) => {
     resultMap.set(item.target_id, item.comments_count);
   });
 
@@ -95,7 +95,7 @@ export interface CommentPreview {
  */
 export async function fetchCommentPreviews(
   targetType: LikeTargetType,
-  targetIds: string[]
+  targetIds: string[],
 ): Promise<Map<string, CommentPreview[]>> {
   if (targetIds.length === 0) {
     return new Map();
@@ -134,7 +134,10 @@ export async function fetchCommentPreviews(
               .single();
 
             if (__DEV__ && profileError) {
-              console.warn(`[fetchCommentPreviews] Profile fetch error for ${comment.author_id.substring(0, 8)}:`, profileError.message);
+              console.warn(
+                `[fetchCommentPreviews] Profile fetch error for ${comment.author_id.substring(0, 8)}:`,
+                profileError.message,
+              );
             }
 
             // Guard against undefined profile
@@ -151,12 +154,12 @@ export async function fetchCommentPreviews(
               author_display_name: profile.display_name || null,
               author_avatar_url: profile.avatar_url || null,
             };
-          })
+          }),
         );
 
         // Reverse to show oldest first (Instagram style)
         resultMap.set(targetId, commentsWithAuthors.reverse());
-      })
+      }),
     );
   } catch (err) {
     if (__DEV__) {
@@ -174,7 +177,7 @@ export async function toggleLike(
   targetType: LikeTargetType,
   targetId: string,
   userId: string,
-  currentlyLiked: boolean
+  currentlyLiked: boolean,
 ): Promise<boolean> {
   if (currentlyLiked) {
     // Delete like
@@ -192,13 +195,11 @@ export async function toggleLike(
     return true;
   } else {
     // Insert like
-    const { error } = await supabase
-      .from('likes_v2')
-      .insert({
-        user_id: userId,
-        target_type: targetType,
-        target_id: targetId,
-      });
+    const { error } = await supabase.from('likes_v2').insert({
+      user_id: userId,
+      target_type: targetType,
+      target_id: targetId,
+    });
 
     if (error) {
       console.error('[toggleLike] Insert error:', error);

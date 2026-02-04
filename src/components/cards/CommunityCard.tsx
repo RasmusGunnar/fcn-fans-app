@@ -39,7 +39,7 @@ export function CommunityCard({
   onPressJoin,
 }: CommunityCardProps) {
   const theme = defaultTheme;
-  
+
   return (
     <Card style={styles.card}>
       <Pill

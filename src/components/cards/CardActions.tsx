@@ -25,10 +25,13 @@ export function CardActions({
   onPressShare,
 }: CardActionsProps) {
   const theme = defaultTheme;
-  
+
   const handleToggleLike = () => {
     if (__DEV__) {
-      console.log('[CardActions] Like toggle clicked:', { before: { liked, likes }, willToggle: !liked });
+      console.log('[CardActions] Like toggle clicked:', {
+        before: { liked, likes },
+        willToggle: !liked,
+      });
     }
     onToggleLike();
   };
@@ -39,7 +42,7 @@ export function CardActions({
     }
     onPressComment();
   };
-  
+
   return (
     <View style={styles.container} pointerEvents="box-none">
       <View style={styles.leftActions} pointerEvents="box-none">

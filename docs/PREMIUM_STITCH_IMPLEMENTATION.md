@@ -5,6 +5,7 @@
 ### 1. Theme Token Updates
 
 **Elevation (src/theme/tokens/elevation.ts)**
+
 - Softened shadows for premium feel:
   - `sm`: opacity 0.10 → 0.06, radius 4
   - `md`: opacity 0.15 → 0.08, radius 8 → 12
@@ -53,12 +54,14 @@ chip: {
 ### 2. Component Updates
 
 **Button (src/components/ui/Button.tsx)**
+
 - ✅ Updated to use `theme.components.button.radius` (pill shape)
 - ✅ Size `lg` now uses token-based height/padding
 - ✅ Variants use `theme.components.button.variants` tokens
 - ✅ Primary/ghost variants reference `brand.accent` correctly
 
 **Pill (src/components/ui/Pill.tsx)**
+
 - ✅ **REFACTORED** from legacy pattern to `useTheme()` + `createStyles(theme)`
 - ✅ Removed hardcoded imports: `import { colors, spacing, radius }`
 - ✅ Removed hardcoded `fontSize: 12`
@@ -67,6 +70,7 @@ chip: {
 - ✅ Uses `theme.typography.caption` for consistent text sizing
 
 **Chip (src/components/ui/Chip.tsx)** ⭐ NEW COMPONENT
+
 - ✅ Created new segmented control component
 - ✅ Pill radius (999) for consistent styling
 - ✅ Selected/unselected state styling with proper borders
@@ -77,6 +81,7 @@ chip: {
 ### 3. Card Component Fixes
 
 **Card Variants (existing - no changes needed)**
+
 - Already uses `StyleSheet.hairlineWidth` for borders
 - Already uses soft shadows from elevation tokens
 - Already uses expo-linear-gradient
@@ -85,6 +90,7 @@ chip: {
 ### 4. Usage Updates
 
 Updated existing Pill usages to match new variants:
+
 - **CommunityCard**: `blue` → `badge`
 - **EventCard**: `orange` → `gold`
 - **FanFactionCard**: `neutral` → `subtle`
@@ -92,23 +98,27 @@ Updated existing Pill usages to match new variants:
 ## 🎨 Visual Results
 
 ### Primary Buttons
+
 - **Pill shape** (border-radius: 999px)
 - **Large size**: 48px height, generous padding
 - **Soft press**: 0.8 opacity on press
 
 ### Pills/Badges
+
 - **Pill shape** (border-radius: 999px)
 - **Badge variant**: Red with white text, uppercase
 - **Subtle variant**: Light grey background
 - **Gold variant**: Gold background with white text
 
 ### Chips (Segmented Controls)
+
 - **Pill shape** (border-radius: 999px)
 - **40px height** for comfortable touch targets
 - **Selected**: Red background, white text
 - **Unselected**: White background, grey border, dark text
 
 ### Cards
+
 - **Softer shadows**: Lower opacity (0.08 for md)
 - **Larger blur radius**: 12px for premium feel
 - **Hairline borders**: Consistent 1px across platforms
@@ -125,11 +135,13 @@ Updated existing Pill usages to match new variants:
 ## 📊 Design System Compliance
 
 **Before:**
+
 - Pill component violated design system (legacy imports)
 - Hardcoded fontSize values
 - Manual color references
 
 **After:**
+
 - 100% token-based styling
 - useTheme() + createStyles(theme) pattern
 - All sizing, colors, radius from theme tokens
@@ -138,6 +150,7 @@ Updated existing Pill usages to match new variants:
 ## 🔄 Migration Notes
 
 If you have existing Pill usages with old variants:
+
 - `red` → `badge`
 - `blue` → `badge`
 - `orange` → `gold`
@@ -174,6 +187,7 @@ If you have existing Pill usages with old variants:
 ## 🎯 Achievement
 
 **Premium Stitch-style component styling successfully applied globally:**
+
 - ✅ Pill primary buttons
 - ✅ Pill chips for segmented controls
 - ✅ Clean cards with soft shadows

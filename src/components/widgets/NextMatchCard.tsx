@@ -23,7 +23,7 @@ export interface NextMatchCardProps {
 
 /**
  * NextMatchCard - Reusable next match widget
- * 
+ *
  * DO NOT hardcode colors/padding/margin/radius/shadows
  * Uses theme tokens exclusively via createStyles(theme) pattern
  */
@@ -55,13 +55,7 @@ export function NextMatchCard({
 
   const renderTeamLogo = (logo?: ImageSourcePropType, teamName?: string) => {
     if (logo) {
-      return (
-        <Image
-          source={logo}
-          style={styles.teamLogo}
-          resizeMode="contain"
-        />
-      );
+      return <Image source={logo} style={styles.teamLogo} resizeMode="contain" />;
     }
     // Fallback circle with team initial
     return (
@@ -87,7 +81,10 @@ export function NextMatchCard({
           <Text variant="caption" style={{ color: theme.colors.text.secondary }}>
             {dateText}
           </Text>
-          <Text variant="caption" style={{ color: theme.colors.text.muted, marginTop: theme.spacing[0] }}>
+          <Text
+            variant="caption"
+            style={{ color: theme.colors.text.muted, marginTop: theme.spacing[0] }}
+          >
             {venueText}
           </Text>
         </View>
@@ -104,7 +101,10 @@ export function NextMatchCard({
       <View
         style={[
           styles.divider,
-          { borderBottomColor: theme.colors.border.subtle, borderBottomWidth: theme.layout.borderHairline },
+          {
+            borderBottomColor: theme.colors.border.subtle,
+            borderBottomWidth: theme.layout.borderHairline,
+          },
         ]}
       />
 
@@ -138,7 +138,10 @@ export function NextMatchCard({
           <View
             style={[
               styles.divider,
-              { borderBottomColor: theme.colors.border.subtle, borderBottomWidth: theme.layout.borderHairline },
+              {
+                borderBottomColor: theme.colors.border.subtle,
+                borderBottomWidth: theme.layout.borderHairline,
+              },
             ]}
           />
           <View style={styles.ctaContainer}>
@@ -149,12 +152,7 @@ export function NextMatchCard({
 
       {/* Member Badge (if member state) */}
       {state === 'member' && (
-        <View
-          style={[
-            styles.memberBadge,
-            { backgroundColor: theme.colors.brand.gold },
-          ]}
-        >
+        <View style={[styles.memberBadge, { backgroundColor: theme.colors.brand.gold }]}>
           <Text variant="small" style={{ color: theme.colors.text.inverse, fontWeight: '700' }}>
             MEDLEM
           </Text>

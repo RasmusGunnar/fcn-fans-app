@@ -128,23 +128,30 @@ export default function EventScreen({ route, navigation }: Props) {
   );
 }
 
-const createStyles = () => StyleSheet.create({
-  container: { flex: 1 },
-  header: { padding: theme.layout.screenPadding, borderBottomWidth: 1 },
-  bold: { fontWeight: '800', fontSize: 16 },
-  muted: { opacity: 0.7 },
-  badge: {
-    marginTop: theme.spacing[2],
-    alignSelf: 'flex-start',
-    paddingVertical: theme.spacing[2],
-    paddingHorizontal: theme.spacing[2],
-    borderWidth: 1,
-    borderRadius: theme.radius.pill,
-    fontSize: 12,
-  },
-  msg: { padding: theme.spacing[3], borderBottomWidth: 1 },
-  msgText: { fontSize: 15 },
-  msgMeta: { marginTop: theme.spacing[1], fontSize: 11, opacity: 0.6 },
-  composer: { flexDirection: 'row', gap: theme.spacing[2], padding: theme.spacing[3], borderTopWidth: 1, alignItems: 'center' },
-  input: { flex: 1, borderWidth: 1, borderRadius: theme.radius.md, padding: theme.spacing[3] },
-});
+const createStyles = () =>
+  StyleSheet.create({
+    container: { flex: 1 },
+    header: { padding: theme.layout.screenPadding, borderBottomWidth: 1 },
+    bold: { fontWeight: '800', fontSize: 16 },
+    muted: { opacity: 0.7 },
+    badge: {
+      marginTop: theme.spacing[2],
+      alignSelf: 'flex-start',
+      paddingVertical: theme.spacing[2],
+      paddingHorizontal: theme.spacing[2],
+      borderWidth: 1,
+      borderRadius: theme.radius.pill,
+      fontSize: 12,
+    },
+    msg: { padding: theme.spacing[3], borderBottomWidth: 1 },
+    msgText: { fontSize: 15 },
+    msgMeta: { marginTop: theme.spacing[1], fontSize: 11, opacity: 0.6 },
+    composer: {
+      flexDirection: 'row',
+      gap: theme.spacing[2],
+      padding: theme.spacing[3],
+      borderTopWidth: 1,
+      alignItems: 'center',
+    },
+    input: { flex: 1, borderWidth: 1, borderRadius: theme.radius.md, padding: theme.spacing[3] },
+  });

@@ -146,72 +146,73 @@ export default function CreateSheet({ visible, onClose }: CreateSheetProps) {
   );
 }
 
-const makeStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.bg.default,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing[6],
-    paddingVertical: theme.spacing[4],
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border.default,
-  },
-  closeButton: {
-    padding: theme.spacing[1],
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: theme.colors.text.primary,
-  },
-  content: {
-    flex: 1,
-  },
-  choiceContainer: {
-    padding: theme.spacing[6],
-    gap: theme.spacing[6],
-  },
-  choiceCard: {
-    backgroundColor: theme.colors.bg.card,
-    padding: theme.spacing[8],
-    borderRadius: theme.radius.md,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: theme.colors.border.default,
-  },
-  choiceIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.colors.bg.default,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: theme.spacing[4],
-  },
-  choiceTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: theme.colors.text.primary,
-    marginBottom: theme.spacing[2],
-  },
-  choiceDescription: {
-    fontSize: 14,
-    color: theme.colors.text.secondary,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  infoText: {
-    fontSize: 14,
-    color: theme.colors.text.secondary,
-    backgroundColor: theme.colors.bg.card,
-    padding: theme.spacing[4],
-    borderRadius: theme.radius.sm,
-    borderWidth: 1,
-    borderColor: theme.colors.border.default,
-    marginBottom: theme.spacing[4],
-  },
-});
+const makeStyles = (theme: ReturnType<typeof useTheme>) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.bg.default,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: theme.spacing[6],
+      paddingVertical: theme.spacing[4],
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border.default,
+    },
+    closeButton: {
+      padding: theme.spacing[1],
+    },
+    title: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: theme.colors.text.primary,
+    },
+    content: {
+      flex: 1,
+    },
+    choiceContainer: {
+      padding: theme.spacing[6],
+      gap: theme.spacing[6],
+    },
+    choiceCard: {
+      backgroundColor: theme.colors.bg.card,
+      padding: theme.spacing[8],
+      borderRadius: theme.radius.md,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: theme.colors.border.default,
+    },
+    choiceIcon: {
+      width: 80,
+      height: 80,
+      borderRadius: theme.radius.pill,
+      backgroundColor: theme.colors.bg.default,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: theme.spacing[4],
+    },
+    choiceTitle: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: theme.colors.text.primary,
+      marginBottom: theme.spacing[2],
+    },
+    choiceDescription: {
+      fontSize: 14,
+      color: theme.colors.text.secondary,
+      textAlign: 'center',
+      lineHeight: 20,
+    },
+    infoText: {
+      fontSize: 14,
+      color: theme.colors.text.secondary,
+      backgroundColor: theme.colors.bg.card,
+      padding: theme.spacing[4],
+      borderRadius: theme.radius.sm,
+      borderWidth: 1,
+      borderColor: theme.colors.border.default,
+      marginBottom: theme.spacing[4],
+    },
+  });

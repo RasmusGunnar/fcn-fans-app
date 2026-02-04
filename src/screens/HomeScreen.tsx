@@ -24,26 +24,26 @@ export default function HomeScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const { user, isAppAdmin } = useAuth();
   const styles = createStyles();
-  const { 
-    feedItems, 
+  const {
+    feedItems,
     communityMap,
     profileMap,
-    likeMap, 
-    commentCountMap, 
+    likeMap,
+    commentCountMap,
     commentPreviewMap,
-    fetchPosts, 
-    removePost, 
+    fetchPosts,
+    removePost,
     toggleLike,
     incrementCommentCount,
     addCommentPreview,
-    loading 
+    loading,
   } = useFeed();
   const [nextFixture, setNextFixture] = useState<Fixture | null>(null);
   const [loadingFixture, setLoadingFixture] = useState(false);
 
   // Defensive: Ensure feedItems is always an array and filter out any falsy values
   const safeFeedItems = (Array.isArray(feedItems) ? feedItems : []).filter(Boolean);
-  
+
   // Ensure all maps have safe defaults
   const safeProfileMap = profileMap || {};
   const safeLikeMap = likeMap || {};
@@ -53,12 +53,12 @@ export default function HomeScreen() {
   // Debug logging for testing
   if (__DEV__) {
     console.log('[HomeScreen]', { userId: user?.id, isAppAdmin });
-    console.log('[HomeScreen] feedItems type', { 
-      isArray: Array.isArray(feedItems), 
+    console.log('[HomeScreen] feedItems type', {
+      isArray: Array.isArray(feedItems),
       value: feedItems ? 'defined' : 'undefined',
-      length: safeFeedItems.length 
+      length: safeFeedItems.length,
     });
-    
+
     // Log first item's data
     if (safeFeedItems.length > 0) {
       const firstItem = safeFeedItems[0];
@@ -249,42 +249,43 @@ export default function HomeScreen() {
   );
 }
 
-const createStyles = () => StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  content: { padding: spacing.md },
-  card: { marginBottom: spacing.md },
-  matchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginVertical: spacing.lg,
-  },
-  team: { alignItems: 'center', flex: 1 },
-  teamCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: theme.radius.pill,
-    backgroundColor: colors.fcnRed,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  teamLogo: { width: 60, height: 60, borderRadius: theme.radius.pill },
-  teamName: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.text,
-    marginTop: spacing.xs,
-    textAlign: 'center',
-  },
-  teamText: { color: colors.card, fontSize: 16, fontWeight: '700' },
-  loadingContainer: { paddingVertical: spacing.xl, alignItems: 'center' },
-  loadingText: { fontSize: 14, color: colors.subtext },
-  emptyContainer: { paddingVertical: spacing.xl, alignItems: 'center' },
-  emptyText: { fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: spacing.xs },
-  emptySubtext: { fontSize: 14, color: colors.subtext },
-  vs: { fontSize: 18, fontWeight: '700', color: colors.text, marginHorizontal: spacing.md },
-  matchDetails: { marginBottom: spacing.lg },
-  detailRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm },
-  icon: { fontSize: 16, marginRight: spacing.sm },
-  detailText: { fontSize: 14, color: colors.subtext },
-});
+const createStyles = () =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.bg },
+    content: { padding: spacing.md },
+    card: { marginBottom: spacing.md },
+    matchRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginVertical: spacing.lg,
+    },
+    team: { alignItems: 'center', flex: 1 },
+    teamCircle: {
+      width: 60,
+      height: 60,
+      borderRadius: theme.radius.pill,
+      backgroundColor: colors.fcnRed,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    teamLogo: { width: 60, height: 60, borderRadius: theme.radius.pill },
+    teamName: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.text,
+      marginTop: spacing.xs,
+      textAlign: 'center',
+    },
+    teamText: { color: colors.card, fontSize: 16, fontWeight: '700' },
+    loadingContainer: { paddingVertical: spacing.xl, alignItems: 'center' },
+    loadingText: { fontSize: 14, color: colors.subtext },
+    emptyContainer: { paddingVertical: spacing.xl, alignItems: 'center' },
+    emptyText: { fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: spacing.xs },
+    emptySubtext: { fontSize: 14, color: colors.subtext },
+    vs: { fontSize: 18, fontWeight: '700', color: colors.text, marginHorizontal: spacing.md },
+    matchDetails: { marginBottom: spacing.lg },
+    detailRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm },
+    icon: { fontSize: 16, marginRight: spacing.sm },
+    detailText: { fontSize: 14, color: colors.subtext },
+  });

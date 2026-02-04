@@ -171,12 +171,7 @@ export default function CreateEventScreen({ navigation }: Props) {
 
         <View style={styles.halfColumn}>
           <Text style={styles.label}>By *</Text>
-          <TextInput
-            style={styles.input}
-            value={city}
-            onChangeText={setCity}
-            placeholder="Farum"
-          />
+          <TextInput style={styles.input} value={city} onChangeText={setCity} placeholder="Farum" />
         </View>
       </View>
 
@@ -212,57 +207,58 @@ export default function CreateEventScreen({ navigation }: Props) {
   );
 }
 
-const createStyles = (theme: typeof import('../theme').defaultTheme) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.bg.default,
-  },
-  contentContainer: {
-    padding: theme.spacing[4],
-    paddingBottom: theme.spacing[8],
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: theme.colors.text.primary,
-    marginTop: theme.spacing[6],
-    marginBottom: theme.spacing[2],
-  },
-  label: {
-    marginTop: theme.spacing[2],
-    marginBottom: theme.spacing[1],
-    fontWeight: '600',
-    color: theme.colors.text.primary,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: theme.colors.border.default,
-    borderRadius: theme.radius.md,
-    padding: theme.spacing[2],
-    fontSize: 16,
-    color: theme.colors.text.primary,
-    backgroundColor: theme.colors.bg.elevated,
-  },
-  textArea: {
-    height: 80,
-    textAlignVertical: 'top',
-  },
-  row: {
-    flexDirection: 'row',
-    gap: theme.spacing[2],
-  },
-  halfColumn: {
-    flex: 1,
-  },
-  loadingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: theme.spacing[4],
-    gap: theme.spacing[2],
-  },
-  loadingText: {
-    fontSize: 14,
-    color: theme.colors.text.secondary,
-  },
-});
+const createStyles = (theme: typeof import('../theme').defaultTheme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.bg.default,
+    },
+    contentContainer: {
+      padding: theme.spacing[4],
+      paddingBottom: theme.spacing[8],
+    },
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: theme.colors.text.primary,
+      marginTop: theme.spacing[6],
+      marginBottom: theme.spacing[2],
+    },
+    label: {
+      marginTop: theme.spacing[2],
+      marginBottom: theme.spacing[1],
+      fontWeight: '600',
+      color: theme.colors.text.primary,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: theme.colors.border.default,
+      borderRadius: theme.radius.md,
+      padding: theme.spacing[2],
+      fontSize: 16,
+      color: theme.colors.text.primary,
+      backgroundColor: theme.colors.bg.elevated,
+    },
+    textArea: {
+      height: 80,
+      textAlignVertical: 'top',
+    },
+    row: {
+      flexDirection: 'row',
+      gap: theme.spacing[2],
+    },
+    halfColumn: {
+      flex: 1,
+    },
+    loadingContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: theme.spacing[4],
+      gap: theme.spacing[2],
+    },
+    loadingText: {
+      fontSize: 14,
+      color: theme.colors.text.secondary,
+    },
+  });

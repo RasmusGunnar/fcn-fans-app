@@ -1,6 +1,6 @@
 /**
  * NextMatchCard Component - Usage Examples
- * 
+ *
  * Reusable Next Match widget following strict design system rules.
  * All styling uses theme tokens exclusively - no hardcoded values.
  */
@@ -89,7 +89,7 @@ export function MinimalMatchExample() {
 
 /**
  * Props Documentation:
- * 
+ *
  * @param dateText - Match date and time (caption style)
  * @param venueText - Match venue/location (caption style)
  * @param homeTeamName - Home team name (body bold)
@@ -103,7 +103,7 @@ export function MinimalMatchExample() {
  * @param kickoffLabel - Optional badge label (e.g., "Afspark om 2 dage", "LIVE")
  * @param ctaLabel - Optional CTA button text
  * @param onPressCta - Optional CTA button handler
- * 
+ *
  * Styling Rules:
  * - Uses Card variant="hero"
  * - Background: theme.colors.bg.elevated
@@ -113,6 +113,6 @@ export function MinimalMatchExample() {
  * - Margin: theme.layout.screenPadding
  * - Border hairline: theme.layout.borderHairline
  * - Divider: theme.colors.border.subtle
- * 
+ *
  * All spacing, colors, and typography use theme tokens exclusively.
  */

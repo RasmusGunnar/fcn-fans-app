@@ -7,7 +7,7 @@ export const lightColors = {
     accent: '#E30613',
     muted: '#F0F0F0',
   },
-  
+
   // Background colors
   bg: {
     default: '#FFFFFF',
@@ -17,7 +17,7 @@ export const lightColors = {
     canvas: '#F5F5F5',
     subtle: '#F0F0F0',
   },
-  
+
   // Text colors
   text: {
     primary: '#1A1A1A',
@@ -26,7 +26,7 @@ export const lightColors = {
     inverse: '#FFFFFF',
     error: '#E30613',
   },
-  
+
   // Border colors
   border: {
     default: '#EBEBEB',
@@ -35,13 +35,13 @@ export const lightColors = {
     active: '#E30613',
     hairline: '#F2F2F2',
   },
-  
+
   // Semantic colors
   success: '#1DB954',
   warning: '#C2410C',
   error: '#DC2626',
   info: '#2563EB',
-  
+
   // State colors (aliases for common use cases)
   state: {
     success: '#34C759',
@@ -49,7 +49,7 @@ export const lightColors = {
     error: '#DC2626',
     info: '#2563EB',
   },
-  
+
   // Pill colors
   pill: {
     red: {
@@ -69,11 +69,11 @@ export const lightColors = {
       text: '#92400E',
     },
   },
-  
+
   // Special backgrounds
   spotifyGreen: '#1DB954',
   ctaBg: '#F7EED6',
-  
+
   // Overlay colors for modals and sheets
   overlay: {
     light: 'rgba(0, 0, 0, 0.3)',
@@ -91,7 +91,7 @@ export const darkColors = {
     accent: '#E30613',
     muted: '#374151',
   },
-  
+
   // Background colors
   bg: {
     default: '#111827',
@@ -101,7 +101,7 @@ export const darkColors = {
     canvas: '#0F172A',
     subtle: '#1F2937',
   },
-  
+
   // Text colors
   text: {
     primary: '#F9FAFB',
@@ -110,7 +110,7 @@ export const darkColors = {
     inverse: '#111827',
     error: '#E30613',
   },
-  
+
   // Border colors
   border: {
     default: '#374151',
@@ -119,13 +119,13 @@ export const darkColors = {
     active: '#E30613',
     hairline: '#4B5563',
   },
-  
+
   // Semantic colors
   success: '#1DB954',
   warning: '#F59E0B',
   error: '#EF4444',
   info: '#3B82F6',
-  
+
   // State colors (aliases for common use cases)
   state: {
     success: '#34C759',
@@ -133,7 +133,7 @@ export const darkColors = {
     error: '#EF4444',
     info: '#3B82F6',
   },
-  
+
   // Pill colors
   pill: {
     red: {
@@ -153,11 +153,11 @@ export const darkColors = {
       text: '#FDE68A',
     },
   },
-  
+
   // Special backgrounds
   spotifyGreen: '#1DB954',
   ctaBg: '#78350F',
-  
+
   // Overlay colors for modals and sheets
   overlay: {
     light: 'rgba(0, 0, 0, 0.3)',

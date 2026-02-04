@@ -264,9 +264,7 @@ export default function EventsScreen() {
           style={[styles.chip, filterMode === 'all' && styles.chipActive]}
           onPress={() => setFilterMode('all')}
         >
-          <Text style={[styles.chipText, filterMode === 'all' && styles.chipTextActive]}>
-            Alle
-          </Text>
+          <Text style={[styles.chipText, filterMode === 'all' && styles.chipTextActive]}>Alle</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -350,9 +348,7 @@ export default function EventsScreen() {
                   <Text style={styles.emptySubtext}>
                     {mapItems.length} af {filteredFeed.length} events har koordinater
                   </Text>
-                  <Text style={styles.emptyHint}>
-                    Kør fixtures sync for at geocode stadions
-                  </Text>
+                  <Text style={styles.emptyHint}>Kør fixtures sync for at geocode stadions</Text>
                 </>
               ) : (
                 <>

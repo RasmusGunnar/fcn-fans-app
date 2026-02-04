@@ -84,12 +84,23 @@ export default function CommunityHubScreen({ route, navigation }: Props) {
   );
 }
 
-const makeStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
-  container: { flex: 1, padding: theme.spacing[4] },
-  header: { borderWidth: 1, borderRadius: theme.radius.md, padding: theme.spacing[3], marginBottom: theme.spacing[4] },
-  h1: { fontSize: 22, fontWeight: '800' },
-  h2: { fontSize: 16, fontWeight: '700', marginBottom: theme.spacing[2] },
-  card: { borderWidth: 1, borderRadius: theme.radius.md, padding: theme.spacing[3], marginBottom: theme.spacing[3] },
-  bold: { fontWeight: '700' },
-  muted: { opacity: 0.7 },
-});
+const makeStyles = (theme: ReturnType<typeof useTheme>) =>
+  StyleSheet.create({
+    container: { flex: 1, padding: theme.spacing[4] },
+    header: {
+      borderWidth: 1,
+      borderRadius: theme.radius.md,
+      padding: theme.spacing[3],
+      marginBottom: theme.spacing[4],
+    },
+    h1: { fontSize: 22, fontWeight: '800' },
+    h2: { fontSize: 16, fontWeight: '700', marginBottom: theme.spacing[2] },
+    card: {
+      borderWidth: 1,
+      borderRadius: theme.radius.md,
+      padding: theme.spacing[3],
+      marginBottom: theme.spacing[3],
+    },
+    bold: { fontWeight: '700' },
+    muted: { opacity: 0.7 },
+  });

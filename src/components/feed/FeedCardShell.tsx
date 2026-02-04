@@ -113,7 +113,7 @@ export function FeedCardShell({
       ) : (
         children
       )}
-      
+
       <CardActions
         liked={liked}
         likes={likesCount}
@@ -122,7 +122,7 @@ export function FeedCardShell({
         onPressComment={handlePressComment}
         onPressShare={actions.onPressShare || (() => {})}
       />
-      
+
       {showPreview && (
         <View style={styles.previewContainer}>
           <Pressable onPress={handlePressComment}>
@@ -148,7 +148,7 @@ export function FeedCardShell({
           })}
         </View>
       )}
-      
+
       {commentsOpen && !disableInlineComments && (
         <InlineComments
           targetType={targetType}

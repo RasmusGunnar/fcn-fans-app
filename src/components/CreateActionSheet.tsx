@@ -56,48 +56,48 @@ export default function CreateActionSheet({ visible, onClose, onPicked }: Props)
 
 function createStyles(theme: Theme) {
   return StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: theme.colors.overlay.medium,
-  },
-  backdrop: {
-    flex: 1,
-  },
-  sheet: {
-    backgroundColor: theme.colors.bg.card,
-    padding: theme.spacing[4],
-    borderTopLeftRadius: theme.radius.md,
-    borderTopRightRadius: theme.radius.md,
-  },
-  title: {
-    fontSize: theme.typography.h3.fontSize,
-    fontWeight: theme.typography.h3.fontWeight as any,
-    color: theme.colors.text.primary,
-    marginBottom: theme.spacing[4],
-  },
-  actions: {
-    gap: theme.spacing[2],
-  },
-  action: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: theme.spacing[2],
-  },
-  actionText: {
-    marginLeft: theme.spacing[2],
-    fontSize: theme.typography.body.fontSize,
-    color: theme.colors.text.primary,
-  },
-  cancel: {
-    marginTop: theme.spacing[4],
-    alignSelf: 'center',
-    paddingVertical: theme.spacing[2],
-    paddingHorizontal: theme.spacing[6],
-  },
-  cancelText: {
-    color: theme.colors.text.secondary,
-    fontSize: theme.typography.body.fontSize,
-  },
+    overlay: {
+      flex: 1,
+      justifyContent: 'flex-end',
+      backgroundColor: theme.colors.overlay.medium,
+    },
+    backdrop: {
+      flex: 1,
+    },
+    sheet: {
+      backgroundColor: theme.colors.bg.card,
+      padding: theme.spacing[4],
+      borderTopLeftRadius: theme.radius.md,
+      borderTopRightRadius: theme.radius.md,
+    },
+    title: {
+      fontSize: theme.typography.h3.fontSize,
+      fontWeight: theme.typography.h3.fontWeight as any,
+      color: theme.colors.text.primary,
+      marginBottom: theme.spacing[4],
+    },
+    actions: {
+      gap: theme.spacing[2],
+    },
+    action: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: theme.spacing[2],
+    },
+    actionText: {
+      marginLeft: theme.spacing[2],
+      fontSize: theme.typography.body.fontSize,
+      color: theme.colors.text.primary,
+    },
+    cancel: {
+      marginTop: theme.spacing[4],
+      alignSelf: 'center',
+      paddingVertical: theme.spacing[2],
+      paddingHorizontal: theme.spacing[6],
+    },
+    cancelText: {
+      color: theme.colors.text.secondary,
+      fontSize: theme.typography.body.fontSize,
+    },
   });
 }

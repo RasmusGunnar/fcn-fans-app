@@ -24,11 +24,7 @@ export default function PostDetailScreen() {
       <AppHeader title="Opslag" subtitle="" />
       <View style={styles.content}>
         {post && (
-          <FanPostCard
-            post={post}
-            authorProfile={authorProfile}
-            onDeleted={handleDeleted}
-          />
+          <FanPostCard post={post} authorProfile={authorProfile} onDeleted={handleDeleted} />
         )}
       </View>
     </ScrollView>

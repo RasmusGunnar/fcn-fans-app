@@ -21,7 +21,7 @@ export function SongAccordionCard({
   onToggle,
 }: SongAccordionCardProps) {
   const theme = defaultTheme;
-  
+
   return (
     <Card style={styles.card}>
       <Pressable onPress={onToggle} style={styles.header}>

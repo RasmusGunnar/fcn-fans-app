@@ -290,85 +290,85 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
 
 function createStyles(theme: Theme) {
   return StyleSheet.create({
-  container: {
-    gap: theme.spacing[4],
-  },
-  label: {
-    fontSize: theme.typography.body.fontSize,
-    fontWeight: '600',
-    color: theme.colors.text.primary,
-  },
-  input: {
-    padding: theme.spacing[4],
-    backgroundColor: theme.colors.bg.card,
-    borderRadius: theme.radius.sm,
-    borderWidth: 1,
-    borderColor: theme.colors.border.default,
-    fontSize: theme.typography.body.fontSize,
-    color: theme.colors.text.primary,
-  },
-  previewButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: theme.spacing[2],
-    padding: theme.spacing[4],
-    backgroundColor: theme.colors.bg.card,
-    borderRadius: theme.radius.sm,
-    borderWidth: 1,
-    borderColor: theme.colors.primary,
-  },
-  previewButtonDisabled: {
-    opacity: 0.5,
-  },
-  previewButtonText: {
-    fontSize: theme.typography.body.fontSize,
-    fontWeight: '600',
-    color: theme.colors.primary,
-  },
-  errorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing[2],
-    padding: theme.spacing[4],
-    backgroundColor: theme.colors.bg.card,
-    borderRadius: theme.radius.sm,
-    borderWidth: 1,
-    borderColor: theme.colors.primary,
-  },
-  errorText: {
-    flex: 1,
-    fontSize: theme.typography.body.fontSize,
-    color: theme.colors.primary,
-  },
-  previewCard: {
-    padding: theme.spacing[0],
-    overflow: 'hidden',
-  },
-  previewImage: {
-    width: '100%',
-    height: 180,
-    backgroundColor: theme.colors.border.default,
-  },
-  previewContent: {
-    padding: theme.spacing[4],
-    gap: theme.spacing[1],
-  },
-  previewSiteName: {
-    fontSize: theme.typography.small.fontSize,
-    fontWeight: '600',
-    color: theme.colors.text.secondary,
-    textTransform: 'uppercase',
-  },
-  previewTitle: {
-    fontSize: theme.typography.h3.fontSize,
-    fontWeight: theme.typography.h3.fontWeight as any,
-    color: theme.colors.text.primary,
-  },
-  previewDescription: {
-    fontSize: theme.typography.body.fontSize,
-    color: theme.colors.text.secondary,
-    lineHeight: theme.typography.body.lineHeight,
-  },
+    container: {
+      gap: theme.spacing[4],
+    },
+    label: {
+      fontSize: theme.typography.body.fontSize,
+      fontWeight: '600',
+      color: theme.colors.text.primary,
+    },
+    input: {
+      padding: theme.spacing[4],
+      backgroundColor: theme.colors.bg.card,
+      borderRadius: theme.radius.sm,
+      borderWidth: 1,
+      borderColor: theme.colors.border.default,
+      fontSize: theme.typography.body.fontSize,
+      color: theme.colors.text.primary,
+    },
+    previewButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: theme.spacing[2],
+      padding: theme.spacing[4],
+      backgroundColor: theme.colors.bg.card,
+      borderRadius: theme.radius.sm,
+      borderWidth: 1,
+      borderColor: theme.colors.primary,
+    },
+    previewButtonDisabled: {
+      opacity: 0.5,
+    },
+    previewButtonText: {
+      fontSize: theme.typography.body.fontSize,
+      fontWeight: '600',
+      color: theme.colors.primary,
+    },
+    errorContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing[2],
+      padding: theme.spacing[4],
+      backgroundColor: theme.colors.bg.card,
+      borderRadius: theme.radius.sm,
+      borderWidth: 1,
+      borderColor: theme.colors.primary,
+    },
+    errorText: {
+      flex: 1,
+      fontSize: theme.typography.body.fontSize,
+      color: theme.colors.primary,
+    },
+    previewCard: {
+      padding: theme.spacing[0],
+      overflow: 'hidden',
+    },
+    previewImage: {
+      width: '100%',
+      height: 180,
+      backgroundColor: theme.colors.border.default,
+    },
+    previewContent: {
+      padding: theme.spacing[4],
+      gap: theme.spacing[1],
+    },
+    previewSiteName: {
+      fontSize: theme.typography.small.fontSize,
+      fontWeight: '600',
+      color: theme.colors.text.secondary,
+      textTransform: 'uppercase',
+    },
+    previewTitle: {
+      fontSize: theme.typography.h3.fontSize,
+      fontWeight: theme.typography.h3.fontWeight as any,
+      color: theme.colors.text.primary,
+    },
+    previewDescription: {
+      fontSize: theme.typography.body.fontSize,
+      color: theme.colors.text.secondary,
+      lineHeight: theme.typography.body.lineHeight,
+    },
   });
 }

@@ -15,21 +15,22 @@ interface FeedCardHeaderProps {
  * Shared header component for feed cards (posts, news, etc.)
  * Ensures consistent layout: badge → avatar → title/subtitle → menu
  */
-export function FeedCardHeader({
-  avatarSlot,
-  title,
-  subtitle,
-  rightSlot,
-}: FeedCardHeaderProps) {
+export function FeedCardHeader({ avatarSlot, title, subtitle, rightSlot }: FeedCardHeaderProps) {
   const theme = useTheme();
   const styles = createStyles(theme);
-  
+
   return (
     <View style={styles.header}>
       {avatarSlot}
       <View style={styles.headerInfo}>
-        <Text variant="body" style={{ fontWeight: '600' }}>{title}</Text>
-        {subtitle && <Text variant="small" color="secondary">{subtitle}</Text>}
+        <Text variant="body" style={{ fontWeight: '600' }}>
+          {title}
+        </Text>
+        {subtitle && (
+          <Text variant="small" color="secondary">
+            {subtitle}
+          </Text>
+        )}
       </View>
       {rightSlot && <View style={styles.rightSlot}>{rightSlot}</View>}
     </View>

@@ -11,24 +11,19 @@ export interface TextProps extends Omit<RNTextProps, 'style'> {
 
 /**
  * Themed Text component
- * 
+ *
  * DO NOT hardcode fontSize, lineHeight, fontWeight - use variant prop
  * DO NOT hardcode colors - use color prop
- * 
+ *
  * Examples:
  *   <Text variant="h1" color="primary">Heading</Text>
  *   <Text variant="body" color="secondary">Body text</Text>
  *   <Text variant="caption" color="muted">Caption</Text>
  */
-export function Text({
-  variant = 'body',
-  color = 'primary',
-  style,
-  ...props
-}: TextProps) {
+export function Text({ variant = 'body', color = 'primary', style, ...props }: TextProps) {
   const theme = defaultTheme;
   const textStyle = getTextStyle(theme, variant);
-  
+
   const colorMap = {
     primary: theme.colors.text.primary,
     secondary: theme.colors.text.secondary,
@@ -37,15 +32,6 @@ export function Text({
     error: theme.colors.error,
     success: theme.colors.success,
   };
-  
-  return (
-    <RNText
-      style={[
-        textStyle,
-        { color: colorMap[color] },
-        style,
-      ]}
-      {...props}
-    />
-  );
+
+  return <RNText style={[textStyle, { color: colorMap[color] }, style]} {...props} />;
 }

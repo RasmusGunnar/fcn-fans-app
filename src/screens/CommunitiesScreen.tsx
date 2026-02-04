@@ -17,12 +17,12 @@ import { getCommunities, Community as CommunityData } from '../services/communit
 
 export default function CommunitiesScreen() {
   console.log('🚀 DEBUG: CommunitiesScreen LOADED (feat/communities-rbac-avatars)');
-  
+
   const navigation = useNavigation();
   const tabBarHeight = useBottomTabBarHeight();
   const theme = useTheme();
   const styles = createStyles(theme);
-  
+
   const [communities, setCommunities] = useState<CommunityData[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -68,7 +68,9 @@ export default function CommunitiesScreen() {
       style={{ flex: 1, backgroundColor: theme.colors.bg.default }}
       contentContainerStyle={{ paddingBottom: tabBarHeight + theme.spacing[6] }}
     >
-      <Text variant="small" color="muted" style={{ padding: theme.spacing[2] }}>DEBUG: Communities v2</Text>
+      <Text variant="small" color="muted" style={{ padding: theme.spacing[2] }}>
+        DEBUG: Communities v2
+      </Text>
       <AppHeader
         title="Fællesskaber"
         subtitle="Find dit fanfællesskab"
@@ -79,13 +81,31 @@ export default function CommunitiesScreen() {
         {/* Fan Fraktioner Section */}
         {factions.length > 0 && (
           <View style={{ marginBottom: theme.spacing[8] }}>
-            <Text variant="caption" style={[styles.sectionTitle, { marginBottom: theme.spacing[3] }]}>FAN FRAKTIONER</Text>
+            <Text
+              variant="caption"
+              style={[styles.sectionTitle, { marginBottom: theme.spacing[3] }]}
+            >
+              FAN FRAKTIONER
+            </Text>
             {factions.map((faction) => (
               <Card key={faction.id} style={{ marginBottom: theme.spacing[3] }}>
                 <View style={[styles.cardHeader, { marginBottom: theme.spacing[3] }]}>
-                  <View style={[styles.avatar, { marginRight: theme.spacing[4], width: 60, height: 60, borderRadius: theme.radius.pill }]}>
+                  <View
+                    style={[
+                      styles.avatar,
+                      {
+                        marginRight: theme.spacing[4],
+                        width: 60,
+                        height: 60,
+                        borderRadius: theme.radius.pill,
+                      },
+                    ]}
+                  >
                     {faction.avatar_url ? (
-                      <Image source={{ uri: faction.avatar_url }} style={[styles.avatarImage, { width: 60, height: 60 }]} />
+                      <Image
+                        source={{ uri: faction.avatar_url }}
+                        style={[styles.avatarImage, { width: 60, height: 60 }]}
+                      />
                     ) : (
                       <Ionicons name="star" size={40} color={theme.colors.primary} />
                     )}
@@ -114,7 +134,12 @@ export default function CommunitiesScreen() {
         {/* Lokale Fællesskaber Section */}
         {localCommunities.length > 0 && (
           <View style={{ marginBottom: theme.spacing[8] }}>
-            <Text variant="caption" style={[styles.sectionTitle, { marginBottom: theme.spacing[3] }]}>LOKALE FÆLLESSKABER</Text>
+            <Text
+              variant="caption"
+              style={[styles.sectionTitle, { marginBottom: theme.spacing[3] }]}
+            >
+              LOKALE FÆLLESSKABER
+            </Text>
             {localCommunities.map((community) => (
               <Card key={community.id} style={{ marginBottom: theme.spacing[3] }}>
                 <ListRow
@@ -137,12 +162,14 @@ export default function CommunitiesScreen() {
           </View>
         )}
 
-
         {/* Empty state */}
         {communities.length === 0 && (
           <View style={[styles.emptyState, { paddingVertical: theme.spacing[8] * 2 }]}>
             <Ionicons name="people-outline" size={64} color={theme.colors.text.muted} />
-            <Text variant="h3" style={{ marginTop: theme.spacing[4], marginBottom: theme.spacing[1] }}>
+            <Text
+              variant="h3"
+              style={{ marginTop: theme.spacing[4], marginBottom: theme.spacing[1] }}
+            >
               Ingen fællesskaber endnu
             </Text>
             <Text variant="body" color="secondary" style={{ textAlign: 'center' }}>
@@ -166,7 +193,10 @@ export default function CommunitiesScreen() {
         >
           <View style={{ alignItems: 'center' }}>
             <Ionicons name="add-circle" size={48} color={theme.colors.primary} />
-            <Text variant="h3" style={{ marginTop: theme.spacing[2], marginBottom: theme.spacing[1] }}>
+            <Text
+              variant="h3"
+              style={{ marginTop: theme.spacing[2], marginBottom: theme.spacing[1] }}
+            >
               Mangler dit område?
             </Text>
             <Text variant="body" color="secondary" style={{ textAlign: 'center', lineHeight: 20 }}>
@@ -179,37 +209,38 @@ export default function CommunitiesScreen() {
   );
 }
 
-const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sectionTitle: {
-    fontWeight: '600',
-    textTransform: 'uppercase',
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  avatar: {
-    width: 60,
-    height: 60,
-    borderRadius: theme.radius.pill,
-    overflow: 'hidden',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarImage: {
-    width: 60,
-    height: 60,
-    borderRadius: theme.radius.pill,
-  },
-  cardContent: {
-    flex: 1,
-  },
-  emptyState: {
-    alignItems: 'center',
-  },
-});
+const createStyles = (theme: ReturnType<typeof useTheme>) =>
+  StyleSheet.create({
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    sectionTitle: {
+      fontWeight: '600',
+      textTransform: 'uppercase',
+    },
+    cardHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    avatar: {
+      width: 60,
+      height: 60,
+      borderRadius: theme.radius.pill,
+      overflow: 'hidden',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    avatarImage: {
+      width: 60,
+      height: 60,
+      borderRadius: theme.radius.pill,
+    },
+    cardContent: {
+      flex: 1,
+    },
+    emptyState: {
+      alignItems: 'center',
+    },
+  });

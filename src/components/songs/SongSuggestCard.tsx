@@ -10,7 +10,7 @@ interface SongSuggestCardProps {
 
 export function SongSuggestCard({ onPressSuggest }: SongSuggestCardProps) {
   const theme = defaultTheme;
-  
+
   return (
     <View style={styles.card}>
       <View style={styles.iconContainer}>

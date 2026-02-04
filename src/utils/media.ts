@@ -34,7 +34,7 @@ export function normalizeMedia(media: unknown): MediaItem[] {
     if (media.startsWith('http://') || media.startsWith('https://')) {
       return [{ url: media }];
     }
-    
+
     // Otherwise try to parse as JSON
     try {
       const parsed = JSON.parse(media);

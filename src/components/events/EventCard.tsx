@@ -43,7 +43,7 @@ export function EventCard({
   const normalizedEventType = (eventType ?? '').toLowerCase();
   const isBusTrip = normalizedEventType === 'bustur' || normalizedEventType === 'bus_trip';
   const categoryLabel = isBusTrip ? 'Bustur' : 'Event';
-  
+
   const date = new Date(startAt);
   const dateStr = date.toLocaleDateString('da-DK', {
     weekday: 'short',

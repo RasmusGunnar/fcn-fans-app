@@ -39,7 +39,7 @@ export function FanFactionCard({
   onPressJoin,
 }: FanFactionCardProps) {
   const theme = defaultTheme;
-  
+
   return (
     <Card style={styles.card}>
       <Pill

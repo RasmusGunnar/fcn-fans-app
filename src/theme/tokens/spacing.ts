@@ -12,15 +12,15 @@ export const spacing = {
 } as const;
 
 export const layout = {
-  screenPadding: 16,  // space.4
-  cardPadding: 12,    // space.3
-  listGap: 8,         // space.2
+  screenPadding: 16, // space.4
+  cardPadding: 12, // space.3
+  listGap: 8, // space.2
   borderWidth: 1,
   borderHairline: 1,
 } as const;
 
 export const border = {
-  hairline: 1,  // Use with StyleSheet.hairlineWidth in components
+  hairline: 1, // Use with StyleSheet.hairlineWidth in components
 } as const;
 
 export type SpacingTokens = typeof spacing;
