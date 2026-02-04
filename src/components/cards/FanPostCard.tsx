@@ -16,7 +16,8 @@ import {
 import { Card } from '../ui/Card';
 import { OptionsMenu, OptionsMenuOption } from '../OptionsMenu';
 import { CardRoot } from './CardRoot';
-import { CardHeader } from './CardHeader';
+import { Pill } from '../ui/Pill';
+import { FeedCardHeader } from '../FeedCardHeader';
 import { Avatar } from '../Avatar';
 import { defaultTheme } from '../../theme';
 import { Post } from '../../types/post';
@@ -46,6 +47,7 @@ function getTimeAgo(isoDate: string): string {
 interface FanPostCardProps {
   post: Post;
   authorProfile?: { display_name: string | null; avatar_url: string | null };
+  communityMap?: Record<string, string>;
   liked?: boolean;
   likes?: number;
   commentsCount?: number;
@@ -60,6 +62,7 @@ interface FanPostCardProps {
 export function FanPostCard({
   post,
   authorProfile,
+  communityMap,
   liked = post.likedByMe,
   likes = post.likesCount,
   commentsCount = 0,
@@ -168,15 +171,16 @@ export function FanPostCard({
   }
 
   // Build card behavior model to determine category, name line, and press behavior
-  const actorType = post.communityName ? 'community' : 'fan';
-  const actorName = actorType === 'community' 
-    ? (post.communityName || 'Fællesskab')
-    : (authorProfile?.display_name || post.authorName || 'Fan');
-  
+  const communityId = (post as any).communityId ?? (post as any).community_id ?? null;
+  const isCommunityPost = !!communityId;
+  const communityName = communityId && communityMap?.[communityId] ? communityMap[communityId] : null;
+
   const cardModel = buildCardBehaviorModel({
     kind: 'post',
-    actorType,
-    actorName,
+    actorType: isCommunityPost ? 'community' : 'fan',
+    actorName: isCommunityPost
+      ? (communityName ?? 'Fællesskab')
+      : (authorProfile?.display_name || (post as any).authorName || 'Ukendt'),
     postLinkUrl: undefined, // Posts don't have embedded links in current data model
   });
 
@@ -204,20 +208,21 @@ export function FanPostCard({
         onPressShare: handleShare,
       }}
     >
-      <CardHeader
-        categoryLabel={cardModel.categoryLabel}
-        nameLine={cardModel.nameLine}
-        fallbackTitle={authorProfile?.display_name || post.authorName || 'Ukendt'}
-        subtitle={groupDisplay ? `${groupDisplay} · ${timeAgo}` : timeAgo}
-        avatarSlot={
-          <Avatar
-            userId={post.authorId}
-            avatarUrl={authorProfile?.avatar_url}
-            size={40}
-            label={authorProfile?.display_name || post.authorName || 'Fan'}
-          />
-        }
-      />
+      <Pill label={cardModel.categoryLabel} />
+      {cardModel.nameLine ? (
+        <FeedCardHeader
+          avatarSlot={
+            <Avatar
+              userId={post.authorId}
+              avatarUrl={authorProfile?.avatar_url}
+              size={40}
+              label={authorProfile?.display_name || post.authorName || 'Fan'}
+            />
+          }
+          title={cardModel.nameLine}
+          subtitle={groupDisplay ? `${groupDisplay} · ${timeAgo}` : timeAgo}
+        />
+      ) : null}
       {((showEditOption || showDeleteOption) && postMenuOptions.length > 0) ? (
         <OptionsMenu options={postMenuOptions} />
       ) : null}

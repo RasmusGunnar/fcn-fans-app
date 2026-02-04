@@ -71,8 +71,15 @@ export default function CreateScreen() {
       if (user?.id) {
         const { data, error } = await supabase
           .from('posts')
-          .insert({ author_id: user.id, text: text.trim(), media: mediaArray })
-          .select('id, created_at, author_id, text, media');
+          .insert({
+            author_id: user.id,
+            text: text.trim(),
+            media: mediaArray,
+            ...(audienceType === 'community' && route?.params?.communityId
+              ? { community_id: route.params.communityId }
+              : {}),
+          })
+          .select('id, created_at, author_id, text, media, community_id');
         if (error) throw error;
 
         if (data && data[0]) {
@@ -82,6 +89,7 @@ export default function CreateScreen() {
             id: dbRecord.id,
             authorName: user?.email ?? 'Ukendt',
             authorId: dbRecord.author_id,
+            communityId: dbRecord.community_id ?? null,
             createdAt: dbRecord.created_at || new Date().toISOString(),
             text: dbRecord.text,
             communityName: audienceType === 'community' ? selectedCommunity : undefined,
@@ -106,6 +114,10 @@ export default function CreateScreen() {
       id: Date.now().toString(),
       authorName: user?.email ?? 'Ukendt',
       authorId: user?.id,
+      communityId:
+        audienceType === 'community' && route?.params?.communityId
+          ? route.params.communityId
+          : null,
       createdAt: new Date().toISOString(),
       text: text.trim(),
       communityName: audienceType === 'community' ? selectedCommunity : undefined,

@@ -123,7 +123,7 @@ export function PostComposer({ onSuccess, actor }: PostComposerProps) {
             media: mediaArray,
             ...(actor?.type === 'community' ? { community_id: actor.id } : {}),
           })
-          .select('id, created_at, author_id, text, media');
+          .select('id, created_at, author_id, text, media, community_id');
         if (error) throw error;
 
         if (data && data[0]) {
@@ -133,6 +133,7 @@ export function PostComposer({ onSuccess, actor }: PostComposerProps) {
             id: dbRecord.id,
             authorName: user?.email ?? 'Ukendt',
             authorId: dbRecord.author_id,
+            communityId: dbRecord.community_id ?? null,
             createdAt: dbRecord.created_at || new Date().toISOString(),
             text: dbRecord.text,
             likesCount: 0,

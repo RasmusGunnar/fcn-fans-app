@@ -140,13 +140,17 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         console.log('[FeedProvider] News items fetched:', newsItems.length);
       }
 
-      // Build community map from news items
+      // Build community map from news items and posts
       const communityIds = newsItems
         .filter((item) => item.actorType === 'community' && item.actorId)
         .map((item) => item.actorId);
 
-      if (communityIds.length > 0) {
-        const uniqueCommunityIds = [...new Set(communityIds)];
+      const postCommunityIds = transformedPosts
+        .map((post) => post.communityId)
+        .filter(Boolean) as string[];
+
+      if (communityIds.length > 0 || postCommunityIds.length > 0) {
+        const uniqueCommunityIds = [...new Set([...communityIds, ...postCommunityIds])];
         try {
           const { data: communities, error: commError } = await supabase
             .from('communities')

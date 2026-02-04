@@ -46,8 +46,8 @@ export function buildCardBehaviorModel(input: CardBehaviorInput): CardBehaviorMo
   // - Event: category="Event" | "Bustur", nameLine=null eller eventCommunityName hvis sat
 
   if (input.kind === 'post') {
-    const categoryLabel = input.actorType === 'fan' ? 'Fra Fans' : actorName;
-    const nameLine = input.actorType === 'fan' ? actorName : null;
+    const categoryLabel = input.actorType === 'community' ? actorName : 'Fra Fans';
+    const nameLine = input.actorType === 'community' ? null : actorName;
 
     // Press rules:
     // - post med link => open_external
