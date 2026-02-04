@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AppHeader } from '../components/AppHeader';
 import { Card, Text, Screen } from '../components/ui';
 import { PrimaryButton } from '../components/PrimaryButton';
+import { ListRow } from '../ui/components/ListRow';
 import { useTheme } from '../theme';
 import { getCommunities, Community as CommunityData } from '../services/communities';
 
@@ -116,29 +117,17 @@ export default function CommunitiesScreen() {
             <Text variant="caption" style={[styles.sectionTitle, { marginBottom: theme.spacing[3] }]}>LOKALE FÆLLESSKABER</Text>
             {localCommunities.map((community) => (
               <Card key={community.id} style={{ marginBottom: theme.spacing[3] }}>
-                <View style={[styles.cardHeader, { marginBottom: theme.spacing[3] }]}>
-                  <View style={[styles.avatar, { marginRight: theme.spacing[4], width: 60, height: 60, borderRadius: theme.radius.pill }]}>
-                    {community.avatar_url ? (
-                      <Image
-                        source={{ uri: community.avatar_url }}
-                        style={[styles.avatarImage, { width: 60, height: 60 }]}
-                      />
-                    ) : (
-                      <Ionicons name="people-circle" size={40} color={theme.colors.primary} />
-                    )}
-                  </View>
-                  <View style={styles.cardContent}>
-                    <Text variant="h3">{community.name}</Text>
-                    <Text variant="body" color="secondary">
-                      {community.description || 'Ingen beskrivelse'}
-                    </Text>
-                    {community.member_count !== undefined && (
-                      <Text variant="small" color="muted" style={{ marginTop: theme.spacing[1] }}>
-                        {community.member_count} medlem{community.member_count !== 1 ? 'mer' : ''}
-                      </Text>
-                    )}
-                  </View>
-                </View>
+                <ListRow
+                  accent="community"
+                  icon="people-circle"
+                  title={community.name}
+                  subtitle={community.description || 'Ingen beskrivelse'}
+                  meta={
+                    community.member_count !== undefined
+                      ? `${community.member_count} medlem${community.member_count !== 1 ? 'mer' : ''}`
+                      : undefined
+                  }
+                />
                 <PrimaryButton
                   title="Gå til fællesskab →"
                   onPress={() => navigateToDetail(community.id, community.name)}

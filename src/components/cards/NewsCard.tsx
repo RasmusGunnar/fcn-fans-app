@@ -5,9 +5,10 @@
 import React from 'react';
 import { View, Text, StyleSheet, Image, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Card } from '../ui/Card';
+import { Card } from '../../ui/primitives/Card';
+import { CategoryBadge } from '../../ui/components/CategoryBadge';
+import { FeedCardHeader } from '../FeedCardHeader';
 import { CardRoot } from './CardRoot';
-import { CardHeader } from './CardHeader';
 import { defaultTheme } from '../../theme';
 import { NewsItem } from '../../types/news';
 import { useAuth } from '../../auth/AuthProvider';
@@ -116,11 +117,8 @@ export function NewsCard({
       commentPreviews={commentPreviews}
       onNewComment={onNewComment}
     >
-      <CardHeader
-        categoryLabel={cardModel.categoryLabel}
-        nameLine={cardModel.nameLine}
-        fallbackTitle={authorName}
-        subtitle={timeAgo}
+      <CategoryBadge categoryKey="news" />
+      <FeedCardHeader
         avatarSlot={
           <View style={styles.avatar}>
             {avatarSource ? (
@@ -134,9 +132,11 @@ export function NewsCard({
             )}
           </View>
         }
+        title={cardModel.nameLine || authorName}
+        subtitle={timeAgo}
       />
 
-      <View style={styles.linkCard}>
+      <Card variant="subtle" padding="sm" style={styles.linkCard}>
         {newsItem.imageUrl && (
           <Image source={{ uri: newsItem.imageUrl }} style={styles.image} resizeMode="cover" />
         )}
@@ -157,7 +157,7 @@ export function NewsCard({
             <Text style={styles.linkText}>Åbn link</Text>
           </View>
         </View>
-      </View>
+      </Card>
     </CardRoot>
   );
 }
@@ -179,10 +179,9 @@ const styles = StyleSheet.create({
     height: 40,
   },
   linkCard: {
-    backgroundColor: theme.colors.border.default,
-    borderRadius: theme.radius.md,
     overflow: 'hidden',
     marginBottom: theme.spacing[2],
+    padding: theme.spacing[0],
   },
   image: {
     width: '100%',

@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, View, Text } from 'react-native';
-import { Card } from '../ui/Card';
+import { Card } from '../../ui/primitives/Card';
 import { CardActions } from '../cards/CardActions';
 import { InlineComments, CommentTargetType } from '../comments/InlineComments';
 import { defaultTheme } from '../../theme';

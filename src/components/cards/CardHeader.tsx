@@ -29,7 +29,7 @@ export function CardHeader({
         <Pill label={categoryLabel} />
       )}
       {title ? (
-        <FeedCardHeader title={title} subtitle={subtitle ?? null} avatarSlot={avatarSlot} />
+        <FeedCardHeader title={title} subtitle={subtitle ?? undefined} avatarSlot={avatarSlot} />
       ) : null}
     </>
   );

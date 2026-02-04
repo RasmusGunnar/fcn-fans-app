@@ -13,7 +13,7 @@ import { supabase } from '../../lib/supabase';
 import { defaultTheme } from '../../theme';
 import { Avatar } from '../Avatar';
 
-export type CommentTargetType = 'post' | 'news' | 'event' | 'match';
+export type CommentTargetType = 'post' | 'news' | 'event' | 'match' | 'bus_trip';
 
 interface Comment {
   id: string;
