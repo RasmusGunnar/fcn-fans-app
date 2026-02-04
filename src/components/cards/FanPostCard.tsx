@@ -3,8 +3,8 @@
 // NO hardcoded numbers or color strings allowed.
 
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, Image, TextInput, Pressable, Share, Alert } from 'react-native';
-import { Card } from '../ui/Card';
+import { View, StyleSheet, Image, TextInput, Pressable, Share, Alert } from 'react-native';
+import { Card, Text } from '../ui';
 import { OptionsMenu, OptionsMenuOption } from '../OptionsMenu';
 import { CardRoot } from './CardRoot';
 import { FeedCardHeader } from '../FeedCardHeader';
@@ -239,19 +239,27 @@ export function FanPostCard({
           />
           <View style={styles.editActions}>
             <Pressable style={styles.editButton} onPress={handleCancelEdit}>
-              <Text style={styles.editButtonTextCancel}>Annuller</Text>
+              <Text variant="caption" color="primary" style={styles.editButtonTextCancel}>
+                Annuller
+              </Text>
             </Pressable>
             <Pressable style={[styles.editButton, styles.editButtonSave]} onPress={handleSaveEdit}>
-              <Text style={styles.editButtonText}>Gem</Text>
+              <Text variant="caption" color="inverse" style={styles.editButtonText}>
+                Gem
+              </Text>
             </Pressable>
           </View>
         </View>
       ) : (
-        <Text style={styles.text}>{post.text}</Text>
+        <Text variant="body" color="primary" style={styles.text}>
+          {post.text}
+        </Text>
       )}
       {isVideo ? (
         <View style={styles.videoPlaceholder}>
-          <Text style={styles.placeholderText}>Video vedhæftet</Text>
+          <Text variant="caption" color="secondary" style={styles.placeholderText}>
+            Video vedhæftet
+          </Text>
         </View>
       ) : imageUrl && !imageLoadError ? (
         <Image
@@ -271,7 +279,9 @@ export function FanPostCard({
         />
       ) : imageLoadError && __DEV__ ? (
         <View style={styles.imageErrorContainer}>
-          <Text style={styles.imageErrorText}>⚠️ Billede kunne ikke indlæses</Text>
+          <Text variant="caption" color="secondary" style={styles.imageErrorText}>
+            ⚠️ Billede kunne ikke indlæses
+          </Text>
         </View>
       ) : null}
     </CardRoot>
@@ -282,9 +292,6 @@ const theme = defaultTheme;
 
 const styles = StyleSheet.create({
   text: {
-    fontSize: 14,
-    color: theme.colors.text.primary,
-    lineHeight: 20,
     marginBottom: theme.spacing[3],
   },
   imagePlaceholder: {
@@ -309,8 +316,6 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.sm,
   },
   imageErrorText: {
-    fontSize: 12,
-    color: theme.colors.text.secondary,
     textAlign: 'center',
   },
   videoPlaceholder: {
@@ -322,8 +327,6 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing[2],
   },
   placeholderText: {
-    color: theme.colors.text.secondary,
-    fontSize: 14,
   },
   commentsContainer: {
     borderTopWidth: 1,
@@ -343,12 +346,11 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.border.default,
   },
   commentBody: { flex: 1 },
-  commentText: { color: theme.colors.text.primary, fontSize: 14 },
-  commentMeta: { color: theme.colors.text.secondary, fontSize: 12 },
+  commentText: { color: theme.colors.text.primary },
+  commentMeta: { color: theme.colors.text.secondary },
   commentDelete: {
     color: theme.colors.primary,
-    fontSize: 24,
-    fontWeight: '700',
+    ...theme.typography.h3,
   },
   composerRow: {
     flexDirection: 'row',
@@ -363,7 +365,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing[2],
     paddingVertical: theme.spacing[1],
     color: theme.colors.text.primary,
-    fontSize: 14,
+    ...theme.typography.body,
   },
   composerSend: {
     paddingVertical: theme.spacing[1],
@@ -371,7 +373,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.primary,
     borderRadius: theme.radius.sm,
   },
-  composerSendText: { color: theme.colors.bg.card, fontWeight: '600' },
+  composerSendText: { color: theme.colors.bg.card },
   editContainer: {
     marginBottom: theme.spacing[3],
   },
@@ -381,7 +383,7 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.sm,
     padding: theme.spacing[2],
     color: theme.colors.text.primary,
-    fontSize: 14,
+    ...theme.typography.body,
     minHeight: 80,
     textAlignVertical: 'top',
   },
@@ -404,7 +406,6 @@ const styles = StyleSheet.create({
   },
   editButtonText: {
     color: theme.colors.bg.card,
-    fontWeight: '600',
   },
   editButtonTextCancel: {
     color: theme.colors.text.primary,

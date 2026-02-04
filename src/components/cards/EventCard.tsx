@@ -3,10 +3,10 @@
 // NO hardcoded numbers or color strings allowed.
 
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { Card } from '../ui/Card';
+import { Text } from '../ui';
 import { CardRoot } from './CardRoot';
 import { CardHeader } from './CardHeader';
 import { useAuth } from '../../auth/AuthProvider';
@@ -104,16 +104,24 @@ export function EventCard({
           </View>
         }
       />
-      <Text style={styles.title}>{title}</Text>
+      <Text variant="h3" color="primary" style={styles.title}>
+        {title}
+      </Text>
       <View style={styles.detailRow}>
         <Ionicons name="calendar" size={16} color={theme.colors.text.secondary} />
-        <Text style={styles.detailText}>{date}</Text>
+        <Text variant="body" color="secondary" style={styles.detailText}>
+          {date}
+        </Text>
       </View>
       <View style={styles.detailRow}>
         <Ionicons name="location" size={16} color={theme.colors.text.secondary} />
-        <Text style={styles.detailText}>{location}</Text>
+        <Text variant="body" color="secondary" style={styles.detailText}>
+          {location}
+        </Text>
       </View>
-      <Text style={styles.spotsLeft}>{spotsLeft} pladser tilbage</Text>
+      <Text variant="caption" style={styles.spotsLeft}>
+        {spotsLeft} pladser tilbage
+      </Text>
     </CardRoot>
   );
 }
@@ -131,9 +139,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: theme.colors.text.primary,
     marginTop: theme.spacing[2],
     marginBottom: theme.spacing[4],
   },
@@ -143,14 +148,10 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing[2],
   },
   detailText: {
-    fontSize: 14,
-    color: theme.colors.text.secondary,
     marginLeft: theme.spacing[2],
   },
   spotsLeft: {
-    fontSize: 14,
     color: theme.colors.pill.orange.text,
-    fontWeight: '600',
     marginBottom: theme.spacing[6],
   },
 });

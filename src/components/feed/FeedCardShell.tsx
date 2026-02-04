@@ -4,8 +4,8 @@
 // Do not import FeedCardShell directly. Use CardRoot from src/components/cards/CardRoot.tsx
 
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, View, Text } from 'react-native';
-import { Card } from '../../ui/primitives/Card';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Card, Text } from '../ui';
 import { CardActions } from '../cards/CardActions';
 import { InlineComments, CommentTargetType } from '../comments/InlineComments';
 import { defaultTheme } from '../../theme';
@@ -126,7 +126,9 @@ export function FeedCardShell({
       {showPreview && (
         <View style={styles.previewContainer}>
           <Pressable onPress={handlePressComment}>
-            <Text style={styles.viewAllText}>Se alle {commentsCount} kommentarer</Text>
+            <Text variant="caption" color="secondary" style={styles.viewAllText}>
+              Se alle {commentsCount} kommentarer
+            </Text>
           </Pressable>
           {commentPreviews.map((comment) => {
             const displayName = getAuthorDisplayName(comment);
@@ -140,8 +142,13 @@ export function FeedCardShell({
                   label={displayName}
                 />
                 <View style={styles.previewTextContainer}>
-                  <Text style={styles.previewAuthor}>{displayName}</Text>
-                  <Text style={styles.previewText}> {comment.text}</Text>
+                  <Text variant="caption" color="primary" style={styles.previewAuthor}>
+                    {displayName}
+                  </Text>
+                  <Text variant="caption" color="primary" style={styles.previewText}>
+                    {' '}
+                    {comment.text}
+                  </Text>
                 </View>
               </View>
             );
@@ -177,8 +184,6 @@ const styles = StyleSheet.create({
     paddingBottom: theme.spacing[1],
   },
   viewAllText: {
-    fontSize: 13,
-    color: theme.colors.text.secondary,
     marginBottom: theme.spacing[1],
   },
   previewComment: {
@@ -193,12 +198,8 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   previewAuthor: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.colors.text.primary,
+    marginRight: theme.spacing[1],
   },
   previewText: {
-    fontSize: 13,
-    color: theme.colors.text.primary,
   },
 });

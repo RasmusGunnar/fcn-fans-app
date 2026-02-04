@@ -3,9 +3,9 @@
 // NO hardcoded numbers or color strings allowed.
 
 import React from 'react';
-import { View, Text, StyleSheet, Image, Linking } from 'react-native';
+import { View, StyleSheet, Image, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Card } from '../../ui/primitives/Card';
+import { Card, Text } from '../ui';
 import { FeedCardHeader } from '../FeedCardHeader';
 import { CardRoot } from './CardRoot';
 import { defaultTheme } from '../../theme';
@@ -135,25 +135,31 @@ export function NewsCard({
         subtitle={timeAgo}
       />
 
-      <Card variant="subtle" padding="sm" style={styles.linkCard}>
+      <Card style={styles.linkCard}>
         {newsItem.imageUrl && (
           <Image source={{ uri: newsItem.imageUrl }} style={styles.image} resizeMode="cover" />
         )}
         <View style={styles.linkContent}>
-          {newsItem.siteName && <Text style={styles.siteName}>{newsItem.siteName}</Text>}
+          {newsItem.siteName && (
+            <Text variant="small" color="secondary" style={styles.siteName}>
+              {newsItem.siteName}
+            </Text>
+          )}
           {newsItem.title && (
-            <Text style={styles.title} numberOfLines={2}>
+            <Text variant="bodyBold" color="primary" style={styles.title} numberOfLines={2}>
               {newsItem.title}
             </Text>
           )}
           {newsItem.description && (
-            <Text style={styles.description} numberOfLines={3}>
+            <Text variant="body" color="secondary" style={styles.description} numberOfLines={3}>
               {newsItem.description}
             </Text>
           )}
           <View style={styles.linkIndicator}>
             <Ionicons name="open-outline" size={14} color={theme.colors.primary} />
-            <Text style={styles.linkText}>Åbn link</Text>
+            <Text variant="caption" color="primary" style={styles.linkText}>
+              Åbn link
+            </Text>
           </View>
         </View>
       </Card>
@@ -180,7 +186,6 @@ const styles = StyleSheet.create({
   linkCard: {
     overflow: 'hidden',
     marginBottom: theme.spacing[2],
-    padding: theme.spacing[0],
   },
   image: {
     width: '100%',
@@ -192,20 +197,11 @@ const styles = StyleSheet.create({
     gap: theme.spacing[1],
   },
   siteName: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.colors.text.secondary,
     textTransform: 'uppercase',
   },
   title: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: theme.colors.text.primary,
   },
   description: {
-    fontSize: 14,
-    color: theme.colors.text.secondary,
-    lineHeight: 20,
   },
   linkIndicator: {
     flexDirection: 'row',
@@ -214,8 +210,5 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing[1],
   },
   linkText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.colors.primary,
   },
 });
