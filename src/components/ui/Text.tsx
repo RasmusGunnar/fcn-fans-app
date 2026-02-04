@@ -1,6 +1,6 @@
 import React from 'react';
 import { Text as RNText, TextProps as RNTextProps } from 'react-native';
-import { defaultTheme, getTextStyle } from '../../theme';
+import { useTheme, getTextStyle } from '../../theme';
 import type { TypographyVariant } from '../../theme/tokens';
 
 export interface TextProps extends Omit<RNTextProps, 'style'> {
@@ -21,7 +21,7 @@ export interface TextProps extends Omit<RNTextProps, 'style'> {
  *   <Text variant="caption" color="muted">Caption</Text>
  */
 export function Text({ variant = 'body', color = 'primary', style, ...props }: TextProps) {
-  const theme = defaultTheme;
+  const theme = useTheme();
   const textStyle = getTextStyle(theme, variant);
 
   const colorMap = {

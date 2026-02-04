@@ -46,7 +46,7 @@ export function Card({ variant = 'default', imageSource, style, children, ...pro
         style={[
           baseStyle,
           {
-            borderBottomWidth: StyleSheet.hairlineWidth,
+            borderBottomWidth: feedItemConfig.borderBottomWidth,
             borderBottomColor: feedItemConfig.borderBottomColor,
           },
           style,
@@ -64,7 +64,7 @@ export function Card({ variant = 'default', imageSource, style, children, ...pro
     'borderColor' in variantConfig &&
     variantConfig.borderWidth > 0
       ? {
-          borderWidth: StyleSheet.hairlineWidth,
+          borderWidth: variantConfig.borderWidth,
           borderColor: variantConfig.borderColor,
         }
       : {};

@@ -24,7 +24,7 @@ export function Card({
 
   const paddingMap: Record<CardPadding, number> = {
     sm: theme.spacing[3],
-    md: theme.spacing[4],
+    md: theme.components.card.padding,
     lg: theme.spacing[6],
   };
 
