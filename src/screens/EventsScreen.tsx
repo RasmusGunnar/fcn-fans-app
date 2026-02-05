@@ -14,12 +14,14 @@ import MapView, { Marker, Region } from 'react-native-maps';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AppHeader } from '../components/AppHeader';
-import { MatchCard } from '../components/events/MatchCard';
-import { BusTripCard } from '../components/events/BusTripCard';
-import { EventCard as GenericEventCard } from '../components/events/EventCard';
 import { MapMarkerIcon } from '../components/MapMarkerIcon';
 import { fetchFeedUpcoming, type FeedItem } from '../services/eventsApi';
+import { FeedItemRenderer } from '../components/feed/FeedItemRenderer';
+import type { FeedItem as HomeFeedItem } from '../types/feed';
+import { targetKey } from '../utils/targetKey';
 import { defaultTheme as theme } from '../theme';
+import { useAuth } from '../auth/AuthProvider';
+import { useFeed } from '../state/FeedContext';
 
 type ViewMode = 'list' | 'map';
 type FilterMode = 'all' | 'matches' | 'events';
@@ -53,6 +55,17 @@ export default function EventsScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const mapRef = useRef<MapView>(null);
   const bottomSheetRef = useRef<BottomSheet>(null);
+  const { user, isAppAdmin } = useAuth();
+  const {
+    profileMap,
+    communityMap,
+    likeMap,
+    commentCountMap,
+    commentPreviewMap,
+    toggleLike,
+    incrementCommentCount,
+    addCommentPreview,
+  } = useFeed();
 
   const [feed, setFeed] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -154,56 +167,97 @@ export default function EventsScreen() {
     })
     .filter((item): item is MapItem => item !== null);
 
-  const renderListItem = ({ item }: { item: FeedItem }) => {
+  const toHomeFeedItem = (item: FeedItem): HomeFeedItem => {
     if (item.kind === 'match') {
-      return (
-        <MatchCard
-          matchId={item.id}
-          home={item.home}
-          away={item.away}
-          homeLogo={item.homeLogo}
-          awayLogo={item.awayLogo}
-          kickoffAt={item.kickoffAt}
-          venue={item.venue}
-          venueCity={item.venueCity}
-          competition={item.competition}
-          round={item.round}
-          onPress={() => (navigation as any).navigate('MatchDetails', { fixtureId: item.id })}
-        />
-      );
+      return {
+        kind: 'match',
+        id: item.id,
+        data: {
+          id: item.id,
+          kickoffAt: item.kickoffAt,
+          home: item.home,
+          away: item.away,
+          homeLogo: item.homeLogo,
+          awayLogo: item.awayLogo,
+          venue: item.venue,
+          venueCity: item.venueCity,
+          competition: item.competition,
+          round: item.round,
+        },
+      };
     }
 
     if (item.kind === 'bus_trip') {
-      return (
-        <BusTripCard
-          title={item.title}
-          startAt={item.startAt}
-          departurePlace={item.departurePlace}
-          seatsLeft={item.seatsLeft}
-          totalSeats={item.totalSeats}
-          priceDkk={item.priceDkk}
-          organizerName={item.organizerName}
-          onPress={() => (navigation as any).navigate('BusTripDetails', { busTripId: item.id })}
-        />
-      );
+      return {
+        kind: 'bus_trip',
+        id: item.id,
+        data: {
+          id: item.id,
+          title: item.title,
+          startAt: item.startAt,
+          location: item.departurePlace,
+          description: item.description,
+          organizerName: item.organizerName,
+          organizerGroupId: null,
+          createdAt: null,
+          eventType: 'bus_trip',
+        },
+      };
     }
 
-    if (isEventLike(item.kind)) {
-      return (
-        <GenericEventCard
-          eventId={item.id}
-          title={item.title}
-          startAt={item.startAt}
-          location={item.location}
-          organizerName={item.organizerName}
-          description={item.description}
-          eventType={toEventType(item.kind)}
-          onPress={() => (navigation as any).navigate('EventDetails', { eventId: item.id })}
-        />
-      );
-    }
+    return {
+      kind: 'event',
+      id: item.id,
+      data: {
+        id: item.id,
+        title: item.title,
+        startAt: item.startAt,
+        location: item.location,
+        description: item.description,
+        organizerName: item.organizerName,
+        organizerGroupId: item.organizer_group_id ?? null,
+        organizerType: item.organizer_type ?? null,
+        organizerId: item.organizer_id ?? null,
+        creatorUserId: item.creator_user_id ?? null,
+        createdBy: item.created_by ?? null,
+        createdAt: null,
+        eventType: 'event',
+      },
+    };
+  };
 
-    return null;
+  const renderListItem = ({ item }: { item: FeedItem }) => {
+    const feedItem = toHomeFeedItem(item);
+    const key = targetKey(feedItem.kind, feedItem.id);
+    const likeState = likeMap[key] || { liked: false, likes: 0 };
+    const commentCount = commentCountMap[key] || 0;
+    const commentPreviews = commentPreviewMap[key] || [];
+
+    return (
+      <FeedItemRenderer
+        item={feedItem}
+        itemKey={key}
+        user={user}
+        isAppAdmin={isAppAdmin}
+        likeState={likeState}
+        commentCount={commentCount}
+        commentPreviews={commentPreviews}
+        safeProfileMap={profileMap || {}}
+        communityMap={communityMap || {}}
+        toggleLike={toggleLike}
+        removePost={() => {}}
+        removeNews={() => {}}
+        incrementCommentCount={incrementCommentCount}
+        addCommentPreview={addCommentPreview}
+        onPressMatch={(matchId) =>
+          (navigation as any).navigate('MatchDetails', { fixtureId: matchId })
+        }
+        onPressBusTrip={(busTripId) =>
+          (navigation as any).navigate('BusTripDetails', { busTripId })
+        }
+        onPressEvent={(eventId) => (navigation as any).navigate('EventDetails', { eventId })}
+      />
+    );
   };
 
   const handleMarkerPress = useCallback((item: MapItem) => {
@@ -264,9 +318,7 @@ export default function EventsScreen() {
           style={[styles.chip, filterMode === 'all' && styles.chipActive]}
           onPress={() => setFilterMode('all')}
         >
-          <Text style={[styles.chipText, filterMode === 'all' && styles.chipTextActive]}>
-            Alle
-          </Text>
+          <Text style={[styles.chipText, filterMode === 'all' && styles.chipTextActive]}>Alle</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -320,7 +372,6 @@ export default function EventsScreen() {
           renderItem={renderListItem}
           keyExtractor={(item) => `${item.kind}-${item.id}`}
           contentContainerStyle={{
-            padding: theme.spacing[4],
             paddingBottom: tabBarHeight + theme.spacing[6],
           }}
           refreshControl={
@@ -350,9 +401,7 @@ export default function EventsScreen() {
                   <Text style={styles.emptySubtext}>
                     {mapItems.length} af {filteredFeed.length} events har koordinater
                   </Text>
-                  <Text style={styles.emptyHint}>
-                    Kør fixtures sync for at geocode stadions
-                  </Text>
+                  <Text style={styles.emptyHint}>Kør fixtures sync for at geocode stadions</Text>
                 </>
               ) : (
                 <>

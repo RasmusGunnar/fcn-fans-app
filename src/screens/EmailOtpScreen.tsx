@@ -56,14 +56,14 @@ export default function EmailOtpScreen({ route }: any) {
         onChangeText={setCode}
         placeholder="Kode"
         keyboardType="number-pad"
-        style={{ 
-          borderWidth: theme.layout.borderWidth, 
+        style={{
+          borderWidth: theme.layout.borderWidth,
           borderColor: theme.colors.border.default,
-          padding: theme.spacing[3], 
+          padding: theme.spacing[3],
           borderRadius: theme.radius.md,
           fontSize: theme.typography.body.fontSize,
           color: theme.colors.text.primary,
-          backgroundColor: theme.colors.bg.elevated
+          backgroundColor: theme.colors.bg.elevated,
         }}
       />
 

@@ -44,19 +44,19 @@ export async function uploadAvatar(userId: string): Promise<string | null> {
     }
 
     const asset = result.assets[0];
-    
+
     // Validate local file exists and has size > 0
     try {
       const fileInfo = await FileSystem.getInfoAsync(asset.uri);
       if (__DEV__) {
         console.log('[AvatarUpload] Local file info:', fileInfo);
       }
-      
+
       if (!fileInfo.exists) {
         Alert.alert('Fejl', 'Filen kunne ikke findes');
         return null;
       }
-      
+
       if (fileInfo.size === 0) {
         Alert.alert('Fejl', 'Filen er tom (0 bytes)');
         return null;
@@ -68,11 +68,12 @@ export async function uploadAvatar(userId: string): Promise<string | null> {
     }
 
     const originalMimeType = asset.mimeType || 'unknown';
-    const isHeic = originalMimeType.toLowerCase().includes('heic') || 
-                   originalMimeType.toLowerCase().includes('heif') ||
-                   asset.uri.toLowerCase().includes('.heic') ||
-                   asset.uri.toLowerCase().includes('.heif');
-    
+    const isHeic =
+      originalMimeType.toLowerCase().includes('heic') ||
+      originalMimeType.toLowerCase().includes('heif') ||
+      asset.uri.toLowerCase().includes('.heic') ||
+      asset.uri.toLowerCase().includes('.heif');
+
     console.log('[uploadAvatar] Converting image to JPEG', {
       originalUri: asset.uri,
       originalMimeType,
@@ -101,13 +102,13 @@ export async function uploadAvatar(userId: string): Promise<string | null> {
 
     // Convert base64 to Uint8Array (reliable for Supabase in Expo)
     const bytes = base64ToUint8Array(base64);
-    
+
     if (__DEV__) {
       const fileInfo = await FileSystem.getInfoAsync(asset.uri);
-      console.log('[AvatarUpload]', { 
+      console.log('[AvatarUpload]', {
         localSize: fileInfo.exists && !fileInfo.isDirectory ? fileInfo.size : 'unknown',
         blobSize: bytes.length,
-        path: `${userId}.jpg`
+        path: `${userId}.jpg`,
       });
     }
 

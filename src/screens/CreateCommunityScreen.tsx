@@ -82,53 +82,50 @@ export default function CreateCommunityScreen() {
           disabled={creating}
         />
 
-        <PrimaryButton
-          title="Annuller"
-          onPress={() => navigation.goBack()}
-          disabled={creating}
-        />
+        <PrimaryButton title="Annuller" onPress={() => navigation.goBack()} disabled={creating} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const makeStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.bg.default,
-  },
-  content: {
-    padding: theme.spacing[6],
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: theme.colors.text.primary,
-    marginBottom: theme.spacing[2],
-  },
-  subtitle: {
-    fontSize: 16,
-    color: theme.colors.text.secondary,
-    marginBottom: theme.spacing[8],
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.colors.text.primary,
-    marginBottom: theme.spacing[2],
-    marginTop: theme.spacing[4],
-  },
-  input: {
-    backgroundColor: theme.colors.bg.card,
-    borderRadius: theme.radius.sm,
-    padding: theme.spacing[4],
-    fontSize: 16,
-    color: theme.colors.text.primary,
-    borderWidth: 1,
-    borderColor: theme.colors.border.default,
-  },
-  textArea: {
-    height: 100,
-    textAlignVertical: 'top',
-  },
-});
+const makeStyles = (theme: ReturnType<typeof useTheme>) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.bg.default,
+    },
+    content: {
+      padding: theme.spacing[6],
+    },
+    title: {
+      fontSize: 28,
+      fontWeight: 'bold',
+      color: theme.colors.text.primary,
+      marginBottom: theme.spacing[2],
+    },
+    subtitle: {
+      fontSize: 16,
+      color: theme.colors.text.secondary,
+      marginBottom: theme.spacing[8],
+    },
+    label: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: theme.colors.text.primary,
+      marginBottom: theme.spacing[2],
+      marginTop: theme.spacing[4],
+    },
+    input: {
+      backgroundColor: theme.colors.bg.card,
+      borderRadius: theme.radius.sm,
+      padding: theme.spacing[4],
+      fontSize: 16,
+      color: theme.colors.text.primary,
+      borderWidth: 1,
+      borderColor: theme.colors.border.default,
+    },
+    textArea: {
+      height: 100,
+      textAlignVertical: 'top',
+    },
+  });

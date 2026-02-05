@@ -69,18 +69,31 @@ export default function LoginScreen() {
   const primaryDisabled = loading || !email.trim().includes('@') || password.length < 6;
 
   return (
-    <ImageBackground source={bg ?? undefined} style={[styles.bg, { backgroundColor: theme.colors.bg.default }]} resizeMode="cover">
+    <ImageBackground
+      source={bg ?? undefined}
+      style={[styles.bg, { backgroundColor: theme.colors.bg.default }]}
+      resizeMode="cover"
+    >
       <View style={[styles.bgOverlay, { backgroundColor: theme.colors.overlay.medium }]} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.flex}
       >
         <View style={{ flex: 1, justifyContent: 'center', padding: theme.spacing[4] }}>
-          <Card style={[styles.card, { backgroundColor: theme.colors.bg.card, borderColor: theme.colors.border.default }]}>
+          <Card
+            style={[
+              styles.card,
+              { backgroundColor: theme.colors.bg.card, borderColor: theme.colors.border.default },
+            ]}
+          >
             {logo ? (
               <Image source={logo} style={styles.logo} resizeMode="contain" />
             ) : (
-              <Text variant="h1" color="inverse" style={{ textAlign: 'center', marginBottom: theme.spacing[2] }}>
+              <Text
+                variant="h1"
+                color="inverse"
+                style={{ textAlign: 'center', marginBottom: theme.spacing[2] }}
+              >
                 FCN Fans
               </Text>
             )}
@@ -96,10 +109,22 @@ export default function LoginScreen() {
                     borderRadius: theme.radius.sm,
                     marginHorizontal: theme.spacing[1],
                   },
-                  mode === 'login' && [styles.modeBtnActive, { backgroundColor: theme.colors.bg.elevated }],
+                  mode === 'login' && [
+                    styles.modeBtnActive,
+                    { backgroundColor: theme.colors.bg.elevated },
+                  ],
                 ]}
               >
-                <Text style={[styles.modeBtnText, { color: theme.colors.text.secondary }, mode === 'login' && [styles.modeBtnTextActive, { color: theme.colors.text.primary }]]}>
+                <Text
+                  style={[
+                    styles.modeBtnText,
+                    { color: theme.colors.text.secondary },
+                    mode === 'login' && [
+                      styles.modeBtnTextActive,
+                      { color: theme.colors.text.primary },
+                    ],
+                  ]}
+                >
                   Log ind
                 </Text>
               </Pressable>
@@ -113,23 +138,41 @@ export default function LoginScreen() {
                     borderRadius: theme.radius.sm,
                     marginHorizontal: theme.spacing[1],
                   },
-                  mode === 'signup' && [styles.modeBtnActive, { backgroundColor: theme.colors.bg.elevated }],
+                  mode === 'signup' && [
+                    styles.modeBtnActive,
+                    { backgroundColor: theme.colors.bg.elevated },
+                  ],
                 ]}
               >
-                <Text style={[styles.modeBtnText, { color: theme.colors.text.secondary }, mode === 'signup' && [styles.modeBtnTextActive, { color: theme.colors.text.primary }]]}>
+                <Text
+                  style={[
+                    styles.modeBtnText,
+                    { color: theme.colors.text.secondary },
+                    mode === 'signup' && [
+                      styles.modeBtnTextActive,
+                      { color: theme.colors.text.primary },
+                    ],
+                  ]}
+                >
                   Opret
                 </Text>
               </Pressable>
             </View>
 
-            <Text variant="body" color="secondary" style={{ textAlign: 'center', marginBottom: theme.spacing[3] }}>
+            <Text
+              variant="body"
+              color="secondary"
+              style={{ textAlign: 'center', marginBottom: theme.spacing[3] }}
+            >
               {mode === 'login'
                 ? 'Log ind for at fortsætte til FCN Fans'
                 : 'Opret en konto for at komme i gang'}
             </Text>
 
             <View style={{ marginTop: theme.spacing[1] }}>
-              <Text variant="bodyBold" color="secondary" style={{ marginBottom: theme.spacing[1] }}>Email</Text>
+              <Text variant="bodyBold" color="secondary" style={{ marginBottom: theme.spacing[1] }}>
+                Email
+              </Text>
               <TextInput
                 style={[
                   styles.input,
@@ -150,7 +193,11 @@ export default function LoginScreen() {
                 keyboardType="email-address"
               />
 
-              <Text variant="bodyBold" color="secondary" style={{ marginTop: theme.spacing[2], marginBottom: theme.spacing[1] }}>
+              <Text
+                variant="bodyBold"
+                color="secondary"
+                style={{ marginTop: theme.spacing[2], marginBottom: theme.spacing[1] }}
+              >
                 Kodeord
               </Text>
               <TextInput
@@ -190,9 +237,13 @@ export default function LoginScreen() {
               <View style={{ height: theme.spacing[2] }} />
               <View style={styles.signupRow}>
                 {mode === 'login' ? (
-                  <Text variant="body" color="secondary">Er du ikke oprettet endnu? </Text>
+                  <Text variant="body" color="secondary">
+                    Er du ikke oprettet endnu?{' '}
+                  </Text>
                 ) : (
-                  <Text variant="body" color="secondary">Har du allerede en konto? </Text>
+                  <Text variant="body" color="secondary">
+                    Har du allerede en konto?{' '}
+                  </Text>
                 )}
                 {mode === 'login' ? (
                   <Pressable onPress={() => setMode('signup')}>
@@ -207,7 +258,11 @@ export default function LoginScreen() {
             </View>
 
             <View style={{ marginTop: theme.spacing[3], alignItems: 'center' }}>
-              <Text variant="body" color="secondary" style={{ textAlign: 'center', marginBottom: theme.spacing[2] }}>
+              <Text
+                variant="body"
+                color="secondary"
+                style={{ textAlign: 'center', marginBottom: theme.spacing[2] }}
+              >
                 Du kan også oprette dig med:
               </Text>
 
@@ -225,7 +280,9 @@ export default function LoginScreen() {
                   ]}
                   onPress={onApple}
                 >
-                  <Text style={[styles.socialBtnText, { color: theme.colors.text.secondary }]}>Apple</Text>
+                  <Text style={[styles.socialBtnText, { color: theme.colors.text.secondary }]}>
+                    Apple
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[
@@ -240,7 +297,9 @@ export default function LoginScreen() {
                   ]}
                   onPress={onFacebook}
                 >
-                  <Text style={[styles.socialBtnText, { color: theme.colors.text.secondary }]}>Facebook</Text>
+                  <Text style={[styles.socialBtnText, { color: theme.colors.text.secondary }]}>
+                    Facebook
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -251,34 +310,39 @@ export default function LoginScreen() {
   );
 }
 
-const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
-  flex: { flex: 1 },
-  bg: { flex: 1 },
-  bgOverlay: { ...StyleSheet.absoluteFillObject },
-  card: {
-    borderWidth: theme.layout.borderWidth,
-  },
-  logo: { width: 140, height: 68, alignSelf: 'center', marginBottom: theme.spacing[2] },
-  modeToggleRow: { flexDirection: 'row', justifyContent: 'center', marginBottom: theme.spacing[2] },
-  modeBtn: {
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  modeBtnActive: {},
-  modeBtnText: { fontWeight: '700' },
-  modeBtnTextActive: {},
-  input: {
-    borderWidth: theme.layout.borderWidth,
-  },
-  signupRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  linkText: { fontWeight: '700', marginLeft: theme.spacing[1] },
-  socialBtn: {
-    borderWidth: theme.layout.borderWidth,
-    opacity: 0.6,
-  },
-  socialBtnText: { fontWeight: '700' },
-});
+const createStyles = (theme: ReturnType<typeof useTheme>) =>
+  StyleSheet.create({
+    flex: { flex: 1 },
+    bg: { flex: 1 },
+    bgOverlay: { ...StyleSheet.absoluteFillObject },
+    card: {
+      borderWidth: theme.layout.borderWidth,
+    },
+    logo: { width: 140, height: 68, alignSelf: 'center', marginBottom: theme.spacing[2] },
+    modeToggleRow: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      marginBottom: theme.spacing[2],
+    },
+    modeBtn: {
+      borderWidth: 1,
+      borderColor: 'transparent',
+    },
+    modeBtnActive: {},
+    modeBtnText: { fontWeight: '700' },
+    modeBtnTextActive: {},
+    input: {
+      borderWidth: theme.layout.borderWidth,
+    },
+    signupRow: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    linkText: { fontWeight: '700', marginLeft: theme.spacing[1] },
+    socialBtn: {
+      borderWidth: theme.layout.borderWidth,
+      opacity: 0.6,
+    },
+    socialBtnText: { fontWeight: '700' },
+  });

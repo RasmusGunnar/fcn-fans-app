@@ -32,6 +32,8 @@ export interface EventPermissionObject {
   organizer_group_id?: string | null;
 }
 
+export type FeedItemActorType = 'user' | 'community';
+
 /**
  * Check if user can edit a post.
  * Rules: System admin OR post author
@@ -138,6 +140,27 @@ export function canDeleteEvent(
   if (event.created_by === userId) return true;
   // Community owner/admin can delete events in their community
   if (event.organizer_group_id && communityRole && ['owner', 'admin'].includes(communityRole)) {
+    return true;
+  }
+  return false;
+}
+
+export function canDeleteFeedItem({
+  isAppAdmin,
+  viewerUserId,
+  itemAuthorId,
+  itemActorType,
+  itemCommunityRole,
+}: {
+  isAppAdmin: boolean;
+  viewerUserId?: string;
+  itemAuthorId?: string | null;
+  itemActorType?: FeedItemActorType;
+  itemCommunityRole?: CommunityRole | null;
+}): boolean {
+  if (isAppAdmin) return true;
+  if (viewerUserId && itemAuthorId && viewerUserId === itemAuthorId) return true;
+  if (itemActorType === 'community' && itemCommunityRole && ['owner', 'admin'].includes(itemCommunityRole)) {
     return true;
   }
   return false;

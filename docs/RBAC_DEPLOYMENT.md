@@ -3,6 +3,7 @@
 ## ✅ Implementation Complete
 
 All RBAC features have been implemented following the requirements:
+
 - ✅ Additive changes only (no breaking changes)
 - ✅ Posts table and queries untouched
 - ✅ System admin role with full access
@@ -21,6 +22,7 @@ All RBAC features have been implemented following the requirements:
 4. Execute the SQL
 
 **What it does:**
+
 - Creates `app_admins` table with RLS
 - Adds admin bypass policies for:
   - `news_items` (full access)
@@ -32,7 +34,7 @@ All RBAC features have been implemented following the requirements:
 1. Get your user UUID from Supabase Dashboard → Authentication → Users
 2. Run in SQL Editor:
    ```sql
-   insert into public.app_admins(user_id) 
+   insert into public.app_admins(user_id)
    values ('YOUR-USER-UUID-HERE');
    ```
 3. Verify:
@@ -43,6 +45,7 @@ All RBAC features have been implemented following the requirements:
 ### Step 3: Test in App
 
 1. **Rebuild app:**
+
    ```bash
    npm start
    # Or restart Expo Go
@@ -74,6 +77,7 @@ All RBAC features have been implemented following the requirements:
 ## 🔍 Files Changed
 
 ### New Files
+
 1. **supabase/migrations/20260120000000_app_admins.sql**
    - App admins table + RLS + bypass policies
 
@@ -91,6 +95,7 @@ All RBAC features have been implemented following the requirements:
    - Deployment checklist
 
 ### Modified Files
+
 1. **src/components/ActorSelector.tsx**
    - Now uses `getMyCommunityRoles()` from rbac.ts
    - Filters to show only owner/admin communities
@@ -105,6 +110,7 @@ All RBAC features have been implemented following the requirements:
 ## ⚠️ Important Notes
 
 ### What Was NOT Changed
+
 - ❌ `posts` table schema
 - ❌ Post creation queries
 - ❌ Post upload flow
@@ -113,12 +119,14 @@ All RBAC features have been implemented following the requirements:
 - ❌ Any existing table columns
 
 ### Migration Safety
+
 - Idempotent: Can be run multiple times safely
 - Uses `if not exists` for table creation
 - Uses `drop policy if exists` before creating policies
 - No data loss risk
 
 ### RLS Behavior
+
 - System admins bypass all restrictions via new policies
 - Community owner/admin can post as community (news only for now)
 - Regular users unchanged
@@ -161,10 +169,11 @@ Before considering deployment complete:
 ## 📞 Troubleshooting
 
 ### ActorSelector shows no communities
+
 1. Check if you're actually owner/admin:
    ```sql
-   select community_id, role 
-   from community_members 
+   select community_id, role
+   from community_members
    where user_id = 'YOUR-UUID';
    ```
 2. Verify communities exist:
@@ -173,19 +182,22 @@ Before considering deployment complete:
    ```
 
 ### System admin check returns false
+
 1. Verify admin was seeded:
    ```sql
    select * from app_admins;
    ```
 2. Check RLS is enabled:
    ```sql
-   select tablename, rowsecurity 
-   from pg_tables 
+   select tablename, rowsecurity
+   from pg_tables
    where schemaname = 'public' and tablename = 'app_admins';
    ```
 
 ### Posts broken after deployment
+
 This should NOT happen (posts untouched), but if it does:
+
 1. Check console for errors
 2. Verify `posts` table unchanged:
    ```sql

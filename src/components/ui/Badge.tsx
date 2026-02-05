@@ -52,8 +52,8 @@ export function Badge({ label, variant = 'neutral', size = 'md' }: BadgeProps) {
       };
     }
     return {
-      paddingVertical: theme.spacing[1],
-      paddingHorizontal: theme.spacing[2],
+      paddingVertical: theme.components.pill.py,
+      paddingHorizontal: theme.components.pill.px,
     };
   };
 
@@ -70,12 +70,11 @@ export function Badge({ label, variant = 'neutral', size = 'md' }: BadgeProps) {
 function createStyles(theme: Theme) {
   return StyleSheet.create({
     badge: {
-      borderRadius: theme.radius.pill,
+      borderRadius: theme.components.pill.radius,
       alignSelf: 'flex-start',
     },
     text: {
-      ...theme.typography.small,
-      fontWeight: '600',
+      ...theme.typography.caption,
     },
   });
 }

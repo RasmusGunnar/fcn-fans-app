@@ -1,12 +1,12 @@
-﻿const fs = require("fs");
-const path = require("path");
+﻿const fs = require('fs');
+const path = require('path');
 
-const roots = ["src/screens", "src/components"];
-const exts = new Set([".ts", ".tsx"]);
+const roots = ['src/screens', 'src/components'];
+const exts = new Set(['.ts', '.tsx']);
 
 const patterns = [
-  /#[0-9a-fA-F]{3,8}\b/g,                 // hex colors
-  /rgba?\(/g,                             // rgb/rgba
+  /#[0-9a-fA-F]{3,8}\b/g, // hex colors
+  /rgba?\(/g, // rgb/rgba
   /\bborderRadius\s*:\s*\d+/g,
   /\bpadding\s*:\s*\d+/g,
   /\bmargin\s*:\s*\d+/g,
@@ -29,7 +29,7 @@ let hits = 0;
 
 for (const root of roots) {
   for (const file of walk(root)) {
-    const text = fs.readFileSync(file, "utf8");
+    const text = fs.readFileSync(file, 'utf8');
     for (const re of patterns) {
       re.lastIndex = 0;
       const m = re.exec(text);
@@ -42,8 +42,12 @@ for (const root of roots) {
 }
 
 if (hits > 0) {
-  console.error(`\n❌ design:check failed (${hits} files with matches). Remove hardcodes and use theme tokens.`);
+  console.error(
+    `\n❌ design:check failed (${hits} files with matches). Remove hardcodes and use theme tokens.`,
+  );
   process.exit(1);
 } else {
-  console.log("✅ design:check passed (no hardcoded colors/spacing/radius/shadows in screens/components).");
+  console.log(
+    '✅ design:check passed (no hardcoded colors/spacing/radius/shadows in screens/components).',
+  );
 }

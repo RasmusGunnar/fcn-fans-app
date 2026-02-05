@@ -27,7 +27,7 @@ export function Pill({ label, icon, variant = 'badge' }: PillProps) {
       default: // badge
         return {
           container: { backgroundColor: theme.components.pill.variants.badge.bg },
-          text: { 
+          text: {
             color: theme.components.pill.variants.badge.text,
             textTransform: 'uppercase' as const,
           },

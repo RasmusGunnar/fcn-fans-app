@@ -57,7 +57,10 @@ export default function MatchDetailsScreen() {
   // Loading state
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.bg.default }]} edges={['top']}>
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: theme.colors.bg.default }]}
+        edges={['top']}
+      >
         <View style={[styles.header, { backgroundColor: theme.colors.primary }]}>
           <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color={theme.colors.bg.card} />
@@ -66,7 +69,9 @@ export default function MatchDetailsScreen() {
         </View>
         <View style={styles.errorContainer}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text style={[styles.loadingText, { color: theme.colors.text.secondary }]}>Henter kampdata...</Text>
+          <Text style={[styles.loadingText, { color: theme.colors.text.secondary }]}>
+            Henter kampdata...
+          </Text>
         </View>
       </SafeAreaView>
     );
@@ -75,7 +80,10 @@ export default function MatchDetailsScreen() {
   // Fallback if no fixture provided or found
   if (!fixture) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.bg.default }]} edges={['top']}>
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: theme.colors.bg.default }]}
+        edges={['top']}
+      >
         <View style={[styles.header, { backgroundColor: theme.colors.primary }]}>
           <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color={theme.colors.bg.card} />
@@ -83,7 +91,9 @@ export default function MatchDetailsScreen() {
           <Text style={[styles.headerTitle, { color: theme.colors.bg.card }]}>Kampdetaljer</Text>
         </View>
         <View style={styles.errorContainer}>
-          <Text style={[styles.errorText, { color: theme.colors.text.primary }]}>Kunne ikke finde kampdata</Text>
+          <Text style={[styles.errorText, { color: theme.colors.text.primary }]}>
+            Kunne ikke finde kampdata
+          </Text>
           <PrimaryButton title="Gå tilbage" onPress={() => navigation.goBack()} />
         </View>
       </SafeAreaView>
@@ -91,7 +101,10 @@ export default function MatchDetailsScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.bg.default }]} edges={['top']}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.bg.default }]}
+      edges={['top']}
+    >
       {/* Custom Header */}
       <View style={[styles.header, { backgroundColor: theme.colors.primary }]}>
         <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
@@ -117,7 +130,9 @@ export default function MatchDetailsScreen() {
                   </Text>
                 </View>
               )}
-              <Text style={[styles.teamName, { color: theme.colors.text.primary }]}>{fixture.home_team}</Text>
+              <Text style={[styles.teamName, { color: theme.colors.text.primary }]}>
+                {fixture.home_team}
+              </Text>
             </View>
             <Text style={[styles.vs, { color: theme.colors.text.primary }]}>VS</Text>
             <View style={styles.team}>
@@ -130,7 +145,9 @@ export default function MatchDetailsScreen() {
                   </Text>
                 </View>
               )}
-              <Text style={[styles.teamName, { color: theme.colors.text.primary }]}>{fixture.away_team}</Text>
+              <Text style={[styles.teamName, { color: theme.colors.text.primary }]}>
+                {fixture.away_team}
+              </Text>
             </View>
           </View>
           {(fixture.competition || fixture.round) && (
@@ -161,7 +178,12 @@ export default function MatchDetailsScreen() {
         </View>
 
         {/* Join CTA */}
-        <Pressable style={[styles.joinCta, { backgroundColor: theme.colors.bg.card, borderColor: theme.colors.primary }]}>
+        <Pressable
+          style={[
+            styles.joinCta,
+            { backgroundColor: theme.colors.bg.card, borderColor: theme.colors.primary },
+          ]}
+        >
           <Ionicons name="person-add" size={24} color={theme.colors.primary} />
           <Text style={[styles.joinText, { color: theme.colors.primary }]}>Deltag (247)</Text>
         </Pressable>
@@ -189,150 +211,151 @@ export default function MatchDetailsScreen() {
   );
 }
 
-const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  backButton: {
-    marginRight: spacing.sm,
-  },
-  headerTitle: {
-    fontSize: theme.typography.h3.fontSize,
-    fontWeight: theme.typography.h3.fontWeight as any,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  matchCard: {
-    margin: spacing.md,
-  },
-  matchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginVertical: spacing.lg,
-  },
-  team: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  teamCircle: {
-    width: theme.spacing[12],
-    height: theme.spacing[12],
-    borderRadius: theme.radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  teamLogo: {
-    width: theme.spacing[12],
-    height: theme.spacing[12],
-    borderRadius: theme.radius.pill,
-  },
-  teamName: {
-    fontSize: theme.typography.body.fontSize,
-    fontWeight: '600',
-    marginTop: spacing.sm,
-    textAlign: 'center',
-  },
-  teamText: {
-    fontSize: theme.typography.h2.fontSize,
-    fontWeight: '700',
-  },
-  errorContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xl,
-  },
-  errorText: {
-    fontSize: theme.typography.body.fontSize,
-    marginBottom: spacing.lg,
-  },
-  loadingText: {
-    fontSize: theme.typography.body.fontSize,
-    marginTop: spacing.md,
-  },
-  vs: {
-    fontSize: theme.typography.h2.fontSize,
-    fontWeight: '700',
-    marginHorizontal: spacing.md,
-  },
-  leagueText: {
-    fontSize: theme.typography.body.fontSize,
-    textAlign: 'center',
-    marginBottom: spacing.md,
-  },
-  divider: {
-    height: theme.layout.borderWidth,
-    marginBottom: spacing.md,
-  },
-  ctaRow: {
-    flexDirection: 'row',
-    paddingHorizontal: spacing.md,
-    marginBottom: spacing.md,
-  },
-  ctaButton: {
-    flex: 1,
-    marginHorizontal: spacing.xs,
-  },
-  joinCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: theme.layout.borderWidth,
-    borderRadius: theme.radius.md,
-    paddingVertical: spacing.lg,
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.md,
-  },
-  joinText: {
-    fontSize: theme.typography.h3.fontSize,
-    fontWeight: '600',
-    marginLeft: spacing.sm,
-  },
-  section: {
-    paddingHorizontal: spacing.md,
-    marginBottom: spacing.md,
-  },
-  activitiesCard: {
-    marginBottom: spacing.md,
-  },
-  commentsCard: {
-    marginBottom: spacing.md,
-  },
-  commentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    borderBottomWidth: theme.layout.borderWidth,
-  },
-  avatar: {
-    width: theme.spacing[10],
-    height: theme.spacing[10],
-    borderRadius: theme.radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.sm,
-  },
-  avatarText: {
-    fontSize: theme.typography.body.fontSize,
-    fontWeight: '700',
-  },
-  commentContent: {
-    flex: 1,
-  },
-  commentAuthor: {
-    fontSize: theme.typography.body.fontSize,
-    fontWeight: '600',
-  },
-  commentText: {
-    fontSize: theme.typography.body.fontSize,
-    marginTop: theme.spacing[0],
-  },
-});
+const createStyles = (theme: ReturnType<typeof useTheme>) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+    },
+    backButton: {
+      marginRight: spacing.sm,
+    },
+    headerTitle: {
+      fontSize: theme.typography.h3.fontSize,
+      fontWeight: theme.typography.h3.fontWeight as any,
+    },
+    scrollView: {
+      flex: 1,
+    },
+    matchCard: {
+      margin: spacing.md,
+    },
+    matchRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginVertical: spacing.lg,
+    },
+    team: {
+      alignItems: 'center',
+      flex: 1,
+    },
+    teamCircle: {
+      width: theme.spacing[12],
+      height: theme.spacing[12],
+      borderRadius: theme.radius.pill,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    teamLogo: {
+      width: theme.spacing[12],
+      height: theme.spacing[12],
+      borderRadius: theme.radius.pill,
+    },
+    teamName: {
+      fontSize: theme.typography.body.fontSize,
+      fontWeight: '600',
+      marginTop: spacing.sm,
+      textAlign: 'center',
+    },
+    teamText: {
+      fontSize: theme.typography.h2.fontSize,
+      fontWeight: '700',
+    },
+    errorContainer: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: spacing.xl,
+    },
+    errorText: {
+      fontSize: theme.typography.body.fontSize,
+      marginBottom: spacing.lg,
+    },
+    loadingText: {
+      fontSize: theme.typography.body.fontSize,
+      marginTop: spacing.md,
+    },
+    vs: {
+      fontSize: theme.typography.h2.fontSize,
+      fontWeight: '700',
+      marginHorizontal: spacing.md,
+    },
+    leagueText: {
+      fontSize: theme.typography.body.fontSize,
+      textAlign: 'center',
+      marginBottom: spacing.md,
+    },
+    divider: {
+      height: theme.layout.borderWidth,
+      marginBottom: spacing.md,
+    },
+    ctaRow: {
+      flexDirection: 'row',
+      paddingHorizontal: spacing.md,
+      marginBottom: spacing.md,
+    },
+    ctaButton: {
+      flex: 1,
+      marginHorizontal: spacing.xs,
+    },
+    joinCta: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: theme.layout.borderWidth,
+      borderRadius: theme.radius.md,
+      paddingVertical: spacing.lg,
+      marginHorizontal: spacing.md,
+      marginBottom: spacing.md,
+    },
+    joinText: {
+      fontSize: theme.typography.h3.fontSize,
+      fontWeight: '600',
+      marginLeft: spacing.sm,
+    },
+    section: {
+      paddingHorizontal: spacing.md,
+      marginBottom: spacing.md,
+    },
+    activitiesCard: {
+      marginBottom: spacing.md,
+    },
+    commentsCard: {
+      marginBottom: spacing.md,
+    },
+    commentRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: spacing.sm,
+      borderBottomWidth: theme.layout.borderWidth,
+    },
+    avatar: {
+      width: theme.spacing[10],
+      height: theme.spacing[10],
+      borderRadius: theme.radius.pill,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: spacing.sm,
+    },
+    avatarText: {
+      fontSize: theme.typography.body.fontSize,
+      fontWeight: '700',
+    },
+    commentContent: {
+      flex: 1,
+    },
+    commentAuthor: {
+      fontSize: theme.typography.body.fontSize,
+      fontWeight: '600',
+    },
+    commentText: {
+      fontSize: theme.typography.body.fontSize,
+      marginTop: theme.spacing[0],
+    },
+  });

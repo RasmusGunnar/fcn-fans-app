@@ -5,8 +5,20 @@ import { FeedItem } from '../types/feed';
 import { supabase } from '../lib/supabase';
 import { normalizeMedia } from '../utils/media';
 import { fetchNewsItems } from '../services/newsApi';
-import { fetchBusTripsUpcoming, fetchEventsUpcoming, type BusTrip, type Event } from '../services/eventsApi';
-import { fetchLikeStates, fetchCommentCounts, fetchCommentPreviews, toggleLike as toggleLikeApi, type LikeTargetType, type CommentPreview } from '../services/likesApi';
+import {
+  fetchBusTripsUpcoming,
+  fetchEventsUpcoming,
+  type BusTrip,
+  type Event,
+} from '../services/eventsApi';
+import {
+  fetchLikeStates,
+  fetchCommentCounts,
+  fetchCommentPreviews,
+  toggleLike as toggleLikeApi,
+  type LikeTargetType,
+  type CommentPreview,
+} from '../services/likesApi';
 import { targetKey } from '../utils/targetKey';
 
 // Helper to safely extract created timestamp from FeedItem
@@ -36,6 +48,7 @@ interface FeedContextType {
   commentPreviewMap: Record<string, CommentPreview[]>; // Comment previews by "${kind}:${id}"
   addPost: (post: Post) => void;
   removePost: (postId: string) => void;
+  removeNews: (newsId: string) => void;
   fetchPosts: () => Promise<void>;
   toggleLike: (kind: LikeTargetType, id: string, userId: string) => Promise<void>;
   incrementCommentCount: (kind: LikeTargetType, id: string) => void;
@@ -50,7 +63,9 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
   const [posts, setPosts] = useState<Post[]>([]);
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
   const [communityMap, setCommunityMap] = useState<Record<string, string>>({});
-  const [profileMap, setProfileMap] = useState<Record<string, { display_name: string | null; avatar_url: string | null }>>({});
+  const [profileMap, setProfileMap] = useState<
+    Record<string, { display_name: string | null; avatar_url: string | null }>
+  >({});
   const [likeMap, setLikeMap] = useState<Record<string, { liked: boolean; likes: number }>>({});
   const [commentCountMap, setCommentCountMap] = useState<Record<string, number>>({});
   const [commentPreviewMap, setCommentPreviewMap] = useState<Record<string, CommentPreview[]>>({});
@@ -79,18 +94,21 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Fetch author profiles for all posts
-      const authorIds = [...new Set((postsData || []).map(p => p.author_id).filter(Boolean))];
-      const newProfileMap: Record<string, { display_name: string | null; avatar_url: string | null }> = {};
-      
+      const authorIds = [...new Set((postsData || []).map((p) => p.author_id).filter(Boolean))];
+      const newProfileMap: Record<
+        string,
+        { display_name: string | null; avatar_url: string | null }
+      > = {};
+
       if (authorIds.length > 0) {
         try {
           const { data: profiles, error: profileError } = await supabase
             .from('profiles')
             .select('id, display_name, avatar_url')
             .in('id', authorIds);
-          
+
           if (!profileError && profiles) {
-            profiles.forEach(profile => {
+            profiles.forEach((profile) => {
               newProfileMap[profile.id] = {
                 display_name: profile.display_name,
                 avatar_url: profile.avatar_url,
@@ -104,7 +122,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
           console.warn('[FeedProvider] Failed to fetch profiles:', e);
         }
       }
-      
+
       setProfileMap(newProfileMap);
 
       // Transform DB posts to Post type with normalized media
@@ -210,12 +228,8 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       const safeBusTripsArray = upcomingBusTrips ?? [];
 
       const combinedFeed: FeedItem[] = [
-        ...safePostsArray.map(
-          (post): FeedItem => ({ kind: 'post', id: post.id, data: post }),
-        ),
-        ...safeNewsArray.map(
-          (news): FeedItem => ({ kind: 'news', id: news.id, data: news }),
-        ),
+        ...safePostsArray.map((post): FeedItem => ({ kind: 'post', id: post.id, data: post })),
+        ...safeNewsArray.map((news): FeedItem => ({ kind: 'news', id: news.id, data: news })),
         ...safeEventsArray.map(
           (event): FeedItem => ({
             kind: 'event',
@@ -228,6 +242,10 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
               description: event.description ?? null,
               organizerName: event.organizer?.name ?? null,
               organizerGroupId: event.organizer_group_id ?? null,
+              organizerType: event.organizer_type ?? null,
+              organizerId: event.organizer_id ?? null,
+              creatorUserId: event.creator_user_id ?? null,
+              createdBy: event.created_by ?? null,
               createdAt: event.created_at ?? null,
               eventType: 'event',
             },
@@ -245,6 +263,8 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
               description: busTrip.description ?? null,
               organizerName: busTrip.organizer?.name ?? null,
               organizerGroupId: busTrip.organizer_group_id ?? null,
+              organizerType: busTrip.organizer_group_id ? 'community' : null,
+              organizerId: busTrip.organizer_group_id ?? null,
               createdAt: busTrip.created_at ?? null,
               eventType: 'bus_trip',
             },
@@ -264,12 +284,12 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       // Fetch like and comment counts for all feed items
       // Note: get_like_state_v2 doesn't support user context, so liked will always be false
       // Individual like state will be fetched when user interacts
-      
+
       // Group items by kind
-      const postIds = safePostsArray.map(p => p.id);
-      const newsIds = safeNewsArray.map(n => n.id);
-      const eventIds = safeEventsArray.map(e => e.id);
-      const busTripIds = safeBusTripsArray.map(b => b.id);
+      const postIds = safePostsArray.map((p) => p.id);
+      const newsIds = safeNewsArray.map((n) => n.id);
+      const eventIds = safeEventsArray.map((e) => e.id);
+      const busTripIds = safeBusTripsArray.map((b) => b.id);
 
       // Fetch likes, comments, and previews for each kind in parallel
       // Wrap each in try-catch to ensure we get Maps even if individual fetch fails
@@ -287,18 +307,54 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         busTripComments,
         busTripPreviews,
       ] = await Promise.all([
-        fetchLikeStates('post', postIds).catch(err => { console.warn('[FeedProvider] postLikes failed:', err); return new Map(); }),
-        fetchCommentCounts('post', postIds).catch(err => { console.warn('[FeedProvider] postComments failed:', err); return new Map(); }),
-        fetchCommentPreviews('post', postIds).catch(err => { console.warn('[FeedProvider] postPreviews failed:', err); return new Map(); }),
-        fetchLikeStates('news', newsIds).catch(err => { console.warn('[FeedProvider] newsLikes failed:', err); return new Map(); }),
-        fetchCommentCounts('news', newsIds).catch(err => { console.warn('[FeedProvider] newsComments failed:', err); return new Map(); }),
-        fetchCommentPreviews('news', newsIds).catch(err => { console.warn('[FeedProvider] newsPreviews failed:', err); return new Map(); }),
-        fetchLikeStates('event', eventIds).catch(err => { console.warn('[FeedProvider] eventLikes failed:', err); return new Map(); }),
-        fetchCommentCounts('event', eventIds).catch(err => { console.warn('[FeedProvider] eventComments failed:', err); return new Map(); }),
-        fetchCommentPreviews('event', eventIds).catch(err => { console.warn('[FeedProvider] eventPreviews failed:', err); return new Map(); }),
-        fetchLikeStates('bus_trip', busTripIds).catch(err => { console.warn('[FeedProvider] busTripLikes failed:', err); return new Map(); }),
-        fetchCommentCounts('bus_trip', busTripIds).catch(err => { console.warn('[FeedProvider] busTripComments failed:', err); return new Map(); }),
-        fetchCommentPreviews('bus_trip', busTripIds).catch(err => { console.warn('[FeedProvider] busTripPreviews failed:', err); return new Map(); }),
+        fetchLikeStates('post', postIds).catch((err) => {
+          console.warn('[FeedProvider] postLikes failed:', err);
+          return new Map();
+        }),
+        fetchCommentCounts('post', postIds).catch((err) => {
+          console.warn('[FeedProvider] postComments failed:', err);
+          return new Map();
+        }),
+        fetchCommentPreviews('post', postIds).catch((err) => {
+          console.warn('[FeedProvider] postPreviews failed:', err);
+          return new Map();
+        }),
+        fetchLikeStates('news', newsIds).catch((err) => {
+          console.warn('[FeedProvider] newsLikes failed:', err);
+          return new Map();
+        }),
+        fetchCommentCounts('news', newsIds).catch((err) => {
+          console.warn('[FeedProvider] newsComments failed:', err);
+          return new Map();
+        }),
+        fetchCommentPreviews('news', newsIds).catch((err) => {
+          console.warn('[FeedProvider] newsPreviews failed:', err);
+          return new Map();
+        }),
+        fetchLikeStates('event', eventIds).catch((err) => {
+          console.warn('[FeedProvider] eventLikes failed:', err);
+          return new Map();
+        }),
+        fetchCommentCounts('event', eventIds).catch((err) => {
+          console.warn('[FeedProvider] eventComments failed:', err);
+          return new Map();
+        }),
+        fetchCommentPreviews('event', eventIds).catch((err) => {
+          console.warn('[FeedProvider] eventPreviews failed:', err);
+          return new Map();
+        }),
+        fetchLikeStates('bus_trip', busTripIds).catch((err) => {
+          console.warn('[FeedProvider] busTripLikes failed:', err);
+          return new Map();
+        }),
+        fetchCommentCounts('bus_trip', busTripIds).catch((err) => {
+          console.warn('[FeedProvider] busTripComments failed:', err);
+          return new Map();
+        }),
+        fetchCommentPreviews('bus_trip', busTripIds).catch((err) => {
+          console.warn('[FeedProvider] busTripPreviews failed:', err);
+          return new Map();
+        }),
       ]);
 
       // Ensure all Maps are valid (in case catch returns undefined)
@@ -331,28 +387,28 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       const newCommentCountMap: Record<string, number> = {};
       const newCommentPreviewMap: Record<string, CommentPreview[]> = {};
 
-      postIds.forEach(id => {
+      postIds.forEach((id) => {
         const key = targetKey('post', id);
         newLikeMap[key] = safePostLikes.get(id) || { liked: false, likes: 0 };
         newCommentCountMap[key] = safePostComments.get(id) || 0;
         newCommentPreviewMap[key] = safePostPreviews.get(id) || [];
       });
 
-      newsIds.forEach(id => {
+      newsIds.forEach((id) => {
         const key = targetKey('news', id);
         newLikeMap[key] = safeNewsLikes.get(id) || { liked: false, likes: 0 };
         newCommentCountMap[key] = safeNewsComments.get(id) || 0;
         newCommentPreviewMap[key] = safeNewsPreviews.get(id) || [];
       });
 
-      eventIds.forEach(id => {
+      eventIds.forEach((id) => {
         const key = targetKey('event', id);
         newLikeMap[key] = safeEventLikes.get(id) || { liked: false, likes: 0 };
         newCommentCountMap[key] = safeEventComments.get(id) || 0;
         newCommentPreviewMap[key] = safeEventPreviews.get(id) || [];
       });
 
-      busTripIds.forEach(id => {
+      busTripIds.forEach((id) => {
         const key = targetKey('bus_trip', id);
         newLikeMap[key] = safeBusTripLikes.get(id) || { liked: false, likes: 0 };
         newCommentCountMap[key] = safeBusTripComments.get(id) || 0;
@@ -372,7 +428,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
           commentsLoaded: Object.keys(newCommentCountMap || {}).length,
           previewsLoaded: Object.keys(newCommentPreviewMap || {}).length,
         });
-        
+
         // Log sample of data for first item
         if (combinedFeed.length > 0) {
           const firstKey = targetKey(combinedFeed[0].kind as any, combinedFeed[0].id);
@@ -439,81 +495,92 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
     setFeedItems((prev) => prev.filter((item) => item.id !== postId));
   }, []);
 
-  const toggleLike = useCallback(async (kind: LikeTargetType, id: string, userId: string) => {
-    const key = targetKey(kind, id);
-    const currentState = likeMap[key] || { liked: false, likes: 0 };
-    
-    // Optimistic update
-    const newLiked = !currentState.liked;
-    const newLikes = newLiked ? currentState.likes + 1 : Math.max(0, currentState.likes - 1);
-    
-    setLikeMap(prev => ({
-      ...prev,
-      [key]: { liked: newLiked, likes: newLikes }
-    }));
+  const removeNews = useCallback((newsId: string) => {
+    setFeedItems((prev) => prev.filter((item) => !(item.kind === 'news' && item.id === newsId)));
+  }, []);
 
-    // Persist to DB
-    try {
-      const success = await toggleLikeApi(kind, id, userId, currentState.liked);
-      if (!success) {
-        console.warn('[toggleLike failed]', { targetType: kind, targetId: id, error: 'unknown' });
-        // Revert on failure
-        setLikeMap(prev => ({
-          ...prev,
-          [key]: currentState
-        }));
-        return;
-      }
-      console.log('[toggleLike ok]', { targetType: kind, targetId: id });
-    } catch (error) {
-      console.warn('[toggleLike failed]', { targetType: kind, targetId: id, error });
-      // Revert on failure
-      setLikeMap(prev => ({
+  const toggleLike = useCallback(
+    async (kind: LikeTargetType, id: string, userId: string) => {
+      const key = targetKey(kind, id);
+      const currentState = likeMap[key] || { liked: false, likes: 0 };
+
+      // Optimistic update
+      const newLiked = !currentState.liked;
+      const newLikes = newLiked ? currentState.likes + 1 : Math.max(0, currentState.likes - 1);
+
+      setLikeMap((prev) => ({
         ...prev,
-        [key]: currentState
+        [key]: { liked: newLiked, likes: newLikes },
       }));
-    }
-  }, [likeMap]);
+
+      // Persist to DB
+      try {
+        const success = await toggleLikeApi(kind, id, userId, currentState.liked);
+        if (!success) {
+          console.warn('[toggleLike failed]', { targetType: kind, targetId: id, error: 'unknown' });
+          // Revert on failure
+          setLikeMap((prev) => ({
+            ...prev,
+            [key]: currentState,
+          }));
+          return;
+        }
+        console.log('[toggleLike ok]', { targetType: kind, targetId: id });
+      } catch (error) {
+        console.warn('[toggleLike failed]', { targetType: kind, targetId: id, error });
+        // Revert on failure
+        setLikeMap((prev) => ({
+          ...prev,
+          [key]: currentState,
+        }));
+      }
+    },
+    [likeMap],
+  );
 
   const incrementCommentCount = useCallback((kind: LikeTargetType, id: string) => {
     const key = targetKey(kind, id);
-    setCommentCountMap(prev => ({
+    setCommentCountMap((prev) => ({
       ...prev,
-      [key]: (prev[key] || 0) + 1
+      [key]: (prev[key] || 0) + 1,
     }));
   }, []);
 
-  const addCommentPreview = useCallback((kind: LikeTargetType, id: string, comment: CommentPreview) => {
-    const key = targetKey(kind, id);
-    setCommentPreviewMap(prev => {
-      const existing = prev[key] || [];
-      // Prepend new comment and keep only latest 2
-      const updated = [comment, ...existing].slice(0, 2);
-      return {
-        ...prev,
-        [key]: updated
-      };
-    });
-  }, []);
+  const addCommentPreview = useCallback(
+    (kind: LikeTargetType, id: string, comment: CommentPreview) => {
+      const key = targetKey(kind, id);
+      setCommentPreviewMap((prev) => {
+        const existing = prev[key] || [];
+        // Prepend new comment and keep only latest 2
+        const updated = [comment, ...existing].slice(0, 2);
+        return {
+          ...prev,
+          [key]: updated,
+        };
+      });
+    },
+    [],
+  );
 
   return (
     <FeedContext.Provider
-      value={{ 
-        posts, 
-        feedItems, 
+      value={{
+        posts,
+        feedItems,
         communityMap,
-        profileMap, 
-        likeMap, 
+        profileMap,
+        likeMap,
         commentCountMap,
         commentPreviewMap,
-        addPost, 
-        removePost, 
-        fetchPosts, 
+        addPost,
+        removePost,
+        removeNews,
+        fetchPosts,
         toggleLike,
         incrementCommentCount,
         addCommentPreview,
-        loading, 
-        error 
+        loading,
+        error,
       }}
     >
       {children}

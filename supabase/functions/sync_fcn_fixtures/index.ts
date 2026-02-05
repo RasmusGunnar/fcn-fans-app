@@ -42,7 +42,10 @@ const API_FOOTBALL_BASE = 'https://v3.football.api-sports.io';
 async function fetchFixturesFromApiFootball(
   apiKey: string,
   teamSearch: string,
-): Promise<{ fixtures: NormalizedFixture[]; teamName?: string; teamId?: string } | { error: string; details?: any }> {
+): Promise<
+  | { fixtures: NormalizedFixture[]; teamName?: string; teamId?: string }
+  | { error: string; details?: any }
+> {
   try {
     // Step 1: Resolve team ID
     console.log(`[api-football] Searching for team: ${teamSearch}`);
@@ -159,7 +162,10 @@ async function fetchFixturesFromApiFootball(
 async function fetchFixturesFromRapidApi(
   apiKey: string,
   teamSearch: string,
-): Promise<{ fixtures: NormalizedFixture[]; teamName?: string; teamId?: string } | { error: string; details?: any }> {
+): Promise<
+  | { fixtures: NormalizedFixture[]; teamName?: string; teamId?: string }
+  | { error: string; details?: any }
+> {
   console.warn('[rapidapi] Provider not yet implemented');
   return {
     error: 'RapidAPI provider not implemented',

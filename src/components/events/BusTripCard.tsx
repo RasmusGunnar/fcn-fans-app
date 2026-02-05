@@ -5,6 +5,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Card } from '../ui/Card';
+import { EventSubtypeBadge } from '../ui/EventSubtypeBadge';
 import { defaultTheme } from '../../theme';
 
 interface BusTripCardProps {
@@ -45,7 +46,7 @@ export function BusTripCard({
     <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
       <Card style={styles.card}>
         <View style={styles.header}>
-          <Text style={styles.badge}>BUSTUR</Text>
+          <EventSubtypeBadge subtype="bus_trip" />
           {organizerName && <Text style={styles.organizer}>🚩 {organizerName}</Text>}
         </View>
 
@@ -95,15 +96,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: theme.spacing[2],
-  },
-  badge: {
-    backgroundColor: theme.colors.state.warning,
-    color: theme.colors.bg.card,
-    paddingHorizontal: theme.spacing[2],
-    paddingVertical: theme.spacing[1],
-    borderRadius: theme.radius.sm,
-    fontSize: 11,
-    fontWeight: '700',
   },
   organizer: {
     fontSize: 11,

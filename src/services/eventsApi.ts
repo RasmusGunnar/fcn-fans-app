@@ -46,6 +46,9 @@ export interface Event {
   location_address: string | null;
   organizer_group_id: string | null;
   created_by: string | null;
+  creator_user_id?: string | null;
+  organizer_type?: 'fan' | 'community' | null;
+  organizer_id?: string | null;
   created_at: string;
   organizer?: FanGroup | null;
   // Location/geocoding fields
@@ -116,6 +119,9 @@ export type FeedItem =
       location: string | null;
       organizerName: string | null;
       description: string | null;
+      organizer_type?: 'fan' | 'community' | null;
+      organizer_id?: string | null;
+      creator_user_id?: string | null;
       lat?: number | null;
       lng?: number | null;
       created_by?: string | null;
@@ -181,7 +187,9 @@ export async function fetchEventsUpcoming(limit = 20, communityId?: string): Pro
   try {
     let query = supabase
       .from('events')
-      .select('id, title, description, start_at, end_at, location_name, location_address, organizer_group_id, created_by, created_at, lat, lng')
+      .select(
+        'id, title, description, start_at, end_at, location_name, location_address, organizer_group_id, created_by, creator_user_id, organizer_type, organizer_id, created_at, lat, lng',
+      )
       .gte('start_at', new Date().toISOString())
       .order('start_at', { ascending: true })
       .limit(limit);
@@ -263,6 +271,9 @@ export async function fetchFeedUpcoming(): Promise<FeedItem[]> {
       lng: e.lng,
       organizerName: null,
       description: e.description,
+      organizer_type: e.organizer_type ?? null,
+      organizer_id: e.organizer_id ?? null,
+      creator_user_id: e.creator_user_id ?? null,
       created_by: e.created_by,
       organizer_group_id: e.organizer_group_id,
     }));
@@ -312,7 +323,7 @@ export async function fetchEventById(id: string): Promise<Event | null> {
     const { data, error } = await supabase
       .from('events')
       .select(
-        'id, title, description, start_at, end_at, location_name, location_address, organizer_group_id, created_by, created_at',
+        'id, title, description, start_at, end_at, location_name, location_address, organizer_group_id, created_by, creator_user_id, organizer_type, organizer_id, created_at',
       )
       .eq('id', id)
       .single();

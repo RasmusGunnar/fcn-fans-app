@@ -11,18 +11,13 @@ export interface CardShellProps {
 
 /**
  * CardShell - Tynd wrapper omkring UI Card komponenten
- * 
+ *
  * Tilføjer Pressable funktionalitet hvis onPress er angivet,
  * ellers renderer en standard Card.
- * 
+ *
  * Bevarer Card's eksisterende padding/radius/shadow styling.
  */
-export function CardShell({
-  children,
-  onPress,
-  testID,
-  style,
-}: CardShellProps) {
+export function CardShell({ children, onPress, testID, style }: CardShellProps) {
   if (onPress) {
     return (
       <Pressable
@@ -30,9 +25,7 @@ export function CardShell({
         testID={testID}
         style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
       >
-        <Card style={style}>
-          {children}
-        </Card>
+        <Card style={style}>{children}</Card>
       </Pressable>
     );
   }

@@ -9,12 +9,7 @@ export interface ChipProps {
   disabled?: boolean;
 }
 
-export function Chip({
-  label,
-  selected = false,
-  onPress,
-  disabled = false,
-}: ChipProps) {
+export function Chip({ label, selected = false, onPress, disabled = false }: ChipProps) {
   const theme = useTheme();
   const styles = createStyles(theme);
 

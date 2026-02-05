@@ -72,13 +72,34 @@ function ProfileRow({
 }) {
   const theme = useTheme();
   return (
-    <Pressable style={[styles.row, { borderBottomColor: theme.colors.border.default }]} onPress={onPress}>
-      <View style={[styles.rowIcon, { backgroundColor: theme.colors.primary }, isLogout && { backgroundColor: theme.colors.primary }]}>
+    <Pressable
+      style={[styles.row, { borderBottomColor: theme.colors.border.default }]}
+      onPress={onPress}
+    >
+      <View
+        style={[
+          styles.rowIcon,
+          { backgroundColor: theme.colors.primary },
+          isLogout && { backgroundColor: theme.colors.primary },
+        ]}
+      >
         <Ionicons name={icon as any} size={16} color={theme.colors.bg.card} />
       </View>
       <View style={styles.rowText}>
-        <Text style={[styles.rowTitle, { color: theme.colors.text.primary }, isLogout && { color: theme.colors.primary }]}>{title}</Text>
-        {subtitle && <Text style={[styles.rowSubtitle, { color: theme.colors.text.secondary }]}>{subtitle}</Text>}
+        <Text
+          style={[
+            styles.rowTitle,
+            { color: theme.colors.text.primary },
+            isLogout && { color: theme.colors.primary },
+          ]}
+        >
+          {title}
+        </Text>
+        {subtitle && (
+          <Text style={[styles.rowSubtitle, { color: theme.colors.text.secondary }]}>
+            {subtitle}
+          </Text>
+        )}
       </View>
       <Ionicons name="chevron-forward" size={16} color={theme.colors.text.secondary} />
     </Pressable>
@@ -203,12 +224,18 @@ export default function ProfileScreen() {
       <View style={[styles.container, { backgroundColor: theme.colors.bg.default }]}>
         <View style={styles.headerSection}>
           <Text style={[styles.headerTitle, { color: theme.colors.text.primary }]}>Min Profil</Text>
-          <Text style={[styles.headerSubtitle, { color: theme.colors.text.secondary }]}>Indstillinger & fællesskaber</Text>
+          <Text style={[styles.headerSubtitle, { color: theme.colors.text.secondary }]}>
+            Indstillinger & fællesskaber
+          </Text>
         </View>
         <View style={styles.emptyContainer}>
           <Ionicons name="person-circle-outline" size={64} color={theme.colors.text.secondary} />
-          <Text style={[styles.emptyTitle, { color: theme.colors.text.primary }]}>Du skal være logget ind</Text>
-          <Text style={[styles.emptySubtext, { color: theme.colors.text.secondary }]}>Log ind for at se din profil</Text>
+          <Text style={[styles.emptyTitle, { color: theme.colors.text.primary }]}>
+            Du skal være logget ind
+          </Text>
+          <Text style={[styles.emptySubtext, { color: theme.colors.text.secondary }]}>
+            Log ind for at se din profil
+          </Text>
         </View>
       </View>
     );
@@ -219,11 +246,15 @@ export default function ProfileScreen() {
       <View style={[styles.container, { backgroundColor: theme.colors.bg.default }]}>
         <View style={styles.headerSection}>
           <Text style={[styles.headerTitle, { color: theme.colors.text.primary }]}>Min Profil</Text>
-          <Text style={[styles.headerSubtitle, { color: theme.colors.text.secondary }]}>Indstillinger & fællesskaber</Text>
+          <Text style={[styles.headerSubtitle, { color: theme.colors.text.secondary }]}>
+            Indstillinger & fællesskaber
+          </Text>
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text style={[styles.loadingText, { color: theme.colors.text.secondary }]}>Henter profil...</Text>
+          <Text style={[styles.loadingText, { color: theme.colors.text.secondary }]}>
+            Henter profil...
+          </Text>
         </View>
       </View>
     );
@@ -237,7 +268,9 @@ export default function ProfileScreen() {
       {/* Simple header without red background */}
       <View style={styles.headerSection}>
         <Text style={[styles.headerTitle, { color: theme.colors.text.primary }]}>Min Profil</Text>
-        <Text style={[styles.headerSubtitle, { color: theme.colors.text.secondary }]}>Indstillinger & fællesskaber</Text>
+        <Text style={[styles.headerSubtitle, { color: theme.colors.text.secondary }]}>
+          Indstillinger & fællesskaber
+        </Text>
       </View>
 
       {/* Avatar Upload Banner - Always visible */}
@@ -254,8 +287,13 @@ export default function ProfileScreen() {
               </Text>
             </View>
           </View>
-          <Pressable style={[styles.bannerButton, { backgroundColor: theme.colors.primary }]} onPress={handleUploadAvatar}>
-            <Text style={[styles.bannerButtonText, { color: theme.colors.bg.card }]}>{profile?.avatar_url ? 'Skift' : 'Upload'}</Text>
+          <Pressable
+            style={[styles.bannerButton, { backgroundColor: theme.colors.primary }]}
+            onPress={handleUploadAvatar}
+          >
+            <Text style={[styles.bannerButtonText, { color: theme.colors.bg.card }]}>
+              {profile?.avatar_url ? 'Skift' : 'Upload'}
+            </Text>
             <Ionicons name="arrow-forward" size={16} color={theme.colors.bg.card} />
           </Pressable>
         </Card>
@@ -285,13 +323,20 @@ export default function ProfileScreen() {
                 label={profile?.display_name || user?.email || 'Fan'}
               />
               {/* Camera icon overlay */}
-              <View style={[styles.avatarOverlay, { backgroundColor: theme.colors.primary, borderColor: theme.colors.bg.card }]}>
+              <View
+                style={[
+                  styles.avatarOverlay,
+                  { backgroundColor: theme.colors.primary, borderColor: theme.colors.bg.card },
+                ]}
+              >
                 <Ionicons name="camera" size={20} color={theme.colors.bg.card} />
               </View>
             </View>
           </Pressable>
           <View style={styles.profileInfo}>
-            <Text style={[styles.profileName, { color: theme.colors.text.primary }]}>{profile?.display_name || user?.email || 'Fan'}</Text>
+            <Text style={[styles.profileName, { color: theme.colors.text.primary }]}>
+              {profile?.display_name || user?.email || 'Fan'}
+            </Text>
             <Text style={[styles.profileSubtext, { color: theme.colors.text.secondary }]}>
               {profile?.member_since
                 ? `Medlem siden ${formatMemberSince(profile.member_since)}`
@@ -347,7 +392,9 @@ export default function ProfileScreen() {
       {/* Upcoming Events */}
       <Card style={{ marginBottom: spacing.md }}>
         <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text.primary }]}>DINE KOMMENDE EVENTS</Text>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text.primary }]}>
+            DINE KOMMENDE EVENTS
+          </Text>
           <Pressable
             style={[styles.newEventButton, { backgroundColor: theme.colors.primary }]}
             onPress={() => (navigation as any).navigate('CreateNewEvent')}
@@ -368,7 +415,9 @@ export default function ProfileScreen() {
             />
           ))
         ) : (
-          <Text style={[styles.emptyText, { color: theme.colors.text.secondary }]}>Ingen kommende events</Text>
+          <Text style={[styles.emptyText, { color: theme.colors.text.secondary }]}>
+            Ingen kommende events
+          </Text>
         )}
       </Card>
 
@@ -396,186 +445,191 @@ export default function ProfileScreen() {
       </Card>
 
       <View style={styles.footer}>
-        <Text style={[styles.footerText, { color: theme.colors.text.secondary }]}>FCN Fans App v1.0.0</Text>
-        <Text style={[styles.footerText, { color: theme.colors.text.secondary }]}>Lavet af fans, til fans ❤️🔵</Text>
+        <Text style={[styles.footerText, { color: theme.colors.text.secondary }]}>
+          FCN Fans App v1.0.0
+        </Text>
+        <Text style={[styles.footerText, { color: theme.colors.text.secondary }]}>
+          Lavet af fans, til fans ❤️🔵
+        </Text>
       </View>
     </ScrollView>
   );
 }
 
-const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  headerSection: {
-    paddingTop: spacing.xl,
-    paddingBottom: spacing.lg,
-    paddingHorizontal: spacing.sm,
-  },
-  headerTitle: {
-    fontSize: theme.typography.h1.fontSize,
-    fontWeight: theme.typography.h1.fontWeight as any,
-    marginBottom: spacing.xs,
-  },
-  headerSubtitle: {
-    fontSize: theme.typography.body.fontSize,
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.xl * 2,
-  },
-  loadingText: {
-    marginTop: spacing.md,
-    fontSize: theme.typography.body.fontSize,
-  },
-  emptyContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.xl * 2,
-    paddingHorizontal: spacing.lg,
-  },
-  emptyTitle: {
-    fontSize: theme.typography.h3.fontSize,
-    fontWeight: '600',
-    marginTop: spacing.md,
-    marginBottom: spacing.xs,
-  },
-  emptySubtext: {
-    fontSize: theme.typography.body.fontSize,
-    textAlign: 'center',
-  },
-  profileSummary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  avatar: {
-    position: 'relative',
-    marginRight: spacing.md,
-  },
-  avatarOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: theme.spacing[6],
-    height: theme.spacing[6],
-    borderRadius: theme.radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: theme.layout.borderWidth * 2,
-  },
-  avatarBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: spacing.md,
-  },
-  bannerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  bannerText: {
-    marginLeft: spacing.sm,
-    flex: 1,
-  },
-  bannerTitle: {
-    fontSize: theme.typography.body.fontSize,
-    fontWeight: '600',
-  },
-  bannerSubtitle: {
-    fontSize: theme.typography.small.fontSize,
-    marginTop: theme.spacing[0],
-  },
-  bannerButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    borderRadius: theme.radius.sm,
-    gap: theme.spacing[1],
-  },
-  bannerButtonText: {
-    fontSize: theme.typography.body.fontSize,
-    fontWeight: '600',
-  },
-  profileInfo: {
-    flex: 1,
-  },
-  profileName: {
-    fontSize: theme.typography.h3.fontSize,
-    fontWeight: '700',
-  },
-  profileSubtext: {
-    fontSize: theme.typography.body.fontSize,
-    marginTop: spacing.xs,
-    marginBottom: spacing.sm,
-  },
-  badges: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    flexWrap: 'wrap',
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-  },
-  sectionTitle: {
-    fontSize: theme.typography.body.fontSize,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    borderBottomWidth: theme.layout.borderWidth,
-  },
-  rowIcon: {
-    width: theme.spacing[8],
-    height: theme.spacing[8],
-    borderRadius: theme.radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.sm,
-  },
-  rowText: {
-    flex: 1,
-  },
-  rowTitle: {
-    fontSize: 16,
-  },
-  rowSubtitle: {
-    fontSize: 14,
-    marginTop: theme.spacing[0],
-  },
-  footer: {
-    alignItems: 'center',
-    paddingVertical: spacing.lg,
-  },
-  footerText: {
-    fontSize: 12,
-    textAlign: 'center',
-  },
-  newEventButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: theme.radius.sm,
-    gap: theme.spacing[1],
-  },
-  newEventButtonText: {
-    fontSize: theme.typography.small.fontSize,
-    fontWeight: '600',
-  },
-  emptyText: {
-    fontSize: theme.typography.body.fontSize,
-    textAlign: 'center',
-    paddingVertical: spacing.md,
-  },
-});
+const createStyles = (theme: ReturnType<typeof useTheme>) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+    },
+    headerSection: {
+      paddingTop: spacing.xl,
+      paddingBottom: spacing.lg,
+      paddingHorizontal: spacing.sm,
+    },
+    headerTitle: {
+      fontSize: theme.typography.h1.fontSize,
+      fontWeight: theme.typography.h1.fontWeight as any,
+      marginBottom: spacing.xs,
+    },
+    headerSubtitle: {
+      fontSize: theme.typography.body.fontSize,
+    },
+    loadingContainer: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: spacing.xl * 2,
+    },
+    loadingText: {
+      marginTop: spacing.md,
+      fontSize: theme.typography.body.fontSize,
+    },
+    emptyContainer: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: spacing.xl * 2,
+      paddingHorizontal: spacing.lg,
+    },
+    emptyTitle: {
+      fontSize: theme.typography.h3.fontSize,
+      fontWeight: '600',
+      marginTop: spacing.md,
+      marginBottom: spacing.xs,
+    },
+    emptySubtext: {
+      fontSize: theme.typography.body.fontSize,
+      textAlign: 'center',
+    },
+    profileSummary: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    avatar: {
+      position: 'relative',
+      marginRight: spacing.md,
+    },
+    avatarOverlay: {
+      position: 'absolute',
+      bottom: 0,
+      right: 0,
+      width: theme.spacing[6],
+      height: theme.spacing[6],
+      borderRadius: theme.radius.pill,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: theme.layout.borderWidth * 2,
+    },
+    avatarBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: spacing.md,
+    },
+    bannerContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flex: 1,
+    },
+    bannerText: {
+      marginLeft: spacing.sm,
+      flex: 1,
+    },
+    bannerTitle: {
+      fontSize: theme.typography.body.fontSize,
+      fontWeight: '600',
+    },
+    bannerSubtitle: {
+      fontSize: theme.typography.small.fontSize,
+      marginTop: theme.spacing[0],
+    },
+    bannerButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: spacing.xs,
+      paddingHorizontal: spacing.sm,
+      borderRadius: theme.radius.sm,
+      gap: theme.spacing[1],
+    },
+    bannerButtonText: {
+      fontSize: theme.typography.body.fontSize,
+      fontWeight: '600',
+    },
+    profileInfo: {
+      flex: 1,
+    },
+    profileName: {
+      fontSize: theme.typography.h3.fontSize,
+      fontWeight: '700',
+    },
+    profileSubtext: {
+      fontSize: theme.typography.body.fontSize,
+      marginTop: spacing.xs,
+      marginBottom: spacing.sm,
+    },
+    badges: {
+      flexDirection: 'row',
+      gap: spacing.xs,
+      flexWrap: 'wrap',
+    },
+    sectionHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: spacing.sm,
+    },
+    sectionTitle: {
+      fontSize: theme.typography.body.fontSize,
+      fontWeight: '700',
+      textTransform: 'uppercase',
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: spacing.sm,
+      borderBottomWidth: theme.layout.borderWidth,
+    },
+    rowIcon: {
+      width: theme.spacing[8],
+      height: theme.spacing[8],
+      borderRadius: theme.radius.pill,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: spacing.sm,
+    },
+    rowText: {
+      flex: 1,
+    },
+    rowTitle: {
+      fontSize: 16,
+    },
+    rowSubtitle: {
+      fontSize: 14,
+      marginTop: theme.spacing[0],
+    },
+    footer: {
+      alignItems: 'center',
+      paddingVertical: spacing.lg,
+    },
+    footerText: {
+      fontSize: 12,
+      textAlign: 'center',
+    },
+    newEventButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
+      borderRadius: theme.radius.sm,
+      gap: theme.spacing[1],
+    },
+    newEventButtonText: {
+      fontSize: theme.typography.small.fontSize,
+      fontWeight: '600',
+    },
+    emptyText: {
+      fontSize: theme.typography.body.fontSize,
+      textAlign: 'center',
+      paddingVertical: spacing.md,
+    },
+  });

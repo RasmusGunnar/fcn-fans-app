@@ -13,9 +13,9 @@ export type CardBehaviorInput = {
   actorName: string; // fanens navn eller community-navn (hvis man poster som community)
 
   // content targets
-  postLinkUrl?: string | null;  // hvis post har indlejret link
-  newsUrl?: string | null;      // nyhedens url
-  eventId?: string | null;      // event detail target (intern)
+  postLinkUrl?: string | null; // hvis post har indlejret link
+  newsUrl?: string | null; // nyhedens url
+  eventId?: string | null; // event detail target (intern)
   eventType?: string | null;
 
   // event: hvis tilknyttet community, skal navnelinje vise community-navn
@@ -23,12 +23,12 @@ export type CardBehaviorInput = {
 };
 
 export type CardBehaviorModel = {
-  categoryLabel: string;        // "Fra Fans" | "Nyhed" | "Event" | community navn
-  nameLine?: string | null;     // fanens navn | community navn | null
+  categoryLabel: string; // "Fra Fans" | "Nyhed" | "Event" | community navn
+  nameLine?: string | null; // fanens navn | community navn | null
 
   pressBehavior: PressBehavior; // none | open_external | open_internal
-  externalUrl?: string;         // hvis open_external
-  internalEventId?: string;     // hvis open_internal (event)
+  externalUrl?: string; // hvis open_external
+  internalEventId?: string; // hvis open_internal (event)
 };
 
 function safeText(value: string | null | undefined, fallback: string) {
@@ -37,7 +37,10 @@ function safeText(value: string | null | undefined, fallback: string) {
 }
 
 export function buildCardBehaviorModel(input: CardBehaviorInput): CardBehaviorModel {
-  const actorName = safeText(input.actorName, input.actorType === 'fan' ? 'Ukendt fan' : 'Fællesskab');
+  const actorName = safeText(
+    input.actorName,
+    input.actorType === 'fan' ? 'Ukendt fan' : 'Fællesskab',
+  );
 
   // Header rules (fra specifikationen)
   // - Post som fan: category="Fra Fans", nameLine=fanName

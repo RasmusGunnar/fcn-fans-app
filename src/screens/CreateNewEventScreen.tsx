@@ -22,6 +22,10 @@ import { colors, spacing } from '../theme';
 import { useAuth } from '../auth/AuthProvider';
 import { supabase } from '../lib/supabase';
 import { countOwnedCommunities } from '../services/profileApi';
+import { ActorSelector } from '../components/ActorSelector';
+import { useFeed } from '../state/FeedContext';
+import type { Actor } from '../types/news';
+import { resolveProfileDisplayName } from '../utils/actor';
 
 type EventType = 'event' | 'bus_trip';
 
@@ -29,6 +33,7 @@ export default function CreateNewEventScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { profileMap } = useFeed();
   const styles = createStyles();
 
   // Check if user can create bus trips
@@ -53,6 +58,7 @@ export default function CreateNewEventScreen() {
   const [contactInfo, setContactInfo] = useState('');
 
   const [submitting, setSubmitting] = useState(false);
+  const [selectedActor, setSelectedActor] = useState<Actor | null>(null);
 
   const checkUserPermissions = async () => {
     if (!user?.id) {
@@ -74,6 +80,18 @@ export default function CreateNewEventScreen() {
     checkUserPermissions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const displayName = resolveProfileDisplayName(profileMap, user.id, user.email || undefined);
+    setSelectedActor((prev) =>
+      prev ?? {
+        type: 'user',
+        id: user.id,
+        name: displayName,
+      },
+    );
+  }, [user?.id, user?.email, profileMap]);
 
   const handleDateChange = (event: any, selectedDate?: Date) => {
     setShowDatePicker(false);
@@ -133,10 +151,17 @@ export default function CreateNewEventScreen() {
       return;
     }
 
+    if (!selectedActor) {
+      Alert.alert('Fejl', 'Vælg hvem du opretter som');
+      return;
+    }
+
     setSubmitting(true);
 
     try {
       if (eventType === 'event') {
+        const organizerType = selectedActor.type === 'community' ? 'community' : 'fan';
+        const organizerId = selectedActor.id;
         // Create event
         const { data, error } = await supabase
           .from('events')
@@ -147,6 +172,10 @@ export default function CreateNewEventScreen() {
             location_address: locationAddress.trim() || null,
             start_at: startDate.toISOString(),
             created_by: user.id,
+            creator_user_id: user.id,
+            organizer_type: organizerType,
+            organizer_id: organizerId,
+            organizer_group_id: organizerType === 'community' ? organizerId : null,
           })
           .select()
           .single();
@@ -337,6 +366,10 @@ export default function CreateNewEventScreen() {
         <Card style={styles.card}>
           <Text style={styles.sectionTitle}>Grundlæggende information</Text>
 
+          {selectedActor ? (
+            <ActorSelector selectedActor={selectedActor} onSelectActor={setSelectedActor} />
+          ) : null}
+
           <Text style={styles.label}>Titel *</Text>
           <TextInput
             style={styles.input}
@@ -508,126 +541,127 @@ export default function CreateNewEventScreen() {
   );
 }
 
-const createStyles = () => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.card,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  card: {
-    marginBottom: spacing.md,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.xs,
-    marginTop: spacing.sm,
-  },
-  input: {
-    backgroundColor: colors.bg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.sm,
-    padding: spacing.sm,
-    fontSize: 16,
-    color: colors.text,
-  },
-  textArea: {
-    minHeight: 100,
-    textAlignVertical: 'top',
-  },
-  typeSelector: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  typeButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.sm,
-    gap: spacing.xs,
-  },
-  typeButtonActive: {
-    backgroundColor: colors.fcnRed,
-    borderColor: colors.fcnRed,
-  },
-  typeButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.subtext,
-  },
-  typeButtonTextActive: {
-    color: colors.card,
-  },
-  dateTimeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  dateTimeIcon: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bg,
-    borderRadius: spacing.sm,
-    marginRight: spacing.sm,
-  },
-  dateTimeText: {
-    flex: 1,
-  },
-  dateTimeLabel: {
-    fontSize: 12,
-    color: colors.subtext,
-    marginBottom: spacing.xs,
-  },
-  dateTimeValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  buttonContainer: {
-    marginTop: spacing.md,
-  },
-});
+const createStyles = () =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bg,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      backgroundColor: colors.card,
+    },
+    backButton: {
+      width: 40,
+      height: 40,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    headerTitle: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    scrollView: {
+      flex: 1,
+    },
+    loadingContainer: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    card: {
+      marginBottom: spacing.md,
+    },
+    sectionTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: spacing.md,
+    },
+    label: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.text,
+      marginBottom: spacing.xs,
+      marginTop: spacing.sm,
+    },
+    input: {
+      backgroundColor: colors.bg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: spacing.sm,
+      padding: spacing.sm,
+      fontSize: 16,
+      color: colors.text,
+    },
+    textArea: {
+      minHeight: 100,
+      textAlignVertical: 'top',
+    },
+    typeSelector: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+    },
+    typeButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: spacing.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: spacing.sm,
+      gap: spacing.xs,
+    },
+    typeButtonActive: {
+      backgroundColor: colors.fcnRed,
+      borderColor: colors.fcnRed,
+    },
+    typeButtonText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.subtext,
+    },
+    typeButtonTextActive: {
+      color: colors.card,
+    },
+    dateTimeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: spacing.sm,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    dateTimeIcon: {
+      width: 40,
+      height: 40,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.bg,
+      borderRadius: spacing.sm,
+      marginRight: spacing.sm,
+    },
+    dateTimeText: {
+      flex: 1,
+    },
+    dateTimeLabel: {
+      fontSize: 12,
+      color: colors.subtext,
+      marginBottom: spacing.xs,
+    },
+    dateTimeValue: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    buttonContainer: {
+      marginTop: spacing.md,
+    },
+  });

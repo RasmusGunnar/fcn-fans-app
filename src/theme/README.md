@@ -5,6 +5,7 @@ A strict, token-based design system for the FCN Fans React Native app.
 ## Strict Rules ⚠️
 
 **Zero tolerance for hardcoded values in screens and components:**
+
 - ❌ No hex colors (`#000`, `#FFFFFF`)
 - ❌ No `rgba()` or `rgb()` colors
 - ❌ No numeric spacing/padding/margin (including `0` - use `theme.spacing[0]`)
@@ -12,6 +13,7 @@ A strict, token-based design system for the FCN Fans React Native app.
 - ❌ No numeric `elevation` or `shadowColor`
 
 **Validation:**
+
 ```bash
 npm run design:check
 ```
@@ -46,7 +48,7 @@ import { View, StyleSheet } from 'react-native';
 function CustomComponent() {
   const theme = useTheme();
   const styles = createStyles(theme);
-  
+
   return <View style={styles.container} />;
 }
 
@@ -101,20 +103,20 @@ theme.colors.pill.*          // Pill/badge colors (red, orange, neutral, yellow)
 ```typescript
 // Access via: theme.spacing[*]
 
-theme.spacing[0]   // 0px
-theme.spacing[1]   // 4px
-theme.spacing[2]   // 8px
-theme.spacing[3]   // 12px
-theme.spacing[4]   // 16px
-theme.spacing[6]   // 24px
-theme.spacing[8]   // 32px
-theme.spacing[10]  // 40px
-theme.spacing[12]  // 48px
+theme.spacing[0]; // 0px
+theme.spacing[1]; // 4px
+theme.spacing[2]; // 8px
+theme.spacing[3]; // 12px
+theme.spacing[4]; // 16px
+theme.spacing[6]; // 24px
+theme.spacing[8]; // 32px
+theme.spacing[10]; // 40px
+theme.spacing[12]; // 48px
 
 // Layout tokens
-theme.layout.screenPadding  // 16px - standard screen padding
-theme.layout.cardPadding    // 16px - standard card padding
-theme.layout.listGap        // 12px - gap between list items
+theme.layout.screenPadding; // 16px - standard screen padding
+theme.layout.cardPadding; // 16px - standard card padding
+theme.layout.listGap; // 12px - gap between list items
 ```
 
 ### Border Radius (`src/theme/tokens/radius.ts`)
@@ -122,12 +124,12 @@ theme.layout.listGap        // 12px - gap between list items
 ```typescript
 // Access via: theme.radius.*
 
-theme.radius.none  // 0
-theme.radius.sm    // 8px
-theme.radius.md    // 12px
-theme.radius.lg    // 16px - CARDS USE THIS
-theme.radius.xl    // 20px
-theme.radius.pill  // 999px
+theme.radius.none; // 0
+theme.radius.sm; // 8px
+theme.radius.md; // 12px
+theme.radius.lg; // 16px - CARDS USE THIS
+theme.radius.xl; // 20px
+theme.radius.pill; // 999px
 ```
 
 **Rule:** All cards must use `theme.radius.lg` (16px).
@@ -137,13 +139,13 @@ theme.radius.pill  // 999px
 ```typescript
 // Access via: theme.typography.*
 
-theme.typography.h1        // 32px / 40 line / 700 weight
-theme.typography.h2        // 24px / 32 line / 600 weight
-theme.typography.h3        // 20px / 28 line / 600 weight
-theme.typography.body      // 16px / 24 line / 400 weight
-theme.typography.bodyBold  // 16px / 24 line / 600 weight
-theme.typography.caption   // 14px / 20 line / 400 weight
-theme.typography.small     // 12px / 16 line / 400 weight
+theme.typography.h1; // 32px / 40 line / 700 weight
+theme.typography.h2; // 24px / 32 line / 600 weight
+theme.typography.h3; // 20px / 28 line / 600 weight
+theme.typography.body; // 16px / 24 line / 400 weight
+theme.typography.bodyBold; // 16px / 24 line / 600 weight
+theme.typography.caption; // 14px / 20 line / 400 weight
+theme.typography.small; // 12px / 16 line / 400 weight
 ```
 
 ### Elevation (`src/theme/tokens/elevation.ts`)
@@ -151,13 +153,14 @@ theme.typography.small     // 12px / 16 line / 400 weight
 ```typescript
 // Access via: theme.elevation.*
 
-theme.elevation.none  // No shadow
-theme.elevation.sm    // Small shadow (iOS: opacity 0.1, Android: 2)
-theme.elevation.md    // Medium shadow (iOS: opacity 0.15, Android: 4)
-theme.elevation.lg    // Large shadow (iOS: opacity 0.2, Android: 8)
+theme.elevation.none; // No shadow
+theme.elevation.sm; // Small shadow (iOS: opacity 0.1, Android: 2)
+theme.elevation.md; // Medium shadow (iOS: opacity 0.15, Android: 4)
+theme.elevation.lg; // Large shadow (iOS: opacity 0.2, Android: 8)
 ```
 
 **Card defaults:**
+
 - Default cards: `sm` elevation
 - Raised cards: `md` elevation
 
@@ -166,8 +169,8 @@ theme.elevation.lg    // Large shadow (iOS: opacity 0.2, Android: 8)
 ```typescript
 // Access via: theme.gradients.*
 
-theme.gradients.imageHeaderOverlay  // Black gradient for card image headers
-theme.gradients.primary             // Red brand gradient
+theme.gradients.imageHeaderOverlay; // Black gradient for card image headers
+theme.gradients.primary; // Red brand gradient
 ```
 
 ## Helper Functions
@@ -211,6 +214,7 @@ import { Text } from '../components/ui';
 ```
 
 **Props:**
+
 - `variant`: `h1` | `h2` | `h3` | `body` | `bodyBold` | `caption` | `small`
 - `color`: `primary` | `secondary` | `muted` | `inverse` | `error` | `success`
 - All React Native `TextProps`
@@ -239,6 +243,7 @@ import { Card } from '../components/ui';
 ```
 
 **Props:**
+
 - `variant`: `default` | `raised` | `imageHeader`
 - `imageSource`: Image source for imageHeader variant
 - All React Native `ViewProps`
@@ -262,6 +267,7 @@ import { Screen } from '../components/ui';
 ```
 
 **Props:**
+
 - `scrollable`: `boolean` - wraps content in ScrollView
 - `scrollViewProps`: Props passed to inner ScrollView
 - All React Native `ViewProps`
@@ -273,7 +279,7 @@ import { Screen } from '../components/ui';
 ```tsx
 // Use theme tokens
 <View style={{ padding: theme.spacing[4], borderRadius: theme.radius.lg }}>
-  
+
 // Use themed components
 <Text variant="h1" color="primary">Title</Text>
 
@@ -313,6 +319,7 @@ const shadowStyle = getShadowStyle(theme, 'md');
 When refactoring a screen to use the design system:
 
 1. ✅ Add design system comment at top:
+
    ```typescript
    // =====================================================
    // DESIGN SYSTEM RULES:
@@ -321,6 +328,7 @@ When refactoring a screen to use the design system:
    ```
 
 2. ✅ Import themed components:
+
    ```typescript
    import { Screen, Card, Text } from '../components/ui';
    import { defaultTheme } from '../theme';
@@ -347,19 +355,17 @@ When refactoring a screen to use the design system:
 export default function MyScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: '#F6F7F9', padding: 16 }}>
-      <View style={{
-        backgroundColor: '#FFFFFF',
-        padding: 16,
-        borderRadius: 12,
-        shadowOpacity: 0.1,
-        elevation: 2,
-      }}>
-        <Text style={{ fontSize: 24, fontWeight: '700', color: '#111827' }}>
-          Title
-        </Text>
-        <Text style={{ fontSize: 16, color: '#6B7280', marginTop: 8 }}>
-          Description
-        </Text>
+      <View
+        style={{
+          backgroundColor: '#FFFFFF',
+          padding: 16,
+          borderRadius: 12,
+          shadowOpacity: 0.1,
+          elevation: 2,
+        }}
+      >
+        <Text style={{ fontSize: 24, fontWeight: '700', color: '#111827' }}>Title</Text>
+        <Text style={{ fontSize: 16, color: '#6B7280', marginTop: 8 }}>Description</Text>
       </View>
     </View>
   );
@@ -379,11 +385,13 @@ import { defaultTheme } from '../theme';
 
 export default function MyScreen() {
   const theme = defaultTheme;
-  
+
   return (
     <Screen>
       <Card>
-        <Text variant="h2" color="primary">Title</Text>
+        <Text variant="h2" color="primary">
+          Title
+        </Text>
         <Text variant="body" color="secondary" style={{ marginTop: theme.spacing[2] }}>
           Description
         </Text>
@@ -398,10 +406,10 @@ export default function MyScreen() {
 All component defaults are defined in `theme.components`:
 
 ```typescript
-theme.components.card.borderRadius      // radius.lg (16)
-theme.components.card.padding           // layout.cardPadding (16)
-theme.components.card.elevationDefault  // 'sm'
-theme.components.card.elevationRaised   // 'md'
+theme.components.card.borderRadius; // radius.lg (16)
+theme.components.card.padding; // layout.cardPadding (16)
+theme.components.card.elevationDefault; // 'sm'
+theme.components.card.elevationRaised; // 'md'
 ```
 
 ## Theme Modes

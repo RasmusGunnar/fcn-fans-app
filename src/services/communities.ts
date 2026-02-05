@@ -574,7 +574,9 @@ export async function updateCommunity(
       .from('communities')
       .update({
         ...(updates.name !== undefined && { name: updates.name.trim() }),
-        ...(updates.description !== undefined && { description: updates.description?.trim() || null }),
+        ...(updates.description !== undefined && {
+          description: updates.description?.trim() || null,
+        }),
       })
       .eq('id', communityId);
 

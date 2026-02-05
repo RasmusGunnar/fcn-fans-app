@@ -4,9 +4,8 @@ import { useTheme, Theme } from '../theme';
 import { Text } from './ui';
 
 interface FeedCardHeaderProps {
-  badgeText?: string;
-  avatarSlot: ReactNode; // Render prop for avatar (Avatar component or fallback)
-  title: string;
+  avatarSlot?: ReactNode; // Render prop for avatar (Avatar component or fallback)
+  title?: string;
   subtitle?: string;
   rightSlot?: ReactNode; // OptionsMenu or other right-aligned content
 }
@@ -23,33 +22,62 @@ export function FeedCardHeader({
 }: FeedCardHeaderProps) {
   const theme = useTheme();
   const styles = createStyles(theme);
-  
+  const showHeaderRow = Boolean(avatarSlot || title || subtitle || rightSlot);
+
   return (
-    <View style={styles.header}>
-      {avatarSlot}
-      <View style={styles.headerInfo}>
-        <Text variant="body" style={{ fontWeight: '600' }}>{title}</Text>
-        {subtitle && <Text variant="small" color="secondary">{subtitle}</Text>}
-      </View>
-      {rightSlot && <View style={styles.rightSlot}>{rightSlot}</View>}
+    <View style={styles.container}>
+      {showHeaderRow && (
+        <View style={styles.header}>
+          {avatarSlot ? avatarSlot : null}
+          <View style={[styles.headerInfo, !avatarSlot && styles.headerInfoNoAvatar]}>
+            {!!title && (
+              <Text variant="bodyBold" style={styles.title}>
+                {title}
+              </Text>
+            )}
+            {subtitle && (
+              <Text variant="small" color="muted" style={styles.subtitle}>
+                {subtitle}
+              </Text>
+            )}
+          </View>
+          {rightSlot ? <View style={styles.rightSlot}>{rightSlot}</View> : null}
+        </View>
+      )}
     </View>
   );
 }
 
 function createStyles(theme: Theme) {
   return StyleSheet.create({
+    container: {
+      marginTop: theme.spacing[0],
+      marginBottom: theme.spacing[1],
+      gap: theme.spacing[1],
+    },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
-      marginTop: theme.spacing[2],
-      marginBottom: theme.spacing[4],
     },
     headerInfo: {
       flex: 1,
-      marginLeft: theme.spacing[2],
+      marginLeft: theme.spacing[3],
+    },
+    headerInfoNoAvatar: {
+      marginLeft: theme.spacing[0],
     },
     rightSlot: {
       marginLeft: theme.spacing[1],
+    },
+    title: {
+      fontSize: 14,
+      fontWeight: '600',
+    },
+    subtitle: {
+      marginTop: theme.spacing[0],
+      marginBottom: theme.spacing[0],
+      fontSize: 12,
+      lineHeight: 16,
     },
   });
 }

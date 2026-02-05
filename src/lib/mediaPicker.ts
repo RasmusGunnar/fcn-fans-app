@@ -57,11 +57,12 @@ export async function pickFromLibrary(): Promise<MediaAsset | null> {
   // For images: Convert to JPEG to avoid HEIC/format issues
   if (detectedType === 'image') {
     const originalMimeType = a.mimeType || 'unknown';
-    const isHeic = originalMimeType.toLowerCase().includes('heic') || 
-                   originalMimeType.toLowerCase().includes('heif') ||
-                   a.uri.toLowerCase().includes('.heic') ||
-                   a.uri.toLowerCase().includes('.heif');
-    
+    const isHeic =
+      originalMimeType.toLowerCase().includes('heic') ||
+      originalMimeType.toLowerCase().includes('heif') ||
+      a.uri.toLowerCase().includes('.heic') ||
+      a.uri.toLowerCase().includes('.heif');
+
     console.log('[pickFromLibrary] Converting image to JPEG', {
       originalUri: a.uri,
       originalMimeType,

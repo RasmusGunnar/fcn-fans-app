@@ -30,7 +30,7 @@ export interface Theme {
   typography: TypographyTokens;
   elevation: ElevationTokens;
   gradients: GradientTokens;
-  
+
   // Component defaults
   components: {
     card: {
@@ -121,7 +121,7 @@ export interface Theme {
 
 export function createTheme(mode: ThemeMode = 'light'): Theme {
   const colors = mode === 'light' ? lightColors : darkColors;
-  
+
   return {
     mode,
     colors,
@@ -132,7 +132,7 @@ export function createTheme(mode: ThemeMode = 'light'): Theme {
     typography,
     elevation,
     gradients,
-    
+
     components: {
       card: {
         borderRadius: radiusTokens.lg,

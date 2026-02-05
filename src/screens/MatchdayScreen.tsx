@@ -31,14 +31,14 @@ export default function MatchdayScreen() {
   }, []);
 
   const renderFixture = ({ item }: { item: Fixture }) => (
-    <Pressable 
+    <Pressable
       style={[
-        styles.card, 
-        { 
-          backgroundColor: theme.colors.bg.card, 
-          borderColor: theme.colors.border.default 
-        }
-      ]} 
+        styles.card,
+        {
+          backgroundColor: theme.colors.bg.card,
+          borderColor: theme.colors.border.default,
+        },
+      ]}
       onPress={() => nav.navigate('MatchDetails', { fixtureId: item.id })}
     >
       <View style={styles.matchRow}>
@@ -115,8 +115,12 @@ export default function MatchdayScreen() {
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={[styles.emptyText, { color: theme.colors.text.primary }]}>Ingen kommende kampe endnu</Text>
-            <Text style={[styles.emptySubtext, { color: theme.colors.text.secondary }]}>Tjek tilbage senere</Text>
+            <Text style={[styles.emptyText, { color: theme.colors.text.primary }]}>
+              Ingen kommende kampe endnu
+            </Text>
+            <Text style={[styles.emptySubtext, { color: theme.colors.text.secondary }]}>
+              Tjek tilbage senere
+            </Text>
           </View>
         }
         contentContainerStyle={fixtures.length === 0 ? styles.emptyList : undefined}
@@ -125,91 +129,92 @@ export default function MatchdayScreen() {
   );
 }
 
-const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: spacing.md,
-  },
-  h1: {
-    fontSize: theme.typography.h1.fontSize,
-    fontWeight: theme.typography.h1.fontWeight as any,
-    marginBottom: spacing.lg,
-  },
-  card: {
-    borderWidth: theme.layout.borderWidth,
-    borderRadius: theme.radius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-  matchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
-  },
-  teamContainer: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  teamLogo: {
-    width: theme.spacing[12],
-    height: theme.spacing[12],
-    borderRadius: theme.radius.pill,
-  },
-  teamCircle: {
-    width: theme.spacing[12],
-    height: theme.spacing[12],
-    borderRadius: theme.radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  teamInitials: {
-    fontSize: theme.typography.body.fontSize,
-    fontWeight: '700',
-  },
-  teamName: {
-    fontSize: theme.typography.small.fontSize,
-    fontWeight: '600',
-    marginTop: spacing.xs,
-    textAlign: 'center',
-  },
-  vsContainer: {
-    paddingHorizontal: spacing.sm,
-  },
-  vs: {
-    fontSize: theme.typography.body.fontSize,
-    fontWeight: '700',
-  },
-  detailsContainer: {
-    borderTopWidth: theme.layout.borderWidth,
-    paddingTop: spacing.sm,
-  },
-  dateText: {
-    fontSize: theme.typography.small.fontSize,
-    marginBottom: spacing.xs,
-  },
-  venueText: {
-    fontSize: theme.typography.small.fontSize,
-    marginBottom: spacing.xs,
-  },
-  competitionText: {
-    fontSize: theme.typography.small.fontSize,
-  },
-  emptyContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.xl * 2,
-  },
-  emptyText: {
-    fontSize: theme.typography.body.fontSize,
-    fontWeight: '600',
-    marginBottom: spacing.xs,
-  },
-  emptySubtext: {
-    fontSize: theme.typography.body.fontSize,
-  },
-  emptyList: {
-    flexGrow: 1,
-  },
-});
+const createStyles = (theme: ReturnType<typeof useTheme>) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      padding: spacing.md,
+    },
+    h1: {
+      fontSize: theme.typography.h1.fontSize,
+      fontWeight: theme.typography.h1.fontWeight as any,
+      marginBottom: spacing.lg,
+    },
+    card: {
+      borderWidth: theme.layout.borderWidth,
+      borderRadius: theme.radius.lg,
+      padding: spacing.md,
+      marginBottom: spacing.md,
+    },
+    matchRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: spacing.md,
+    },
+    teamContainer: {
+      flex: 1,
+      alignItems: 'center',
+    },
+    teamLogo: {
+      width: theme.spacing[12],
+      height: theme.spacing[12],
+      borderRadius: theme.radius.pill,
+    },
+    teamCircle: {
+      width: theme.spacing[12],
+      height: theme.spacing[12],
+      borderRadius: theme.radius.pill,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    teamInitials: {
+      fontSize: theme.typography.body.fontSize,
+      fontWeight: '700',
+    },
+    teamName: {
+      fontSize: theme.typography.small.fontSize,
+      fontWeight: '600',
+      marginTop: spacing.xs,
+      textAlign: 'center',
+    },
+    vsContainer: {
+      paddingHorizontal: spacing.sm,
+    },
+    vs: {
+      fontSize: theme.typography.body.fontSize,
+      fontWeight: '700',
+    },
+    detailsContainer: {
+      borderTopWidth: theme.layout.borderWidth,
+      paddingTop: spacing.sm,
+    },
+    dateText: {
+      fontSize: theme.typography.small.fontSize,
+      marginBottom: spacing.xs,
+    },
+    venueText: {
+      fontSize: theme.typography.small.fontSize,
+      marginBottom: spacing.xs,
+    },
+    competitionText: {
+      fontSize: theme.typography.small.fontSize,
+    },
+    emptyContainer: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: spacing.xl * 2,
+    },
+    emptyText: {
+      fontSize: theme.typography.body.fontSize,
+      fontWeight: '600',
+      marginBottom: spacing.xs,
+    },
+    emptySubtext: {
+      fontSize: theme.typography.body.fontSize,
+    },
+    emptyList: {
+      flexGrow: 1,
+    },
+  });

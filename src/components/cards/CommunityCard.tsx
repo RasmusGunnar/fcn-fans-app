@@ -3,10 +3,9 @@
 // NO hardcoded numbers or color strings allowed.
 
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Card } from '../ui/Card';
-import { Pill } from '../ui/Pill';
+import { Card, Text, CategoryBadge } from '../ui';
 import { PrimaryButton } from '../PrimaryButton';
 import { CardActions } from './CardActions';
 import { defaultTheme } from '../../theme';
@@ -39,30 +38,35 @@ export function CommunityCard({
   onPressJoin,
 }: CommunityCardProps) {
   const theme = defaultTheme;
-  
+
   return (
     <Card style={styles.card}>
-      <Pill
-        label="Community"
-        variant="badge"
-        icon={<Ionicons name="people" size={14} color={theme.colors.bg.card} />}
-      />
       <View style={styles.header}>
         <View style={styles.avatar}>
           <Ionicons name="people-circle" size={40} color={theme.colors.primary} />
         </View>
         <View style={styles.headerInfo}>
-          <Text style={styles.title}>{name}</Text>
+          <Text variant="h3" color="primary" style={styles.title}>
+            {name}
+          </Text>
           <View style={styles.metaRow}>
             <Ionicons name="people" size={12} color={theme.colors.text.secondary} />
-            <Text style={styles.metaText}>{members} medlemmer</Text>
-            <Text style={styles.metaSeparator}>•</Text>
+            <Text variant="caption" color="secondary" style={styles.metaText}>
+              {members} medlemmer
+            </Text>
+            <Text variant="caption" color="secondary" style={styles.metaSeparator}>
+              •
+            </Text>
             <Ionicons name="time" size={12} color={theme.colors.text.secondary} />
-            <Text style={styles.metaText}>{timeAgo}</Text>
+            <Text variant="caption" color="secondary" style={styles.metaText}>
+              {timeAgo}
+            </Text>
           </View>
         </View>
       </View>
-      <Text style={styles.description}>{description}</Text>
+      <Text variant="body" color="primary" style={styles.description}>
+        {description}
+      </Text>
       <PrimaryButton title="Gå til fællesskab" onPress={onPressJoin} />
       <CardActions
         liked={liked}
@@ -95,9 +99,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: theme.colors.text.primary,
     marginBottom: theme.spacing[1],
   },
   metaRow: {
@@ -105,19 +106,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   metaText: {
-    fontSize: 12,
-    color: theme.colors.text.secondary,
     marginLeft: theme.spacing[1],
   },
   metaSeparator: {
-    fontSize: 12,
-    color: theme.colors.text.secondary,
     marginHorizontal: theme.spacing[1],
   },
   description: {
-    fontSize: 14,
-    color: theme.colors.text.primary,
-    lineHeight: 20,
     marginBottom: theme.spacing[6],
   },
 });

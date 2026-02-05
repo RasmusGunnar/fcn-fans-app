@@ -1,116 +1,125 @@
-import React, { ReactNode } from 'react';
-import { View, Pressable, StyleSheet } from 'react-native';
+import React from 'react';
+import { View, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, Theme } from '../../theme';
+import { CATEGORIES, type CategoryKey } from '../../theme/categories';
 import { Text } from './Text';
-import { Avatar } from './Avatar';
 
-export interface ListRowProps {
+export type ListRowProps = {
+  accent: CategoryKey;
+  accentColorToken?: string;
+  icon: string;
   title: string;
   subtitle?: string;
-  leftAvatar?: {
-    userId?: string;
-    avatarUrl?: string;
-    label?: string;
-  };
-  leftIcon?: keyof typeof Ionicons.glyphMap;
-  rightAccessory?: ReactNode;
+  meta?: string;
   onPress?: () => void;
-  disabled?: boolean;
+};
+
+function resolveColorToken(theme: Theme, token?: string, componentName?: string): string {
+  if (typeof token !== 'string' || token.trim().length === 0) {
+    if (__DEV__) {
+      console.warn('[resolveColorToken] Missing token', { componentName, token });
+    }
+    return theme.colors.text.primary;
+  }
+  const parts = token.split('.');
+  let current: any = theme.colors;
+  for (const part of parts) {
+    current = current?.[part];
+  }
+  return typeof current === 'string' ? current : theme.colors.brand.accent;
 }
 
 export function ListRow({
+  accent,
+  accentColorToken,
+  icon,
   title,
   subtitle,
-  leftAvatar,
-  leftIcon,
-  rightAccessory,
+  meta,
   onPress,
-  disabled = false,
 }: ListRowProps) {
   const theme = useTheme();
   const styles = createStyles(theme);
+  const definition = CATEGORIES[accent];
+  const resolvedAccentToken =
+    accentColorToken ?? definition?.solidBgToken ?? (definition as any)?.colorToken ?? 'text.muted';
+  const accentColor = resolveColorToken(theme, resolvedAccentToken, 'ListRow');
 
-  const content = (
-    <>
-      {/* Left side: Avatar or Icon */}
-      {leftAvatar && (
-        <View style={styles.leftContainer}>
-          <Avatar
-            userId={leftAvatar.userId}
-            avatarUrl={leftAvatar.avatarUrl}
-            label={leftAvatar.label}
-            size="md"
-          />
-        </View>
-      )}
-      {leftIcon && !leftAvatar && (
-        <View style={styles.leftContainer}>
-          <Ionicons name={leftIcon} size={24} color={theme.colors.text.secondary} />
-        </View>
-      )}
+  const Container = onPress ? Pressable : View;
+  const containerProps = onPress ? { onPress } : {};
 
-      {/* Middle: Title and Subtitle */}
-      <View style={styles.middleContainer}>
-        <Text variant="body" numberOfLines={1}>
-          {title}
-        </Text>
-        {subtitle && (
-          <Text variant="caption" color="secondary" numberOfLines={1}>
-            {subtitle}
+  return (
+    <Container style={styles.container} {...containerProps}>
+      <View style={[styles.accentBar, { backgroundColor: accentColor }]} />
+      <View style={styles.content}>
+        <View style={styles.iconWrap}>
+          <Ionicons name={icon as any} size={theme.components.icon.size.md} color={accentColor} />
+        </View>
+        <View style={styles.textBlock}>
+          <Text variant="h3" color="primary" style={styles.title}>
+            {title}
+          </Text>
+          {!!subtitle && (
+            <Text variant="body" color="secondary" style={styles.subtitle}>
+              {subtitle}
+            </Text>
+          )}
+        </View>
+        {!!meta && (
+          <Text variant="small" color="secondary" style={styles.meta}>
+            {meta}
           </Text>
         )}
       </View>
-
-      {/* Right accessory */}
-      {rightAccessory && <View style={styles.rightContainer}>{rightAccessory}</View>}
-    </>
+    </Container>
   );
-
-  if (onPress) {
-    return (
-      <Pressable
-        onPress={onPress}
-        disabled={disabled}
-        style={({ pressed }) => [
-          styles.row,
-          disabled && styles.disabled,
-          pressed && !disabled && styles.pressed,
-        ]}
-      >
-        {content}
-      </Pressable>
-    );
-  }
-
-  return <View style={styles.row}>{content}</View>;
 }
 
 function createStyles(theme: Theme) {
   return StyleSheet.create({
-    row: {
+    container: {
+      backgroundColor: theme.colors.bg.card,
+      borderRadius: theme.radius.md,
+      borderWidth: theme.layout.borderHairline,
+      borderColor: theme.colors.border.default,
+      overflow: 'hidden',
+      marginBottom: theme.spacing[3],
+    },
+    accentBar: {
+      height: '100%',
+      width: theme.spacing[1],
+      position: 'absolute',
+      left: 0,
+      top: 0,
+      bottom: 0,
+    },
+    content: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingVertical: theme.spacing[3],
+      paddingVertical: theme.spacing[4],
       paddingHorizontal: theme.spacing[4],
       gap: theme.spacing[3],
-      backgroundColor: theme.colors.bg.card,
     },
-    leftContainer: {
-      flexShrink: 0,
+    iconWrap: {
+      width: theme.spacing[10],
+      height: theme.spacing[10],
+      borderRadius: theme.radius.pill,
+      backgroundColor: theme.colors.bg.subtle,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
-    middleContainer: {
+    textBlock: {
       flex: 1,
-      gap: theme.spacing[1],
     },
-    rightContainer: {
-      flexShrink: 0,
+    title: {
+      color: theme.colors.text.primary,
     },
-    pressed: {
-      opacity: 0.7,
+    subtitle: {
+      marginTop: theme.spacing[1],
     },
-    disabled: {
-      opacity: 0.5,
+    meta: {
+      color: theme.colors.text.secondary,
     },
   });
 }

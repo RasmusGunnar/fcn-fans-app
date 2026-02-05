@@ -4,8 +4,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme, Theme } from '../theme';
 import { Actor } from '../types/news';
 import { useAuth } from '../auth/AuthProvider';
+import { useFeed } from '../state/FeedContext';
 import { supabase } from '../lib/supabase';
 import { getMyCommunityRoles, canPostAsCommunity } from '../services/rbac';
+import { resolveProfileDisplayName } from '../utils/actor';
 
 interface ActorSelectorProps {
   selectedActor: Actor;
@@ -22,6 +24,7 @@ export function ActorSelector({ selectedActor, onSelectActor }: ActorSelectorPro
   const theme = useTheme();
   const styles = createStyles(theme);
   const { user } = useAuth();
+  const { profileMap } = useFeed();
   const [showDropdown, setShowDropdown] = useState(false);
   const [eligibleCommunities, setEligibleCommunities] = useState<EligibleCommunity[]>([]);
   const [loading, setLoading] = useState(false);
@@ -80,10 +83,11 @@ export function ActorSelector({ selectedActor, onSelectActor }: ActorSelectorPro
 
   const handleSelectUser = () => {
     if (!user) return;
+    const displayName = resolveProfileDisplayName(profileMap, user.id, user.email || undefined);
     onSelectActor({
       type: 'user',
       id: user.id,
-      name: user.email || 'Dig',
+      name: displayName,
     });
     setShowDropdown(false);
   };
@@ -128,7 +132,10 @@ export function ActorSelector({ selectedActor, onSelectActor }: ActorSelectorPro
             <>
               <Pressable style={styles.dropdownItem} onPress={handleSelectUser}>
                 <Ionicons name="person" size={20} color={theme.colors.text.primary} />
-                <Text style={styles.dropdownText}>{user?.email || 'Dig selv'}</Text>
+                <Text style={styles.dropdownText}>
+                  {resolveProfileDisplayName(profileMap, user?.id, user?.email || undefined)}
+                  <Text style={styles.dropdownLabel}> (Dig selv)</Text>
+                </Text>
               </Pressable>
 
               {hasEligibleCommunities && (
@@ -160,70 +167,73 @@ export function ActorSelector({ selectedActor, onSelectActor }: ActorSelectorPro
 
 function createStyles(theme: Theme) {
   return StyleSheet.create({
-  container: {
-    marginBottom: theme.spacing[4],
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.colors.text.primary,
-    marginBottom: theme.spacing[1],
-  },
-  selector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: theme.spacing[4],
-    backgroundColor: theme.colors.bg.card,
-    borderRadius: theme.radius.sm,
-    borderWidth: 1,
-    borderColor: theme.colors.border.default,
-  },
-  selectedActor: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing[2],
-  },
-  selectedText: {
-    fontSize: 16,
-    color: theme.colors.text.primary,
-  },
-  dropdown: {
-    marginTop: theme.spacing[1],
-    backgroundColor: theme.colors.bg.card,
-    borderRadius: theme.radius.sm,
-    borderWidth: 1,
-    borderColor: theme.colors.border.default,
-    padding: theme.spacing[1],
-  },
-  dropdownItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing[2],
-    padding: theme.spacing[4],
-    borderRadius: theme.radius.sm,
-  },
-  dropdownText: {
-    fontSize: 16,
-    color: theme.colors.text.primary,
-  },
-  dropdownDivider: {
-    height: 1,
-    backgroundColor: theme.colors.border.default,
-    marginVertical: theme.spacing[1],
-  },
-  dropdownHeader: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.colors.text.secondary,
-    paddingHorizontal: theme.spacing[4],
-    paddingVertical: theme.spacing[1],
-    textTransform: 'uppercase',
-  },
-  roleLabel: {
-    fontSize: 12,
-    color: theme.colors.text.secondary,
-    marginLeft: 'auto',
-  },
+    container: {
+      marginBottom: theme.spacing[4],
+    },
+    label: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: theme.colors.text.primary,
+      marginBottom: theme.spacing[1],
+    },
+    selector: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: theme.spacing[4],
+      backgroundColor: theme.colors.bg.card,
+      borderRadius: theme.radius.sm,
+      borderWidth: 1,
+      borderColor: theme.colors.border.default,
+    },
+    selectedActor: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing[2],
+    },
+    selectedText: {
+      fontSize: 16,
+      color: theme.colors.text.primary,
+    },
+    dropdown: {
+      marginTop: theme.spacing[1],
+      backgroundColor: theme.colors.bg.card,
+      borderRadius: theme.radius.sm,
+      borderWidth: 1,
+      borderColor: theme.colors.border.default,
+      padding: theme.spacing[1],
+    },
+    dropdownItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing[2],
+      padding: theme.spacing[4],
+      borderRadius: theme.radius.sm,
+    },
+    dropdownText: {
+      fontSize: 16,
+      color: theme.colors.text.primary,
+    },
+    dropdownLabel: {
+      color: theme.colors.text.secondary,
+    },
+    dropdownDivider: {
+      height: 1,
+      backgroundColor: theme.colors.border.default,
+      marginVertical: theme.spacing[1],
+    },
+    dropdownHeader: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: theme.colors.text.secondary,
+      paddingHorizontal: theme.spacing[4],
+      paddingVertical: theme.spacing[1],
+      textTransform: 'uppercase',
+    },
+    roleLabel: {
+      fontSize: 12,
+      color: theme.colors.text.secondary,
+      marginLeft: 'auto',
+    },
   });
 }

@@ -46,9 +46,7 @@ export async function isSystemAdmin(): Promise<boolean> {
  * Get current user's roles in all their communities
  * Returns a map of community_id -> role
  */
-export async function getMyCommunityRoles(): Promise<
-  Record<string, 'owner' | 'admin' | 'member'>
-> {
+export async function getMyCommunityRoles(): Promise<Record<string, 'owner' | 'admin' | 'member'>> {
   try {
     const {
       data: { user },

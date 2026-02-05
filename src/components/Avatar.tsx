@@ -22,22 +22,22 @@ export function Avatar({ userId, avatarUrl, size = 32, label }: AvatarProps) {
   // Build candidate paths
   const candidatePaths = React.useMemo(() => {
     const paths: string[] = [];
-    
+
     // If avatarUrl starts with http, use it directly
     if (avatarUrl && avatarUrl.startsWith('http')) {
       return [avatarUrl];
     }
-    
+
     // Otherwise, build candidate paths in the avatars bucket
     if (avatarUrl) {
       paths.push(avatarUrl);
     }
-    
+
     if (userId) {
       paths.push(`${userId}/avatar.jpg`);
       paths.push(`${userId}.jpg`);
     }
-    
+
     // De-duplicate
     return [...new Set(paths)];
   }, [userId, avatarUrl]);
@@ -54,22 +54,22 @@ export function Avatar({ userId, avatarUrl, size = 32, label }: AvatarProps) {
   useEffect(() => {
     setCurrentCandidateIndex(0);
     setResolvedUri(null);
-    
+
     // Check cache first
     const cacheKey = candidatePaths.join('|');
     if (pathCache.has(cacheKey)) {
       const cachedUri = pathCache.get(cacheKey)!;
       setResolvedUri(cachedUri);
-      console.log('[AvatarDebug]', { 
-        userId, 
-        avatarUrl, 
-        tried: candidatePaths, 
+      console.log('[AvatarDebug]', {
+        userId,
+        avatarUrl,
+        tried: candidatePaths,
         finalUri: cachedUri,
-        source: 'cache'
+        source: 'cache',
       });
       return;
     }
-    
+
     // Try first candidate
     if (candidatePaths.length > 0) {
       const uri = getPublicUrl(candidatePaths[0]);
@@ -80,7 +80,7 @@ export function Avatar({ userId, avatarUrl, size = 32, label }: AvatarProps) {
   // Handle image load errors
   const handleError = () => {
     const nextIndex = currentCandidateIndex + 1;
-    
+
     if (nextIndex < candidatePaths.length) {
       // Try next candidate
       setCurrentCandidateIndex(nextIndex);
@@ -89,12 +89,12 @@ export function Avatar({ userId, avatarUrl, size = 32, label }: AvatarProps) {
     } else {
       // All candidates failed
       setResolvedUri(null);
-      console.log('[AvatarDebug]', { 
-        userId, 
-        avatarUrl, 
-        tried: candidatePaths, 
+      console.log('[AvatarDebug]', {
+        userId,
+        avatarUrl,
+        tried: candidatePaths,
         finalUri: null,
-        result: 'all-failed'
+        result: 'all-failed',
       });
     }
   };
@@ -105,30 +105,28 @@ export function Avatar({ userId, avatarUrl, size = 32, label }: AvatarProps) {
       // Cache successful path
       const cacheKey = candidatePaths.join('|');
       pathCache.set(cacheKey, resolvedUri);
-      
-      console.log('[AvatarDebug]', { 
-        userId, 
-        avatarUrl, 
-        tried: candidatePaths, 
+
+      console.log('[AvatarDebug]', {
+        userId,
+        avatarUrl,
+        tried: candidatePaths,
         finalUri: resolvedUri,
-        candidateIndex: currentCandidateIndex
+        candidateIndex: currentCandidateIndex,
       });
     }
   };
 
   // Render fallback initials
   if (!resolvedUri) {
-    const initials = label 
-      ? label.substring(0, 2).toUpperCase() 
-      : userId 
-        ? userId.substring(0, 2).toUpperCase() 
+    const initials = label
+      ? label.substring(0, 2).toUpperCase()
+      : userId
+        ? userId.substring(0, 2).toUpperCase()
         : '??';
-    
+
     return (
       <View style={[styles.fallback, { width: size, height: size, borderRadius: size / 2 }]}>
-        <Text style={[styles.initials, { fontSize: size * 0.4 }]}>
-          {initials}
-        </Text>
+        <Text style={[styles.initials, { fontSize: size * 0.4 }]}>{initials}</Text>
       </View>
     );
   }

@@ -1,11 +1,13 @@
 # Instagram-Style Inline Comments Implementation
 
 ## Overview
+
 Implemented universal inline comments system for all feed item types (posts, news, events, matches) without navigation. Comments fold in/out under each card when clicking the comment button.
 
 ## Changed Files
 
 ### 1. **supabase/migrations_legacy/20260123000001_create_comments_v2.sql** (NEW)
+
 - Created `comments_v2` table with universal commenting support
 - Fields:
   - `id` (uuid, primary key)
@@ -22,6 +24,7 @@ Implemented universal inline comments system for all feed item types (posts, new
 - Helper function: `get_comment_count(target_type, target_id)`
 
 ### 2. **src/components/comments/InlineComments.tsx** (NEW)
+
 - Universal inline comments component
 - Props:
   - `targetType`: 'post'|'news'|'event'|'match'
@@ -41,6 +44,7 @@ Implemented universal inline comments system for all feed item types (posts, new
 - Login prompt if not authenticated
 
 ### 3. **src/components/cards/FanPostCard.tsx** (UPDATED)
+
 - Added `InlineComments` import
 - Added state: `commentsOpen`, `dynamicCommentsCount`
 - Removed default "kommer snart" alert
@@ -49,6 +53,7 @@ Implemented universal inline comments system for all feed item types (posts, new
 - Comment count updates dynamically from InlineComments
 
 ### 4. **src/components/cards/NewsCard.tsx** (UPDATED)
+
 - Added `useState`, `useAuth`, `InlineComments` imports
 - Added state: `commentsOpen`, `dynamicCommentsCount`
 - onPressComment toggles `commentsOpen`
@@ -57,6 +62,7 @@ Implemented universal inline comments system for all feed item types (posts, new
 - Uses `newsItem.id` as stable targetId
 
 ### 5. **src/components/cards/EventCard.tsx** (UPDATED)
+
 - Simple EventCard for HomeScreen
 - Added `useState`, `useAuth`, `InlineComments` imports
 - Added `eventId` prop (required)
@@ -66,6 +72,7 @@ Implemented universal inline comments system for all feed item types (posts, new
 - Comment count updates dynamically
 
 ### 6. **src/components/events/EventCard.tsx** (UPDATED)
+
 - Detailed EventCard for EventsScreen
 - Added `useState`, `useAuth`, `CardActions`, `InlineComments` imports
 - Added `eventId` prop (required)
@@ -77,6 +84,7 @@ Implemented universal inline comments system for all feed item types (posts, new
 - Comment count updates dynamically
 
 ### 7. **src/components/events/MatchCard.tsx** (UPDATED)
+
 - Added `useState`, `useAuth`, `CardActions`, `InlineComments` imports
 - Added `matchId` prop (required)
 - Added optional props: `liked`, `likes`, `comments`, `onToggleLike`, `onPressShare`
@@ -90,7 +98,7 @@ Implemented universal inline comments system for all feed item types (posts, new
 
 ### Stable IDs for Each Type:
 
-1. **Posts**: 
+1. **Posts**:
    - Use `post.id` (UUID from posts table)
    - Already stable and unique
 
@@ -111,12 +119,14 @@ Implemented universal inline comments system for all feed item types (posts, new
 ### Ensuring Stable IDs:
 
 All entity types already have UUID `id` fields from Supabase tables:
+
 - `posts.id` → uuid
 - `news.id` → uuid (if table exists)
 - `events.id` → uuid
 - `fixtures.id` → uuid
 
 **If news items lack stable IDs**, implement one of these strategies:
+
 1. Add UUID primary key to news table
 2. Use hash of URL as stable ID: `crypto.createHash('sha256').update(newsItem.url).digest('hex').substring(0, 36)`
 3. Store news in Supabase table with UUID primary key
@@ -124,20 +134,23 @@ All entity types already have UUID `id` fields from Supabase tables:
 ## Touch Handling Architecture
 
 ### Card Press Behavior:
+
 - **Card content (Pressable)**: Navigates to detail screen
 - **CardActions (comment/like/share buttons)**: Uses `pointerEvents="auto"` to prevent bubbling
 - **InlineComments**: Renders below CardActions, doesn't interfere with navigation
 
 ### How it works:
+
 1. Card content wrapped in `Pressable` with `onPress` navigation
-2. `CardActions` container uses `pointerEvents="box-none"` 
-3. Individual action buttons use `pointerEvents="auto"` 
+2. `CardActions` container uses `pointerEvents="box-none"`
+3. Individual action buttons use `pointerEvents="auto"`
 4. Comment button press → toggles `commentsOpen`, doesn't navigate
 5. Tapping card content → navigates as before
 
 ## Migration Instructions
 
 ### 1. Run Supabase Migration:
+
 ```bash
 # Apply migration to your Supabase project
 supabase db push
@@ -147,6 +160,7 @@ supabase db push
 ### 2. Update Component Usages:
 
 **HomeScreen** (if using simple EventCard):
+
 ```tsx
 <EventCard
   eventId={event.id} // ADD THIS
@@ -165,6 +179,7 @@ supabase db push
 ```
 
 **EventsScreen** (using detailed EventCard):
+
 ```tsx
 <GenericEventCard
   eventId={item.id} // ADD THIS
@@ -183,6 +198,7 @@ supabase db push
 ```
 
 **MatchCard Usage**:
+
 ```tsx
 <MatchCard
   matchId={fixture.id} // ADD THIS
@@ -209,11 +225,13 @@ supabase db push
 If `newsItem.id` doesn't exist or isn't stable:
 
 **Option A**: Add UUID to news table
+
 ```sql
 ALTER TABLE news ADD COLUMN IF NOT EXISTS id uuid PRIMARY KEY DEFAULT gen_random_uuid();
 ```
 
 **Option B**: Generate stable ID from URL
+
 ```typescript
 // In NewsCard component
 import { createHash } from 'crypto';
@@ -230,7 +248,7 @@ const stableId = newsItem.id || createHash('sha256')
 
 - [ ] Post comments: create, view, delete own
 - [ ] News comments: create, view, delete own
-- [ ] Event comments: create, view, delete own  
+- [ ] Event comments: create, view, delete own
 - [ ] Match comments: create, view, delete own
 - [ ] Toggle comment section (fold in/out)
 - [ ] Comment count updates after adding/deleting

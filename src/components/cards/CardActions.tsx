@@ -3,8 +3,9 @@
 // NO hardcoded numbers or color strings allowed.
 
 import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Text } from '../ui';
 import { defaultTheme } from '../../theme';
 
 interface CardActionsProps {
@@ -25,10 +26,13 @@ export function CardActions({
   onPressShare,
 }: CardActionsProps) {
   const theme = defaultTheme;
-  
+
   const handleToggleLike = () => {
     if (__DEV__) {
-      console.log('[CardActions] Like toggle clicked:', { before: { liked, likes }, willToggle: !liked });
+      console.log('[CardActions] Like toggle clicked:', {
+        before: { liked, likes },
+        willToggle: !liked,
+      });
     }
     onToggleLike();
   };
@@ -39,7 +43,7 @@ export function CardActions({
     }
     onPressComment();
   };
-  
+
   return (
     <View style={styles.container} pointerEvents="box-none">
       <View style={styles.leftActions} pointerEvents="box-none">
@@ -49,11 +53,19 @@ export function CardActions({
             size={20}
             color={liked ? theme.colors.primary : theme.colors.text.secondary}
           />
-          <Text style={[styles.actionText, liked && styles.likedText]}>{likes}</Text>
+          <Text
+            variant="caption"
+            color={liked ? 'primary' : 'secondary'}
+            style={styles.actionText}
+          >
+            {likes}
+          </Text>
         </Pressable>
         <Pressable style={styles.action} onPress={handlePressComment} pointerEvents="auto">
           <Ionicons name="chatbubble-outline" size={20} color={theme.colors.text.secondary} />
-          <Text style={styles.actionText}>{comments}</Text>
+          <Text variant="caption" color="secondary" style={styles.actionText}>
+            {comments}
+          </Text>
         </Pressable>
       </View>
       <Pressable style={styles.action} onPress={onPressShare} pointerEvents="auto">
@@ -70,8 +82,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: theme.spacing[2],
-    borderTopWidth: 1,
+    borderTopWidth: theme.layout.borderHairline,
     borderTopColor: theme.colors.border.light,
   },
   leftActions: {
@@ -83,11 +94,6 @@ const styles = StyleSheet.create({
     marginRight: theme.spacing[4],
   },
   actionText: {
-    fontSize: 14,
-    color: theme.colors.text.secondary,
     marginLeft: theme.spacing[1],
-  },
-  likedText: {
-    color: theme.colors.primary,
   },
 });

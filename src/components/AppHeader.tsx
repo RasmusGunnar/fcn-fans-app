@@ -57,59 +57,59 @@ export function AppHeader({
 
 function createStyles(theme: Theme) {
   return StyleSheet.create({
-  outerContainer: {
-    backgroundColor: theme.colors.primary,
-    overflow: 'visible' as const,
-  },
-  innerContainer: {
-    minHeight: theme.spacing[12],
-    paddingHorizontal: theme.layout.screenPadding,
-    paddingVertical: theme.spacing[2],
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    overflow: 'visible' as const,
-  },
-  contentRow: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    overflow: 'visible' as const,
-  },
-  logoWrapper: {
-    width: theme.spacing[10],
-    height: theme.spacing[10],
-    marginRight: theme.spacing[1],
-    overflow: 'visible' as const,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logo: {
-    width: theme.spacing[10],
-    height: theme.spacing[10],
-  },
-  textContainer: {
-    flex: 1,
-    marginLeft: theme.spacing[0],
-  },
-  title: {
-    fontSize: theme.typography.h3.fontSize,
-    fontWeight: theme.typography.h3.fontWeight as any,
-    color: theme.colors.bg.card,
-  },
-  subtitle: {
-    fontSize: theme.typography.small.fontSize,
-    color: theme.colors.bg.card,
-    opacity: 0.9,
-  },
-  profileButton: {
-    width: theme.spacing[8],
-    height: theme.spacing[8],
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.colors.primary,
-    opacity: 0.8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+    outerContainer: {
+      backgroundColor: theme.colors.primary,
+      overflow: 'visible' as const,
+    },
+    innerContainer: {
+      minHeight: theme.spacing[12],
+      paddingHorizontal: theme.layout.screenPadding,
+      paddingVertical: theme.spacing[2],
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      overflow: 'visible' as const,
+    },
+    contentRow: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      overflow: 'visible' as const,
+    },
+    logoWrapper: {
+      width: theme.spacing[10],
+      height: theme.spacing[10],
+      marginRight: theme.spacing[1],
+      overflow: 'visible' as const,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    logo: {
+      width: theme.spacing[10],
+      height: theme.spacing[10],
+    },
+    textContainer: {
+      flex: 1,
+      marginLeft: theme.spacing[0],
+    },
+    title: {
+      fontSize: theme.typography.h3.fontSize,
+      fontWeight: theme.typography.h3.fontWeight as any,
+      color: theme.colors.bg.card,
+    },
+    subtitle: {
+      fontSize: theme.typography.small.fontSize,
+      color: theme.colors.bg.card,
+      opacity: 0.9,
+    },
+    profileButton: {
+      width: theme.spacing[8],
+      height: theme.spacing[8],
+      borderRadius: theme.radius.pill,
+      backgroundColor: theme.colors.primary,
+      opacity: 0.8,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
   });
 }
