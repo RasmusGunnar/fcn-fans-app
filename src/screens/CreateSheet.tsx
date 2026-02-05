@@ -9,6 +9,7 @@ import { ActorSelector } from '../components/ActorSelector';
 import { useTheme } from '../theme';
 import { useAuth } from '../auth/AuthProvider';
 import { Actor } from '../types/news';
+import { resolveProfileDisplayName } from '../utils/actor';
 
 interface CreateSheetProps {
   visible: boolean;
@@ -20,7 +21,7 @@ type ContentType = null | 'post' | 'news';
 export default function CreateSheet({ visible, onClose }: CreateSheetProps) {
   console.log('[CreateSheet] Component rendered', { visible });
   const insets = useSafeAreaInsets();
-  const { fetchPosts } = useFeed();
+  const { fetchPosts, profileMap } = useFeed();
   const { user } = useAuth();
   const theme = useTheme();
 
@@ -28,7 +29,7 @@ export default function CreateSheet({ visible, onClose }: CreateSheetProps) {
   const [actor, setActor] = useState<Actor>({
     type: 'user',
     id: user?.id || '',
-    name: user?.email || 'Dig',
+    name: resolveProfileDisplayName(profileMap, user?.id, user?.email || undefined),
   });
 
   // Reset actor when user changes
@@ -37,10 +38,10 @@ export default function CreateSheet({ visible, onClose }: CreateSheetProps) {
       setActor({
         type: 'user',
         id: user.id,
-        name: user.email || 'Dig',
+        name: resolveProfileDisplayName(profileMap, user.id, user.email || undefined),
       });
     }
-  }, [user]);
+  }, [user, profileMap]);
 
   // Reset state when modal closes
   useEffect(() => {

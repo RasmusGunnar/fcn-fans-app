@@ -25,6 +25,9 @@ export type { AvatarProps } from './Avatar';
 export { CategoryBadge } from './CategoryBadge';
 export type { CategoryBadgeProps } from './CategoryBadge';
 
+export { EventSubtypeBadge } from './EventSubtypeBadge';
+export type { EventSubtypeBadgeProps, EventSubtype } from './EventSubtypeBadge';
+
 export { ListRow } from './ListRow';
 export type { ListRowProps } from './ListRow';
 

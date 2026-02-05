@@ -4,6 +4,7 @@ export const lightColors = {
   primaryDark: '#B00016',
   brand: {
     gold: '#B89C59',
+    fcnYellow: '#FFBF24',
     accent: '#E30613',
     muted: '#EDE9E2',
   },
@@ -25,6 +26,7 @@ export const lightColors = {
     muted: '#8A8A8A',
     inverse: '#FFFFFF',
     error: '#E30613',
+    onSolid: '#FFFFFF',
   },
 
   // Border colors
@@ -56,6 +58,11 @@ export const lightColors = {
       bg: '#FDE7EA',
       text: '#B00016',
     },
+    green: {
+      bg: '#E7F7EC',
+      text: '#0F7A2F',
+      border: '#BFE6CC',
+    },
     orange: {
       bg: '#FFF7ED',
       text: '#C2410C',
@@ -68,6 +75,15 @@ export const lightColors = {
       bg: '#F9EAC3',
       text: '#92400E',
     },
+  },
+
+  badges: {
+    event: '#FFBF24',
+    eventSoftBg: 'rgba(255, 191, 36, 0.15)',
+    eventBorder: 'rgba(255, 191, 36, 0.40)',
+    busTrip: '#F97316',
+    busTripSoftBg: 'rgba(249, 115, 22, 0.15)',
+    busTripBorder: 'rgba(249, 115, 22, 0.40)',
   },
 
   // Special backgrounds
@@ -88,6 +104,7 @@ export const darkColors = {
   primaryDark: '#B00016',
   brand: {
     gold: '#B89C59',
+    fcnYellow: '#FFBF24',
     accent: '#E30613',
     muted: '#374151',
   },
@@ -109,6 +126,7 @@ export const darkColors = {
     muted: '#9CA3AF',
     inverse: '#111827',
     error: '#E30613',
+    onSolid: '#FFFFFF',
   },
 
   // Border colors
@@ -140,6 +158,11 @@ export const darkColors = {
       bg: '#7F1D1D',
       text: '#FCA5A5',
     },
+    green: {
+      bg: '#14532D',
+      text: '#BBF7D0',
+      border: '#166534',
+    },
     orange: {
       bg: '#7C2D12',
       text: '#FED7AA',
@@ -152,6 +175,15 @@ export const darkColors = {
       bg: '#78350F',
       text: '#FDE68A',
     },
+  },
+
+  badges: {
+    event: '#FFBF24',
+    eventSoftBg: 'rgba(255, 191, 36, 0.15)',
+    eventBorder: 'rgba(255, 191, 36, 0.40)',
+    busTrip: '#F97316',
+    busTripSoftBg: 'rgba(249, 115, 22, 0.15)',
+    busTripBorder: 'rgba(249, 115, 22, 0.40)',
   },
 
   // Special backgrounds

@@ -12,14 +12,19 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAuth } from '../auth/AuthProvider';
 import { PrimaryButton } from '../components/PrimaryButton';
+import { ActorSelector } from '../components/ActorSelector';
 import { supabase } from '../lib/supabase';
 import { buildAddressText, geocodeAddress } from '../services/geocoding';
 import { defaultTheme as theme, spacing } from '../theme';
+import { useFeed } from '../state/FeedContext';
+import type { Actor } from '../types/news';
+import { resolveProfileDisplayName } from '../utils/actor';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CreateEvent'>;
 
 export default function CreateEventScreen({ navigation }: Props) {
   const { user } = useAuth();
+  const { profileMap } = useFeed();
   const styles = createStyles(theme);
 
   // Event basic info
@@ -39,6 +44,19 @@ export default function CreateEventScreen({ navigation }: Props) {
   ); // yyyy-mm-ddThh:mm
 
   const [loading, setLoading] = useState(false);
+  const [selectedActor, setSelectedActor] = useState<Actor | null>(null);
+
+  React.useEffect(() => {
+    if (!user?.id) return;
+    const displayName = resolveProfileDisplayName(profileMap, user.id, user.email || undefined);
+    setSelectedActor((prev) =>
+      prev ?? {
+        type: 'user',
+        id: user.id,
+        name: displayName,
+      },
+    );
+  }, [user?.id, user?.email, profileMap]);
 
   const handleCreate = async () => {
     // Validation
@@ -54,6 +72,11 @@ export default function CreateEventScreen({ navigation }: Props) {
     const dt = new Date(startTime);
     if (isNaN(dt.getTime())) {
       Alert.alert('Ugyldigt tidspunkt', 'Brug format: 2025-12-18T15:00');
+      return;
+    }
+
+    if (!selectedActor) {
+      Alert.alert('Fejl', 'Vælg hvem du opretter som');
       return;
     }
 
@@ -80,6 +103,9 @@ export default function CreateEventScreen({ navigation }: Props) {
       }
 
       // Create event in Supabase
+      const organizerType = selectedActor.type === 'community' ? 'community' : 'fan';
+      const organizerId = selectedActor.id;
+
       const { data, error } = await supabase
         .from('events')
         .insert({
@@ -97,6 +123,10 @@ export default function CreateEventScreen({ navigation }: Props) {
           place_name: geoResult.place_name,
           geocoded_at: new Date().toISOString(),
           created_by: user?.id ?? null,
+          creator_user_id: user?.id ?? null,
+          organizer_type: organizerType,
+          organizer_id: organizerId,
+          organizer_group_id: organizerType === 'community' ? organizerId : null,
         })
         .select('id')
         .single();
@@ -120,6 +150,10 @@ export default function CreateEventScreen({ navigation }: Props) {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       <Text style={styles.sectionTitle}>Event Detaljer</Text>
+
+      {selectedActor ? (
+        <ActorSelector selectedActor={selectedActor} onSelectActor={setSelectedActor} />
+      ) : null}
 
       <Text style={styles.label}>Titel *</Text>
       <TextInput

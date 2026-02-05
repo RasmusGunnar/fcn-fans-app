@@ -70,7 +70,7 @@ export function EventCard({
         onPressShare,
       }}
     >
-      <CardHeader categoryKey={categoryKey} nameLine={organizerName} subtitle={null} />
+      <CardHeader nameLine={organizerName} subtitle={undefined} />
 
       <Text style={styles.title}>{title}</Text>
 

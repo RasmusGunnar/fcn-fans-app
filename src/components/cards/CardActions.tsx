@@ -82,8 +82,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: theme.spacing[2],
-    borderTopWidth: 1,
+    borderTopWidth: theme.layout.borderHairline,
     borderTopColor: theme.colors.border.light,
   },
   leftActions: {

@@ -5,8 +5,7 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, Text } from '../ui';
-import { Pill } from '../ui/Pill';
+import { Card, Text, CategoryBadge } from '../ui';
 import { PrimaryButton } from '../PrimaryButton';
 import { CardActions } from './CardActions';
 import { defaultTheme } from '../../theme';
@@ -42,11 +41,6 @@ export function CommunityCard({
 
   return (
     <Card style={styles.card}>
-      <Pill
-        label="Community"
-        variant="badge"
-        icon={<Ionicons name="people" size={14} color={theme.colors.bg.card} />}
-      />
       <View style={styles.header}>
         <View style={styles.avatar}>
           <Ionicons name="people-circle" size={40} color={theme.colors.primary} />

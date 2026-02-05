@@ -9,7 +9,13 @@ export type CategoryBadgeProps = {
   categoryKey: CategoryKey;
 };
 
-function resolveColorToken(theme: Theme, token: string): string {
+function resolveColorToken(theme: Theme, token?: string, componentName?: string): string {
+  if (typeof token !== 'string' || token.trim().length === 0) {
+    if (__DEV__) {
+      console.warn('[resolveColorToken] Missing token', { componentName, token });
+    }
+    return theme.colors.text.primary;
+  }
   const parts = token.split('.');
   let current: any = theme.colors;
   for (const part of parts) {
@@ -23,18 +29,23 @@ export function CategoryBadge({ categoryKey }: CategoryBadgeProps) {
   const styles = createStyles(theme);
   const definition = CATEGORIES[categoryKey] || {
     key: categoryKey,
-    label: String(categoryKey),
-    colorToken: 'brand.accent',
+    label: 'Ukendt',
+    solidBgToken: 'pill.neutral.bg',
+    solidTextToken: 'pill.neutral.text',
     iconName: 'pricetag',
   };
 
-  const bgColor = resolveColorToken(theme, definition.colorToken);
-  const textColor = theme.colors.text.inverse;
+  const bgColor = resolveColorToken(theme, definition.solidBgToken, 'CategoryBadge');
+  const textColor = resolveColorToken(
+    theme,
+    definition.solidTextToken ?? 'text.onSolid',
+    'CategoryBadge',
+  );
 
   return (
     <View style={[styles.badge, { backgroundColor: bgColor }]}>
       <Ionicons name={definition.iconName as any} size={14} color={textColor} />
-      <Text variant="small" color="inverse" style={styles.text}>
+      <Text variant="small" color="primary" style={[styles.text, { color: textColor }]}>
         {definition.label}
       </Text>
     </View>
@@ -47,13 +58,15 @@ function createStyles(theme: Theme) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: theme.spacing[1],
-      paddingHorizontal: theme.components.pill.px,
-      paddingVertical: theme.components.pill.py,
-      borderRadius: theme.components.pill.radius,
+      paddingHorizontal: theme.spacing[3],
+      paddingVertical: theme.spacing[3] / 2,
+      borderRadius: theme.radius.pill,
       alignSelf: 'flex-start',
+      marginTop: theme.layout.borderHairline,
     },
     text: {
-      fontWeight: '600',
+      fontWeight: '500',
+      fontSize: 12,
     },
   });
 }

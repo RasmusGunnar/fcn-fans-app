@@ -3,16 +3,22 @@
 // NO hardcoded numbers or color strings allowed.
 
 import React from 'react';
-import { View, StyleSheet, Image, Linking } from 'react-native';
+import { View, StyleSheet, Image, Linking, Pressable, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, Text } from '../ui';
-import { FeedCardHeader } from '../FeedCardHeader';
+import { Text } from '../ui';
+import { OptionsMenu, OptionsMenuOption } from '../OptionsMenu';
+import { CardHeader } from './CardHeader';
+import { CardMedia } from './CardMedia';
 import { CardRoot } from './CardRoot';
 import { defaultTheme } from '../../theme';
 import { NewsItem } from '../../types/news';
 import { useAuth } from '../../auth/AuthProvider';
+import { supabase } from '../../lib/supabase';
 import type { CommentPreview } from '../../services/likesApi';
+import type { CategoryKey } from '../../theme/categories';
 import { buildCardBehaviorModel } from './cardBehaviorModel';
+import { resolveActorLine, type ProfileMap } from '../../utils/actor';
+import { canDeleteFeedItem } from '../../utils/permissions';
 
 function getTimeAgo(isoDate: string): string {
   const now = new Date();
@@ -34,6 +40,8 @@ interface NewsCardProps {
   currentUserId?: string; // Current user ID to check if news is own
   userAvatarUrl?: string; // Current user's avatar URL
   communityMap?: Record<string, string>; // Map of community ID -> name
+  profileMap?: ProfileMap;
+  categoryKey?: CategoryKey;
   liked?: boolean;
   commentsCount?: number; // Comment count from commentCountMap
   onToggleLike?: () => void;
@@ -41,6 +49,7 @@ interface NewsCardProps {
   onPressShare?: () => void;
   commentPreviews?: CommentPreview[];
   onNewComment?: (comment: CommentPreview) => void;
+  onDeleted?: (newsId: string) => void;
 }
 
 export function NewsCard({
@@ -48,6 +57,8 @@ export function NewsCard({
   currentUserId,
   userAvatarUrl,
   communityMap = {},
+  profileMap,
+  categoryKey = 'news',
   liked = newsItem.likedByMe,
   commentsCount = newsItem.commentsCount,
   onToggleLike = () => {},
@@ -55,26 +66,22 @@ export function NewsCard({
   onPressShare = () => {},
   commentPreviews = [],
   onNewComment,
+  onDeleted = () => {},
 }: NewsCardProps) {
   const { user, isAppAdmin } = useAuth();
   const timeAgo = getTimeAgo(newsItem.createdAt);
 
-  // Determine author name based on actor type and available data
-  let authorName: string;
-
-  if (newsItem.actorType === 'community' && newsItem.actorId) {
-    // Try to get community name from communityMap
-    authorName = communityMap[newsItem.actorId] || `${newsItem.actorId.slice(0, 6)}…`;
-  } else if (currentUserId && newsItem.createdBy === currentUserId) {
-    // Own post
-    authorName = 'Dig';
-  } else if (newsItem.actorName && newsItem.actorName !== 'Ukendt') {
-    // Use actorName if available and not "Ukendt"
-    authorName = newsItem.actorName;
-  } else {
-    // Fallback to truncated UUID
-    authorName = `${newsItem.createdBy.slice(0, 6)}…`;
-  }
+  const resolvedActor = resolveActorLine({
+    actorType: newsItem.actorType,
+    authorId:
+      newsItem.actorType === 'user'
+        ? newsItem.actorId || newsItem.createdBy
+        : undefined,
+    authorEmail: newsItem.actorName || undefined,
+    profileMap,
+    communityName: newsItem.actorType === 'community' ? communityMap[newsItem.actorId] : undefined,
+  });
+  const authorName = resolvedActor.displayName;
 
   const isOwnPost = currentUserId && newsItem.createdBy === currentUserId;
   const avatarSource = isOwnPost && userAvatarUrl ? { uri: userAvatarUrl } : null;
@@ -84,6 +91,34 @@ export function NewsCard({
       console.warn('[NewsCard] Failed to open URL:', err);
     });
   };
+
+  const showDeleteOption = canDeleteFeedItem({
+    isAppAdmin,
+    viewerUserId: user?.id,
+    itemAuthorId: newsItem.createdBy,
+    itemActorType: newsItem.actorType,
+    itemCommunityRole: null,
+  });
+
+  const handleDeleteNews = async () => {
+    const { error } = await supabase.from('news_items').delete().eq('id', newsItem.id);
+    if (error) {
+      Alert.alert('Fejl', 'Kunne ikke slette nyheden');
+      console.warn('Delete news error', error);
+    } else {
+      onDeleted(newsItem.id);
+    }
+  };
+
+  const newsMenuOptions: OptionsMenuOption[] = [];
+  if (showDeleteOption) {
+    newsMenuOptions.push({
+      label: 'Slet',
+      onPress: handleDeleteNews,
+      destructive: true,
+      icon: 'trash-outline',
+    });
+  }
 
   const theme = defaultTheme;
 
@@ -101,6 +136,8 @@ export function NewsCard({
       targetId={newsItem.id || newsItem.url}
       currentUserId={user?.id}
       isAppAdmin={isAppAdmin}
+      profileMap={profileMap}
+      categoryKey={categoryKey}
       onOpenDetail={
         cardModel.pressBehavior === 'open_external'
           ? () => Linking.openURL(cardModel.externalUrl!)
@@ -116,8 +153,7 @@ export function NewsCard({
       commentPreviews={commentPreviews}
       onNewComment={onNewComment}
     >
-      <FeedCardHeader
-        categoryKey="news"
+      <CardHeader
         avatarSlot={
           <View style={styles.avatar}>
             {avatarSource ? (
@@ -131,38 +167,52 @@ export function NewsCard({
             )}
           </View>
         }
-        title={cardModel.nameLine || authorName}
+        nameLine={cardModel.nameLine}
+        fallbackTitle={authorName}
         subtitle={timeAgo}
       />
 
-      <Card style={styles.linkCard}>
-        {newsItem.imageUrl && (
-          <Image source={{ uri: newsItem.imageUrl }} style={styles.image} resizeMode="cover" />
+      {showDeleteOption && newsMenuOptions.length > 0 ? (
+        <OptionsMenu options={newsMenuOptions} />
+      ) : null}
+
+      {newsItem.imageUrl ? (
+        <CardMedia aspectRatio={16 / 9}>
+          <Image source={{ uri: newsItem.imageUrl }} style={styles.mediaImage} resizeMode="cover" />
+        </CardMedia>
+      ) : null}
+
+      <View style={styles.linkContent}>
+        {newsItem.siteName && (
+          <Text variant="small" color="secondary" style={styles.siteName}>
+            {newsItem.siteName}
+          </Text>
         )}
-        <View style={styles.linkContent}>
-          {newsItem.siteName && (
-            <Text variant="small" color="secondary" style={styles.siteName}>
-              {newsItem.siteName}
-            </Text>
-          )}
-          {newsItem.title && (
-            <Text variant="bodyBold" color="primary" style={styles.title} numberOfLines={2}>
-              {newsItem.title}
-            </Text>
-          )}
-          {newsItem.description && (
-            <Text variant="body" color="secondary" style={styles.description} numberOfLines={3}>
-              {newsItem.description}
-            </Text>
-          )}
-          <View style={styles.linkIndicator}>
-            <Ionicons name="open-outline" size={14} color={theme.colors.primary} />
-            <Text variant="caption" color="primary" style={styles.linkText}>
-              Åbn link
-            </Text>
-          </View>
+        {newsItem.title && (
+          <Text variant="bodyBold" color="primary" style={styles.title} numberOfLines={2}>
+            {newsItem.title}
+          </Text>
+        )}
+        {newsItem.description && (
+          <Text variant="body" color="secondary" style={styles.description} numberOfLines={3}>
+            {newsItem.description}
+          </Text>
+        )}
+        <View style={styles.linkIndicator}>
+          <Ionicons name="open-outline" size={14} color={theme.colors.primary} />
+          <Text variant="caption" color="primary" style={styles.linkText}>
+            Åbn link
+          </Text>
         </View>
-      </Card>
+
+        {newsItem.url ? (
+          <Pressable style={styles.ctaButton} onPress={handleOpenLink}>
+            <Text variant="body" color="primary" style={styles.ctaText}>
+              Læs artikel
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
     </CardRoot>
   );
 }
@@ -183,17 +233,12 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
   },
-  linkCard: {
-    overflow: 'hidden',
-    marginBottom: theme.spacing[2],
-  },
-  image: {
+  mediaImage: {
     width: '100%',
-    height: 180,
+    height: '100%',
     backgroundColor: theme.colors.border.default,
   },
   linkContent: {
-    padding: theme.spacing[4],
     gap: theme.spacing[1],
   },
   siteName: {
@@ -210,5 +255,20 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing[1],
   },
   linkText: {
+  },
+  ctaButton: {
+    marginTop: theme.spacing[2],
+    borderWidth: theme.layout.borderWidth,
+    borderColor: theme.colors.state.success,
+    backgroundColor: 'transparent',
+    paddingVertical: theme.spacing[2] + theme.spacing[1] / 2,
+    paddingHorizontal: theme.spacing[4],
+    borderRadius: theme.radius.pill,
+    alignItems: 'center',
+  },
+  ctaText: {
+    color: theme.colors.state.success,
+    textAlign: 'center',
+    fontWeight: '600',
   },
 });

@@ -1,9 +1,18 @@
-export type CategoryKey = 'post' | 'news' | 'event' | 'bus_trip' | 'match' | 'community' | string;
+export type CategoryKey =
+  | 'post'
+  | 'fan'
+  | 'news'
+  | 'event'
+  | 'bus_trip'
+  | 'match'
+  | 'community'
+  | string;
 
 export type CategoryDefinition = {
   key: CategoryKey;
   label: string;
-  colorToken: string;
+  solidBgToken: string;
+  solidTextToken?: string;
   iconName: string;
 };
 
@@ -11,37 +20,50 @@ export const CATEGORIES: Record<string, CategoryDefinition> = {
   post: {
     key: 'post',
     label: 'Fra Fans',
-    colorToken: 'brand.accent',
+    solidBgToken: 'primary',
+    solidTextToken: 'text.onSolid',
+    iconName: 'chatbubble-ellipses',
+  },
+  fan: {
+    key: 'fan',
+    label: 'Fra Fans',
+    solidBgToken: 'primary',
+    solidTextToken: 'text.onSolid',
     iconName: 'chatbubble-ellipses',
   },
   news: {
     key: 'news',
     label: 'Nyhed',
-    colorToken: 'brand.accent',
+    solidBgToken: 'state.success',
+    solidTextToken: 'text.onSolid',
     iconName: 'newspaper',
   },
   event: {
     key: 'event',
     label: 'Event',
-    colorToken: 'state.success',
+    solidBgToken: 'state.warning',
+    solidTextToken: 'text.onSolid',
     iconName: 'calendar',
   },
   bus_trip: {
     key: 'bus_trip',
     label: 'Bustur',
-    colorToken: 'state.warning',
+    solidBgToken: 'state.warning',
+    solidTextToken: 'text.onSolid',
     iconName: 'bus',
   },
   match: {
     key: 'match',
     label: 'Kamp',
-    colorToken: 'state.success',
+    solidBgToken: 'brand.gold',
+    solidTextToken: 'text.onSolid',
     iconName: 'football',
   },
   community: {
     key: 'community',
     label: 'Fællesskab',
-    colorToken: 'brand.accent',
+    solidBgToken: 'primary',
+    solidTextToken: 'text.onSolid',
     iconName: 'people',
   },
 };

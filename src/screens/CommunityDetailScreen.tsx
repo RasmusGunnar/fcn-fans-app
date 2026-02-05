@@ -65,6 +65,7 @@ export default function CommunityDetailScreen() {
     commentPreviewMap,
     toggleLike,
     removePost,
+    removeNews,
     incrementCommentCount,
     addCommentPreview,
   } = useFeed();
@@ -595,6 +596,7 @@ export default function CommunityDetailScreen() {
                 communityMap={safeCommunityMap}
                 toggleLike={toggleLike}
                 removePost={removePost}
+                removeNews={removeNews}
                 incrementCommentCount={incrementCommentCount}
                 addCommentPreview={addCommentPreview}
               />

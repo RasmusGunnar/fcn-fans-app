@@ -14,6 +14,10 @@ export type FeedEventData = {
   description?: string | null;
   organizerName?: string | null;
   organizerGroupId?: string | null;
+  organizerType?: 'fan' | 'community' | string | null;
+  organizerId?: string | null;
+  creatorUserId?: string | null;
+  createdBy?: string | null;
   createdAt?: string | null;
   eventType?: 'event' | 'bus_trip' | string | null;
 };
@@ -26,8 +30,23 @@ export type FeedBusTripData = {
   description?: string | null;
   organizerName?: string | null;
   organizerGroupId?: string | null;
+  organizerType?: 'fan' | 'community' | string | null;
+  organizerId?: string | null;
   createdAt?: string | null;
   eventType?: 'bus_trip' | string | null;
+};
+
+export type FeedMatchData = {
+  id: string;
+  kickoffAt?: string | null;
+  home?: string | null;
+  away?: string | null;
+  homeLogo?: string | null;
+  awayLogo?: string | null;
+  venue?: string | null;
+  venueCity?: string | null;
+  competition?: string | null;
+  round?: string | null;
 };
 
 /**
@@ -38,7 +57,8 @@ export type FeedItem =
   | { kind: 'post'; id: string; data: Post }
   | { kind: 'news'; id: string; data: NewsItem }
   | { kind: 'event'; id: string; data: FeedEventData }
-  | { kind: 'bus_trip'; id: string; data: FeedBusTripData };
+  | { kind: 'bus_trip'; id: string; data: FeedBusTripData }
+  | { kind: 'match'; id: string; data: FeedMatchData };
 
 /**
  * Type guard functions

@@ -4,10 +4,11 @@
 
 import React, { useState, useMemo } from 'react';
 import { View, StyleSheet, Image, TextInput, Pressable, Share, Alert } from 'react-native';
-import { Card, Text } from '../ui';
+import { Text } from '../ui';
 import { OptionsMenu, OptionsMenuOption } from '../OptionsMenu';
+import { CardMedia } from './CardMedia';
 import { CardRoot } from './CardRoot';
-import { FeedCardHeader } from '../FeedCardHeader';
+import { CardHeader } from './CardHeader';
 import { Avatar } from '../Avatar';
 import { defaultTheme } from '../../theme';
 import { Post } from '../../types/post';
@@ -15,9 +16,11 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../auth/AuthProvider';
 import * as Linking from 'expo-linking';
 import { normalizeMedia, resolveMediaUrl, isVideoMedia } from '../../utils/media';
-import { canEditPost, canDeletePost } from '../../utils/permissions';
+import { canEditPost, canDeleteFeedItem } from '../../utils/permissions';
 import type { CommentPreview } from '../../services/likesApi';
+import type { CategoryKey } from '../../theme/categories';
 import { buildCardBehaviorModel } from './cardBehaviorModel';
+import { resolveActorLine, type ProfileMap } from '../../utils/actor';
 
 function getTimeAgo(isoDate: string): string {
   const now = new Date();
@@ -38,6 +41,8 @@ interface FanPostCardProps {
   post: Post;
   authorProfile?: { display_name: string | null; avatar_url: string | null };
   communityMap?: Record<string, string>;
+  profileMap?: ProfileMap;
+  categoryKey?: CategoryKey;
   liked?: boolean;
   likes?: number;
   commentsCount?: number;
@@ -53,6 +58,8 @@ export function FanPostCard({
   post,
   authorProfile,
   communityMap,
+  profileMap,
+  categoryKey,
   liked = post.likedByMe,
   likes = post.likesCount,
   commentsCount = 0,
@@ -91,7 +98,6 @@ export function FanPostCard({
   // Permission checks - use isAppAdmin from context
   // TODO: Add community role when posts have community_id
   const showEditOption = canEditPost(user?.id, isAppAdmin, { author_id: post.authorId });
-  const showDeleteOption = canDeletePost(user?.id, isAppAdmin, { author_id: post.authorId });
 
   const handleEditPost = () => {
     setIsEditing(true);
@@ -127,6 +133,16 @@ export function FanPostCard({
     }
   };
 
+  // Build card behavior model to determine category, name line, and press behavior
+  const communityId = (post as any).communityId ?? (post as any).community_id ?? null;
+  const isCommunityPost = !!communityId;
+  const showDeleteOption = canDeleteFeedItem({
+    isAppAdmin,
+    viewerUserId: user?.id,
+    itemAuthorId: post.authorId,
+    itemActorType: isCommunityPost ? 'community' : 'user',
+    itemCommunityRole: null,
+  });
   const postMenuOptions: OptionsMenuOption[] = [];
   if (showEditOption) {
     postMenuOptions.push({ label: 'Redigér', onPress: handleEditPost, icon: 'create-outline' });
@@ -139,30 +155,6 @@ export function FanPostCard({
       icon: 'trash-outline',
     });
   }
-
-  // Debug logging for menu visibility and author
-  if (__DEV__) {
-    console.log('[PostAuthor]', {
-      postId: post.id.substring(0, 8),
-      authorId: post.authorId?.substring(0, 8) || 'none',
-      display_name: authorProfile?.display_name,
-      avatar_url: authorProfile?.avatar_url,
-    });
-    console.log('[FanPostCard] Render post:', post.id.substring(0, 8), {
-      isAppAdmin,
-      showEdit: showEditOption,
-      showDelete: showDeleteOption,
-      menuCount: postMenuOptions.length,
-      authorId: post.authorId?.substring(0, 8) || 'none',
-      userId: user?.id?.substring(0, 8) || 'none',
-      likes,
-      liked,
-    });
-  }
-
-  // Build card behavior model to determine category, name line, and press behavior
-  const communityId = (post as any).communityId ?? (post as any).community_id ?? null;
-  const isCommunityPost = !!communityId;
   const communityName =
     communityId && communityMap?.[communityId] ? communityMap[communityId] : null;
 
@@ -183,12 +175,15 @@ export function FanPostCard({
         ? undefined
         : onOpenDetail;
 
-  const categoryKey = isCommunityPost ? 'community' : 'post';
-  const headerTitle =
-    cardModel.nameLine ??
-    (isCommunityPost
-      ? communityName ?? 'Fællesskab'
-      : authorProfile?.display_name || (post as any).authorName || 'Ukendt');
+  const resolvedCategoryKey = categoryKey ?? 'fan';
+  const resolvedAuthor = resolveActorLine({
+    actorType: isCommunityPost ? 'community' : 'user',
+    authorId: post.authorId,
+    authorEmail: authorProfile?.display_name || (post as any).authorName || undefined,
+    profileMap,
+    communityName: isCommunityPost ? communityName ?? undefined : undefined,
+  });
+  const headerTitle = cardModel.nameLine ?? resolvedAuthor.displayName;
   const headerSubtitle = isCommunityPost
     ? timeAgo
     : groupDisplay
@@ -201,6 +196,8 @@ export function FanPostCard({
       targetId={post.id}
       currentUserId={user?.id}
       isAppAdmin={isAppAdmin}
+      profileMap={profileMap}
+      categoryKey={resolvedCategoryKey}
       onOpenDetail={computedOnOpenDetail}
       commentPreviews={commentPreviews}
       onNewComment={onNewComment}
@@ -212,8 +209,7 @@ export function FanPostCard({
         onPressShare: handleShare,
       }}
     >
-      <FeedCardHeader
-        categoryKey={categoryKey}
+      <CardHeader
         avatarSlot={
           <Avatar
             userId={post.authorId}
@@ -222,7 +218,8 @@ export function FanPostCard({
             label={authorProfile?.display_name || post.authorName || 'Fan'}
           />
         }
-        title={headerTitle}
+        nameLine={cardModel.nameLine}
+        fallbackTitle={headerTitle}
         subtitle={headerSubtitle}
       />
       {(showEditOption || showDeleteOption) && postMenuOptions.length > 0 ? (
@@ -262,21 +259,23 @@ export function FanPostCard({
           </Text>
         </View>
       ) : imageUrl && !imageLoadError ? (
-        <Image
-          source={{ uri: imageUrl }}
-          style={styles.image}
-          resizeMode="cover"
-          onError={(e) => {
-            if (__DEV__) {
-              console.log('[PostImageError]', {
-                postId: post.id,
-                uri: imageUrl,
-                native: e?.nativeEvent,
-              });
-            }
-            setImageLoadError(true);
-          }}
-        />
+        <CardMedia aspectRatio={4 / 3}>
+          <Image
+            source={{ uri: imageUrl }}
+            style={styles.mediaImage}
+            resizeMode="cover"
+            onError={(e) => {
+              if (__DEV__) {
+                console.log('[PostImageError]', {
+                  postId: post.id,
+                  uri: imageUrl,
+                  native: e?.nativeEvent,
+                });
+              }
+              setImageLoadError(true);
+            }}
+          />
+        </CardMedia>
       ) : imageLoadError && __DEV__ ? (
         <View style={styles.imageErrorContainer}>
           <Text variant="caption" color="secondary" style={styles.imageErrorText}>
@@ -302,11 +301,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: theme.spacing[2],
   },
-  image: {
+  mediaImage: {
     width: '100%',
-    height: 220,
-    borderRadius: theme.radius.md,
-    marginBottom: theme.spacing[2],
+    height: '100%',
     backgroundColor: theme.colors.border.default,
   },
   imageErrorContainer: {
@@ -329,8 +326,6 @@ const styles = StyleSheet.create({
   placeholderText: {
   },
   commentsContainer: {
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border.light,
     paddingTop: theme.spacing[2],
     gap: theme.spacing[2],
   },

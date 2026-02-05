@@ -7,6 +7,7 @@ import { Text } from './Text';
 
 export type ListRowProps = {
   accent: CategoryKey;
+  accentColorToken?: string;
   icon: string;
   title: string;
   subtitle?: string;
@@ -14,7 +15,13 @@ export type ListRowProps = {
   onPress?: () => void;
 };
 
-function resolveColorToken(theme: Theme, token: string): string {
+function resolveColorToken(theme: Theme, token?: string, componentName?: string): string {
+  if (typeof token !== 'string' || token.trim().length === 0) {
+    if (__DEV__) {
+      console.warn('[resolveColorToken] Missing token', { componentName, token });
+    }
+    return theme.colors.text.primary;
+  }
   const parts = token.split('.');
   let current: any = theme.colors;
   for (const part of parts) {
@@ -23,17 +30,21 @@ function resolveColorToken(theme: Theme, token: string): string {
   return typeof current === 'string' ? current : theme.colors.brand.accent;
 }
 
-export function ListRow({ accent, icon, title, subtitle, meta, onPress }: ListRowProps) {
+export function ListRow({
+  accent,
+  accentColorToken,
+  icon,
+  title,
+  subtitle,
+  meta,
+  onPress,
+}: ListRowProps) {
   const theme = useTheme();
   const styles = createStyles(theme);
-  const definition = CATEGORIES[accent] || {
-    key: accent,
-    label: String(accent),
-    colorToken: 'brand.accent',
-    iconName: 'pricetag',
-  };
-
-  const accentColor = resolveColorToken(theme, definition.colorToken);
+  const definition = CATEGORIES[accent];
+  const resolvedAccentToken =
+    accentColorToken ?? definition?.solidBgToken ?? (definition as any)?.colorToken ?? 'text.muted';
+  const accentColor = resolveColorToken(theme, resolvedAccentToken, 'ListRow');
 
   const Container = onPress ? Pressable : View;
   const containerProps = onPress ? { onPress } : {};

@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AppHeader } from '../components/AppHeader';
 import { Card, Text, Screen } from '../components/ui';
 import { PrimaryButton } from '../components/PrimaryButton';
-import { ListRow } from '../ui/components/ListRow';
+import { ListRow } from '../components/ui';
 import { useTheme } from '../theme';
 import { getCommunities, Community as CommunityData } from '../services/communities';
 
@@ -43,6 +43,11 @@ export default function CommunitiesScreen() {
 
   const getButtonVariant = (type: string) => {
     return type === 'fan_faction' ? 'red' : 'blue';
+  };
+
+  const communityAccentTokenMap: Record<string, string> = {
+    community: 'brand.accent',
+    fan_faction: 'primary',
   };
 
   const factions = communities.filter((c) => c.type === 'fan_faction');
@@ -77,7 +82,7 @@ export default function CommunitiesScreen() {
         onPressProfile={() => (navigation as any).navigate('Profile')}
       />
 
-      <View style={{ padding: theme.spacing[4] }}>
+      <View style={{ paddingVertical: theme.spacing[4] }}>
         {/* Fan Fraktioner Section */}
         {factions.length > 0 && (
           <View style={{ marginBottom: theme.spacing[8] }}>
@@ -142,8 +147,18 @@ export default function CommunitiesScreen() {
             </Text>
             {localCommunities.map((community) => (
               <Card key={community.id} style={{ marginBottom: theme.spacing[3] }}>
+                {(() => {
+                  const accentToken = communityAccentTokenMap[community.type];
+                  if (!accentToken && __DEV__) {
+                    console.warn('[CommunitiesScreen] Unknown community type for accent', {
+                      id: community.id,
+                      type: community.type,
+                    });
+                  }
+                  return (
                 <ListRow
                   accent="community"
+                  accentColorToken={accentToken ?? 'text.muted'}
                   icon="people-circle"
                   title={community.name}
                   subtitle={community.description || 'Ingen beskrivelse'}
@@ -153,6 +168,8 @@ export default function CommunitiesScreen() {
                       : undefined
                   }
                 />
+                  );
+                })()}
                 <PrimaryButton
                   title="Gå til fællesskab →"
                   onPress={() => navigateToDetail(community.id, community.name)}

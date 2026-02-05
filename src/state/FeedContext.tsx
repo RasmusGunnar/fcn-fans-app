@@ -48,6 +48,7 @@ interface FeedContextType {
   commentPreviewMap: Record<string, CommentPreview[]>; // Comment previews by "${kind}:${id}"
   addPost: (post: Post) => void;
   removePost: (postId: string) => void;
+  removeNews: (newsId: string) => void;
   fetchPosts: () => Promise<void>;
   toggleLike: (kind: LikeTargetType, id: string, userId: string) => Promise<void>;
   incrementCommentCount: (kind: LikeTargetType, id: string) => void;
@@ -241,6 +242,10 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
               description: event.description ?? null,
               organizerName: event.organizer?.name ?? null,
               organizerGroupId: event.organizer_group_id ?? null,
+              organizerType: event.organizer_type ?? null,
+              organizerId: event.organizer_id ?? null,
+              creatorUserId: event.creator_user_id ?? null,
+              createdBy: event.created_by ?? null,
               createdAt: event.created_at ?? null,
               eventType: 'event',
             },
@@ -258,6 +263,8 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
               description: busTrip.description ?? null,
               organizerName: busTrip.organizer?.name ?? null,
               organizerGroupId: busTrip.organizer_group_id ?? null,
+              organizerType: busTrip.organizer_group_id ? 'community' : null,
+              organizerId: busTrip.organizer_group_id ?? null,
               createdAt: busTrip.created_at ?? null,
               eventType: 'bus_trip',
             },
@@ -488,6 +495,10 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
     setFeedItems((prev) => prev.filter((item) => item.id !== postId));
   }, []);
 
+  const removeNews = useCallback((newsId: string) => {
+    setFeedItems((prev) => prev.filter((item) => !(item.kind === 'news' && item.id === newsId)));
+  }, []);
+
   const toggleLike = useCallback(
     async (kind: LikeTargetType, id: string, userId: string) => {
       const key = targetKey(kind, id);
@@ -563,6 +574,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         commentPreviewMap,
         addPost,
         removePost,
+        removeNews,
         fetchPosts,
         toggleLike,
         incrementCommentCount,

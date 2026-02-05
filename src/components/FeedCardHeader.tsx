@@ -2,11 +2,8 @@ import React, { ReactNode } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useTheme, Theme } from '../theme';
 import { Text } from './ui';
-import { CategoryBadge } from '../ui/components/CategoryBadge';
-import type { CategoryKey } from '../theme/categories';
 
 interface FeedCardHeaderProps {
-  categoryKey: CategoryKey;
   avatarSlot?: ReactNode; // Render prop for avatar (Avatar component or fallback)
   title?: string;
   subtitle?: string;
@@ -18,7 +15,6 @@ interface FeedCardHeaderProps {
  * Ensures consistent layout: badge → avatar → title/subtitle → menu
  */
 export function FeedCardHeader({
-  categoryKey,
   avatarSlot,
   title,
   subtitle,
@@ -30,23 +26,22 @@ export function FeedCardHeader({
 
   return (
     <View style={styles.container}>
-      <CategoryBadge categoryKey={categoryKey} />
       {showHeaderRow && (
         <View style={styles.header}>
           {avatarSlot ? avatarSlot : null}
           <View style={[styles.headerInfo, !avatarSlot && styles.headerInfoNoAvatar]}>
             {!!title && (
-              <Text variant="body" style={{ fontWeight: '600' }}>
+              <Text variant="bodyBold" style={styles.title}>
                 {title}
               </Text>
             )}
             {subtitle && (
-              <Text variant="small" color="secondary">
+              <Text variant="small" color="muted" style={styles.subtitle}>
                 {subtitle}
               </Text>
             )}
           </View>
-          {rightSlot && <View style={styles.rightSlot}>{rightSlot}</View>}
+          {rightSlot ? <View style={styles.rightSlot}>{rightSlot}</View> : null}
         </View>
       )}
     </View>
@@ -56,9 +51,9 @@ export function FeedCardHeader({
 function createStyles(theme: Theme) {
   return StyleSheet.create({
     container: {
-      marginTop: theme.spacing[2],
-      marginBottom: theme.spacing[4],
-      gap: theme.spacing[2],
+      marginTop: theme.spacing[0],
+      marginBottom: theme.spacing[1],
+      gap: theme.spacing[1],
     },
     header: {
       flexDirection: 'row',
@@ -66,13 +61,23 @@ function createStyles(theme: Theme) {
     },
     headerInfo: {
       flex: 1,
-      marginLeft: theme.spacing[2],
+      marginLeft: theme.spacing[3],
     },
     headerInfoNoAvatar: {
       marginLeft: theme.spacing[0],
     },
     rightSlot: {
       marginLeft: theme.spacing[1],
+    },
+    title: {
+      fontSize: 14,
+      fontWeight: '600',
+    },
+    subtitle: {
+      marginTop: theme.spacing[0],
+      marginBottom: theme.spacing[0],
+      fontSize: 12,
+      lineHeight: 16,
     },
   });
 }

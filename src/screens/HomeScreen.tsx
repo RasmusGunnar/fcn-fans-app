@@ -33,6 +33,7 @@ export default function HomeScreen() {
     commentPreviewMap,
     fetchPosts,
     removePost,
+    removeNews,
     toggleLike,
     incrementCommentCount,
     addCommentPreview,
@@ -225,6 +226,7 @@ export default function HomeScreen() {
               communityMap={communityMap || {}}
               toggleLike={toggleLike}
               removePost={removePost}
+              removeNews={removeNews}
               incrementCommentCount={incrementCommentCount}
               addCommentPreview={addCommentPreview}
             />
@@ -252,7 +254,7 @@ export default function HomeScreen() {
 const createStyles = () =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.bg },
-    content: { padding: spacing.md },
+    content: { paddingHorizontal: spacing[0], paddingVertical: spacing.md },
     card: { marginBottom: spacing.md },
     matchRow: {
       flexDirection: 'row',

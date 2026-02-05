@@ -9,6 +9,9 @@ build/
 .env
 .env.*
 
+# Local temp files
+rc
+
 ios/
 android/
 

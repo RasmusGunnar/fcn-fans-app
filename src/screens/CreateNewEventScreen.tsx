@@ -22,6 +22,10 @@ import { colors, spacing } from '../theme';
 import { useAuth } from '../auth/AuthProvider';
 import { supabase } from '../lib/supabase';
 import { countOwnedCommunities } from '../services/profileApi';
+import { ActorSelector } from '../components/ActorSelector';
+import { useFeed } from '../state/FeedContext';
+import type { Actor } from '../types/news';
+import { resolveProfileDisplayName } from '../utils/actor';
 
 type EventType = 'event' | 'bus_trip';
 
@@ -29,6 +33,7 @@ export default function CreateNewEventScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { profileMap } = useFeed();
   const styles = createStyles();
 
   // Check if user can create bus trips
@@ -53,6 +58,7 @@ export default function CreateNewEventScreen() {
   const [contactInfo, setContactInfo] = useState('');
 
   const [submitting, setSubmitting] = useState(false);
+  const [selectedActor, setSelectedActor] = useState<Actor | null>(null);
 
   const checkUserPermissions = async () => {
     if (!user?.id) {
@@ -74,6 +80,18 @@ export default function CreateNewEventScreen() {
     checkUserPermissions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const displayName = resolveProfileDisplayName(profileMap, user.id, user.email || undefined);
+    setSelectedActor((prev) =>
+      prev ?? {
+        type: 'user',
+        id: user.id,
+        name: displayName,
+      },
+    );
+  }, [user?.id, user?.email, profileMap]);
 
   const handleDateChange = (event: any, selectedDate?: Date) => {
     setShowDatePicker(false);
@@ -133,10 +151,17 @@ export default function CreateNewEventScreen() {
       return;
     }
 
+    if (!selectedActor) {
+      Alert.alert('Fejl', 'Vælg hvem du opretter som');
+      return;
+    }
+
     setSubmitting(true);
 
     try {
       if (eventType === 'event') {
+        const organizerType = selectedActor.type === 'community' ? 'community' : 'fan';
+        const organizerId = selectedActor.id;
         // Create event
         const { data, error } = await supabase
           .from('events')
@@ -147,6 +172,10 @@ export default function CreateNewEventScreen() {
             location_address: locationAddress.trim() || null,
             start_at: startDate.toISOString(),
             created_by: user.id,
+            creator_user_id: user.id,
+            organizer_type: organizerType,
+            organizer_id: organizerId,
+            organizer_group_id: organizerType === 'community' ? organizerId : null,
           })
           .select()
           .single();
@@ -336,6 +365,10 @@ export default function CreateNewEventScreen() {
         {/* Basic Info */}
         <Card style={styles.card}>
           <Text style={styles.sectionTitle}>Grundlæggende information</Text>
+
+          {selectedActor ? (
+            <ActorSelector selectedActor={selectedActor} onSelectActor={setSelectedActor} />
+          ) : null}
 
           <Text style={styles.label}>Titel *</Text>
           <TextInput

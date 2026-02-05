@@ -109,7 +109,7 @@ function createStyles(theme: Theme) {
     header: {
       flexDirection: 'row',
       alignItems: 'center',
-      padding: theme.spacing[4],
+      paddingVertical: theme.spacing[3],
       gap: theme.spacing[3],
     },
     headerText: {
@@ -117,16 +117,12 @@ function createStyles(theme: Theme) {
       gap: theme.spacing[0],
     },
     content: {
-      paddingHorizontal: theme.spacing[4],
       paddingBottom: theme.spacing[3],
     },
     actionBar: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingHorizontal: theme.spacing[4],
       paddingVertical: theme.spacing[2],
-      borderTopWidth: theme.layout.borderWidth,
-      borderTopColor: theme.colors.border.light,
       gap: theme.spacing[6],
     },
     actionButton: {
