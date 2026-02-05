@@ -232,201 +232,257 @@ async function geocodeFixtures(supabase: any): Promise<GeocodingSummary> {
     .from('fixtures')
     .select('id, venue, venue_city, lat, lng')
     .or('lat.is.null,lng.is.null')
-    .limit(10); // Geocode max 10 per sync to respect rate limits
+    // deno-lint-ignore-file no-explicit-any
+    import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 
-  if (geocodeQueryError) {
-    console.warn('[geocoding] Failed to query fixtures:', geocodeQueryError);
-    return { scanned: 0, geocoded: 0, skipped: 0, failed: 0 };
-  }
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const CRON_SECRET = Deno.env.get('CRON_SECRET');
+    const SPORTSDB_API_KEY = Deno.env.get('SPORTSDB_API_KEY');
+    const SPORTSDB_BASE_URL = Deno.env.get('SPORTSDB_BASE_URL') || 'https://www.thesportsdb.com/api/v1/json';
+    const SPORTSDB_LEAGUE_ID = Deno.env.get('SPORTSDB_LEAGUE_ID') || '4340';
 
-  if (!fixturesNeedingGeocode || fixturesNeedingGeocode.length === 0) {
-    console.log('[geocoding] No fixtures need geocoding');
-    return { scanned: 0, geocoded: 0, skipped: 0, failed: 0 };
-  }
-
-  console.log(`[geocoding] Found ${fixturesNeedingGeocode.length} fixtures to process`);
-
-  let geocoded = 0;
-  let skipped = 0;
-  let failed = 0;
-
-  for (const fixture of fixturesNeedingGeocode) {
-    // Skip if venue is missing
-    if (!fixture.venue) {
-      console.log(`[geocoding] Skipping fixture ${fixture.id}: no venue`);
-      skipped++;
-      continue;
-    }
-
-    // Build address text from venue and venue_city
-    const addressParts: string[] = [];
-    if (fixture.venue) addressParts.push(fixture.venue);
-    if (fixture.venue_city) addressParts.push(fixture.venue_city);
-    addressParts.push('Danmark'); // Assume Denmark
-
-    const addressText = addressParts.join(', ');
-    console.log(`[geocoding] Geocoding fixture ${fixture.id}: ${addressText}`);
-
-    const geoResult = await geocodeAddress(addressText);
-    if (geoResult) {
-      // Update fixture with geocoding result
-      const { error: updateError } = await supabase
-        .from('fixtures')
-        .update({
-          lat: geoResult.lat,
-          lng: geoResult.lng,
-          place_name: geoResult.place_name,
-          geocoded_at: new Date().toISOString(),
-        })
-        .eq('id', fixture.id);
-
-      if (updateError) {
-        console.warn(`[geocoding] Failed to update fixture ${fixture.id}:`, updateError);
-        failed++;
-      } else {
-        console.log(`[geocoding] ✓ Geocoded fixture ${fixture.id}`);
-        geocoded++;
-      }
-    } else {
-      console.warn(`[geocoding] Failed to geocode fixture ${fixture.id}`);
-      failed++;
-    }
-  }
-
-  const summary: GeocodingSummary = {
-    scanned: fixturesNeedingGeocode.length,
-    geocoded,
-    skipped,
-    failed,
-  };
-
-  console.log(
-    `[geocoding] Summary: scanned=${summary.scanned}, geocoded=${summary.geocoded}, skipped=${summary.skipped}, failed=${summary.failed}`,
-  );
-
-  return summary;
-}
-
-// ===== MAIN HANDLER =====
-
-serve(async (req) => {
-  try {
-    // Authenticate request with secret header
-    const syncSecret = Deno.env.get('SYNC_SECRET');
-    const providedSecret = req.headers.get('x-sync-secret');
-    if (!syncSecret || providedSecret !== syncSecret) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
-    }
-
-    // Get required environment variables
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    const fcnTeamSearch = Deno.env.get('FCN_TEAM_SEARCH') || 'FC Nordsjaelland';
-    const fixtureProvider = (Deno.env.get('FIXTURE_PROVIDER') || 'api-football') as
-      | 'api-football'
-      | 'rapidapi';
-
-    if (!supabaseUrl || !supabaseServiceKey) {
-      return new Response(JSON.stringify({ error: 'Missing required environment variables' }), {
-        status: 500,
-      });
-    }
-
-    // Initialize Supabase client with service role
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Try to fetch fixtures from selected provider
-    let providerResult:
-      | { fixtures: NormalizedFixture[]; teamName?: string; teamId?: string }
-      | { error: string; details?: any }
-      | null = null;
-
-    if (fixtureProvider === 'api-football') {
-      const apiFootballKey = Deno.env.get('API_FOOTBALL_KEY');
-      if (!apiFootballKey) {
-        console.error('[provider] API_FOOTBALL_KEY not configured');
-      } else {
-        providerResult = await fetchFixturesFromApiFootball(apiFootballKey, fcnTeamSearch);
-      }
-    } else if (fixtureProvider === 'rapidapi') {
-      const rapidApiKey = Deno.env.get('RAPIDAPI_KEY');
-      if (!rapidApiKey) {
-        console.error('[provider] RAPIDAPI_KEY not configured');
-      } else {
-        providerResult = await fetchFixturesFromRapidApi(rapidApiKey, fcnTeamSearch);
-      }
-    }
-
-    // Check if provider fetch succeeded
-    if (providerResult && 'fixtures' in providerResult) {
-      // Provider success - upsert fixtures
-      console.log(`[provider] Successfully fetched ${providerResult.fixtures.length} fixtures`);
-
-      const { data, error } = await supabase
-        .from('fixtures')
-        .upsert(providerResult.fixtures, {
-          onConflict: 'provider_fixture_id',
-        })
-        .select();
-
-      if (error) {
-        console.error('[db] Database error:', error);
-        return new Response(JSON.stringify({ error: 'Database upsert failed', details: error }), {
-          status: 500,
-        });
-      }
-
-      console.log(`[db] Successfully synced ${data?.length || 0} fixtures`);
-
-      // Geocode existing fixtures
-      const geocodingSummary = await geocodeFixtures(supabase);
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          mode: 'full-sync',
-          provider: fixtureProvider,
-          team: providerResult.teamName,
-          teamId: providerResult.teamId,
-          synced: data?.length || 0,
-          geocoding: geocodingSummary,
-        }),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        },
-      );
-    } else {
-      // Provider failed - fallback to geocode-only mode
-      const providerError = providerResult?.error || 'Provider not configured';
-      const providerDetails = providerResult?.details;
-
-      console.warn(
-        `[provider] Failed to fetch fixtures: ${providerError}. Falling back to geocode-only mode.`,
-      );
-      console.warn('[provider] Error details:', providerDetails);
-
-      // Continue with geocoding existing fixtures
-      const geocodingSummary = await geocodeFixtures(supabase);
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          mode: 'geocode-only',
-          reason: providerError,
-          providerDetails,
-          geocoding: geocodingSummary,
-        }),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        },
-      );
-    }
-  } catch (e) {
-    console.error('[main] Unexpected error:', e);
-    return new Response(JSON.stringify({ error: 'Internal server error', details: String(e) }), {
-      status: 500,
+    const supabase = createClient(SUPABASE_URL ?? '', SUPABASE_SERVICE_ROLE_KEY ?? '', {
+      auth: { persistSession: false, autoRefreshToken: false },
     });
-  }
-});
+
+    function stableStringify(value: any): string {
+      if (value === null || typeof value !== 'object') return JSON.stringify(value);
+      if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+      const keys = Object.keys(value).sort();
+      return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(value[k])}`).join(',')}}`;
+    }
+
+    async function sha256(input: string): Promise<string> {
+      const data = new TextEncoder().encode(input);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    function addSeconds(date: Date, seconds: number): Date {
+      return new Date(date.getTime() + seconds * 1000);
+    }
+
+    function toInt(value: any): number | null {
+      const n = Number(value);
+      return Number.isFinite(n) ? n : null;
+    }
+
+    function toKickoff(dateEvent: any, timeEvent: any): string | null {
+      const date = String(dateEvent ?? '').trim();
+      if (!date) return null;
+      const time = String(timeEvent ?? '').trim();
+      if (!time) return new Date(`${date}T00:00:00Z`).toISOString();
+
+      const safeTime = time.includes(':') ? time : `${time}:00`;
+      const iso = `${date}T${safeTime.endsWith('Z') ? safeTime : `${safeTime}Z`}`;
+      const parsed = new Date(iso);
+      return Number.isNaN(parsed.getTime()) ? new Date(`${date}T00:00:00Z`).toISOString() : parsed.toISOString();
+    }
+
+    async function getCache(cacheKey: string) {
+      try {
+        const { data, error } = await supabase
+          .from('api_cache')
+          .select('cache_key, response_json, expires_at, status_code')
+          .eq('cache_key', cacheKey)
+          .maybeSingle();
+
+        if (error || !data) return null;
+        return data;
+      } catch {
+        return null;
+      }
+    }
+
+    async function setCache(params: {
+      cache_key: string;
+      endpoint: string;
+      params_json: any;
+      response_json: any;
+      status_code: number;
+      expires_at: string;
+      fetched_at: string;
+    }) {
+      try {
+        await supabase.from('api_cache').upsert(params, { onConflict: 'cache_key' });
+      } catch {
+        // ignore cache failures
+      }
+    }
+
+    async function tryInsertSyncRun(jobName: string) {
+      try {
+        const { data, error } = await supabase
+          .from('sync_runs')
+          .insert({ job_name: jobName, started_at: new Date().toISOString(), ok: false })
+          .select('id')
+          .single();
+
+        if (error || !data) return null;
+        return data as { id: string };
+      } catch {
+        return null;
+      }
+    }
+
+    async function tryUpdateSyncRun(id: string, ok: boolean, stats: any) {
+      try {
+        await supabase
+          .from('sync_runs')
+          .update({ ok, finished_at: new Date().toISOString(), stats_json: stats })
+          .eq('id', id);
+      } catch {
+        // ignore
+      }
+    }
+
+    function normalizeEvent(event: any) {
+      if (!event) return null;
+      const externalId = toInt(event.idEvent);
+      if (!externalId) return null;
+
+      return {
+        external_id: externalId,
+        kickoff_at: toKickoff(event.dateEvent, event.strTime),
+        status_short: event.strStatus ?? '',
+        status_long: event.strStatus ?? '',
+        elapsed: null,
+        home_goals: toInt(event.intHomeScore),
+        away_goals: toInt(event.intAwayScore),
+        raw: event,
+        updated_at: new Date().toISOString(),
+      };
+    }
+
+    async function upsertFixtures(rows: any[]) {
+      if (!rows.length) return 0;
+      const chunkSize = 200;
+      let total = 0;
+
+      for (let i = 0; i < rows.length; i += chunkSize) {
+        const chunk = rows.slice(i, i + chunkSize);
+        const { error } = await supabase
+          .from('fixtures')
+          .upsert(chunk, { onConflict: 'external_id' });
+
+        if (error) {
+          console.error('[sync_fcn_fixtures] Upsert error:', error);
+          throw error;
+        }
+        total += chunk.length;
+      }
+
+      return total;
+    }
+
+    serve(async (req) => {
+      if (req.method !== 'POST') {
+        return new Response('Method not allowed', { status: 405 });
+      }
+
+      if (CRON_SECRET && req.headers.get('X-CRON-SECRET') !== CRON_SECRET) {
+        return new Response('Unauthorized', { status: 401 });
+      }
+
+      if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+        return new Response('Missing Supabase env vars', { status: 500 });
+      }
+
+      if (!SPORTSDB_API_KEY) {
+        return new Response('Missing SPORTSDB_API_KEY', { status: 500 });
+      }
+
+      let body: any;
+      try {
+        body = await req.json();
+      } catch {
+        return new Response('Invalid JSON body', { status: 400 });
+      }
+
+      const jobName = body?.job_name;
+      if (!jobName) {
+        return new Response('Missing job_name', { status: 400 });
+      }
+
+      let endpoint = '';
+      let ttlSeconds = 0;
+
+      if (jobName === 'fixtures_next_14_days') {
+        endpoint = `/eventsnextleague.php?id=${SPORTSDB_LEAGUE_ID}`;
+        ttlSeconds = 6 * 60 * 60;
+      } else if (jobName === 'fixtures_recent') {
+        endpoint = `/eventspastleague.php?id=${SPORTSDB_LEAGUE_ID}`;
+        ttlSeconds = 60 * 60;
+      } else {
+        return new Response('Unsupported job_name', { status: 400 });
+      }
+
+      const syncRun = await tryInsertSyncRun(jobName);
+
+      try {
+        const url = `${SPORTSDB_BASE_URL}/${SPORTSDB_API_KEY}${endpoint}`;
+        const paramsKey = stableStringify({ endpoint, league: SPORTSDB_LEAGUE_ID });
+        const cacheKey = await sha256(`${url}|${paramsKey}`);
+
+        const cached = await getCache(cacheKey);
+        const now = new Date();
+        const cachedValid = cached && new Date(cached.expires_at) > now;
+
+        let responseJson: any;
+        let statusCode = 200;
+        let cacheHit = false;
+
+        if (cachedValid) {
+          responseJson = cached.response_json;
+          statusCode = cached.status_code ?? 200;
+          cacheHit = true;
+        } else {
+          const res = await fetch(url);
+          statusCode = res.status;
+          responseJson = await res.json();
+
+          const fetchedAt = new Date();
+          const expiresAt = addSeconds(fetchedAt, ttlSeconds);
+          await setCache({
+            cache_key: cacheKey,
+            endpoint,
+            params_json: { league_id: SPORTSDB_LEAGUE_ID },
+            response_json: responseJson,
+            status_code: statusCode,
+            fetched_at: fetchedAt.toISOString(),
+            expires_at: expiresAt.toISOString(),
+          });
+        }
+
+        const events = Array.isArray(responseJson?.events) ? responseJson.events : [];
+        const normalized = events.map(normalizeEvent).filter(Boolean);
+
+        const upserted = await upsertFixtures(normalized);
+        const stats = {
+          job_name: jobName,
+          provider: 'thesportsdb',
+          cache_hit: cacheHit,
+          fetched: events.length,
+          upserted,
+          status_code: statusCode,
+        };
+
+        if (syncRun?.id) {
+          await tryUpdateSyncRun(syncRun.id, true, stats);
+        }
+
+        return new Response(JSON.stringify(stats), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      } catch (err: any) {
+        console.error('[sync_fcn_fixtures] Error:', err);
+        if (syncRun?.id) {
+          await tryUpdateSyncRun(syncRun.id, false, { error: String(err) });
+        }
+        return new Response('Sync failed', { status: 500 });
+      }
+    });
