@@ -15,6 +15,7 @@
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
+      "buildNumber": "1",
       "bundleIdentifier": "dk.rasmusgunnar.fcnfans",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -32,9 +33,7 @@
         "projectId": "4e547ae8-bdfc-498a-872e-310c90386a38"
       }
     },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "2",
     "updates": {
       "url": "https://u.expo.dev/4e547ae8-bdfc-498a-872e-310c90386a38"
     }
