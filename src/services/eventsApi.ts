@@ -81,6 +81,35 @@ export interface Fixture {
   geocoded_at?: string | null;
 }
 
+const FCN_FIXTURES_VIEW = 'v_fcn_fixtures';
+const FCN_TEAM_FILTER = '%nordsjælland%';
+
+function shouldFallbackView(error: any): boolean {
+  const message = String(error?.message ?? '');
+  return error?.code === '42P01' || message.includes('does not exist') || message.includes('relation');
+}
+
+function applyFcnFilter(query: any) {
+  return query.or(`home_team.ilike.${FCN_TEAM_FILTER},away_team.ilike.${FCN_TEAM_FILTER}`);
+}
+
+async function runFixtureQuery(params: {
+  table: string;
+  upcoming: boolean;
+  limit: number;
+}) {
+  const now = new Date().toISOString();
+  let query = supabase.from(params.table).select('*');
+  if (params.table === 'fixtures') {
+    query = applyFcnFilter(query);
+  }
+  query = params.upcoming
+    ? query.gte('kickoff_at', now).order('kickoff_at', { ascending: true })
+    : query.lt('kickoff_at', now).order('kickoff_at', { ascending: false });
+
+  return query.limit(params.limit);
+}
+
 // Feed item discriminated union
 export type FeedItem =
   | {
@@ -135,12 +164,24 @@ export type FeedItem =
  */
 export async function fetchMatchesUpcoming(limit = 20): Promise<Fixture[]> {
   try {
-    const { data, error } = await supabase
-      .from('fixtures')
-      .select('*')
-      .gte('kickoff_at', new Date().toISOString())
-      .order('kickoff_at', { ascending: true })
-      .limit(limit);
+    const { data, error } = await runFixtureQuery({
+      table: FCN_FIXTURES_VIEW,
+      upcoming: true,
+      limit,
+    });
+
+    if (error && shouldFallbackView(error)) {
+      const fallback = await runFixtureQuery({
+        table: 'fixtures',
+        upcoming: true,
+        limit,
+      });
+      if (fallback.error) {
+        console.error('[eventsApi] Error fetching matches (fallback):', fallback.error);
+        return [];
+      }
+      return fallback.data || [];
+    }
 
     if (error) {
       console.error('[eventsApi] Error fetching matches:', error);
@@ -150,6 +191,42 @@ export async function fetchMatchesUpcoming(limit = 20): Promise<Fixture[]> {
     return data || [];
   } catch (err) {
     console.error('[eventsApi] Unexpected error fetching matches:', err);
+    return [];
+  }
+}
+
+/**
+ * Fetch recent fixtures (matches) from Supabase
+ */
+export async function fetchMatchesRecent(limit = 10): Promise<Fixture[]> {
+  try {
+    const { data, error } = await runFixtureQuery({
+      table: FCN_FIXTURES_VIEW,
+      upcoming: false,
+      limit,
+    });
+
+    if (error && shouldFallbackView(error)) {
+      const fallback = await runFixtureQuery({
+        table: 'fixtures',
+        upcoming: false,
+        limit,
+      });
+      if (fallback.error) {
+        console.error('[eventsApi] Error fetching recent matches (fallback):', fallback.error);
+        return [];
+      }
+      return fallback.data || [];
+    }
+
+    if (error) {
+      console.error('[eventsApi] Error fetching recent matches:', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (err) {
+    console.error('[eventsApi] Unexpected error fetching recent matches:', err);
     return [];
   }
 }
@@ -346,7 +423,20 @@ export async function fetchEventById(id: string): Promise<Event | null> {
  */
 export async function fetchFixtureById(id: string): Promise<Fixture | null> {
   try {
-    const { data, error } = await supabase.from('fixtures').select('*').eq('id', id).maybeSingle();
+    const { data, error } = await supabase
+      .from(FCN_FIXTURES_VIEW)
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error && shouldFallbackView(error)) {
+      const fallback = await supabase.from('fixtures').select('*').eq('id', id).maybeSingle();
+      if (fallback.error) {
+        console.error('[eventsApi] Error fetching fixture (fallback):', fallback.error);
+        return null;
+      }
+      return fallback.data || null;
+    }
 
     if (error) {
       console.error('[eventsApi] Error fetching fixture:', error);

@@ -23,17 +23,78 @@ export interface Fixture {
   geocoded_at?: string | null;
 }
 
+const FCN_FIXTURES_VIEW = 'v_fcn_fixtures';
+const FCN_TEAM_FILTER = '%nordsjælland%';
+
+function shouldFallbackView(error: any): boolean {
+  const message = String(error?.message ?? '');
+  return error?.code === '42P01' || message.includes('does not exist') || message.includes('relation');
+}
+
+function applyFcnFilter(query: any) {
+  return query.or(`home_team.ilike.${FCN_TEAM_FILTER},away_team.ilike.${FCN_TEAM_FILTER}`);
+}
+
+export async function fetchUpcomingFcntFixtures(limit = 30): Promise<Fixture[]> {
+  try {
+    const { data, error } = await supabase
+      .from(FCN_FIXTURES_VIEW)
+      .select('*')
+      .gte('kickoff_at', new Date().toISOString())
+      .order('kickoff_at', { ascending: true })
+      .limit(limit);
+
+    if (error && shouldFallbackView(error)) {
+      const fallback = await applyFcnFilter(supabase.from('fixtures').select('*'))
+        .gte('kickoff_at', new Date().toISOString())
+        .order('kickoff_at', { ascending: true })
+        .limit(limit);
+
+      if (fallback.error) {
+        console.error('[fixtures] Error fetching FCN upcoming fixtures (fallback):', fallback.error);
+        return [];
+      }
+
+      return fallback.data || [];
+    }
+
+    if (error) {
+      console.error('[fixtures] Error fetching FCN upcoming fixtures:', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (err) {
+    console.error('[fixtures] Unexpected error fetching FCN upcoming fixtures:', err);
+    return [];
+  }
+}
+
 /**
  * Fetch upcoming fixtures from Supabase, sorted by kickoff time
  */
 export async function fetchUpcomingFixtures(limitCount = 50): Promise<Fixture[]> {
   try {
     const { data, error } = await supabase
-      .from('fixtures')
+      .from(FCN_FIXTURES_VIEW)
       .select('*')
       .gte('kickoff_at', new Date().toISOString())
       .order('kickoff_at', { ascending: true })
       .limit(limitCount);
+
+    if (error && shouldFallbackView(error)) {
+      const fallback = await applyFcnFilter(supabase.from('fixtures').select('*'))
+        .gte('kickoff_at', new Date().toISOString())
+        .order('kickoff_at', { ascending: true })
+        .limit(limitCount);
+
+      if (fallback.error) {
+        console.error('[fixtures] Error fetching upcoming fixtures (fallback):', fallback.error);
+        return [];
+      }
+
+      return fallback.data || [];
+    }
 
     if (error) {
       console.error('[fixtures] Error fetching upcoming fixtures:', error);
@@ -53,12 +114,27 @@ export async function fetchUpcomingFixtures(limitCount = 50): Promise<Fixture[]>
 export async function fetchNextFixture(): Promise<Fixture | null> {
   try {
     const { data, error } = await supabase
-      .from('fixtures')
+      .from(FCN_FIXTURES_VIEW)
       .select('*')
       .gte('kickoff_at', new Date().toISOString())
       .order('kickoff_at', { ascending: true })
       .limit(1)
       .maybeSingle();
+
+    if (error && shouldFallbackView(error)) {
+      const fallback = await applyFcnFilter(supabase.from('fixtures').select('*'))
+        .gte('kickoff_at', new Date().toISOString())
+        .order('kickoff_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (fallback.error) {
+        console.error('[fixtures] Error fetching next fixture (fallback):', fallback.error);
+        return null;
+      }
+
+      return fallback.data || null;
+    }
 
     if (error) {
       console.error('[fixtures] Error fetching next fixture:', error);
