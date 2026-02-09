@@ -16,6 +16,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AppHeader } from '../components/AppHeader';
 import { MapMarkerIcon } from '../components/MapMarkerIcon';
 import { fetchFeedUpcoming, type FeedItem } from '../services/eventsApi';
+import { fetchUpcomingFcntFixtures, type Fixture } from '../services/fixtures';
 import { FeedItemRenderer } from '../components/feed/FeedItemRenderer';
 import type { FeedItem as HomeFeedItem } from '../types/feed';
 import { targetKey } from '../utils/targetKey';
@@ -24,7 +25,6 @@ import { useAuth } from '../auth/AuthProvider';
 import { useFeed } from '../state/FeedContext';
 
 type ViewMode = 'list' | 'map';
-type FilterMode = 'all' | 'matches' | 'events';
 
 // Normalized map item type
 type MapItem = {
@@ -37,7 +37,7 @@ type MapItem = {
   subtitle?: string;
   venue?: string;
   logoUrl?: string | null;
-  feedItem: FeedItem; // Keep original for navigation
+  feedItem: FeedItem | Fixture; // Keep original for navigation
 };
 
 const FARUM_REGION: Region = {
@@ -46,9 +46,6 @@ const FARUM_REGION: Region = {
   latitudeDelta: 0.5,
   longitudeDelta: 0.5,
 };
-
-const isEventLike = (kind: string) => kind === 'event' || kind === 'bus_trip';
-const toEventType = (kind: string) => (kind === 'bus_trip' ? 'bustur' : 'event');
 
 export default function EventsScreen() {
   const navigation = useNavigation();
@@ -67,32 +64,30 @@ export default function EventsScreen() {
     addCommentPreview,
   } = useFeed();
 
+  const [upcomingMatches, setUpcomingMatches] = useState<Fixture[]>([]);
   const [feed, setFeed] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const [viewMode, setViewMode] = useState<ViewMode>('list');
-  const [filterMode, setFilterMode] = useState<FilterMode>('all');
   const [selectedItem, setSelectedItem] = useState<MapItem | null>(null);
 
   const snapPoints = useMemo(() => ['20%', '45%', '85%'], []);
 
   const loadFeed = async () => {
-    const items = await fetchFeedUpcoming();
-    setFeed(items);
+    const [upcoming, feedItems] = await Promise.all([
+      fetchUpcomingFcntFixtures(30),
+      fetchFeedUpcoming(),
+    ]);
+    setUpcomingMatches(upcoming);
+    setFeed(feedItems);
     setLoading(false);
 
     if (__DEV__) {
-      const counts = items.reduce(
-        (acc, item) => {
-          acc[
-            item.kind === 'match' ? 'matches' : item.kind === 'bus_trip' ? 'busTrips' : 'events'
-          ]++;
-          return acc;
-        },
-        { matches: 0, busTrips: 0, events: 0 },
-      );
-      console.log('[EventsScreen] feed counts', { ...counts, total: items.length });
+      console.log('[EventsScreen] match counts', {
+        upcoming: upcoming.length,
+        total: upcoming.length,
+      });
     }
   };
 
@@ -112,62 +107,70 @@ export default function EventsScreen() {
     }, []),
   );
 
-  // Filter feed based on filter chips
-  const filteredFeed = feed.filter((item) => {
-    if (filterMode === 'all') return true;
-    if (filterMode === 'matches') return item.kind === 'match';
-    if (filterMode === 'events') return isEventLike(item.kind);
-    return true;
+  const allMatches = useMemo(() => [...upcomingMatches], [upcomingMatches]);
+  const eventsOnly = useMemo(
+    () => feed.filter((item) => item.kind !== 'match'),
+    [feed],
+  );
+
+  // Convert match fixtures to map items (only items with lat/lng)
+  const mapItems: MapItem[] = [
+    ...allMatches.map((item): MapItem | null => {
+      const lat = item.lat;
+      const lng = item.lng;
+      if (typeof lat !== 'number' || typeof lng !== 'number') return null;
+
+      return {
+        id: item.id,
+        kind: 'match',
+        title: `${item.home_team} - ${item.away_team}`,
+        datetime: item.kickoff_at,
+        lat,
+        lng,
+        venue: item.venue || undefined,
+        subtitle: item.venue || item.venue_city || undefined,
+        logoUrl: item.home_logo_url,
+        feedItem: item,
+      };
+    }),
+    ...eventsOnly.map((item): MapItem | null => {
+      if (item.kind !== 'event') return null;
+      const lat = (item as any).lat;
+      const lng = (item as any).lng;
+      if (typeof lat !== 'number' || typeof lng !== 'number') return null;
+
+      return {
+        id: item.id,
+        kind: 'event',
+        title: item.title,
+        datetime: item.startAt,
+        lat,
+        lng,
+        subtitle: item.location || undefined,
+        logoUrl: null,
+        feedItem: item,
+      };
+    }),
+  ].filter((item): item is MapItem => item !== null);
+
+  const toHomeFeedItem = (item: Fixture): HomeFeedItem => ({
+    kind: 'match',
+    id: item.id,
+    data: {
+      id: item.id,
+      kickoffAt: item.kickoff_at,
+      home: item.home_team,
+      away: item.away_team,
+      homeLogo: item.home_logo_url,
+      awayLogo: item.away_logo_url,
+      venue: item.venue,
+      venueCity: item.venue_city,
+      competition: item.competition,
+      round: item.round,
+    },
   });
 
-  // Convert filtered feed to map items (only items with lat/lng)
-  const mapItems: MapItem[] = filteredFeed
-    .map((item): MapItem | null => {
-      if (item.kind === 'match') {
-        // Match needs lat/lng from fixtures table
-        const lat = (item as any).lat;
-        const lng = (item as any).lng;
-        if (typeof lat !== 'number' || typeof lng !== 'number') return null;
-
-        return {
-          id: item.id,
-          kind: 'match',
-          title: `${item.home} - ${item.away}`,
-          datetime: item.kickoffAt,
-          lat,
-          lng,
-          venue: item.venue || undefined,
-          subtitle: item.venue || item.venueCity || undefined,
-          logoUrl: item.homeLogo,
-          feedItem: item,
-        };
-      }
-
-      if (item.kind === 'event') {
-        // Event needs lat/lng from events table
-        const lat = (item as any).lat;
-        const lng = (item as any).lng;
-        if (typeof lat !== 'number' || typeof lng !== 'number') return null;
-
-        return {
-          id: item.id,
-          kind: 'event',
-          title: item.title,
-          datetime: item.startAt,
-          lat,
-          lng,
-          subtitle: item.location || undefined,
-          logoUrl: null,
-          feedItem: item,
-        };
-      }
-
-      // Bus trips don't have their own location, skip for now
-      return null;
-    })
-    .filter((item): item is MapItem => item !== null);
-
-  const toHomeFeedItem = (item: FeedItem): HomeFeedItem => {
+  const toHomeFeedItemFromFeed = (item: FeedItem): HomeFeedItem => {
     if (item.kind === 'match') {
       return {
         kind: 'match',
@@ -226,8 +229,38 @@ export default function EventsScreen() {
     };
   };
 
-  const renderListItem = ({ item }: { item: FeedItem }) => {
+  const renderMatchItem = (item: Fixture) => {
     const feedItem = toHomeFeedItem(item);
+    const key = targetKey(feedItem.kind, feedItem.id);
+    const likeState = likeMap[key] || { liked: false, likes: 0 };
+    const commentCount = commentCountMap[key] || 0;
+    const commentPreviews = commentPreviewMap[key] || [];
+
+    return (
+      <FeedItemRenderer
+        item={feedItem}
+        itemKey={key}
+        user={user}
+        isAppAdmin={isAppAdmin}
+        likeState={likeState}
+        commentCount={commentCount}
+        commentPreviews={commentPreviews}
+        safeProfileMap={profileMap || {}}
+        communityMap={communityMap || {}}
+        toggleLike={toggleLike}
+        removePost={() => {}}
+        removeNews={() => {}}
+        incrementCommentCount={incrementCommentCount}
+        addCommentPreview={addCommentPreview}
+        onPressMatch={(matchId) =>
+          (navigation as any).navigate('MatchDetails', { fixtureId: matchId })
+        }
+      />
+    );
+  };
+
+  const renderEventItem = ({ item }: { item: FeedItem }) => {
+    const feedItem = toHomeFeedItemFromFeed(item);
     const key = targetKey(feedItem.kind, feedItem.id);
     const likeState = likeMap[key] || { liked: false, likes: 0 };
     const commentCount = commentCountMap[key] || 0;
@@ -259,6 +292,17 @@ export default function EventsScreen() {
       />
     );
   };
+
+  const renderSection = (title: string, items: Fixture[]) => (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      {items.length === 0 ? (
+        <Text style={styles.sectionEmpty}>Ingen FCN-kampe fundet endnu</Text>
+      ) : (
+        items.map((item) => <View key={item.id}>{renderMatchItem(item)}</View>)
+      )}
+    </View>
+  );
 
   const handleMarkerPress = useCallback((item: MapItem) => {
     setSelectedItem(item);
@@ -312,34 +356,6 @@ export default function EventsScreen() {
         onPressProfile={() => (navigation as any).navigate('Profile')}
       />
 
-      {/* Filter Chips */}
-      <View style={styles.filterContainer}>
-        <TouchableOpacity
-          style={[styles.chip, filterMode === 'all' && styles.chipActive]}
-          onPress={() => setFilterMode('all')}
-        >
-          <Text style={[styles.chipText, filterMode === 'all' && styles.chipTextActive]}>Alle</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.chip, filterMode === 'matches' && styles.chipActive]}
-          onPress={() => setFilterMode('matches')}
-        >
-          <Text style={[styles.chipText, filterMode === 'matches' && styles.chipTextActive]}>
-            Kampe
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.chip, filterMode === 'events' && styles.chipActive]}
-          onPress={() => setFilterMode('events')}
-        >
-          <Text style={[styles.chipText, filterMode === 'events' && styles.chipTextActive]}>
-            Events
-          </Text>
-        </TouchableOpacity>
-      </View>
-
       {/* View Mode Toggle */}
       <View style={styles.toggleContainer}>
         <TouchableOpacity
@@ -368,8 +384,8 @@ export default function EventsScreen() {
         </View>
       ) : viewMode === 'list' ? (
         <FlatList
-          data={filteredFeed}
-          renderItem={renderListItem}
+          data={eventsOnly}
+          renderItem={renderEventItem}
           keyExtractor={(item) => `${item.kind}-${item.id}`}
           contentContainerStyle={{
             paddingBottom: tabBarHeight + theme.spacing[6],
@@ -381,6 +397,11 @@ export default function EventsScreen() {
               tintColor={theme.colors.primary}
               colors={[theme.colors.primary]}
             />
+          }
+          ListHeaderComponent={
+            <View>
+              {renderSection('Kommende kampe', upcomingMatches)}
+            </View>
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
@@ -395,11 +416,11 @@ export default function EventsScreen() {
           {mapItems.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyIcon}>📍</Text>
-              {filteredFeed.length > 0 ? (
+              {allMatches.length > 0 || eventsOnly.length > 0 ? (
                 <>
                   <Text style={styles.emptyText}>Mangler lokationer</Text>
                   <Text style={styles.emptySubtext}>
-                    {mapItems.length} af {filteredFeed.length} events har koordinater
+                    {mapItems.length} af {allMatches.length + eventsOnly.length} events har koordinater
                   </Text>
                   <Text style={styles.emptyHint}>Kør fixtures sync for at geocode stadions</Text>
                 </>
@@ -475,33 +496,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.bg.default,
   },
-  filterContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: theme.spacing[4],
-    paddingTop: theme.spacing[2],
-    paddingBottom: theme.spacing[1],
-    gap: theme.spacing[2],
-  },
-  chip: {
-    paddingHorizontal: theme.spacing[4],
-    paddingVertical: theme.spacing[1],
-    borderRadius: theme.radius.pill,
-    borderWidth: 1.5,
-    borderColor: theme.colors.border.default,
-    backgroundColor: theme.colors.bg.elevated,
-  },
-  chipActive: {
-    backgroundColor: theme.colors.primary,
-    borderColor: theme.colors.primary,
-  },
-  chipText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.colors.text.primary,
-  },
-  chipTextActive: {
-    color: theme.colors.bg.elevated,
-  },
   toggleContainer: {
     flexDirection: 'row',
     marginHorizontal: theme.spacing[4],
@@ -565,6 +559,22 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: theme.spacing[1],
     fontStyle: 'italic',
+  },
+  section: {
+    paddingTop: theme.spacing[2],
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.text.primary,
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[2],
+  },
+  sectionEmpty: {
+    fontSize: 14,
+    color: theme.colors.text.secondary,
+    paddingHorizontal: theme.spacing[4],
+    paddingBottom: theme.spacing[4],
   },
   mapContainer: {
     flex: 1,
