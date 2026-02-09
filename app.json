@@ -15,7 +15,7 @@
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
-      "buildNumber": "1",
+      "buildNumber": "6",
       "bundleIdentifier": "dk.rasmusgunnar.fcnfans",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
