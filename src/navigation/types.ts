@@ -3,6 +3,7 @@ import type { Fixture } from '../services/fixtures';
 
 export type AuthStackParamList = {
   Welcome: undefined;
+  Login: { mode?: 'login' | 'signup' } | undefined;
   EmailOtp?: { email?: string } | undefined;
 };
 

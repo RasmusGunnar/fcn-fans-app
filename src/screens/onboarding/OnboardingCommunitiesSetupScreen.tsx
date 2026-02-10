@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { Alert, ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen, Text, Button, Card } from '../../components/ui';
@@ -16,6 +16,7 @@ export default function OnboardingCommunitiesSetupScreen({ navigation }: Props) 
   const theme = useTheme();
   const styles = createStyles(theme);
   const { user } = useAuth();
+  const footerHeight = 96;
 
   const [communities, setCommunities] = useState<Community[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -107,67 +108,69 @@ export default function OnboardingCommunitiesSetupScreen({ navigation }: Props) 
   };
 
   return (
-    <Screen scrollable>
-      <View style={styles.header}>
-        <Text variant="h1">Vælg fællesskaber</Text>
-        <Text variant="body" color="secondary">
-          Du kan vælge nu eller springe over.
-        </Text>
-      </View>
-
-      {loading ? (
-        <View style={styles.loading}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
+    <Screen style={styles.container}>
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: footerHeight + theme.spacing[3] }]}
+      >
+        <View style={styles.header}>
+          <Text variant="h1">Vælg fællesskaber</Text>
+          <Text variant="body" color="secondary">
+            Du kan vælge nu eller springe over.
+          </Text>
         </View>
-      ) : (
-        <View style={styles.list}>
-          {communities.map((community) => {
-            const selected = selectedIds.has(community.id);
-            return (
-              <Pressable
-                key={community.id}
-                onPress={() => toggleSelect(community.id)}
-                style={[styles.row, selected && styles.rowSelected]}
-              >
-                <View style={styles.rowText}>
-                  <Text variant="bodyBold">{community.name}</Text>
-                  <Text variant="small" color="secondary">
-                    {community.description || 'Ingen beskrivelse'}
-                  </Text>
-                </View>
-                <Ionicons
-                  name={selected ? 'checkmark-circle' : 'ellipse-outline'}
-                  size={22}
-                  color={selected ? theme.colors.primary : theme.colors.text.muted}
-                />
-              </Pressable>
-            );
-          })}
 
-          {communities.length === 0 && (
-            <Card style={styles.emptyCard}>
-              <Text variant="bodyBold">Ingen fællesskaber lige nu</Text>
-              <Text variant="body" color="secondary">
-                Du kan springe over og vælge senere.
-              </Text>
-            </Card>
-          )}
-        </View>
-      )}
+        {loading ? (
+          <View style={styles.loading}>
+            <ActivityIndicator size="large" color={theme.colors.primary} />
+          </View>
+        ) : (
+          <View style={styles.list}>
+            {communities.map((community) => {
+              const selected = selectedIds.has(community.id);
+              return (
+                <Pressable
+                  key={community.id}
+                  onPress={() => toggleSelect(community.id)}
+                  style={[styles.row, selected && styles.rowSelected]}
+                >
+                  <View style={styles.rowText}>
+                    <Text variant="bodyBold">{community.name}</Text>
+                    <Text variant="small" color="secondary">
+                      {community.description || 'Ingen beskrivelse'}
+                    </Text>
+                  </View>
+                  <Ionicons
+                    name={selected ? 'checkmark-circle' : 'ellipse-outline'}
+                    size={22}
+                    color={selected ? theme.colors.primary : theme.colors.text.muted}
+                  />
+                </Pressable>
+              );
+            })}
 
-      <View style={styles.footer}>
+            {communities.length === 0 && (
+              <Card style={styles.emptyCard}>
+                <Text variant="bodyBold">Ingen fællesskaber lige nu</Text>
+                <Text variant="body" color="secondary">
+                  Du kan springe over og vælge senere.
+                </Text>
+              </Card>
+            )}
+          </View>
+        )}
+      </ScrollView>
+
+      <View style={[styles.footer, { height: footerHeight }]}>
         <Button
           title="Spring over"
           variant="ghost"
           onPress={() => handleFinish(true)}
           disabled={saving}
-          fullWidth
         />
         <Button
           title={saving ? 'Afslutter...' : selectedCount > 0 ? 'Afslut' : 'Afslut uden valg'}
           onPress={() => handleFinish(false)}
           disabled={saving}
-          fullWidth
         />
       </View>
     </Screen>
@@ -176,6 +179,9 @@ export default function OnboardingCommunitiesSetupScreen({ navigation }: Props) 
 
 const createStyles = (theme: ReturnType<typeof useTheme>) =>
   StyleSheet.create({
+    container: {
+      flex: 1,
+    },
     header: {
       gap: theme.spacing[2],
       marginBottom: theme.spacing[4],
@@ -186,6 +192,9 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
     list: {
       gap: theme.spacing[2],
+    },
+    scrollContent: {
+      paddingBottom: theme.spacing[4],
     },
     row: {
       borderWidth: theme.layout.borderWidth,
@@ -210,7 +219,19 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       gap: theme.spacing[2],
     },
     footer: {
-      marginTop: theme.spacing[5],
+      position: 'absolute',
+      left: theme.spacing[3],
+      right: theme.spacing[3],
+      bottom: theme.spacing[3],
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
       gap: theme.spacing[2],
+      paddingHorizontal: theme.spacing[2],
+      paddingVertical: theme.spacing[2],
+      backgroundColor: theme.colors.bg.card,
+      borderRadius: theme.radius.md,
+      borderWidth: theme.layout.borderWidth,
+      borderColor: theme.colors.border.default,
     },
   });
