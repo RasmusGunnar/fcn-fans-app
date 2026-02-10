@@ -40,21 +40,6 @@ const tabData = [
   },
 ];
 
-const onboardingTabData = [
-  {
-    name: 'Communities',
-    label: 'Fællesskab',
-    iconActive: 'people' as const,
-    iconInactive: 'people-outline' as const,
-  },
-  {
-    name: 'Profile',
-    label: 'Profil',
-    iconActive: 'person' as const,
-    iconInactive: 'person-outline' as const,
-  },
-];
-
 function CustomTabBar({ state, descriptors, navigation, tabs, showCreate }: any) {
   const insets = useSafeAreaInsets();
   const [sheetVisible, setSheetVisible] = useState(false);
@@ -117,26 +102,24 @@ function CustomTabBar({ state, descriptors, navigation, tabs, showCreate }: any)
   );
 }
 
-export function AppTabs({ onboardingRequired = false }: { onboardingRequired?: boolean }) {
-  const tabs = onboardingRequired ? onboardingTabData : tabData;
+export function AppTabs() {
+  const tabs = tabData;
   return (
     <Tab.Navigator
-      tabBar={(props) => (
-        <CustomTabBar {...props} tabs={tabs} showCreate={!onboardingRequired} />
-      )}
+      tabBar={(props) => <CustomTabBar {...props} tabs={tabs} showCreate />}
       screenOptions={{
         headerShown: false,
       }}
-      initialRouteName={onboardingRequired ? 'Profile' : 'Home'}
+      initialRouteName="Home"
     >
-      {onboardingRequired ? null : <Tab.Screen name="Home" component={HomeStack} />}
+      <Tab.Screen name="Home" component={HomeStack} />
       <Tab.Screen name="Communities" component={CommunitiesStack} />
-      {onboardingRequired ? null : <Tab.Screen name="Events" component={EventsStack} />}
-      {onboardingRequired ? null : <Tab.Screen name="Songs" component={SongsScreen} />}
+      <Tab.Screen name="Events" component={EventsStack} />
+      <Tab.Screen name="Songs" component={SongsScreen} />
       <Tab.Screen
         name="Profile"
         component={ProfileStack}
-        options={onboardingRequired ? undefined : { tabBarButton: () => null }}
+        options={{ tabBarButton: () => null }}
       />
     </Tab.Navigator>
   );

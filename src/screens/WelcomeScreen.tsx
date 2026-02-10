@@ -105,6 +105,7 @@ export default function WelcomeScreen({ navigation }: Props) {
             fontSize: theme.typography.body.fontSize,
           }}
         />
+        <Button title="Fortsæt til login" onPress={() => navigation.navigate('Login')} />
         <Button title={busy ? 'Sender...' : 'Send kode'} onPress={sendCode} disabled={!canSend} />
 
         {/* Separator */}

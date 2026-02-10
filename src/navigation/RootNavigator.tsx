@@ -3,6 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import * as Linking from 'expo-linking';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { AuthStack } from './AuthStack';
+import { OnboardingStack } from './OnboardingStack';
 import { AppTabs } from './AppTabs';
 import { useAuth } from '../auth/AuthProvider';
 import CreateScreen from '../screens/CreateScreen';
@@ -51,8 +52,9 @@ function Inner() {
 
   if (loading || (user && profileLoading)) return null;
 
-  const onboardingRequired = !!user && !isProfileComplete(profile);
-  return user ? <AppTabs onboardingRequired={onboardingRequired} /> : <AuthStack />;
+  if (!user) return <AuthStack />;
+  if (!profile || !isProfileComplete(profile)) return <OnboardingStack />;
+  return <AppTabs />;
 }
 
 export function RootNavigator() {
