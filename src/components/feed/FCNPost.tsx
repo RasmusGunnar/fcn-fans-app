@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Pressable, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useTheme, Theme } from '../../theme';
 import { Card, Text, Avatar } from '../ui';
+import { CardActions } from '../cards/CardActions';
 
 export interface FCNPostProps {
   authorName: string;
@@ -61,44 +61,14 @@ export function FCNPost({
         </View>
 
         {/* Action Bar */}
-        <View style={styles.actionBar}>
-          <Pressable style={styles.actionButton} onPress={onPressLike} disabled={!onPressLike}>
-            <Ionicons
-              name={liked ? 'heart' : 'heart-outline'}
-              size={theme.components.icon.size.md}
-              color={liked ? theme.colors.state.error : theme.colors.text.secondary}
-            />
-            <Text variant="caption" color="secondary" style={styles.actionText}>
-              {likes}
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.actionButton}
-            onPress={onPressComment}
-            disabled={!onPressComment}
-          >
-            <Ionicons
-              name="chatbubble-outline"
-              size={theme.components.icon.size.md}
-              color={theme.colors.text.secondary}
-            />
-            <Text variant="caption" color="secondary" style={styles.actionText}>
-              {comments}
-            </Text>
-          </Pressable>
-
-          <Pressable style={styles.actionButton} onPress={onPressShare} disabled={!onPressShare}>
-            <Ionicons
-              name="share-outline"
-              size={theme.components.icon.size.md}
-              color={theme.colors.text.secondary}
-            />
-            <Text variant="caption" color="secondary" style={styles.actionText}>
-              {shares}
-            </Text>
-          </Pressable>
-        </View>
+        <CardActions
+          liked={liked}
+          likes={likes}
+          comments={comments}
+          onToggleLike={onPressLike ?? (() => {})}
+          onPressComment={onPressComment ?? (() => {})}
+          onPressShare={onPressShare ?? (() => {})}
+        />
       </Pressable>
     </Card>
   );
@@ -118,20 +88,6 @@ function createStyles(theme: Theme) {
     },
     content: {
       paddingBottom: theme.spacing[3],
-    },
-    actionBar: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingVertical: theme.spacing[2],
-      gap: theme.spacing[6],
-    },
-    actionButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: theme.spacing[1],
-    },
-    actionText: {
-      marginLeft: theme.spacing[1],
     },
   });
 }
