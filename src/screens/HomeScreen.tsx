@@ -1,5 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, RefreshControl, Image } from 'react-native';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  RefreshControl,
+  Image,
+  ViewToken,
+  AppState,
+} from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { AppHeader } from '../components/AppHeader';
@@ -41,6 +50,8 @@ export default function HomeScreen() {
   } = useFeed();
   const [nextFixture, setNextFixture] = useState<Fixture | null>(null);
   const [loadingFixture, setLoadingFixture] = useState(false);
+  const [currentPlayingVideoPostId, setCurrentPlayingVideoPostId] = useState<string | null>(null);
+  const [isAppActive, setIsAppActive] = useState(true);
 
   // Defensive: Ensure feedItems is always an array and filter out any falsy values
   const safeFeedItems = (Array.isArray(feedItems) ? feedItems : []).filter(Boolean);
@@ -50,6 +61,44 @@ export default function HomeScreen() {
   const safeLikeMap = likeMap || {};
   const safeCommentCountMap = commentCountMap || {};
   const safeCommentPreviewMap = commentPreviewMap || {};
+
+  // Track which video post is visible for autoplay
+  const handleViewableItemsChanged = useCallback(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      const visibleVideoPost = viewableItems.find((viewableItem) => {
+        const feedItem = viewableItem.item as any;
+        if (!feedItem || feedItem.kind !== 'post') return false;
+        const post = feedItem.data as any;
+        return post?.media?.[0]?.type === 'video';
+      });
+
+      if (visibleVideoPost?.item) {
+        setCurrentPlayingVideoPostId(getFeedItemKey(visibleVideoPost.item as any));
+      } else {
+        setCurrentPlayingVideoPostId(null);
+      }
+    },
+    [],
+  );
+
+  const viewabilityConfig = useMemo(
+    () => ({
+      viewAreaCoveragePercentThreshold: 60,
+      minimumViewTime: 100,
+    }),
+    [],
+  );
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      setIsAppActive(state === 'active');
+      if (state !== 'active') {
+        setCurrentPlayingVideoPostId(null);
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
 
   // Debug logging for testing
   if (__DEV__) {
@@ -109,8 +158,42 @@ export default function HomeScreen() {
     setFactionLikes(factionLiked ? factionLikes - 1 : factionLikes + 1);
   };
 
+  const renderFeedItem = ({ item }: { item: any }) => {
+    const key = getFeedItemKey(item);
+    const likeState = safeLikeMap[key] || { liked: false, likes: 0 };
+    const commentCount = safeCommentCountMap[key] || 0;
+    const commentPreviews = safeCommentPreviewMap[key] || [];
+    const isActiveVideo = key === currentPlayingVideoPostId;
+
+    return (
+      <FeedItemRenderer
+        key={key}
+        item={item}
+        itemKey={key}
+        user={user}
+        isAppAdmin={isAppAdmin}
+        likeState={likeState}
+        commentCount={commentCount}
+        commentPreviews={commentPreviews}
+        safeProfileMap={safeProfileMap}
+        communityMap={communityMap || {}}
+        toggleLike={toggleLike}
+        removePost={removePost}
+        removeNews={removeNews}
+        incrementCommentCount={incrementCommentCount}
+        addCommentPreview={addCommentPreview}
+        isActiveVideo={isActiveVideo}
+        isAppActive={isAppActive}
+        onActivateVideo={() => setCurrentPlayingVideoPostId(key)}
+      />
+    );
+  };
+
   return (
-    <ScrollView
+    <FlatList
+      data={safeFeedItems}
+      keyExtractor={(item) => getFeedItemKey(item)}
+      renderItem={renderFeedItem}
       style={styles.container}
       contentContainerStyle={{ paddingBottom: tabBarHeight + spacing.lg }}
       refreshControl={
@@ -121,133 +204,114 @@ export default function HomeScreen() {
           colors={[colors.fcnRed]}
         />
       }
-    >
-      <AppHeader
-        title="FC Nordsjælland"
-        subtitle="Fan Fællesskab"
-        onPressProfile={() => (navigation as any).navigate('Profile')}
-      />
-      <View style={styles.content}>
-        <Card style={styles.card}>
-          <Pill label="Næste Kamp" />
-          {loadingFixture ? (
-            <View style={styles.loadingContainer}>
-              <Text style={styles.loadingText}>Henter kampdata...</Text>
-            </View>
-          ) : nextFixture ? (
-            <>
-              <View style={styles.matchRow}>
-                <View style={styles.team}>
-                  {nextFixture.home_logo_url ? (
-                    <Image source={{ uri: nextFixture.home_logo_url }} style={styles.teamLogo} />
-                  ) : (
-                    <View style={styles.teamCircle}>
-                      <Text style={styles.teamText}>
-                        {nextFixture.home_team.substring(0, 3).toUpperCase()}
+      keyboardDismissMode="on-drag"
+      keyboardShouldPersistTaps="handled"
+      onViewableItemsChanged={handleViewableItemsChanged}
+      viewabilityConfig={viewabilityConfig}
+      ListHeaderComponent={
+        <>
+          <AppHeader
+            title="FC Nordsjælland"
+            subtitle="Fan Fællesskab"
+            onPressProfile={() => (navigation as any).navigate('Profile')}
+          />
+          <View style={styles.content}>
+            <Card style={styles.card}>
+              <Pill label="Næste Kamp" />
+              {loadingFixture ? (
+                <View style={styles.loadingContainer}>
+                  <Text style={styles.loadingText}>Henter kampdata...</Text>
+                </View>
+              ) : nextFixture ? (
+                <>
+                  <View style={styles.matchRow}>
+                    <View style={styles.team}>
+                      {nextFixture.home_logo_url ? (
+                        <Image source={{ uri: nextFixture.home_logo_url }} style={styles.teamLogo} />
+                      ) : (
+                        <View style={styles.teamCircle}>
+                          <Text style={styles.teamText}>
+                            {nextFixture.home_team.substring(0, 3).toUpperCase()}
+                          </Text>
+                        </View>
+                      )}
+                      <Text style={styles.teamName}>{nextFixture.home_team}</Text>
+                    </View>
+                    <Text style={styles.vs}>VS</Text>
+                    <View style={styles.team}>
+                      {nextFixture.away_logo_url ? (
+                        <Image source={{ uri: nextFixture.away_logo_url }} style={styles.teamLogo} />
+                      ) : (
+                        <View style={styles.teamCircle}>
+                          <Text style={styles.teamText}>
+                            {nextFixture.away_team.substring(0, 3).toUpperCase()}
+                          </Text>
+                        </View>
+                      )}
+                      <Text style={styles.teamName}>{nextFixture.away_team}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.matchDetails}>
+                    <View style={styles.detailRow}>
+                      <Text style={styles.icon}></Text>
+                      <Text style={styles.detailText}>
+                        {formatShortDateDa(nextFixture.kickoff_at)}, kl. {formatTime(nextFixture.kickoff_at)}
                       </Text>
                     </View>
-                  )}
-                  <Text style={styles.teamName}>{nextFixture.home_team}</Text>
-                </View>
-                <Text style={styles.vs}>VS</Text>
-                <View style={styles.team}>
-                  {nextFixture.away_logo_url ? (
-                    <Image source={{ uri: nextFixture.away_logo_url }} style={styles.teamLogo} />
-                  ) : (
-                    <View style={styles.teamCircle}>
-                      <Text style={styles.teamText}>
-                        {nextFixture.away_team.substring(0, 3).toUpperCase()}
-                      </Text>
-                    </View>
-                  )}
-                  <Text style={styles.teamName}>{nextFixture.away_team}</Text>
-                </View>
-              </View>
-              <View style={styles.matchDetails}>
-                <View style={styles.detailRow}>
-                  <Text style={styles.icon}></Text>
-                  <Text style={styles.detailText}>
-                    {formatShortDateDa(nextFixture.kickoff_at)}, kl.{' '}
-                    {formatTime(nextFixture.kickoff_at)}
-                  </Text>
-                </View>
-                {nextFixture.venue && (
-                  <View style={styles.detailRow}>
-                    <Text style={styles.icon}></Text>
-                    <Text style={styles.detailText}>
-                      {nextFixture.venue}
-                      {nextFixture.venue_city ? `, ${nextFixture.venue_city}` : ''}
-                    </Text>
+                    {nextFixture.venue && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.icon}></Text>
+                        <Text style={styles.detailText}>
+                          {nextFixture.venue}
+                          {nextFixture.venue_city ? `, ${nextFixture.venue_city}` : ''}
+                        </Text>
+                      </View>
+                    )}
+                    {nextFixture.competition && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.icon}></Text>
+                        <Text style={styles.detailText}>
+                          {nextFixture.competition}
+                          {nextFixture.round ? ` - ${nextFixture.round}` : ''}
+                        </Text>
+                      </View>
+                    )}
                   </View>
-                )}
-                {nextFixture.competition && (
-                  <View style={styles.detailRow}>
-                    <Text style={styles.icon}></Text>
-                    <Text style={styles.detailText}>
-                      {nextFixture.competition}
-                      {nextFixture.round ? ` - ${nextFixture.round}` : ''}
-                    </Text>
-                  </View>
-                )}
-              </View>
-              <PrimaryButton
-                title="Se detaljer"
-                onPress={() =>
-                  (navigation as any).navigate('MatchDetails', { fixtureId: nextFixture.id })
-                }
-              />
-            </>
-          ) : (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>Ingen kommende kampe endnu</Text>
-              <Text style={styles.emptySubtext}>Tjek tilbage senere</Text>
-            </View>
-          )}
-        </Card>
-
-        {/* Render combined feed (posts + news) */}
-        {safeFeedItems.map((item) => {
-          const key = getFeedItemKey(item);
-          const likeState = safeLikeMap[key] || { liked: false, likes: 0 };
-          const commentCount = safeCommentCountMap[key] || 0;
-          const commentPreviews = safeCommentPreviewMap[key] || [];
-
-          return (
-            <FeedItemRenderer
-              key={key}
-              item={item}
-              itemKey={key}
-              user={user}
-              isAppAdmin={isAppAdmin}
-              likeState={likeState}
-              commentCount={commentCount}
-              commentPreviews={commentPreviews}
-              safeProfileMap={safeProfileMap}
-              communityMap={communityMap || {}}
-              toggleLike={toggleLike}
-              removePost={removePost}
-              removeNews={removeNews}
-              incrementCommentCount={incrementCommentCount}
-              addCommentPreview={addCommentPreview}
-            />
-          );
-        })}
-
-        <FanFactionCard
-          name="Ultras FCN"
-          members={89}
-          timeAgo="1 time siden"
-          description="FCN's mest passionerede fans. Vi støtter holdet gennem tykt og tyndt med sang, flag og uforbeholden støtte."
-          liked={factionLiked}
-          likes={factionLikes}
-          comments={1}
-          onToggleLike={toggleFactionLike}
-          onPressComment={() => console.log('Faction comment')}
-          onPressShare={() => console.log('Faction share')}
-          onPressJoin={() => console.log('Navigate to Faction')}
-        />
-      </View>
-    </ScrollView>
+                  <PrimaryButton
+                    title="Se detaljer"
+                    onPress={() =>
+                      (navigation as any).navigate('MatchDetails', { fixtureId: nextFixture.id })
+                    }
+                  />
+                </>
+              ) : (
+                <View style={styles.emptyContainer}>
+                  <Text style={styles.emptyText}>Ingen kommende kampe endnu</Text>
+                  <Text style={styles.emptySubtext}>Tjek tilbage senere</Text>
+                </View>
+              )}
+            </Card>
+          </View>
+        </>
+      }
+      ListFooterComponent={
+        <View style={styles.content}>
+          <FanFactionCard
+            name="Ultras FCN"
+            members={89}
+            timeAgo="1 time siden"
+            description="FCN's mest passionerede fans. Vi støtter holdet gennem tykt og tyndt med sang, flag og uforbeholden støtte."
+            liked={factionLiked}
+            likes={factionLikes}
+            comments={1}
+            onToggleLike={toggleFactionLike}
+            onPressComment={() => console.log('Faction comment')}
+            onPressShare={() => console.log('Faction share')}
+            onPressJoin={() => console.log('Navigate to Faction')}
+          />
+        </View>
+      }
+    />
   );
 }
 

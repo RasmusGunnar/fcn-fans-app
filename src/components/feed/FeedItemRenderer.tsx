@@ -24,6 +24,7 @@ export type FeedItemRendererProps = {
   onPressEvent?: (eventId: string) => void;
   onPressBusTrip?: (busTripId: string) => void;
   onPressMatch?: (matchId: string) => void;
+  isActiveVideo?: boolean;
 };
 
 export function FeedItemRenderer({
@@ -44,6 +45,7 @@ export function FeedItemRenderer({
   onPressEvent,
   onPressBusTrip,
   onPressMatch,
+  isActiveVideo = false,
 }: FeedItemRendererProps) {
   switch (item.kind) {
     case 'post': {
@@ -71,6 +73,7 @@ export function FeedItemRenderer({
             incrementCommentCount('post', item.id);
             addCommentPreview('post', item.id, comment);
           }}
+          isActiveVideo={isActiveVideo}
         />
       );
     }
@@ -87,6 +90,7 @@ export function FeedItemRenderer({
           profileMap={safeProfileMap}
           categoryKey="news"
           liked={likeState.liked}
+          likes={likeState.likes}
           commentsCount={commentCount}
           onToggleLike={() => {
             if (user?.id) {
@@ -166,6 +170,14 @@ export function FeedItemRenderer({
           round={item.data.round ?? null}
           profileMap={safeProfileMap}
           onPress={onPressMatch ? () => onPressMatch(item.id) : () => {}}
+          liked={likeState.liked}
+          likes={likeState.likes}
+          comments={commentCount}
+          onToggleLike={() => {
+            if (user?.id) {
+              toggleLike('match', item.id, user.id);
+            }
+          }}
         />
       );
 

@@ -3,39 +3,48 @@
 // DO NOT hardcode radius/spacing/colors/shadows; use theme tokens.
 // =====================================================
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   TextInput,
   StyleSheet,
   Alert,
-  Pressable,
-  TouchableOpacity,
   Image,
   ImageBackground,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 import { PrimaryButton } from '../components/PrimaryButton';
-import { Text, Card } from '../components/ui';
+import { Text, Card, Button } from '../components/ui';
 import { useTheme } from '../theme';
 import { useAuth } from '../auth/AuthProvider';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { AuthStackParamList } from '../navigation/AuthStack';
 
-export default function LoginScreen() {
+type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
+
+export default function LoginScreen({ route, navigation }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
-  const { signInWithPassword, signUp, loading } = useAuth();
+  const [mode, setMode] = useState<'login' | 'signup'>(route.params?.mode ?? 'login');
+  const { signInWithPassword, signUp, signInWithApple, loading } = useAuth();
   const theme = useTheme();
   const styles = createStyles(theme);
 
+  useEffect(() => {
+    if (route.params?.mode) {
+      setMode(route.params.mode);
+    }
+  }, [route.params?.mode]);
+
   const onSubmit = async () => {
     const e = email.trim().toLowerCase();
-    if (!e || !e.includes('@'))
+    if (!e || !e.includes('@')) {
       return Alert.alert('Ugyldig email', 'Indtast en gyldig emailadresse');
-    if (!password || password.length < 6)
+    }
+    if (!password || password.length < 6) {
       return Alert.alert('Ugyldigt kodeord', 'Kodeord skal være mindst 6 tegn.');
-
+    }
     try {
       if (mode === 'signup') {
         await signUp(e, password);
@@ -50,8 +59,14 @@ export default function LoginScreen() {
     }
   };
 
-  const onApple = () => Alert.alert('Kommer snart', 'Apple login kommer snart');
-  const onFacebook = () => Alert.alert('Kommer snart', 'Facebook login kommer snart');
+  const onApple = async () => {
+    try {
+      await signInWithApple();
+    } catch (err: any) {
+      const msg = err?.message || String(err) || 'Ukendt fejl';
+      Alert.alert('Fejl', msg);
+    }
+  };
 
   let logo: any = null;
   try {
@@ -66,7 +81,8 @@ export default function LoginScreen() {
     bg = null;
   }
 
-  const primaryDisabled = loading || !email.trim().includes('@') || password.length < 6;
+  const primaryDisabled =
+    loading || !email.trim().includes('@') || !password || password.length < 6;
 
   return (
     <ImageBackground
@@ -86,6 +102,8 @@ export default function LoginScreen() {
               { backgroundColor: theme.colors.bg.card, borderColor: theme.colors.border.default },
             ]}
           >
+            <Button title="Tilbage" variant="ghost" onPress={() => navigation.goBack()} />
+
             {logo ? (
               <Image source={logo} style={styles.logo} resizeMode="contain" />
             ) : (
@@ -98,66 +116,9 @@ export default function LoginScreen() {
               </Text>
             )}
 
-            <View style={styles.modeToggleRow}>
-              <Pressable
-                onPress={() => setMode('login')}
-                style={[
-                  styles.modeBtn,
-                  {
-                    paddingVertical: theme.spacing[2],
-                    paddingHorizontal: theme.spacing[4],
-                    borderRadius: theme.radius.sm,
-                    marginHorizontal: theme.spacing[1],
-                  },
-                  mode === 'login' && [
-                    styles.modeBtnActive,
-                    { backgroundColor: theme.colors.bg.elevated },
-                  ],
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.modeBtnText,
-                    { color: theme.colors.text.secondary },
-                    mode === 'login' && [
-                      styles.modeBtnTextActive,
-                      { color: theme.colors.text.primary },
-                    ],
-                  ]}
-                >
-                  Log ind
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setMode('signup')}
-                style={[
-                  styles.modeBtn,
-                  {
-                    paddingVertical: theme.spacing[2],
-                    paddingHorizontal: theme.spacing[4],
-                    borderRadius: theme.radius.sm,
-                    marginHorizontal: theme.spacing[1],
-                  },
-                  mode === 'signup' && [
-                    styles.modeBtnActive,
-                    { backgroundColor: theme.colors.bg.elevated },
-                  ],
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.modeBtnText,
-                    { color: theme.colors.text.secondary },
-                    mode === 'signup' && [
-                      styles.modeBtnTextActive,
-                      { color: theme.colors.text.primary },
-                    ],
-                  ]}
-                >
-                  Opret
-                </Text>
-              </Pressable>
-            </View>
+            <Text variant="h2" style={{ textAlign: 'center', marginBottom: theme.spacing[2] }}>
+              {mode === 'signup' ? 'Opret bruger' : 'Log ind'}
+            </Text>
 
             <Text
               variant="body"
@@ -169,7 +130,20 @@ export default function LoginScreen() {
                 : 'Opret en konto for at komme i gang'}
             </Text>
 
-            <View style={{ marginTop: theme.spacing[1] }}>
+            {Platform.OS === 'ios' ? (
+              <>
+                <PrimaryButton title="Fortsæt med Apple" onPress={onApple} disabled={loading} />
+                <Text
+                  variant="caption"
+                  color="secondary"
+                  style={{ textAlign: 'center', marginTop: theme.spacing[1] }}
+                >
+                  Hurtigst på iPhone
+                </Text>
+              </>
+            ) : null}
+
+            <View style={{ marginTop: theme.spacing[3] }}>
               <Text variant="bodyBold" color="secondary" style={{ marginBottom: theme.spacing[1] }}>
                 Email
               </Text>
@@ -219,7 +193,7 @@ export default function LoginScreen() {
                 placeholderTextColor={theme.colors.text.secondary}
               />
 
-              <View style={{ height: theme.spacing[4] }} />
+              <View style={{ height: theme.spacing[3] }} />
               <PrimaryButton
                 title={
                   loading
@@ -227,82 +201,29 @@ export default function LoginScreen() {
                       ? 'Opretter...'
                       : 'Logger ind...'
                     : mode === 'signup'
-                      ? 'Opret'
+                      ? 'Opret bruger'
                       : 'Log ind'
                 }
                 onPress={onSubmit}
                 disabled={primaryDisabled}
               />
-
-              <View style={{ height: theme.spacing[2] }} />
-              <View style={styles.signupRow}>
-                {mode === 'login' ? (
-                  <Text variant="body" color="secondary">
-                    Er du ikke oprettet endnu?{' '}
-                  </Text>
-                ) : (
-                  <Text variant="body" color="secondary">
-                    Har du allerede en konto?{' '}
-                  </Text>
-                )}
-                {mode === 'login' ? (
-                  <Pressable onPress={() => setMode('signup')}>
-                    <Text style={[styles.linkText, { color: theme.colors.info }]}>Opret her</Text>
-                  </Pressable>
-                ) : (
-                  <Pressable onPress={() => setMode('login')}>
-                    <Text style={[styles.linkText, { color: theme.colors.info }]}>Log ind</Text>
-                  </Pressable>
-                )}
-              </View>
             </View>
 
-            <View style={{ marginTop: theme.spacing[3], alignItems: 'center' }}>
-              <Text
-                variant="body"
-                color="secondary"
-                style={{ textAlign: 'center', marginBottom: theme.spacing[2] }}
-              >
-                Du kan også oprette dig med:
-              </Text>
-
-              <View style={{ flexDirection: 'row', gap: theme.spacing[3] }}>
-                <TouchableOpacity
-                  style={[
-                    styles.socialBtn,
-                    {
-                      borderColor: theme.colors.border.default,
-                      paddingVertical: theme.spacing[2],
-                      paddingHorizontal: theme.spacing[4],
-                      borderRadius: theme.radius.sm,
-                      marginHorizontal: theme.spacing[1],
-                    },
-                  ]}
-                  onPress={onApple}
+            {Platform.OS === 'ios' ? (
+              <View style={{ marginTop: theme.spacing[4], alignItems: 'center' }}>
+                <Text
+                  variant="body"
+                  color="secondary"
+                  style={{ textAlign: 'center', marginBottom: theme.spacing[2] }}
                 >
-                  <Text style={[styles.socialBtnText, { color: theme.colors.text.secondary }]}>
-                    Apple
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.socialBtn,
-                    {
-                      borderColor: theme.colors.border.default,
-                      paddingVertical: theme.spacing[2],
-                      paddingHorizontal: theme.spacing[4],
-                      borderRadius: theme.radius.sm,
-                      marginHorizontal: theme.spacing[1],
-                    },
-                  ]}
-                  onPress={onFacebook}
-                >
-                  <Text style={[styles.socialBtnText, { color: theme.colors.text.secondary }]}>
-                    Facebook
-                  </Text>
-                </TouchableOpacity>
+                  Du kan også fortsætte med:
+                </Text>
+                <Button title="Facebook" onPress={() => {}} disabled fullWidth variant="outline" />
+                <Text variant="caption" color="muted" style={{ marginTop: theme.spacing[1] }}>
+                  Kommer snart
+                </Text>
               </View>
-            </View>
+            ) : null}
           </Card>
         </View>
       </KeyboardAvoidingView>
@@ -319,30 +240,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       borderWidth: theme.layout.borderWidth,
     },
     logo: { width: 140, height: 68, alignSelf: 'center', marginBottom: theme.spacing[2] },
-    modeToggleRow: {
-      flexDirection: 'row',
-      justifyContent: 'center',
-      marginBottom: theme.spacing[2],
-    },
-    modeBtn: {
-      borderWidth: 1,
-      borderColor: 'transparent',
-    },
-    modeBtnActive: {},
-    modeBtnText: { fontWeight: '700' },
-    modeBtnTextActive: {},
     input: {
       borderWidth: theme.layout.borderWidth,
     },
-    signupRow: {
-      flexDirection: 'row',
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    linkText: { fontWeight: '700', marginLeft: theme.spacing[1] },
-    socialBtn: {
-      borderWidth: theme.layout.borderWidth,
-      opacity: 0.6,
-    },
-    socialBtnText: { fontWeight: '700' },
   });

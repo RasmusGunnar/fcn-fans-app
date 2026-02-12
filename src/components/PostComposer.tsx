@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Card } from './ui/Card';
 import { PrimaryButton } from './PrimaryButton';
 import { useTheme, Theme } from '../theme';
-import { MediaAsset, pickFromLibrary, pickCameraPhoto } from '../lib/mediaPicker';
+import { PickedMedia, pickFromLibrary, pickCameraPhoto, recordVideo } from '../lib/mediaPicker';
 import { uploadMediaToSupabase } from '../lib/upload';
 import { useAuth } from '../auth/AuthProvider';
 import { supabase } from '../lib/supabase';
@@ -32,7 +32,7 @@ export function PostComposer({ onSuccess, actor }: PostComposerProps) {
   const { user } = useAuth();
   const { addPost, fetchPosts } = useFeed();
   const [text, setText] = useState('');
-  const [attachment, setAttachment] = useState<MediaAsset | null>(null);
+  const [attachment, setAttachment] = useState<PickedMedia | null>(null);
   const [loading, setLoading] = useState(false);
 
   const handlePickLibrary = async () => {
@@ -40,14 +40,14 @@ export function PostComposer({ onSuccess, actor }: PostComposerProps) {
     try {
       const asset = await pickFromLibrary();
       if (asset) {
-        console.log('[PostComposer] Image selected from library');
+        console.log('[PostComposer] Media selected from library');
         setAttachment(asset);
       } else {
-        console.log('[PostComposer] Image picker cancelled (no asset returned)');
+        console.log('[PostComposer] Library picker cancelled (no asset returned)');
       }
     } catch (e: any) {
       console.error('[PostComposer] Pick library error:', e);
-      alert('Kunne ikke vælge billede: ' + (e?.message || e));
+      alert('Kunne ikke vælge medie: ' + (e?.message || e));
     }
   };
 
@@ -64,6 +64,22 @@ export function PostComposer({ onSuccess, actor }: PostComposerProps) {
     } catch (e: any) {
       console.error('[PostComposer] Camera error:', e);
       alert('Kunne ikke tage billede: ' + (e?.message || e));
+    }
+  };
+
+  const handleRecordVideo = async () => {
+    console.log('[PostComposer] Record video clicked');
+    try {
+      const asset = await recordVideo();
+      if (asset) {
+        console.log('[PostComposer] Video recorded');
+        setAttachment(asset);
+      } else {
+        console.log('[PostComposer] Video recording cancelled (no asset returned)');
+      }
+    } catch (e: any) {
+      console.error('[PostComposer] Record video error:', e);
+      alert('Kunne ikke optage video: ' + (e?.message || e));
     }
   };
 
@@ -121,6 +137,7 @@ export function PostComposer({ onSuccess, actor }: PostComposerProps) {
             author_id: user.id,
             text: text.trim(),
             media: mediaArray,
+            media_type: attachment?.type ?? null,
             ...(actor?.type === 'community' ? { community_id: actor.id } : {}),
           })
           .select('id, created_at, author_id, text, media, community_id');
@@ -198,14 +215,25 @@ export function PostComposer({ onSuccess, actor }: PostComposerProps) {
         />
         {attachment && (
           <View style={styles.previewContainer}>
-            <Image source={{ uri: attachment.uri }} style={styles.previewImage} />
+            {attachment.type === 'image' ? (
+              <Image source={{ uri: attachment.uri }} style={styles.previewImage} />
+            ) : (
+              <View style={styles.previewVideoPlaceholder}>
+                <Ionicons
+                  name="play-circle"
+                  size={theme.spacing[10]}
+                  color={theme.colors.text.secondary}
+                />
+                <Text style={styles.previewVideoText}>Video vedhæftet</Text>
+              </View>
+            )}
             <Pressable
               style={styles.removeAttachment}
               onPress={() => setAttachment(null)}
               disabled={loading}
             >
               <Ionicons name="close-circle" size={22} color={theme.colors.primary} />
-              <Text style={styles.removeAttachmentText}>Fjern billede</Text>
+              <Text style={styles.removeAttachmentText}>Fjern vedhæftning</Text>
             </Pressable>
           </View>
         )}
@@ -213,11 +241,16 @@ export function PostComposer({ onSuccess, actor }: PostComposerProps) {
 
       {!attachment && (
         <Card style={{ marginBottom: theme.spacing[4] }}>
-          <Text style={styles.label}>Tilføj billede (valgfrit)</Text>
+          <Text style={styles.label}>Tilføj medie (valgfrit)</Text>
           <View style={styles.imageButtonsContainer}>
             <Pressable style={styles.imageButton} onPress={handlePickCamera} disabled={loading}>
               <Ionicons name="camera" size={20} color={theme.colors.primary} />
               <Text style={styles.imageButtonText}>Tag billede</Text>
+            </Pressable>
+
+            <Pressable style={styles.imageButton} onPress={handleRecordVideo} disabled={loading}>
+              <Ionicons name="videocam" size={20} color={theme.colors.primary} />
+              <Text style={styles.imageButtonText}>Optag video</Text>
             </Pressable>
 
             <Pressable style={styles.imageButton} onPress={handlePickLibrary} disabled={loading}>
@@ -307,6 +340,20 @@ function createStyles(theme: Theme) {
     loadingOverlay: {
       marginTop: theme.spacing[2],
       alignItems: 'center',
+    },
+    previewVideoPlaceholder: {
+      width: '100%',
+      height: 200,
+      borderRadius: theme.radius.sm,
+      backgroundColor: theme.colors.bg.subtle,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: theme.spacing[2],
+    },
+    previewVideoText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: theme.colors.text.secondary,
     },
   });
 }

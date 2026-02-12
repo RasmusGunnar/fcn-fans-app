@@ -43,6 +43,7 @@ interface NewsCardProps {
   profileMap?: ProfileMap;
   categoryKey?: CategoryKey;
   liked?: boolean;
+  likes?: number;
   commentsCount?: number; // Comment count from commentCountMap
   onToggleLike?: () => void;
   onPressComment?: () => void;
@@ -60,6 +61,7 @@ export function NewsCard({
   profileMap,
   categoryKey = 'news',
   liked = newsItem.likedByMe,
+  likes = newsItem.likesCount,
   commentsCount = newsItem.commentsCount,
   onToggleLike = () => {},
   onPressComment = () => {},
@@ -145,7 +147,7 @@ export function NewsCard({
       }
       actions={{
         liked,
-        likes: newsItem.likesCount,
+        likes,
         comments: commentsCount,
         onToggleLike,
         onPressShare,

@@ -7,6 +7,7 @@ import {
   Pressable,
   ActivityIndicator,
   Alert,
+  TextInput,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,6 +21,8 @@ import { useTheme } from '../theme';
 import { uploadAvatar } from '../lib/uploadAvatar';
 import { getPublicUrl } from '../lib/storageUrl';
 import { Avatar } from '../components/Avatar';
+import { supabase } from '../lib/supabase';
+import { ensureProfile } from '../lib/profile';
 import {
   fetchMyProfile,
   fetchMyCommunities,
@@ -120,6 +123,9 @@ export default function ProfileScreen() {
   const [upcomingItems, setUpcomingItems] = useState<UpcomingItem[]>([]);
   const [ownedCount, setOwnedCount] = useState(0);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [displayNameInput, setDisplayNameInput] = useState('');
+  const [avatarUrlInput, setAvatarUrlInput] = useState<string | null>(null);
+  const [savingProfile, setSavingProfile] = useState(false);
 
   const loadData = async () => {
     if (!user?.id) {
@@ -139,6 +145,16 @@ export default function ProfileScreen() {
     // Extract profile
     if (results[0].status === 'fulfilled') {
       setProfile(results[0].value);
+      if (displayNameInput.trim().length === 0) {
+        setDisplayNameInput(results[0].value?.display_name || user?.email || '');
+      }
+      if (avatarUrlInput === null && results[0].value?.avatar_url) {
+        const existingAvatar = results[0].value.avatar_url;
+        const resolvedAvatar = existingAvatar.startsWith('http')
+          ? existingAvatar
+          : getPublicUrl('avatars', existingAvatar);
+        setAvatarUrlInput(resolvedAvatar);
+      }
     }
 
     // Extract communities
@@ -178,8 +194,98 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleDevResetLogin = async () => {
+    try {
+      await supabase.auth.signOut({ scope: 'local' } as any);
+      (navigation as any).reset({ index: 0, routes: [{ name: 'Main' }] });
+    } catch (e) {
+      console.warn('[ProfileScreen] Dev reset login failed:', e);
+    }
+  };
+
   const handleEditProfile = () => {
     Alert.alert('Rediger profil', 'Denne funktion kommer snart!');
+  };
+
+  const handleSaveProfile = async () => {
+    if (!user?.id) return;
+    const trimmedName = displayNameInput.trim();
+    const avatarUrl = avatarUrlInput;
+
+    if (!trimmedName) {
+      Alert.alert('Mangler kaldenavn', 'Indtast et kaldenavn for at fortsætte.');
+      return;
+    }
+
+    if (!avatarUrl) {
+      Alert.alert('Mangler profilbillede', 'Upload et profilbillede for at fortsætte.');
+      return;
+    }
+
+    setSavingProfile(true);
+    try {
+      await ensureProfile(user.id);
+
+      const payload = {
+        display_name: trimmedName,
+        avatar_url: avatarUrl,
+        onboarding_complete: true,
+      };
+
+      const { data: updated, error: updateError } = await supabase
+        .from('profiles')
+        .update(payload)
+        .eq('id', user.id)
+        .select('id')
+        .maybeSingle();
+
+      if (updateError || !updated) {
+        if (updateError) {
+          console.warn('[ProfileScreen] Profile update failed, trying upsert:', updateError);
+        }
+        const { data: upserted, error: upsertError } = await supabase
+          .from('profiles')
+          .upsert({ id: user.id, ...payload }, { onConflict: 'id' })
+          .select('id')
+          .maybeSingle();
+
+        if (upsertError || !upserted) {
+          console.warn('[ProfileScreen] Profile upsert failed:', upsertError);
+          Alert.alert('Fejl', 'Kunne ikke gemme profilen. Prøv igen.');
+          return;
+        }
+      }
+
+      const refreshed = await fetchMyProfile(user.id);
+      if (refreshed) {
+        setProfile(refreshed);
+        const refreshedAvatar = refreshed.avatar_url;
+        const resolvedAvatar = refreshedAvatar
+          ? refreshedAvatar.startsWith('http')
+            ? refreshedAvatar
+            : getPublicUrl('avatars', refreshedAvatar)
+          : null;
+        setAvatarUrlInput(resolvedAvatar ?? avatarUrlInput);
+      } else {
+        setProfile((prev) =>
+          prev
+            ? { ...prev, ...payload }
+            : {
+                id: user.id,
+                display_name: trimmedName,
+                avatar_url: avatarUrl,
+                member_since: null,
+                onboarding_complete: true,
+              },
+        );
+      }
+      Alert.alert('Profil gemt', 'Din profil er nu opdateret.');
+    } catch (e) {
+      console.warn('[ProfileScreen] Unexpected save error:', e);
+      Alert.alert('Fejl', 'Kunne ikke gemme profilen. Prøv igen.');
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
   const handleUploadAvatar = async () => {
@@ -190,8 +296,15 @@ export default function ProfileScreen() {
     setUploadingAvatar(false);
 
     if (avatarPath) {
-      // avatarPath includes cache buster, store it directly
-      setProfile((prev) => (prev ? { ...prev, avatar_url: avatarPath } : null));
+      const publicUrl = avatarPath.startsWith('http')
+        ? avatarPath
+        : getPublicUrl('avatars', avatarPath);
+      if (!publicUrl) {
+        Alert.alert('Fejl', 'Kunne ikke hente billed-URL. Prøv igen.');
+        return;
+      }
+      setAvatarUrlInput(publicUrl);
+      setProfile((prev) => (prev ? { ...prev, avatar_url: publicUrl } : null));
       Alert.alert('Succes!', 'Profilbillede opdateret');
     } else {
       Alert.alert('Fejl', 'Kunne ikke uploade billede. Prøv igen.');
@@ -337,6 +450,22 @@ export default function ProfileScreen() {
             <Text style={[styles.profileName, { color: theme.colors.text.primary }]}>
               {profile?.display_name || user?.email || 'Fan'}
             </Text>
+            <Text style={[styles.profileLabel, { color: theme.colors.text.secondary }]}>Kaldenavn</Text>
+            <TextInput
+              value={displayNameInput}
+              onChangeText={setDisplayNameInput}
+              placeholder="Dit kaldenavn"
+              placeholderTextColor={theme.colors.text.secondary}
+              style={[
+                styles.profileInput,
+                {
+                  borderColor: theme.colors.border.default,
+                  color: theme.colors.text.primary,
+                  backgroundColor: theme.colors.bg.elevated,
+                },
+              ]}
+              editable={!savingProfile}
+            />
             <Text style={[styles.profileSubtext, { color: theme.colors.text.secondary }]}>
               {profile?.member_since
                 ? `Medlem siden ${formatMemberSince(profile.member_since)}`
@@ -351,7 +480,11 @@ export default function ProfileScreen() {
           </View>
         </View>
         <View style={{ marginTop: spacing.md }}>
-          <OutlineButton title="Rediger profil" onPress={handleEditProfile} />
+          <OutlineButton
+            title={savingProfile ? 'Gemmer...' : 'Gem & fortsæt'}
+            onPress={handleSaveProfile}
+            disabled={savingProfile}
+          />
         </View>
       </Card>
 
@@ -441,6 +574,14 @@ export default function ProfileScreen() {
           onPress={() => Alert.alert('Hjælp', 'Kontakt support@fcnfans.dk')}
           styles={styles}
         />
+        {__DEV__ && (
+          <ProfileRow
+            icon="refresh"
+            title="Nulstil login"
+            onPress={handleDevResetLogin}
+            styles={styles}
+          />
+        )}
         <ProfileRow icon="log-out" title="Log ud" onPress={handleLogout} isLogout styles={styles} />
       </Card>
 
@@ -561,6 +702,19 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     profileName: {
       fontSize: theme.typography.h3.fontSize,
       fontWeight: '700',
+    },
+    profileLabel: {
+      fontSize: 12,
+      fontWeight: '600',
+      marginTop: spacing.xs,
+      marginBottom: spacing.xs,
+    },
+    profileInput: {
+      borderWidth: 1,
+      borderRadius: spacing.xs,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      fontSize: 14,
     },
     profileSubtext: {
       fontSize: theme.typography.body.fontSize,

@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { getProfileSafe } from '../lib/profile';
 
 // ===== TYPES =====
 
@@ -7,6 +8,7 @@ export interface UserProfile {
   display_name: string | null;
   avatar_url: string | null;
   member_since: string | null;
+  onboarding_complete?: boolean | null;
 }
 
 export interface MyCommunity {
@@ -75,18 +77,10 @@ export function formatEventDate(isoDate: string): string {
  */
 export async function fetchMyProfile(userId: string): Promise<UserProfile | null> {
   try {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, display_name, avatar_url, member_since')
-      .eq('id', userId)
-      .maybeSingle();
-
-    if (error) {
-      console.warn('[profileApi] Error fetching profile', error);
-      return null;
-    }
-
-    return data;
+    return await getProfileSafe<UserProfile>(
+      userId,
+      'id, display_name, avatar_url, member_since, onboarding_complete',
+    );
   } catch (err) {
     console.error('[profileApi] Unexpected error fetching profile:', err);
     return null;

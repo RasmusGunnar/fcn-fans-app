@@ -40,7 +40,7 @@ const tabData = [
   },
 ];
 
-function CustomTabBar({ state, descriptors, navigation }: any) {
+function CustomTabBar({ state, descriptors, navigation, tabs, showCreate }: any) {
   const insets = useSafeAreaInsets();
   const [sheetVisible, setSheetVisible] = useState(false);
 
@@ -54,8 +54,8 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
     setSheetVisible(false);
   };
 
-  const leftTabs = tabData.slice(0, 2);
-  const rightTabs = tabData.slice(2, 4);
+  const leftTabs = tabs.slice(0, Math.ceil(tabs.length / 2));
+  const rightTabs = tabs.slice(Math.ceil(tabs.length / 2));
 
   const renderTab = (tab: (typeof tabData)[0]) => {
     const route = state.routes.find((r: any) => r.name === tab.name);
@@ -89,30 +89,38 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
     <View style={[styles.tabBarContainer, { height: 64 + insets.bottom }]}>
       <View style={styles.tabBar}>
         <View style={styles.sideGroup}>{leftTabs.map(renderTab)}</View>
-        <View style={{ width: 60 }} />
+        {showCreate ? <View style={{ width: 60 }} /> : null}
         <View style={styles.sideGroup}>{rightTabs.map(renderTab)}</View>
-        <Pressable style={styles.centerButton} onPress={onPlusPress}>
-          <Text style={styles.plusText}>+</Text>
-        </Pressable>
+        {showCreate ? (
+          <Pressable style={styles.centerButton} onPress={onPlusPress}>
+            <Text style={styles.plusText}>+</Text>
+          </Pressable>
+        ) : null}
       </View>
-      <CreateSheet visible={sheetVisible} onClose={handleCloseSheet} />
+      {showCreate ? <CreateSheet visible={sheetVisible} onClose={handleCloseSheet} /> : null}
     </View>
   );
 }
 
 export function AppTabs() {
+  const tabs = tabData;
   return (
     <Tab.Navigator
-      tabBar={(props) => <CustomTabBar {...props} />}
+      tabBar={(props) => <CustomTabBar {...props} tabs={tabs} showCreate />}
       screenOptions={{
         headerShown: false,
       }}
+      initialRouteName="Home"
     >
       <Tab.Screen name="Home" component={HomeStack} />
       <Tab.Screen name="Communities" component={CommunitiesStack} />
       <Tab.Screen name="Events" component={EventsStack} />
       <Tab.Screen name="Songs" component={SongsScreen} />
-      <Tab.Screen name="Profile" component={ProfileStack} options={{ tabBarButton: () => null }} />
+      <Tab.Screen
+        name="Profile"
+        component={ProfileStack}
+        options={{ tabBarButton: () => null }}
+      />
     </Tab.Navigator>
   );
 }

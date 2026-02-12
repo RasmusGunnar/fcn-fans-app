@@ -26,6 +26,8 @@ export function CardActions({
   onPressShare,
 }: CardActionsProps) {
   const theme = defaultTheme;
+  const iconCountGap = theme.spacing[2];
+  const iconSize = theme.spacing[5];
 
   const handleToggleLike = () => {
     if (__DEV__) {
@@ -47,29 +49,41 @@ export function CardActions({
   return (
     <View style={styles.container} pointerEvents="box-none">
       <View style={styles.leftActions} pointerEvents="box-none">
-        <Pressable style={styles.action} onPress={handleToggleLike} pointerEvents="auto">
+        <Pressable
+          style={({ pressed }) => [styles.action, { gap: iconCountGap }, pressed && styles.actionPressed]}
+          onPress={handleToggleLike}
+          pointerEvents="auto"
+        >
           <Ionicons
             name={liked ? 'heart' : 'heart-outline'}
-            size={20}
-            color={liked ? theme.colors.primary : theme.colors.text.secondary}
+            size={iconSize}
+            color={liked ? theme.colors.primary : theme.colors.text.muted}
           />
           <Text
             variant="caption"
-            color={liked ? 'primary' : 'secondary'}
-            style={styles.actionText}
+            color={liked ? 'primary' : 'muted'}
+            style={styles.countText}
           >
             {likes}
           </Text>
         </Pressable>
-        <Pressable style={styles.action} onPress={handlePressComment} pointerEvents="auto">
-          <Ionicons name="chatbubble-outline" size={20} color={theme.colors.text.secondary} />
-          <Text variant="caption" color="secondary" style={styles.actionText}>
+        <Pressable
+          style={({ pressed }) => [styles.action, { gap: iconCountGap }, pressed && styles.actionPressed]}
+          onPress={handlePressComment}
+          pointerEvents="auto"
+        >
+          <Ionicons name="chatbubble-outline" size={iconSize} color={theme.colors.text.muted} />
+          <Text variant="caption" color="muted" style={styles.countText}>
             {comments}
           </Text>
         </Pressable>
       </View>
-      <Pressable style={styles.action} onPress={onPressShare} pointerEvents="auto">
-        <Ionicons name="share-social-outline" size={20} color={theme.colors.text.secondary} />
+      <Pressable
+        style={({ pressed }) => [styles.action, styles.shareAction, pressed && styles.actionPressed]}
+        onPress={onPressShare}
+        pointerEvents="auto"
+      >
+        <Ionicons name="share-social-outline" size={iconSize} color={theme.colors.text.muted} />
       </Pressable>
     </View>
   );
@@ -80,20 +94,30 @@ const theme = defaultTheme;
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: theme.layout.cardPadding,
+    paddingVertical: theme.spacing[3],
     borderTopWidth: theme.layout.borderHairline,
-    borderTopColor: theme.colors.border.light,
+    borderTopColor: theme.colors.border.subtle,
   },
   leftActions: {
     flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.layout.cardPadding,
   },
   action: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: theme.spacing[4],
+    minHeight: theme.spacing[11],
+    paddingVertical: theme.spacing[2],
   },
-  actionText: {
-    marginLeft: theme.spacing[1],
+  shareAction: {
+    marginLeft: 'auto',
+  },
+  actionPressed: {
+    opacity: 0.7,
+  },
+  countText: {
+    fontWeight: theme.typography.caption.fontWeight as any,
   },
 });
