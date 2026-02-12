@@ -2,11 +2,18 @@
 // All spacing, colors, and radius values must use theme.spacing[N], theme.colors.*, theme.radius.*
 // NO hardcoded numbers or color strings allowed.
 
-import React, { useState, useMemo } from 'react';
-import { View, StyleSheet, Image, TextInput, Pressable, Share, Alert } from 'react-native';
+import React, { useState, useMemo, useEffect } from 'react';
+import {
+  View,
+  StyleSheet,
+  Image,
+  TextInput,
+  Pressable,
+  Share,
+  Alert,
+} from 'react-native';
 import { Text } from '../ui';
 import { OptionsMenu, OptionsMenuOption } from '../OptionsMenu';
-import { CardMedia } from './CardMedia';
 import { CardRoot } from './CardRoot';
 import { CardHeader } from './CardHeader';
 import { Avatar } from '../Avatar';
@@ -15,8 +22,8 @@ import { Post } from '../../types/post';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../auth/AuthProvider';
 import * as Linking from 'expo-linking';
-import { Ionicons } from '@expo/vector-icons';
-import { normalizeMedia, resolveMediaUrl, isVideoMedia } from '../../utils/media';
+import { Video, ResizeMode } from 'expo-av';
+import { getPublicUrl } from '../../lib/storageUrl';
 import { canEditPost, canDeleteFeedItem } from '../../utils/permissions';
 import type { CommentPreview } from '../../services/likesApi';
 import type { CategoryKey } from '../../theme/categories';
@@ -38,6 +45,70 @@ function getTimeAgo(isoDate: string): string {
   return date.toLocaleDateString('da-DK');
 }
 
+// BASELINE: Type-safe media normalization
+type MediaItem = {
+  bucket?: string;
+  path?: string;
+  type?: string;
+  width?: number;
+  height?: number;
+  thumbnail_path?: string;
+  thumbnail_bucket?: string;
+  url?: string;
+  publicUrl?: string;
+  metadata?: any;
+};
+
+function normalizeMedia(raw: any): MediaItem[] {
+  // BASELINE: Deterministic parsing - no silent failures
+  // Handle null/undefined
+  if (!raw) return [];
+  
+  // Already an array
+  if (Array.isArray(raw)) return raw;
+  
+  // JSON string - parse it
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+      if (typeof parsed === 'object' && parsed !== null) {
+        const hasMediaShape = 'path' in parsed || 'bucket' in parsed || 'type' in parsed || 'url' in parsed || 'uri' in parsed || 'publicUrl' in parsed;
+        return hasMediaShape ? [parsed] : [];
+      }
+      return [];
+    } catch {
+      if (__DEV__) {
+        console.warn('[normalizeMedia] Failed to parse JSON string:', raw);
+      }
+      return [];
+    }
+  }
+  
+  // BASELINE FIX: Single object → wrap only if it has media-like shape
+  if (typeof raw === 'object' && raw !== null) {
+    const hasMediaShape = 'path' in raw || 'bucket' in raw || 'type' in raw || 'url' in raw || 'uri' in raw || 'publicUrl' in raw;
+    if (__DEV__ && !hasMediaShape) {
+      console.warn('[normalizeMedia] Object missing media fields:', Object.keys(raw));
+    }
+    return hasMediaShape ? [raw] : [];
+  }
+  
+  return [];
+}
+
+function normalizeType(typeValue: any): 'image' | 'video' | null {
+  if (!typeValue) return null;
+  const lower = String(typeValue).toLowerCase();
+  // BASELINE: Accept common aliases
+  if (lower === 'image' || lower === 'photo' || lower === 'img') return 'image';
+  if (lower === 'video' || lower === 'movie') return 'video';
+  // BASELINE: Check file extensions
+  if (lower.match(/\.(jpg|jpeg|png|heic|webp)$/)) return 'image';
+  if (lower.match(/\.(mp4|mov|m4v|webm)$/)) return 'video';
+  return null;
+}
+
 interface FanPostCardProps {
   post: Post;
   authorProfile?: { display_name: string | null; avatar_url: string | null };
@@ -53,6 +124,9 @@ interface FanPostCardProps {
   onDeleted?: (postId: string) => void;
   onOpenDetail?: () => void; // Optional navigation to post detail
   onNewComment?: (comment: CommentPreview) => void;
+  isActiveVideo?: boolean;
+  isAppActive?: boolean;
+  onActivateVideo?: () => void;
 }
 
 export function FanPostCard({
@@ -70,6 +144,9 @@ export function FanPostCard({
   onDeleted = () => {},
   onOpenDetail,
   onNewComment,
+  isActiveVideo = false,
+  isAppActive = true,
+  onActivateVideo,
 }: FanPostCardProps) {
   const timeAgo = getTimeAgo(post.createdAt);
   const groupDisplay = post.communityName || post.factionName;
@@ -79,30 +156,47 @@ export function FanPostCard({
 
   const { user, isAppAdmin } = useAuth();
 
-  // Normalize media and extract image URL using centralized helpers
-  // Memoize to avoid redundant normalizeMedia and resolveMediaUrl calls on re-renders
-  const mediaArr = useMemo(() => normalizeMedia(post.media), [post.media]);
-  const firstMedia = useMemo(() => mediaArr[0], [mediaArr]);
-  const mediaUrl = useMemo(() => resolveMediaUrl(firstMedia), [firstMedia]);
-  const isVideo = useMemo(() => isVideoMedia(firstMedia), [firstMedia]);
+  // BASELINE: Deterministic media parsing with DEV logging
+  const mediaArray = useMemo(() => normalizeMedia(post.media), [post.media]);
+  const m0 = mediaArray[0] || null;
+  const mediaKind = normalizeType(m0?.type) || normalizeType((post as any).media_type);
 
-  // Debug logging for resolved media URL
-  if (__DEV__ && mediaUrl) {
-    console.log('[PostImageUri]', { postId: post.id, uri: mediaUrl });
-  }
+  // BASELINE: Simple URL resolution
+  const mediaUri = useMemo(() => {
+    if (!m0) return null;
+    // Prefer bucket+path (new storage pattern)
+    if (m0.bucket && m0.path) {
+      return getPublicUrl(m0.bucket, m0.path);
+    }
+    // Legacy fields
+    if (m0.publicUrl) return m0.publicUrl;
+    if (m0.url) return m0.url;
+    return null;
+  }, [m0]);
 
-  const handleOpenVideo = async () => {
-    if (!mediaUrl) {
-      Alert.alert('Fejl', 'Videoen kunne ikke indlæses.');
-      return;
+  // DEV-only logging for first 2 posts
+  useEffect(() => {
+    if (!__DEV__) return;
+    const logKey = `media-debug-${post.id}`;
+    const alreadyLogged = (globalThis as any)[logKey];
+    if (!alreadyLogged) {
+      (globalThis as any)[logKey] = true;
+      const logCount = ((globalThis as any).__mediaDebugCount || 0) + 1;
+      (globalThis as any).__mediaDebugCount = logCount;
+      if (logCount <= 2) {
+        console.log('[media-debug]', {
+          id: post.id,
+          rawType: typeof post.media,
+          isArray: Array.isArray(post.media),
+          firstMedia: m0,
+          kind: mediaKind,
+          urlExists: !!mediaUri,
+        });
+      }
     }
-    // TODO: Replace with in-app video player when expo-av is added.
-    try {
-      await Linking.openURL(mediaUrl);
-    } catch (e) {
-      Alert.alert('Fejl', 'Kunne ikke åbne videoen.');
-    }
-  };
+  }, [post.id, post.media, m0, mediaKind, mediaUri]);
+
+  // BASELINE: Remove complex video state management - keep only essential edit handlers
 
   const deepLink = Linking.createURL(`/post/${post.id}`);
   const handleShare = () => {
@@ -266,45 +360,99 @@ export function FanPostCard({
           {post.text}
         </Text>
       )}
-      {isVideo ? (
-        <Pressable style={styles.videoPlaceholder} onPress={handleOpenVideo}>
-          <View style={styles.videoIconBadge}>
-            <Ionicons name="play" size={theme.spacing[6]} color={theme.colors.bg.card} />
-          </View>
-          <Text variant="caption" color="secondary" style={styles.placeholderText}>
-            Video vedhæftet
-          </Text>
-        </Pressable>
-      ) : mediaUrl && !imageLoadError ? (
-        <CardMedia aspectRatio={4 / 3}>
-          <Image
-            source={{ uri: mediaUrl }}
-            style={styles.mediaImage}
-            resizeMode="cover"
-            onError={(e) => {
-              if (__DEV__) {
-                console.log('[PostImageError]', {
-                  postId: post.id,
-                  uri: mediaUrl,
-                  native: e?.nativeEvent,
-                });
-              }
-              setImageLoadError(true);
-            }}
-          />
-        </CardMedia>
-      ) : imageLoadError && __DEV__ ? (
-        <View style={styles.imageErrorContainer}>
-          <Text variant="caption" color="secondary" style={styles.imageErrorText}>
-            ⚠️ Billede kunne ikke indlæses
-          </Text>
+      {/* BASELINE: Deterministic media rendering - no silent failures */}
+      {!m0 ? null : (
+        <View style={styles.mediaOuter}>
+          {!mediaKind ? (
+            <View style={styles.mediaFallback}>
+              <Text variant="caption" color="secondary">
+                Ukendt mediaformat
+              </Text>
+              {__DEV__ && (
+                <Text variant="caption" color="secondary" style={{ marginTop: 4 }}>
+                  Type: {m0.type || 'none'}
+                  {m0.bucket || m0.path ? ` • ${m0.bucket || '?'}/${m0.path || '?'}` : ''}
+                  {Object.keys(m0).length > 0 ? ` • Keys: ${Object.keys(m0).join(', ')}` : ''}
+                </Text>
+              )}
+            </View>
+          ) : !mediaUri ? (
+            <View style={styles.mediaFallback}>
+              <Text variant="caption" color="secondary">
+                Media kunne ikke indlæses
+              </Text>
+              {__DEV__ && (
+                <Text variant="caption" color="secondary" style={{ marginTop: 4 }}>
+                  Type: {mediaKind || 'unknown'}
+                  {m0.bucket && m0.path ? ` • ${m0.bucket}/${m0.path}` : ''}
+                </Text>
+              )}
+            </View>
+          ) : mediaKind === 'video' ? (
+            <View style={styles.mediaContainer}>
+              <Video
+                source={{ uri: mediaUri }}
+                style={styles.video}
+                resizeMode={ResizeMode.COVER}
+                shouldPlay={false}
+                useNativeControls
+                onError={(e) => {
+                  console.error('[VideoError]', { postId: post.id, error: e });
+                }}
+              />
+            </View>
+          ) : mediaKind === 'image' ? (
+            imageLoadError ? (
+              <View style={styles.mediaFallback}>
+                <Text variant="caption" color="secondary">
+                  Billede kunne ikke indlæses
+                </Text>
+                {__DEV__ && (
+                  <Text variant="caption" color="secondary" style={{ marginTop: 4 }}>
+                    {mediaUri}
+                  </Text>
+                )}
+              </View>
+            ) : (
+              <View style={styles.mediaContainer}>
+                <Image
+                  source={{ uri: mediaUri }}
+                  style={styles.image}
+                  resizeMode="cover"
+                  onError={(e) => {
+                    if (__DEV__) {
+                      console.log('[ImageError]', {
+                        postId: post.id,
+                        uri: mediaUri,
+                        native: e?.nativeEvent,
+                      });
+                    }
+                    setImageLoadError(true);
+                  }}
+                />
+              </View>
+            )
+          ) : (
+            <View style={styles.mediaFallback}>
+              <Text variant="caption" color="secondary">
+                Uventet mediaformat
+              </Text>
+              {__DEV__ && (
+                <Text variant="caption" color="secondary" style={{ marginTop: 4 }}>
+                  Kind: {mediaKind} • URI: {mediaUri ? 'yes' : 'no'}
+                </Text>
+              )}
+            </View>
+          )}
         </View>
-      ) : null}
+      )}
     </CardRoot>
   );
 }
 
 const theme = defaultTheme;
+
+const cardPadding = theme.components.card.padding;
 
 const styles = StyleSheet.create({
   text: {
@@ -318,39 +466,33 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: theme.spacing[2],
   },
-  mediaImage: {
+  // FULL-BLEED: Media wrapper with negative margins
+  mediaOuter: {
+    marginHorizontal: -cardPadding,
+    marginTop: theme.spacing[3],
+    alignSelf: 'stretch',
+  },
+  // BASELINE: Simple 1:1 media containers - sharp corners
+  mediaContainer: {
+    width: '100%',
+    aspectRatio: 1,
+    backgroundColor: theme.colors.border.default,
+  },
+  video: {
     width: '100%',
     height: '100%',
-    backgroundColor: theme.colors.border.default,
   },
-  imageErrorContainer: {
-    padding: theme.spacing[2],
-    marginVertical: theme.spacing[1],
-    backgroundColor: theme.colors.border.default,
-    borderRadius: theme.radius.sm,
+  image: {
+    width: '100%',
+    height: '100%',
   },
-  imageErrorText: {
-    textAlign: 'center',
-  },
-  videoPlaceholder: {
-    height: 120,
+  mediaFallback: {
+    width: '100%',
+    aspectRatio: 1,
     backgroundColor: theme.colors.border.default,
-    borderRadius: theme.radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: theme.spacing[2],
-    gap: theme.spacing[2],
-  },
-  placeholderText: {
-    textAlign: 'center',
-  },
-  videoIconBadge: {
-    width: theme.spacing[9],
-    height: theme.spacing[9],
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.colors.text.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: theme.spacing[3],
   },
   commentsContainer: {
     paddingTop: theme.spacing[2],

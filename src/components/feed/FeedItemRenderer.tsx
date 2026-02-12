@@ -24,6 +24,7 @@ export type FeedItemRendererProps = {
   onPressEvent?: (eventId: string) => void;
   onPressBusTrip?: (busTripId: string) => void;
   onPressMatch?: (matchId: string) => void;
+  isActiveVideo?: boolean;
 };
 
 export function FeedItemRenderer({
@@ -44,6 +45,7 @@ export function FeedItemRenderer({
   onPressEvent,
   onPressBusTrip,
   onPressMatch,
+  isActiveVideo = false,
 }: FeedItemRendererProps) {
   switch (item.kind) {
     case 'post': {
@@ -71,6 +73,7 @@ export function FeedItemRenderer({
             incrementCommentCount('post', item.id);
             addCommentPreview('post', item.id, comment);
           }}
+          isActiveVideo={isActiveVideo}
         />
       );
     }

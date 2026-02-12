@@ -1,5 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, RefreshControl, Image } from 'react-native';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  RefreshControl,
+  Image,
+  ViewToken,
+  AppState,
+} from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { AppHeader } from '../components/AppHeader';
@@ -41,6 +50,8 @@ export default function HomeScreen() {
   } = useFeed();
   const [nextFixture, setNextFixture] = useState<Fixture | null>(null);
   const [loadingFixture, setLoadingFixture] = useState(false);
+  const [currentPlayingVideoPostId, setCurrentPlayingVideoPostId] = useState<string | null>(null);
+  const [isAppActive, setIsAppActive] = useState(true);
 
   // Defensive: Ensure feedItems is always an array and filter out any falsy values
   const safeFeedItems = (Array.isArray(feedItems) ? feedItems : []).filter(Boolean);
@@ -50,6 +61,44 @@ export default function HomeScreen() {
   const safeLikeMap = likeMap || {};
   const safeCommentCountMap = commentCountMap || {};
   const safeCommentPreviewMap = commentPreviewMap || {};
+
+  // Track which video post is visible for autoplay
+  const handleViewableItemsChanged = useCallback(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      const visibleVideoPost = viewableItems.find((viewableItem) => {
+        const feedItem = viewableItem.item as any;
+        if (!feedItem || feedItem.kind !== 'post') return false;
+        const post = feedItem.data as any;
+        return post?.media?.[0]?.type === 'video';
+      });
+
+      if (visibleVideoPost?.item) {
+        setCurrentPlayingVideoPostId(getFeedItemKey(visibleVideoPost.item as any));
+      } else {
+        setCurrentPlayingVideoPostId(null);
+      }
+    },
+    [],
+  );
+
+  const viewabilityConfig = useMemo(
+    () => ({
+      viewAreaCoveragePercentThreshold: 60,
+      minimumViewTime: 100,
+    }),
+    [],
+  );
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      setIsAppActive(state === 'active');
+      if (state !== 'active') {
+        setCurrentPlayingVideoPostId(null);
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
 
   // Debug logging for testing
   if (__DEV__) {
@@ -114,6 +163,7 @@ export default function HomeScreen() {
     const likeState = safeLikeMap[key] || { liked: false, likes: 0 };
     const commentCount = safeCommentCountMap[key] || 0;
     const commentPreviews = safeCommentPreviewMap[key] || [];
+    const isActiveVideo = key === currentPlayingVideoPostId;
 
     return (
       <FeedItemRenderer
@@ -132,6 +182,9 @@ export default function HomeScreen() {
         removeNews={removeNews}
         incrementCommentCount={incrementCommentCount}
         addCommentPreview={addCommentPreview}
+        isActiveVideo={isActiveVideo}
+        isAppActive={isAppActive}
+        onActivateVideo={() => setCurrentPlayingVideoPostId(key)}
       />
     );
   };
@@ -153,6 +206,8 @@ export default function HomeScreen() {
       }
       keyboardDismissMode="on-drag"
       keyboardShouldPersistTaps="handled"
+      onViewableItemsChanged={handleViewableItemsChanged}
+      viewabilityConfig={viewabilityConfig}
       ListHeaderComponent={
         <>
           <AppHeader

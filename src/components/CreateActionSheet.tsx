@@ -2,18 +2,18 @@ import React from 'react';
 import { Modal, View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, Theme } from '../theme';
-import { PickedMedia, pickCameraPhoto, recordVideo, pickFromLibrary } from '../lib/mediaPicker';
+import { MediaAsset, pickCameraPhoto, pickCameraVideo, pickFromLibrary } from '../lib/mediaPicker';
 
 type Props = {
   visible: boolean;
   onClose: () => void;
-  onPicked: (asset: PickedMedia) => void;
+  onPicked: (asset: MediaAsset) => void;
 };
 
 export default function CreateActionSheet({ visible, onClose, onPicked }: Props) {
   const theme = useTheme();
   const styles = createStyles(theme);
-  const handlePick = async (fn: () => Promise<PickedMedia | null>) => {
+  const handlePick = async (fn: () => Promise<MediaAsset | null>) => {
     try {
       const asset = await fn();
       if (asset) {
@@ -36,7 +36,7 @@ export default function CreateActionSheet({ visible, onClose, onPicked }: Props)
               <Ionicons name="camera" size={22} color={theme.colors.primary} />
               <Text style={styles.actionText}>Tag billede</Text>
             </Pressable>
-            <Pressable style={styles.action} onPress={() => handlePick(recordVideo)}>
+            <Pressable style={styles.action} onPress={() => handlePick(pickCameraVideo)}>
               <Ionicons name="videocam" size={22} color={theme.colors.primary} />
               <Text style={styles.actionText}>Optag video</Text>
             </Pressable>

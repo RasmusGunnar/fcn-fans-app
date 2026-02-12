@@ -45,11 +45,6 @@ export async function uploadAvatar(userId: string): Promise<string | null> {
 
     const asset = result.assets[0];
 
-    if (asset.type && asset.type !== 'image') {
-      Alert.alert('Fejl', 'Vælg venligst et billede til din avatar.');
-      return null;
-    }
-
     // Validate local file exists and has size > 0
     try {
       const fileInfo = await FileSystem.getInfoAsync(asset.uri);

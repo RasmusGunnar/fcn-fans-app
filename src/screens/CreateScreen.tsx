@@ -42,19 +42,23 @@ export default function CreateScreen() {
           throw new Error(`Upload returned invalid result - path: ${uploaded.path}`);
         }
 
-        // Save bucket + path structure (NOT URLs)
+        // Uploaded already has bucket from upload.ts, but verify it
         mediaArray = [
           {
-            bucket: 'post-media',
+            bucket: uploaded.bucket ?? 'post-media',
             path: uploaded.path,
             type: uploaded.type,
             width: uploaded.width,
             height: uploaded.height,
+            ...(uploaded.thumbnail_path && uploaded.thumbnail_bucket
+              ? { thumbnail_path: uploaded.thumbnail_path, thumbnail_bucket: uploaded.thumbnail_bucket }
+              : {}),
           },
         ];
         console.log('[CreateScreen] Attachment uploaded', {
           bucket: 'post-media',
           path: uploaded.path,
+          thumbnail_path: uploaded.thumbnail_path,
         });
       } else if (attachment && !user?.id) {
         throw new Error('Vedhæftning valgt men bruger ikke logget ind');
@@ -69,45 +73,62 @@ export default function CreateScreen() {
     let dbPost: Post | null = null;
     try {
       if (user?.id) {
+        const insertPayload = {
+          author_id: user.id,
+          text: text.trim(),
+          media: mediaArray.length > 0 ? mediaArray : null,
+          media_type: mediaArray.length > 0 ? (mediaArray[0]?.type ?? 'image') : null,
+          ...(audienceType === 'community' && route?.params?.communityId
+            ? { community_id: route.params.communityId }
+            : {}),
+        };
+        console.log('[CreateScreen] DB INSERT payload:', {
+          author_id: insertPayload.author_id,
+          text_length: insertPayload.text.length,
+          media: insertPayload.media,
+          media_type: insertPayload.media_type,
+          community_id: insertPayload.community_id,
+        });
+
         const { data, error } = await supabase
           .from('posts')
-          .insert({
-            author_id: user.id,
-            text: text.trim(),
-            media: mediaArray,
-            media_type: attachment?.type ?? null,
-            ...(audienceType === 'community' && route?.params?.communityId
-              ? { community_id: route.params.communityId }
-              : {}),
-          })
-          .select('id, created_at, author_id, text, media, community_id');
+          .insert(insertPayload)
+          .select('id, created_at, author_id, text, media, community_id')
+          .single();
+
+        console.log('[CreateScreen] Insert response:', { error, dataExists: !!data });
         if (error) throw error;
 
-        if (data && data[0]) {
-          const dbRecord = data[0];
-          // DB-returned post is the source of truth
-          dbPost = {
-            id: dbRecord.id,
-            authorName: user?.email ?? 'Ukendt',
-            authorId: dbRecord.author_id,
-            communityId: dbRecord.community_id ?? null,
-            createdAt: dbRecord.created_at || new Date().toISOString(),
-            text: dbRecord.text,
-            communityName: audienceType === 'community' ? selectedCommunity : undefined,
-            factionName: audienceType === 'faction' ? selectedFaction : undefined,
-            likesCount: 0,
-            commentsCount: 0,
-            likedByMe: false,
-            media: dbRecord.media, // Use DB media (may be parsed as array or string)
-          };
-          console.log('[CreateScreen] Post inserted and fetched from DB:', {
-            postId: dbPost.id,
-            media: dbPost.media,
-          });
+        if (!data) {
+          throw new Error('Insert succeeded but no data returned from database');
         }
+
+        // DB-returned post is the source of truth
+        dbPost = {
+          id: data.id,
+          authorName: user?.email ?? 'Ukendt',
+          authorId: data.author_id,
+          communityId: data.community_id ?? null,
+          createdAt: data.created_at || new Date().toISOString(),
+          text: data.text,
+          communityName: audienceType === 'community' ? selectedCommunity : undefined,
+          factionName: audienceType === 'faction' ? selectedFaction : undefined,
+          likesCount: 0,
+          commentsCount: 0,
+          likedByMe: false,
+          media: data.media,
+        };
+        console.log('[CreateScreen] Post inserted successfully:', {
+          postId: dbPost.id,
+          media: dbPost.media,
+        });
       }
-    } catch (e) {
-      console.warn('[CreateScreen] Insert post error', e);
+    } catch (e: any) {
+      const errorMsg = e?.message || String(e);
+      console.error('[CreateScreen] INSERT FAILED:', errorMsg);
+      alert('Post fejlede: ' + errorMsg + '\n\nTjek: (1) Logget ind (2) Database forbinder (3) Policies tillader insert');
+      setLoading(false);
+      return;
     }
 
     // Use DB-fetched post if available, otherwise fallback to locally constructed

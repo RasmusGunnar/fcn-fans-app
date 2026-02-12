@@ -2,6 +2,11 @@ import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Alert, Platform } from 'react-native';
 
+// Maximum video duration in seconds (enforced by expo-image-picker videoMaxDuration)
+const MAX_VIDEO_SECONDS = 60;
+// Asset duration from expo-image-picker is in milliseconds
+const MS_PER_SECOND = 1000;
+
 export type MediaType = 'image' | 'video';
 
 export type PickedMedia = {
@@ -64,9 +69,12 @@ export async function pickFromLibrary(): Promise<PickedMedia | null> {
     }
   }
 
-  if (detectedType === 'video' && asset.duration && asset.duration > 60) {
-    Alert.alert('Videoen er for lang', 'Maksimal varighed er 60 sekunder.');
-    return null;
+  if (detectedType === 'video' && asset.duration) {
+    const durationSeconds = asset.duration / MS_PER_SECOND;
+    if (durationSeconds > MAX_VIDEO_SECONDS) {
+      Alert.alert('Videoen er for lang', `Maksimal varighed er ${MAX_VIDEO_SECONDS} sekunder. Du valgte en video på ${Math.round(durationSeconds)} sekunder.`);
+      return null;
+    }
   }
 
   if (detectedType === 'image') {
@@ -224,9 +232,12 @@ export async function recordVideo(): Promise<PickedMedia | null> {
     Alert.alert('Fejl', 'Kunne ikke læse videofilen. Prøv igen.');
     return null;
   }
-  if (asset.duration && asset.duration > 60) {
-    Alert.alert('Videoen er for lang', 'Maksimal varighed er 60 sekunder.');
-    return null;
+  if (asset.duration) {
+    const durationSeconds = asset.duration / MS_PER_SECOND;
+    if (durationSeconds > MAX_VIDEO_SECONDS) {
+      Alert.alert('Videoen er for lang', `Maksimal varighed er ${MAX_VIDEO_SECONDS} sekunder. Du oprettede en video på ${Math.round(durationSeconds)} sekunder.`);
+      return null;
+    }
   }
   return {
     uri: asset.uri,

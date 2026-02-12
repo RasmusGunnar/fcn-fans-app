@@ -8,6 +8,8 @@ import { getPublicUrl } from '../lib/storageUrl';
 export type MediaItem = {
   bucket?: string;
   path?: string;
+  thumbnail_bucket?: string;
+  thumbnail_path?: string;
   // Legacy fields for backwards compatibility
   url?: string;
   publicUrl?: string;
@@ -18,12 +20,13 @@ export type MediaItem = {
 
 /**
  * Normalize post.media from various formats to consistent MediaItem[] array.
- * Handles: null, undefined, array, JSON string, single object.
+ * BASELINE: Deterministic parsing - handles null, array, JSON string, single object.
  *
  * @param media - Raw media from post (could be null, array, JSON string, etc.)
  * @returns Normalized MediaItem[] array, empty if no valid media
  */
 export function normalizeMedia(media: unknown): MediaItem[] {
+  // Handle null/undefined
   if (!media) {
     return [];
   }
@@ -39,7 +42,9 @@ export function normalizeMedia(media: unknown): MediaItem[] {
     try {
       const parsed = JSON.parse(media);
       // Parsed could be an array or single object
-      return Array.isArray(parsed) ? (parsed as MediaItem[]) : [parsed as MediaItem];
+      if (Array.isArray(parsed)) return parsed as MediaItem[];
+      if (typeof parsed === 'object' && parsed !== null) return [parsed as MediaItem];
+      return [];
     } catch (e) {
       if (__DEV__) {
         console.warn('[normalizeMedia] Failed to parse JSON string:', { media, error: String(e) });
@@ -53,7 +58,7 @@ export function normalizeMedia(media: unknown): MediaItem[] {
     return media as MediaItem[];
   }
 
-  // If it's a single object, wrap in array
+  // BASELINE FIX: If it's a single object, wrap in array (was returning [] before)
   if (typeof media === 'object' && media !== null) {
     return [media as MediaItem];
   }

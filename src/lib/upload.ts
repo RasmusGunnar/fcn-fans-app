@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 import { PickedMedia } from './mediaPicker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Crypto from 'expo-crypto';
+import * as VideoThumbnails from 'expo-video-thumbnails';
 
 /**
  * Convert base64 string to Uint8Array for reliable Supabase uploads in Expo
@@ -31,6 +32,8 @@ export async function uploadMediaToSupabase(
   type: 'image' | 'video';
   width?: number;
   height?: number;
+  thumbnail_path?: string;
+  thumbnail_bucket?: string;
 }> {
   // Auth guard: verify user is authenticated
   if (!userId || userId.trim() === '') {
@@ -110,14 +113,66 @@ export async function uploadMediaToSupabase(
     throw verifyError; // Re-throw to fail the upload
   }
 
+  // Generate and upload thumbnail for videos
+  let thumbnailPath: string | undefined = undefined;
+  let thumbnailBucket: string | undefined = undefined;
+
+  if (asset.type === 'video') {
+    try {
+      console.log('[Upload] Generating video thumbnail...');
+      const { uri: thumbnailUri } = await VideoThumbnails.getThumbnailAsync(asset.uri, {
+        time: 1000, // 1 second into video
+      });
+
+      if (thumbnailUri) {
+        // Read thumbnail as base64
+        const thumbBase64 = await FileSystem.readAsStringAsync(thumbnailUri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        const thumbBytes = base64ToUint8Array(thumbBase64);
+
+        if (thumbBytes.length === 0) {
+          console.warn('[Upload] Thumbnail byte array is empty, skipping thumbnail upload');
+        } else {
+          // Upload thumbnail to same path but with .thumb.jpg extension
+          const thumbFileName = fileName.replace(/\.[^.]+$/, '.thumb.jpg');
+          const thumbPath = `${userId}/${yyyyMM}/${thumbFileName}`;
+
+          console.log('[Upload] Uploading thumbnail...', { thumbPath });
+          const { data: thumbData, error: thumbError } = await supabase.storage
+            .from('post-media')
+            .upload(thumbPath, thumbBytes, {
+              contentType: 'image/jpeg',
+              upsert: true,
+              cacheControl: '3600',
+            });
+
+          if (thumbError) {
+            console.warn('[Upload] Thumbnail upload failed:', thumbError.message);
+            // Don't throw - continue without thumbnail (fallback to first frame in video)
+          } else {
+            thumbnailPath = thumbData.path;
+            thumbnailBucket = 'post-media';
+            console.log('[Upload] Thumbnail uploaded successfully', { thumbnailPath });
+          }
+        }
+      }
+    } catch (e: any) {
+      console.warn('[Upload] Thumbnail generation failed:', e?.message || e);
+      // Don't throw - continue without thumbnail (fallback UI)
+    }
+  }
+
   // Return bucket and path (NOT the publicUrl)
   // The app will generate URLs on-demand using getPublicUrl helper
   return {
+    bucket: 'post-media',
     path: data.path,
-    publicUrl: '', // Keep for backwards compatibility but don't use
     type: asset.type,
     width: asset.width ?? undefined,
     height: asset.height ?? undefined,
+    thumbnail_path: thumbnailPath,
+    thumbnail_bucket: thumbnailBucket,
   };
 }
 
