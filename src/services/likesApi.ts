@@ -87,6 +87,7 @@ export interface CommentPreview {
   created_at: string;
   author_display_name?: string | null;
   author_avatar_url?: string | null;
+  replies?: CommentPreview[];
 }
 
 /**

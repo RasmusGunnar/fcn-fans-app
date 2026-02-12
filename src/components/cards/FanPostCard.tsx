@@ -15,6 +15,7 @@ import { Post } from '../../types/post';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../auth/AuthProvider';
 import * as Linking from 'expo-linking';
+import { Ionicons } from '@expo/vector-icons';
 import { normalizeMedia, resolveMediaUrl, isVideoMedia } from '../../utils/media';
 import { canEditPost, canDeleteFeedItem } from '../../utils/permissions';
 import type { CommentPreview } from '../../services/likesApi';
@@ -82,13 +83,26 @@ export function FanPostCard({
   // Memoize to avoid redundant normalizeMedia and resolveMediaUrl calls on re-renders
   const mediaArr = useMemo(() => normalizeMedia(post.media), [post.media]);
   const firstMedia = useMemo(() => mediaArr[0], [mediaArr]);
-  const imageUrl = useMemo(() => resolveMediaUrl(firstMedia), [firstMedia]);
+  const mediaUrl = useMemo(() => resolveMediaUrl(firstMedia), [firstMedia]);
   const isVideo = useMemo(() => isVideoMedia(firstMedia), [firstMedia]);
 
   // Debug logging for resolved media URL
-  if (__DEV__ && imageUrl) {
-    console.log('[PostImageUri]', { postId: post.id, uri: imageUrl });
+  if (__DEV__ && mediaUrl) {
+    console.log('[PostImageUri]', { postId: post.id, uri: mediaUrl });
   }
+
+  const handleOpenVideo = async () => {
+    if (!mediaUrl) {
+      Alert.alert('Fejl', 'Videoen kunne ikke indlæses.');
+      return;
+    }
+    // TODO: Replace with in-app video player when expo-av is added.
+    try {
+      await Linking.openURL(mediaUrl);
+    } catch (e) {
+      Alert.alert('Fejl', 'Kunne ikke åbne videoen.');
+    }
+  };
 
   const deepLink = Linking.createURL(`/post/${post.id}`);
   const handleShare = () => {
@@ -253,22 +267,25 @@ export function FanPostCard({
         </Text>
       )}
       {isVideo ? (
-        <View style={styles.videoPlaceholder}>
+        <Pressable style={styles.videoPlaceholder} onPress={handleOpenVideo}>
+          <View style={styles.videoIconBadge}>
+            <Ionicons name="play" size={theme.spacing[6]} color={theme.colors.bg.card} />
+          </View>
           <Text variant="caption" color="secondary" style={styles.placeholderText}>
             Video vedhæftet
           </Text>
-        </View>
-      ) : imageUrl && !imageLoadError ? (
+        </Pressable>
+      ) : mediaUrl && !imageLoadError ? (
         <CardMedia aspectRatio={4 / 3}>
           <Image
-            source={{ uri: imageUrl }}
+            source={{ uri: mediaUrl }}
             style={styles.mediaImage}
             resizeMode="cover"
             onError={(e) => {
               if (__DEV__) {
                 console.log('[PostImageError]', {
                   postId: post.id,
-                  uri: imageUrl,
+                  uri: mediaUrl,
                   native: e?.nativeEvent,
                 });
               }
@@ -322,8 +339,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: theme.spacing[2],
+    gap: theme.spacing[2],
   },
   placeholderText: {
+    textAlign: 'center',
+  },
+  videoIconBadge: {
+    width: theme.spacing[9],
+    height: theme.spacing[9],
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.text.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   commentsContainer: {
     paddingTop: theme.spacing[2],

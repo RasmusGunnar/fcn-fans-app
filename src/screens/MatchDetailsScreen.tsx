@@ -204,6 +204,7 @@ export default function MatchDetailsScreen() {
             targetId={fixture.id}
             currentUserId={user?.id || ''}
             isAppAdmin={isAppAdmin}
+            variant="screen"
           />
         </View>
       </ScrollView>

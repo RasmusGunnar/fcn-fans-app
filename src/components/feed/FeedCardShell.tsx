@@ -13,7 +13,7 @@ import { InlineComments, CommentTargetType } from '../comments/InlineComments';
 import { defaultTheme } from '../../theme';
 import type { CommentPreview } from '../../services/likesApi';
 import { targetKey } from '../../utils/targetKey';
-import { resolveProfileDisplayName, type ProfileMap } from '../../utils/actor';
+import { resolveActorLine, type ProfileMap } from '../../utils/actor';
 import { CategoryBadge } from '../ui';
 import type { CategoryKey } from '../../theme/categories';
 import { Avatar } from '../Avatar';
@@ -91,11 +91,12 @@ export function FeedCardShell({
 
   // Helper to get display name for comment author
   const getAuthorDisplayName = (comment: CommentPreview): string => {
-    return resolveProfileDisplayName(
+    return resolveActorLine({
+      actorType: 'user',
+      authorId: comment.author_id,
+      authorEmail: comment.author_display_name ?? undefined,
       profileMap,
-      comment.author_id,
-      comment.author_display_name ?? undefined,
-    );
+    }).displayName;
   };
 
   const handlePressComment = () => {
@@ -203,6 +204,24 @@ export function FeedCardShell({
                     {' '}
                     {comment.text}
                   </Text>
+                  {comment.replies?.length ? (
+                    <View style={styles.previewReplies}>
+                      {comment.replies.map((reply) => {
+                        const replyDisplayName = getAuthorDisplayName(reply);
+                        return (
+                          <View key={reply.id} style={styles.previewReplyRow}>
+                            <Text variant="caption" color="primary" style={styles.previewAuthor}>
+                              {replyDisplayName}
+                            </Text>
+                            <Text variant="caption" color="primary" style={styles.previewText}>
+                              {' '}
+                              {reply.text}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ) : null}
                 </View>
               </View>
             );
@@ -211,13 +230,18 @@ export function FeedCardShell({
       )}
 
       {commentsOpen && !disableInlineComments && (
-        <InlineComments
-          targetType={targetType}
-          targetId={targetId}
-          currentUserId={currentUserId}
-          isAppAdmin={isAppAdmin}
-          onNewComment={handleNewComment}
-        />
+        <View style={styles.inlineCommentsWrapper}>
+          <InlineComments
+            targetType={targetType}
+            targetId={targetId}
+            currentUserId={currentUserId}
+            isAppAdmin={isAppAdmin}
+            profileMap={profileMap}
+            onNewComment={handleNewComment}
+            variant="inline"
+            maxInlineComments={2}
+          />
+        </View>
       )}
     </CardShell>
   );
@@ -255,8 +279,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   actionBar: {
-    paddingHorizontal: theme.spacing[0],
-    paddingVertical: theme.spacing[0],
   },
   pressableContent: {
     // Allows tapping card content to navigate
@@ -284,5 +306,19 @@ const styles = StyleSheet.create({
     marginRight: theme.spacing[1],
   },
   previewText: {
+  },
+  previewReplies: {
+    width: '100%',
+    paddingLeft: theme.spacing[5],
+    paddingTop: theme.spacing[1],
+    gap: theme.spacing[1],
+  },
+  previewReplyRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  inlineCommentsWrapper: {
+    paddingHorizontal: theme.spacing[3],
+    paddingTop: theme.spacing[2],
   },
 });

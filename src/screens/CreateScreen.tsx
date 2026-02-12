@@ -8,7 +8,7 @@ import { Post } from '../types/post';
 import { Card } from '../components/ui/Card';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { colors, spacing, radius } from '../theme';
-import { MediaAsset, pickFromLibrary } from '../lib/mediaPicker';
+import { PickedMedia, pickFromLibrary } from '../lib/mediaPicker';
 import { uploadMediaToSupabase } from '../lib/upload';
 import { useAuth } from '../auth/AuthProvider';
 import { supabase } from '../lib/supabase';
@@ -22,7 +22,7 @@ export default function CreateScreen() {
   const [audienceType, setAudienceType] = useState<'all' | 'community' | 'faction'>('all');
   const [selectedCommunity, setSelectedCommunity] = useState('Farum Fans');
   const [selectedFaction, setSelectedFaction] = useState('Farum Fighters');
-  const [attachment, setAttachment] = useState<MediaAsset | null>(
+  const [attachment, setAttachment] = useState<PickedMedia | null>(
     route?.params?.initialAttachment ?? null,
   );
 
@@ -75,6 +75,7 @@ export default function CreateScreen() {
             author_id: user.id,
             text: text.trim(),
             media: mediaArray,
+            media_type: attachment?.type ?? null,
             ...(audienceType === 'community' && route?.params?.communityId
               ? { community_id: route.params.communityId }
               : {}),

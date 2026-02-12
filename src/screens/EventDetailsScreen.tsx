@@ -333,6 +333,7 @@ export default function EventDetailsScreen() {
               targetId={event.id}
               currentUserId={user?.id || ''}
               isAppAdmin={isAppAdmin}
+              variant="screen"
             />
           </View>
         )}

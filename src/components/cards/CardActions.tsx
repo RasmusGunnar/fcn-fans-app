@@ -26,8 +26,8 @@ export function CardActions({
   onPressShare,
 }: CardActionsProps) {
   const theme = defaultTheme;
-  // No 6px (1.5) spacing token available; use closest token.
   const iconCountGap = theme.spacing[2];
+  const iconSize = theme.spacing[5];
 
   const handleToggleLike = () => {
     if (__DEV__) {
@@ -56,9 +56,8 @@ export function CardActions({
         >
           <Ionicons
             name={liked ? 'heart' : 'heart-outline'}
-            size={20}
+            size={iconSize}
             color={liked ? theme.colors.primary : theme.colors.text.muted}
-            style={liked ? styles.likeIconActive : undefined}
           />
           <Text
             variant="caption"
@@ -73,7 +72,7 @@ export function CardActions({
           onPress={handlePressComment}
           pointerEvents="auto"
         >
-          <Ionicons name="chatbubble-outline" size={20} color={theme.colors.text.muted} />
+          <Ionicons name="chatbubble-outline" size={iconSize} color={theme.colors.text.muted} />
           <Text variant="caption" color="muted" style={styles.countText}>
             {comments}
           </Text>
@@ -84,7 +83,7 @@ export function CardActions({
         onPress={onPressShare}
         pointerEvents="auto"
       >
-        <Ionicons name="share-social-outline" size={20} color={theme.colors.text.muted} />
+        <Ionicons name="share-social-outline" size={iconSize} color={theme.colors.text.muted} />
       </Pressable>
     </View>
   );
@@ -96,19 +95,21 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: theme.spacing[4],
+    paddingHorizontal: theme.layout.cardPadding,
     paddingVertical: theme.spacing[3],
     borderTopWidth: theme.layout.borderHairline,
-    borderTopColor: theme.colors.border.default,
+    borderTopColor: theme.colors.border.subtle,
   },
   leftActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing[4],
+    gap: theme.layout.cardPadding,
   },
   action: {
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: theme.spacing[11],
+    paddingVertical: theme.spacing[2],
   },
   shareAction: {
     marginLeft: 'auto',
@@ -116,11 +117,7 @@ const styles = StyleSheet.create({
   actionPressed: {
     opacity: 0.7,
   },
-  likeIconActive: {
-    transform: [{ scale: 1.1 }],
-  },
   countText: {
-    fontSize: theme.typography.caption.fontSize,
     fontWeight: theme.typography.caption.fontWeight as any,
   },
 });

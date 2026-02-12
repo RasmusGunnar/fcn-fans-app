@@ -49,7 +49,7 @@ export async function getProfileSafe<T extends Record<string, any>>(
     }
 
     if (data) {
-      return data as T;
+      return data as unknown as T;
     }
 
     console.warn('[profile] Profile missing, attempting to create:', userId);
@@ -70,7 +70,7 @@ export async function getProfileSafe<T extends Record<string, any>>(
       return null;
     }
 
-    return (retryData as T) ?? null;
+    return (retryData as unknown as T) ?? null;
   } catch (err) {
     console.warn('[profile] Unexpected error in getProfileSafe:', err);
     return null;

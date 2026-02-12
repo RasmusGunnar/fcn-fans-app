@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
-import { MediaAsset } from './mediaPicker';
+import { PickedMedia } from './mediaPicker';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Crypto from 'expo-crypto';
 
 /**
@@ -23,7 +24,7 @@ function getExtensionFromUri(uri: string, type: 'image' | 'video'): string {
 
 export async function uploadMediaToSupabase(
   userId: string,
-  asset: MediaAsset,
+  asset: PickedMedia,
 ): Promise<{
   path: string;
   publicUrl: string;
@@ -43,22 +44,25 @@ export async function uploadMediaToSupabase(
   const fileName = `${await cryptoRandom()}.${ext}`;
   const path = `${userId}/${yyyyMM}/${fileName}`;
 
+  const uploadMimeType = asset.mimeType || (asset.type === 'image' ? 'image/jpeg' : `video/${ext}`);
+
   console.log('[Upload] Starting upload to post-media bucket', {
     path,
     type: asset.type,
     originalMimeType: asset.mimeType,
-    uploadMimeType: asset.type === 'image' ? 'image/jpeg' : asset.mimeType || `video/${ext}`,
+    uploadMimeType,
   });
 
-  // Check if we have base64 data
-  if (!asset.base64) {
-    throw new Error(
-      'No base64 data available. Make sure to request base64 in image picker options.',
-    );
+  if (!asset.uri) {
+    throw new Error('uploadMediaToSupabase: Missing asset URI');
   }
 
+  const base64 = await FileSystem.readAsStringAsync(asset.uri, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+
   // Convert base64 to Uint8Array (reliable for Supabase in Expo)
-  const bytes = base64ToUint8Array(asset.base64);
+  const bytes = base64ToUint8Array(base64);
   console.log('[Upload] Converted to byte array:', { length: bytes.length });
 
   // Verify bytes has content
@@ -67,7 +71,7 @@ export async function uploadMediaToSupabase(
   }
 
   const { data, error } = await supabase.storage.from('post-media').upload(path, bytes, {
-    contentType: asset.type === 'image' ? 'image/jpeg' : asset.mimeType || `video/${ext}`,
+    contentType: uploadMimeType,
     upsert: true,
     cacheControl: '3600',
   });
@@ -112,8 +116,8 @@ export async function uploadMediaToSupabase(
     path: data.path,
     publicUrl: '', // Keep for backwards compatibility but don't use
     type: asset.type,
-    width: asset.width,
-    height: asset.height,
+    width: asset.width ?? undefined,
+    height: asset.height ?? undefined,
   };
 }
 

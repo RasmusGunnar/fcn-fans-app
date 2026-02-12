@@ -39,7 +39,7 @@ import { supabase } from '../lib/supabase';
 import { fetchUpcomingFixtures, Fixture, formatDateDa } from '../services/fixtures';
 import { fetchEventsUpcoming, Event as CommunityEvent } from '../services/eventsApi';
 import { PostComposer } from '../components/PostComposer';
-import { pickFromLibrary, pickCameraPhoto } from '../lib/mediaPicker';
+import { pickImageFromLibrary, pickCameraPhoto } from '../lib/mediaPicker';
 
 type CommunityDetailRouteProp = RouteProp<
   { CommunityDetail: { id: string; title: string } },
@@ -202,7 +202,7 @@ export default function CommunityDetailScreen() {
       {
         text: 'Bibliotek',
         onPress: async () => {
-          const asset = await pickFromLibrary();
+          const asset = await pickImageFromLibrary();
           if (asset?.uri) {
             setUploadingAvatar(true);
             const kind = community.type === 'fan_faction' ? 'logo' : 'image';
