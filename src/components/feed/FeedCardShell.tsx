@@ -170,6 +170,14 @@ const styles = StyleSheet.create({
     marginHorizontal: theme.spacing[0],
     padding: theme.spacing[0],
   },
+  imageContainer: {
+    width: '100%',
+    overflow: 'hidden',
+  },
+  actionBar: {
+    paddingHorizontal: theme.spacing[0],
+    paddingVertical: theme.spacing[0],
+  },
   pressableContent: {
     // Allows tapping card content to navigate
   },
