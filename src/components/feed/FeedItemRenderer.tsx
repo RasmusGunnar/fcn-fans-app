@@ -87,6 +87,7 @@ export function FeedItemRenderer({
           profileMap={safeProfileMap}
           categoryKey="news"
           liked={likeState.liked}
+          likes={likeState.likes}
           commentsCount={commentCount}
           onToggleLike={() => {
             if (user?.id) {
@@ -166,6 +167,14 @@ export function FeedItemRenderer({
           round={item.data.round ?? null}
           profileMap={safeProfileMap}
           onPress={onPressMatch ? () => onPressMatch(item.id) : () => {}}
+          liked={likeState.liked}
+          likes={likeState.likes}
+          comments={commentCount}
+          onToggleLike={() => {
+            if (user?.id) {
+              toggleLike('match', item.id, user.id);
+            }
+          }}
         />
       );
 

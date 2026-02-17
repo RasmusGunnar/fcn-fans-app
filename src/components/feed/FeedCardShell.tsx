@@ -255,9 +255,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   actionBar: {
-    paddingHorizontal: sectionPaddingHorizontal,
-    paddingVertical: theme.spacing[3],
-    gap: theme.spacing[4],
+    paddingHorizontal: theme.spacing[0],
+    paddingVertical: theme.spacing[0],
   },
   pressableContent: {
     // Allows tapping card content to navigate
