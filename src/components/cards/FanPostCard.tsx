@@ -369,7 +369,7 @@ export function FanPostCard({
                 Ukendt mediaformat
               </Text>
               {__DEV__ && (
-                <Text variant="caption" color="secondary" style={{ marginTop: 4 }}>
+                <Text variant="caption" color="secondary" style={{ marginTop: theme.spacing[1] }}>
                   Type: {m0.type || 'none'}
                   {m0.bucket || m0.path ? ` • ${m0.bucket || '?'}/${m0.path || '?'}` : ''}
                   {Object.keys(m0).length > 0 ? ` • Keys: ${Object.keys(m0).join(', ')}` : ''}
@@ -382,7 +382,7 @@ export function FanPostCard({
                 Media kunne ikke indlæses
               </Text>
               {__DEV__ && (
-                <Text variant="caption" color="secondary" style={{ marginTop: 4 }}>
+                <Text variant="caption" color="secondary" style={{ marginTop: theme.spacing[1] }}>
                   Type: {mediaKind || 'unknown'}
                   {m0.bucket && m0.path ? ` • ${m0.bucket}/${m0.path}` : ''}
                 </Text>
@@ -408,7 +408,7 @@ export function FanPostCard({
                   Billede kunne ikke indlæses
                 </Text>
                 {__DEV__ && (
-                  <Text variant="caption" color="secondary" style={{ marginTop: 4 }}>
+                  <Text variant="caption" color="secondary" style={{ marginTop: theme.spacing[1] }}>
                     {mediaUri}
                   </Text>
                 )}
@@ -438,7 +438,7 @@ export function FanPostCard({
                 Uventet mediaformat
               </Text>
               {__DEV__ && (
-                <Text variant="caption" color="secondary" style={{ marginTop: 4 }}>
+                <Text variant="caption" color="secondary" style={{ marginTop: theme.spacing[1] }}>
                   Kind: {mediaKind} • URI: {mediaUri ? 'yes' : 'no'}
                 </Text>
               )}

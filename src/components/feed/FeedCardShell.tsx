@@ -167,8 +167,8 @@ const theme = defaultTheme;
 const styles = StyleSheet.create({
   card: {
     marginBottom: theme.layout.listGap,
-    marginHorizontal: 0,
-    padding: 0,
+    marginHorizontal: theme.spacing[0],
+    padding: theme.spacing[0],
   },
   pressableContent: {
     // Allows tapping card content to navigate
