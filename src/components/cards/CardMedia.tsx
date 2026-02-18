@@ -1,9 +1,12 @@
 import React, { Children, isValidElement } from 'react';
 import { View, StyleSheet, type ViewStyle, type StyleProp } from 'react-native';
+import { contentPaddingX } from '../feed/FeedCardShell';
 
 export interface CardMediaProps {
   /** Aspect ratio for the media container. Pass `null` to disable. Default 16/9. */
   aspectRatio?: number | null;
+  /** When true, applies negative horizontal margins to break out of card content padding. */
+  fullBleed?: boolean;
   style?: StyleProp<ViewStyle>;
   children: React.ReactNode;
 }
@@ -27,11 +30,18 @@ function resolveRatio(raw: number | null | undefined): number | undefined {
 /**
  * Wrapper that gives media content a deterministic height via `aspectRatio`.
  *
+ * When `fullBleed` is true, uses a two-view pattern (matching FanPostCard):
+ *   - Outer view: handles bleed (negative margins + alignSelf: stretch)
+ *   - Inner view: handles sizing (width: 100% + aspectRatio)
+ * This avoids a Yoga quirk where aspectRatio resolves before margin-based
+ * stretching, which can leave media inset instead of edge-to-edge.
+ *
  * If the single child already carries its own absolute height or aspectRatio
  * the wrapper skips enforcing a ratio so there is no double-constraint.
  */
 export function CardMedia({
   aspectRatio: rawRatio,
+  fullBleed,
   style,
   children,
 }: CardMediaProps) {
@@ -53,6 +63,33 @@ export function CardMedia({
         }
       }
     }
+  }
+
+  if (fullBleed) {
+    // Two-view pattern: outer handles bleed, inner handles aspect ratio.
+    // This matches the proven FanPostCard mediaOuter + mediaContainer approach
+    // and avoids Yoga computing aspectRatio before margin-stretch.
+    return (
+      <View
+        style={[
+          {
+            marginHorizontal: -contentPaddingX,
+            alignSelf: 'stretch' as const,
+            overflow: 'hidden' as const,
+          },
+          style,
+        ]}
+      >
+        <View
+          style={[
+            { width: '100%' as const },
+            ratio !== undefined ? { aspectRatio: ratio } : undefined,
+          ]}
+        >
+          {children}
+        </View>
+      </View>
+    );
   }
 
   return (

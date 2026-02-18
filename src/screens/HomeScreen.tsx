@@ -83,7 +83,7 @@ export default function HomeScreen() {
 
   const viewabilityConfig = useMemo(
     () => ({
-      viewAreaCoveragePercentThreshold: 60,
+      viewAreaCoveragePercentThreshold: 70,
       minimumViewTime: 100,
     }),
     [],
@@ -137,6 +137,10 @@ export default function HomeScreen() {
   useFocusEffect(
     React.useCallback(() => {
       loadNextFixture();
+      // Pause video when screen loses focus (navigation blur)
+      return () => {
+        setCurrentPlayingVideoPostId(null);
+      };
     }, []),
   );
 

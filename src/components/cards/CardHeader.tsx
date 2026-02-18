@@ -6,6 +6,7 @@ export type CardHeaderProps = {
   fallbackTitle?: string;
   subtitle?: string | undefined;
   avatarSlot?: React.ReactNode;
+  rightSlot?: React.ReactNode;
 };
 
 export function CardHeader({
@@ -13,6 +14,7 @@ export function CardHeader({
   fallbackTitle,
   subtitle,
   avatarSlot,
+  rightSlot,
 }: CardHeaderProps) {
   const title = nameLine ?? fallbackTitle;
 
@@ -21,6 +23,7 @@ export function CardHeader({
       title={title ?? undefined}
       subtitle={subtitle ?? undefined}
       avatarSlot={avatarSlot}
+      rightSlot={rightSlot}
     />
   );
 }

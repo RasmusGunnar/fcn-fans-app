@@ -12,6 +12,9 @@ import type { CommentPreview } from '../../services/likesApi';
 import { targetKey } from '../../utils/targetKey';
 import { Avatar } from '../Avatar';
 
+/** Horizontal content padding inside feed cards. Use negative margin for full-bleed media. */
+export const contentPaddingX = defaultTheme.layout.cardPadding;
+
 interface FeedCardShellProps {
   targetType: CommentTargetType;
   targetId: string;
@@ -182,11 +185,11 @@ const styles = StyleSheet.create({
     // Allows tapping card content to navigate
   },
   contentSection: {
-    paddingHorizontal: theme.spacing[4],
+    paddingHorizontal: theme.layout.cardPadding,
     paddingTop: theme.spacing[3],
   },
   previewContainer: {
-    paddingHorizontal: theme.spacing[4],
+    paddingHorizontal: theme.layout.cardPadding,
     paddingTop: theme.spacing[2],
     paddingBottom: theme.spacing[1],
   },
