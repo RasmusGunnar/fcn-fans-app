@@ -1,29 +1,31 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  ActivityIndicator,
-  Image,
-  TouchableOpacity,
-  Share,
-  Pressable,
-  Alert,
-} from 'react-native';
-import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Card } from '../components/ui/Card';
-import { PrimaryButton } from '../components/PrimaryButton';
+import { useAuth } from '../auth/AuthProvider';
 import { OptionsMenu, OptionsMenuOption } from '../components/OptionsMenu';
+import { PrimaryButton } from '../components/PrimaryButton';
 import { InlineComments } from '../components/comments/InlineComments';
+import { Card } from '../components/ui/Card';
+import { useCommunityRole } from '../hooks/useCommunityRole';
+import { supabase } from '../lib/supabase';
 import { fetchEventById, type Event } from '../services/eventsApi';
 import { defaultTheme as theme } from '../theme';
-import { useAuth } from '../auth/AuthProvider';
-import { canEditEvent, canDeleteEvent } from '../utils/permissions';
-import { supabase } from '../lib/supabase';
-import { useCommunityRole } from '../hooks/useCommunityRole';
+import { canDeleteEvent, canEditEvent } from '../utils/permissions';
 
 type EventDetailsRouteProp = RouteProp<{ EventDetails: { eventId: string } }, 'EventDetails'>;
 
@@ -215,129 +217,137 @@ export default function EventDetailsScreen() {
         )}
       </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={{ paddingBottom: insets.bottom + theme.spacing[6] }}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={insets.top + 44}
       >
-        {/* Header Card with Icon */}
-        <Card style={styles.headerCard}>
-          <View style={styles.iconCircle}>
-            <Text style={styles.iconEmoji}>🎉</Text>
-          </View>
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>EVENT</Text>
-          </View>
-          <Text style={styles.title}>{event.title}</Text>
-          {event.organizer && (
-            <Text style={styles.subtitle}>Arrangeret af {event.organizer.name}</Text>
-          )}
-        </Card>
-
-        {/* Event Details */}
-        <Card style={styles.detailsCard}>
-          <Text style={styles.sectionTitle}>Detaljer</Text>
-
-          <View style={styles.detailRow}>
-            <Ionicons name="calendar" size={20} color={theme.colors.primary} />
-            <View style={styles.detailText}>
-              <Text style={styles.detailLabel}>Dato og tidspunkt</Text>
-              <Text style={styles.detailValue}>
-                {dateStr}, kl. {timeStr}
-                {endStr && ` - ${endStr}`}
-              </Text>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={{ paddingBottom: insets.bottom + theme.spacing[6] }}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Header Card with Icon */}
+          <Card style={styles.headerCard}>
+            <View style={styles.iconCircle}>
+              <Text style={styles.iconEmoji}>🎉</Text>
             </View>
-          </View>
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>EVENT</Text>
+            </View>
+            <Text style={styles.title}>{event.title}</Text>
+            {event.organizer && (
+              <Text style={styles.subtitle}>Arrangeret af {event.organizer.name}</Text>
+            )}
+          </Card>
 
-          {event.location_name && (
+          {/* Event Details */}
+          <Card style={styles.detailsCard}>
+            <Text style={styles.sectionTitle}>Detaljer</Text>
+
             <View style={styles.detailRow}>
-              <Ionicons name="location" size={20} color={theme.colors.primary} />
+              <Ionicons name="calendar" size={20} color={theme.colors.primary} />
               <View style={styles.detailText}>
-                <Text style={styles.detailLabel}>Sted</Text>
-                <Text style={styles.detailValue}>{event.location_name}</Text>
-                {event.location_address && (
-                  <Text style={styles.detailSubvalue}>{event.location_address}</Text>
-                )}
+                <Text style={styles.detailLabel}>Dato og tidspunkt</Text>
+                <Text style={styles.detailValue}>
+                  {dateStr}, kl. {timeStr}
+                  {endStr && ` - ${endStr}`}
+                </Text>
               </View>
             </View>
+
+            {event.location_name && (
+              <View style={styles.detailRow}>
+                <Ionicons name="location" size={20} color={theme.colors.primary} />
+                <View style={styles.detailText}>
+                  <Text style={styles.detailLabel}>Sted</Text>
+                  <Text style={styles.detailValue}>{event.location_name}</Text>
+                  {event.location_address && (
+                    <Text style={styles.detailSubvalue}>{event.location_address}</Text>
+                  )}
+                </View>
+              </View>
+            )}
+
+            <View style={styles.detailRow}>
+              <Ionicons name="people" size={20} color={theme.colors.primary} />
+              <View style={styles.detailText}>
+                <Text style={styles.detailLabel}>Deltagere</Text>
+                <Text style={styles.detailValue}>42 interesserede</Text>
+              </View>
+            </View>
+          </Card>
+
+          {/* Description */}
+          {event.description && (
+            <Card style={styles.descriptionCard}>
+              <Text style={styles.sectionTitle}>Om eventet</Text>
+              <Text style={styles.description}>{event.description}</Text>
+            </Card>
           )}
 
-          <View style={styles.detailRow}>
-            <Ionicons name="people" size={20} color={theme.colors.primary} />
-            <View style={styles.detailText}>
-              <Text style={styles.detailLabel}>Deltagere</Text>
-              <Text style={styles.detailValue}>42 interesserede</Text>
-            </View>
+          {/* Action Buttons */}
+          <View style={styles.actionsContainer}>
+            <TouchableOpacity style={styles.actionButton} onPress={handleSetReminder}>
+              <Ionicons name="notifications-outline" size={24} color={theme.colors.primary} />
+              <Text style={styles.actionText}>Påmindelse</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionButton} onPress={handleShare}>
+              <Ionicons name="share-outline" size={24} color={theme.colors.primary} />
+              <Text style={styles.actionText}>Del</Text>
+            </TouchableOpacity>
           </View>
-        </Card>
 
-        {/* Description */}
-        {event.description && (
-          <Card style={styles.descriptionCard}>
-            <Text style={styles.sectionTitle}>Om eventet</Text>
-            <Text style={styles.description}>{event.description}</Text>
-          </Card>
-        )}
-
-        {/* Action Buttons */}
-        <View style={styles.actionsContainer}>
-          <TouchableOpacity style={styles.actionButton} onPress={handleSetReminder}>
-            <Ionicons name="notifications-outline" size={24} color={theme.colors.primary} />
-            <Text style={styles.actionText}>Påmindelse</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton} onPress={handleShare}>
-            <Ionicons name="share-outline" size={24} color={theme.colors.primary} />
-            <Text style={styles.actionText}>Del</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Organizer */}
-        {event.organizer && (
-          <Card style={styles.organizerCard}>
-            <Text style={styles.sectionTitle}>Arrangør</Text>
-            <View style={styles.organizerInfo}>
-              {event.organizer.logo_url ? (
-                <Image source={{ uri: event.organizer.logo_url }} style={styles.organizerLogo} />
-              ) : (
-                <View style={styles.organizerLogoPlaceholder}>
-                  <Text style={styles.organizerLogoText}>
-                    {event.organizer.name.substring(0, 2).toUpperCase()}
-                  </Text>
-                </View>
-              )}
-              <View style={styles.organizerText}>
-                <Text style={styles.organizerName}>{event.organizer.name}</Text>
-                {event.organizer.description && (
-                  <Text style={styles.organizerDescription}>{event.organizer.description}</Text>
+          {/* Organizer */}
+          {event.organizer && (
+            <Card style={styles.organizerCard}>
+              <Text style={styles.sectionTitle}>Arrangør</Text>
+              <View style={styles.organizerInfo}>
+                {event.organizer.logo_url ? (
+                  <Image source={{ uri: event.organizer.logo_url }} style={styles.organizerLogo} />
+                ) : (
+                  <View style={styles.organizerLogoPlaceholder}>
+                    <Text style={styles.organizerLogoText}>
+                      {event.organizer.name.substring(0, 2).toUpperCase()}
+                    </Text>
+                  </View>
                 )}
+                <View style={styles.organizerText}>
+                  <Text style={styles.organizerName}>{event.organizer.name}</Text>
+                  {event.organizer.description && (
+                    <Text style={styles.organizerDescription}>{event.organizer.description}</Text>
+                  )}
+                </View>
               </View>
-            </View>
-          </Card>
-        )}
+            </Card>
+          )}
 
-        {/* CTA Button */}
-        <View style={styles.ctaContainer}>
-          <PrimaryButton
-            title="Tilmeld mig"
-            onPress={() => {
-              // TODO: Implement RSVP
-              console.log('RSVP to event:', eventId);
-            }}
-          />
-        </View>
-
-        {/* Comments Section */}
-        {event && (
-          <View style={styles.commentsSection}>
-            <InlineComments
-              targetType="event"
-              targetId={event.id}
-              currentUserId={user?.id || ''}
-              isAppAdmin={isAppAdmin}
-              variant="screen"
+          {/* CTA Button */}
+          <View style={styles.ctaContainer}>
+            <PrimaryButton
+              title="Tilmeld mig"
+              onPress={() => {
+                // TODO: Implement RSVP
+                console.log('RSVP to event:', eventId);
+              }}
             />
           </View>
-        )}
-      </ScrollView>
+
+          {/* Comments Section */}
+          {event && (
+            <View style={styles.commentsSection}>
+              <InlineComments
+                targetType="event"
+                targetId={event.id}
+                currentUserId={user?.id || ''}
+                isAppAdmin={isAppAdmin}
+                variant="inline"
+                maxInlineComments={Infinity}
+              />
+            </View>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

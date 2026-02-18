@@ -1,32 +1,32 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import {
-  View,
-  Text,
-  FlatList,
-  StyleSheet,
-  RefreshControl,
-  Image,
-  ViewToken,
-  AppState,
-} from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  AppState,
+  FlatList,
+  Image,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View,
+  ViewToken,
+} from 'react-native';
+import { useAuth } from '../auth/AuthProvider';
 import { AppHeader } from '../components/AppHeader';
+import { PrimaryButton } from '../components/PrimaryButton';
+import { FanFactionCard } from '../components/cards/FanFactionCard';
+import { FeedItemRenderer } from '../components/feed/FeedItemRenderer';
 import { Card } from '../components/ui/Card';
 import { Pill } from '../components/ui/Pill';
-import { PrimaryButton } from '../components/PrimaryButton';
-import { FeedItemRenderer } from '../components/feed/FeedItemRenderer';
-import { FanFactionCard } from '../components/cards/FanFactionCard';
-import { useFeed } from '../state/FeedContext';
-import { useAuth } from '../auth/AuthProvider';
-import { colors, spacing, defaultTheme as theme } from '../theme';
-import { getFeedItemKey } from '../types/feed';
 import {
   fetchNextFixture,
   formatShortDateDa,
   formatTime,
   type Fixture,
 } from '../services/fixtures';
+import { useFeed } from '../state/FeedContext';
+import { colors, spacing, defaultTheme as theme } from '../theme';
+import { getFeedItemKey } from '../types/feed';
 
 export default function HomeScreen() {
   const navigation = useNavigation();
@@ -52,6 +52,9 @@ export default function HomeScreen() {
   const [loadingFixture, setLoadingFixture] = useState(false);
   const [currentPlayingVideoPostId, setCurrentPlayingVideoPostId] = useState<string | null>(null);
   const [isAppActive, setIsAppActive] = useState(true);
+
+  // Rate-limit focus refetches (skip if last fetch was < 5 s ago)
+  const lastFocusFetchRef = useRef<number>(0);
 
   // Defensive: Ensure feedItems is always an array and filter out any falsy values
   const safeFeedItems = (Array.isArray(feedItems) ? feedItems : []).filter(Boolean);
@@ -137,22 +140,21 @@ export default function HomeScreen() {
   useFocusEffect(
     React.useCallback(() => {
       loadNextFixture();
+
+      // Refresh feed when returning from other screens (e.g. after creating an event)
+      const now = Date.now();
+      const elapsed = now - lastFocusFetchRef.current;
+      if (elapsed >= 2000) {
+        lastFocusFetchRef.current = now;
+        fetchPosts();
+      }
+
       // Pause video when screen loses focus (navigation blur)
       return () => {
         setCurrentPlayingVideoPostId(null);
       };
-    }, []),
+    }, [fetchPosts]),
   );
-
-  useEffect(() => {
-    if (__DEV__ && safeFeedItems.length > 0) {
-      console.log('[HomeScreen] Feed items loaded:', {
-        totalCount: safeFeedItems.length,
-        posts: safeFeedItems.filter((item) => item.kind === 'post').length,
-        news: safeFeedItems.filter((item) => item.kind === 'news').length,
-      });
-    }
-  }, [safeFeedItems]);
 
   const [factionLiked, setFactionLiked] = useState(false);
   const [factionLikes, setFactionLikes] = useState(7);
@@ -231,7 +233,10 @@ export default function HomeScreen() {
                   <View style={styles.matchRow}>
                     <View style={styles.team}>
                       {nextFixture.home_logo_url ? (
-                        <Image source={{ uri: nextFixture.home_logo_url }} style={styles.teamLogo} />
+                        <Image
+                          source={{ uri: nextFixture.home_logo_url }}
+                          style={styles.teamLogo}
+                        />
                       ) : (
                         <View style={styles.teamCircle}>
                           <Text style={styles.teamText}>
@@ -244,7 +249,10 @@ export default function HomeScreen() {
                     <Text style={styles.vs}>VS</Text>
                     <View style={styles.team}>
                       {nextFixture.away_logo_url ? (
-                        <Image source={{ uri: nextFixture.away_logo_url }} style={styles.teamLogo} />
+                        <Image
+                          source={{ uri: nextFixture.away_logo_url }}
+                          style={styles.teamLogo}
+                        />
                       ) : (
                         <View style={styles.teamCircle}>
                           <Text style={styles.teamText}>
@@ -259,7 +267,8 @@ export default function HomeScreen() {
                     <View style={styles.detailRow}>
                       <Text style={styles.icon}></Text>
                       <Text style={styles.detailText}>
-                        {formatShortDateDa(nextFixture.kickoff_at)}, kl. {formatTime(nextFixture.kickoff_at)}
+                        {formatShortDateDa(nextFixture.kickoff_at)}, kl.{' '}
+                        {formatTime(nextFixture.kickoff_at)}
                       </Text>
                     </View>
                     {nextFixture.venue && (

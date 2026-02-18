@@ -2,33 +2,25 @@
 // All spacing, colors, and radius values must use theme.spacing[N], theme.colors.*, theme.radius.*
 // NO hardcoded numbers or color strings allowed.
 
-import React, { useState, useMemo, useEffect } from 'react';
-import {
-  View,
-  StyleSheet,
-  Image,
-  TextInput,
-  Pressable,
-  Share,
-  Alert,
-} from 'react-native';
-import { Text } from '../ui';
-import { OptionsMenu, OptionsMenuOption } from '../OptionsMenu';
-import { CardRoot } from './CardRoot';
-import { CardHeader } from './CardHeader';
-import { Avatar } from '../Avatar';
-import { defaultTheme } from '../../theme';
-import { Post } from '../../types/post';
-import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../auth/AuthProvider';
 import * as Linking from 'expo-linking';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Alert, Image, Pressable, Share, StyleSheet, TextInput, View } from 'react-native';
+import { useAuth } from '../../auth/AuthProvider';
 import { getPublicUrl } from '../../lib/storageUrl';
-import { FeedVideo } from '../feed/FeedVideo';
-import { canEditPost, canDeleteFeedItem } from '../../utils/permissions';
+import { supabase } from '../../lib/supabase';
 import type { CommentPreview } from '../../services/likesApi';
+import { defaultTheme } from '../../theme';
 import type { CategoryKey } from '../../theme/categories';
-import { buildCardBehaviorModel } from './cardBehaviorModel';
+import { Post } from '../../types/post';
 import { resolveActorLine, type ProfileMap } from '../../utils/actor';
+import { canDeleteFeedItem, canEditPost } from '../../utils/permissions';
+import { Avatar } from '../Avatar';
+import { FeedVideo } from '../feed/FeedVideo';
+import { OptionsMenu, OptionsMenuOption } from '../OptionsMenu';
+import { Text } from '../ui';
+import { buildCardBehaviorModel } from './cardBehaviorModel';
+import { CardHeader } from './CardHeader';
+import { CardRoot } from './CardRoot';
 
 // ── Image ratio detection ───────────────────────────────────────
 // Global cache so we never call Image.getSize twice for the same URI
@@ -55,11 +47,7 @@ const IMAGE_RATIO_FALLBACK = 4 / 5; // Instagram default while loading
  * - Otherwise call Image.getSize once, cache the result, and re-render.
  * - Fallback while loading: 4:5 (portrait, Instagram feed default).
  */
-function useImageRatio(
-  uri: string | null,
-  metaWidth?: number,
-  metaHeight?: number,
-): number {
+function useImageRatio(uri: string | null, metaWidth?: number, metaHeight?: number): number {
   // Fast path: metadata available
   const metaRatio = useMemo(() => {
     if (metaWidth && metaHeight && metaWidth > 0 && metaHeight > 0) {
@@ -93,7 +81,9 @@ function useImageRatio(
         // getSize failed – keep fallback
       },
     );
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [uri, metaRatio]);
 
   return metaRatio ?? detected ?? IMAGE_RATIO_FALLBACK;
@@ -132,17 +122,23 @@ function normalizeMedia(raw: any): MediaItem[] {
   // BASELINE: Deterministic parsing - no silent failures
   // Handle null/undefined
   if (!raw) return [];
-  
+
   // Already an array
   if (Array.isArray(raw)) return raw;
-  
+
   // JSON string - parse it
   if (typeof raw === 'string') {
     try {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) return parsed;
       if (typeof parsed === 'object' && parsed !== null) {
-        const hasMediaShape = 'path' in parsed || 'bucket' in parsed || 'type' in parsed || 'url' in parsed || 'uri' in parsed || 'publicUrl' in parsed;
+        const hasMediaShape =
+          'path' in parsed ||
+          'bucket' in parsed ||
+          'type' in parsed ||
+          'url' in parsed ||
+          'uri' in parsed ||
+          'publicUrl' in parsed;
         return hasMediaShape ? [parsed] : [];
       }
       return [];
@@ -153,16 +149,22 @@ function normalizeMedia(raw: any): MediaItem[] {
       return [];
     }
   }
-  
+
   // BASELINE FIX: Single object → wrap only if it has media-like shape
   if (typeof raw === 'object' && raw !== null) {
-    const hasMediaShape = 'path' in raw || 'bucket' in raw || 'type' in raw || 'url' in raw || 'uri' in raw || 'publicUrl' in raw;
+    const hasMediaShape =
+      'path' in raw ||
+      'bucket' in raw ||
+      'type' in raw ||
+      'url' in raw ||
+      'uri' in raw ||
+      'publicUrl' in raw;
     if (__DEV__ && !hasMediaShape) {
       console.warn('[normalizeMedia] Object missing media fields:', Object.keys(raw));
     }
     return hasMediaShape ? [raw] : [];
   }
-  
+
   return [];
 }
 
@@ -365,7 +367,7 @@ export function FanPostCard({
     authorId: post.authorId,
     authorEmail: authorProfile?.display_name || (post as any).authorName || undefined,
     profileMap,
-    communityName: isCommunityPost ? communityName ?? undefined : undefined,
+    communityName: isCommunityPost ? (communityName ?? undefined) : undefined,
   });
   const headerTitle = cardModel.nameLine ?? resolvedAuthor.displayName;
   const headerSubtitle = isCommunityPost

@@ -1,13 +1,15 @@
-import React from 'react';
-import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme, Theme } from '../../theme';
+import React from 'react';
+import { StyleSheet, View } from 'react-native';
+import { Theme, useTheme } from '../../theme';
 import { Text } from './Text';
 
 export type EventSubtype = 'event' | 'match' | 'bus_trip';
 
 export type EventSubtypeBadgeProps = {
   subtype: EventSubtype;
+  /** When true, uses opaque bg + inverse text for use on dark hero overlays. */
+  overlay?: boolean;
 };
 
 const resolveSpec = (subtype: EventSubtype) => {
@@ -32,10 +34,32 @@ const resolveSpec = (subtype: EventSubtype) => {
   } as const;
 };
 
-export function EventSubtypeBadge({ subtype }: EventSubtypeBadgeProps) {
+export function EventSubtypeBadge({ subtype, overlay }: EventSubtypeBadgeProps) {
   const theme = useTheme();
   const styles = createStyles(theme);
   const { label, icon, token } = resolveSpec(subtype);
+
+  // Overlay mode: opaque badge bg, inverse (white) text/icon — for dark hero areas
+  if (overlay) {
+    const overlayBg = token === 'busTrip' ? theme.colors.badges.busTrip : theme.colors.badges.event;
+    return (
+      <View
+        style={[
+          styles.badge,
+          {
+            backgroundColor: overlayBg,
+            borderColor: overlayBg,
+          },
+        ]}
+      >
+        <Ionicons name={icon as any} size={14} color={theme.colors.text.inverse} />
+        <Text variant="small" color="inverse" style={styles.text}>
+          {label}
+        </Text>
+      </View>
+    );
+  }
+
   const colors =
     token === 'busTrip'
       ? {

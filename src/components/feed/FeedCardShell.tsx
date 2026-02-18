@@ -3,14 +3,14 @@
 // NO hardcoded numbers or color strings allowed.
 
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, View, Text } from 'react-native';
-import { Card } from '../ui/Card';
-import { CardActions } from '../cards/CardActions';
-import { InlineComments, CommentTargetType } from '../comments/InlineComments';
-import { defaultTheme } from '../../theme';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { CommentPreview } from '../../services/likesApi';
+import { defaultTheme } from '../../theme';
 import { targetKey } from '../../utils/targetKey';
 import { Avatar } from '../Avatar';
+import { CardActions } from '../cards/CardActions';
+import { CommentTargetType, InlineComments } from '../comments/InlineComments';
+import { Card } from '../ui/Card';
 
 /** Horizontal content padding inside feed cards. Use negative margin for full-bleed media. */
 export const contentPaddingX = defaultTheme.layout.cardPadding;
@@ -107,16 +107,12 @@ export function FeedCardShell({
     <Card style={styles.card}>
       {onOpenDetail ? (
         <Pressable onPress={onOpenDetail} style={styles.pressableContent}>
-          <View style={styles.contentSection}>
-            {children}
-          </View>
+          <View style={styles.contentSection}>{children}</View>
         </Pressable>
       ) : (
-        <View style={styles.contentSection}>
-          {children}
-        </View>
+        <View style={styles.contentSection}>{children}</View>
       )}
-      
+
       <CardActions
         liked={liked}
         likes={likesCount}
@@ -125,7 +121,7 @@ export function FeedCardShell({
         onPressComment={handlePressComment}
         onPressShare={actions.onPressShare || (() => {})}
       />
-      
+
       {showPreview && (
         <View style={styles.previewContainer}>
           <Pressable onPress={handlePressComment}>
@@ -151,7 +147,7 @@ export function FeedCardShell({
           })}
         </View>
       )}
-      
+
       {commentsOpen && !disableInlineComments && (
         <InlineComments
           targetType={targetType}

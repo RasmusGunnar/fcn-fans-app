@@ -1,5 +1,5 @@
 import React, { Children, isValidElement } from 'react';
-import { View, StyleSheet, type ViewStyle, type StyleProp } from 'react-native';
+import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { contentPaddingX } from '../feed/FeedCardShell';
 
 export interface CardMediaProps {
@@ -39,12 +39,7 @@ function resolveRatio(raw: number | null | undefined): number | undefined {
  * If the single child already carries its own absolute height or aspectRatio
  * the wrapper skips enforcing a ratio so there is no double-constraint.
  */
-export function CardMedia({
-  aspectRatio: rawRatio,
-  fullBleed,
-  style,
-  children,
-}: CardMediaProps) {
+export function CardMedia({ aspectRatio: rawRatio, fullBleed, style, children }: CardMediaProps) {
   let ratio = resolveRatio(rawRatio);
 
   // Safety: if the sole child already defines its own sizing, let it win.
@@ -52,8 +47,7 @@ export function CardMedia({
     const arr = Children.toArray(children);
     if (arr.length === 1 && isValidElement(arr[0])) {
       const flat = StyleSheet.flatten(
-        (arr[0] as React.ReactElement<{ style?: StyleProp<ViewStyle> }>).props
-          ?.style,
+        (arr[0] as React.ReactElement<{ style?: StyleProp<ViewStyle> }>).props?.style,
       );
       if (flat) {
         const hasOwnRatio = flat.aspectRatio != null;

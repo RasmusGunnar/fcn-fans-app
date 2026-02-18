@@ -2,10 +2,10 @@
 // All spacing, colors, and radius values must use theme.spacing[N], theme.colors.*, theme.radius.*
 // NO hardcoded numbers or color strings allowed.
 
-import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { View, Pressable, StyleSheet } from 'react-native';
-import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
+import { AVPlaybackStatus, ResizeMode, Video } from 'expo-av';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { defaultTheme } from '../../theme';
 
 const theme = defaultTheme;
@@ -21,16 +21,19 @@ export type VideoRatio = '16:9' | '4:5' | '1:1';
 function pickRatio(w?: number, h?: number): VideoRatio {
   if (!w || !h || w <= 0 || h <= 0) return '4:5'; // fallback = portrait
   const aspect = w / h;
-  if (aspect < 0.9) return '4:5';     // portrait
-  if (aspect > 1.1) return '16:9';    // landscape
-  return '1:1';                        // square-ish
+  if (aspect < 0.9) return '4:5'; // portrait
+  if (aspect > 1.1) return '16:9'; // landscape
+  return '1:1'; // square-ish
 }
 
 function ratioToNumber(r: VideoRatio): number {
   switch (r) {
-    case '16:9': return 16 / 9;
-    case '4:5':  return 4 / 5;
-    case '1:1':  return 1;
+    case '16:9':
+      return 16 / 9;
+    case '4:5':
+      return 4 / 5;
+    case '1:1':
+      return 1;
   }
 }
 
@@ -67,9 +70,7 @@ export function FeedVideo({
   const [detectedRatio, setDetectedRatio] = useState<VideoRatio | null>(null);
 
   // If we have metadata from the post, use it; else wait for onLoad
-  const metaRatio = naturalWidth && naturalHeight
-    ? pickRatio(naturalWidth, naturalHeight)
-    : null;
+  const metaRatio = naturalWidth && naturalHeight ? pickRatio(naturalWidth, naturalHeight) : null;
 
   const finalRatio = metaRatio ?? detectedRatio ?? '4:5';
 
@@ -87,13 +88,16 @@ export function FeedVideo({
   }, [shouldPlay]);
 
   // Detect natural size from loaded video if metadata wasn't provided
-  const handleLoad = useCallback((status: AVPlaybackStatus) => {
-    if (!status.isLoaded) return;
-    if (!metaRatio && (status as any).naturalSize) {
-      const ns = (status as any).naturalSize as { width: number; height: number };
-      setDetectedRatio(pickRatio(ns.width, ns.height));
-    }
-  }, [metaRatio]);
+  const handleLoad = useCallback(
+    (status: AVPlaybackStatus) => {
+      if (!status.isLoaded) return;
+      if (!metaRatio && (status as any).naturalSize) {
+        const ns = (status as any).naturalSize as { width: number; height: number };
+        setDetectedRatio(pickRatio(ns.width, ns.height));
+      }
+    },
+    [metaRatio],
+  );
 
   const toggleMute = useCallback(() => {
     setIsMuted((prev) => !prev);
