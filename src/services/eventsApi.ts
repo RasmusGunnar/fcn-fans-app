@@ -86,18 +86,16 @@ const FCN_TEAM_FILTER = '%nordsjælland%';
 
 function shouldFallbackView(error: any): boolean {
   const message = String(error?.message ?? '');
-  return error?.code === '42P01' || message.includes('does not exist') || message.includes('relation');
+  return (
+    error?.code === '42P01' || message.includes('does not exist') || message.includes('relation')
+  );
 }
 
 function applyFcnFilter(query: any) {
   return query.or(`home_team.ilike.${FCN_TEAM_FILTER},away_team.ilike.${FCN_TEAM_FILTER}`);
 }
 
-async function runFixtureQuery(params: {
-  table: string;
-  upcoming: boolean;
-  limit: number;
-}) {
+async function runFixtureQuery(params: { table: string; upcoming: boolean; limit: number }) {
   const now = new Date().toISOString();
   let query = supabase.from(params.table).select('*');
   if (params.table === 'fixtures') {
@@ -258,16 +256,17 @@ export async function fetchBusTripsUpcoming(limit = 20): Promise<BusTrip[]> {
 }
 
 /**
- * Fetch upcoming events from Supabase (simplified - no joins)
+ * Fetch upcoming events from Supabase.
+ * Uses select('*') to avoid 42703 errors from missing columns.
  */
 export async function fetchEventsUpcoming(limit = 20, communityId?: string): Promise<Event[]> {
+  const nowISO = new Date().toISOString();
+
   try {
     let query = supabase
       .from('events')
-      .select(
-        'id, title, description, start_at, end_at, location_name, location_address, organizer_group_id, created_by, creator_user_id, organizer_type, organizer_id, created_at, lat, lng',
-      )
-      .gte('start_at', new Date().toISOString())
+      .select('*')
+      .gte('start_at', nowISO)
       .order('start_at', { ascending: true })
       .limit(limit);
 
@@ -278,10 +277,20 @@ export async function fetchEventsUpcoming(limit = 20, communityId?: string): Pro
     const { data, error } = await query;
 
     if (error) {
-      console.warn('[eventsApi] Error fetching events', error);
+      if (__DEV__) {
+        console.error('[eventsApi] fetchEventsUpcoming error:', error.code, error.message);
+      }
       return [];
     }
 
+    if (__DEV__) {
+      console.log(
+        '[eventsApi] fetchEventsUpcoming count:',
+        (data ?? []).length,
+        'filter: start_at >=',
+        nowISO,
+      );
+    }
     return (data || []) as unknown as Event[];
   } catch (err) {
     console.error('[eventsApi] Unexpected error fetching events:', err);
@@ -397,16 +406,12 @@ export async function fetchBusTripById(id: string): Promise<BusTrip | null> {
 export async function fetchEventById(id: string): Promise<Event | null> {
   try {
     console.log('[eventsApi] Fetching event by id:', id);
-    const { data, error } = await supabase
-      .from('events')
-      .select(
-        'id, title, description, start_at, end_at, location_name, location_address, organizer_group_id, created_by, creator_user_id, organizer_type, organizer_id, created_at',
-      )
-      .eq('id', id)
-      .single();
+    const { data, error } = await supabase.from('events').select('*').eq('id', id).single();
 
     if (error) {
-      console.warn('[eventsApi] Error fetching event by id', error);
+      if (__DEV__) {
+        console.error('[eventsApi] fetchEventById error:', error.code, error.message);
+      }
       return null;
     }
 

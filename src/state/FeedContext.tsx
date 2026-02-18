@@ -1,10 +1,5 @@
-import React, { createContext, useState, useCallback } from 'react';
-import { Post } from '../types/post';
-import { NewsItem } from '../types/news';
-import { FeedItem } from '../types/feed';
+import React, { createContext, useCallback, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { normalizeMedia } from '../utils/media';
-import { fetchNewsItems } from '../services/newsApi';
 import {
   fetchBusTripsUpcoming,
   fetchEventsUpcoming,
@@ -12,13 +7,18 @@ import {
   type Event,
 } from '../services/eventsApi';
 import {
-  fetchLikeStates,
   fetchCommentCounts,
   fetchCommentPreviews,
+  fetchLikeStates,
   toggleLike as toggleLikeApi,
-  type LikeTargetType,
   type CommentPreview,
+  type LikeTargetType,
 } from '../services/likesApi';
+import { fetchNewsItems } from '../services/newsApi';
+import { FeedItem } from '../types/feed';
+import { NewsItem } from '../types/news';
+import { Post } from '../types/post';
+import { normalizeMedia } from '../utils/media';
 import { targetKey } from '../utils/targetKey';
 
 // Helper to safely extract created timestamp from FeedItem

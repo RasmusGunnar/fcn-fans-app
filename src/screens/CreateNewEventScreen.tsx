@@ -162,21 +162,28 @@ export default function CreateNewEventScreen() {
       if (eventType === 'event') {
         const organizerType = selectedActor.type === 'community' ? 'community' : 'fan';
         const organizerId = selectedActor.id;
+
+        const insertPayload = {
+          title: title.trim(),
+          description: description.trim() || null,
+          location_name: locationName.trim(),
+          location_address: locationAddress.trim() || null,
+          start_at: startDate.toISOString(),
+          created_by: user.id,
+          creator_user_id: user.id,
+          organizer_type: organizerType,
+          organizer_id: organizerId,
+          organizer_group_id: organizerType === 'community' ? organizerId : null,
+        };
+
+        if (__DEV__) {
+          console.log('[CreateNewEventScreen] INSERT payload:', JSON.stringify(insertPayload, null, 2));
+        }
+
         // Create event
         const { data, error } = await supabase
           .from('events')
-          .insert({
-            title: title.trim(),
-            description: description.trim() || null,
-            location_name: locationName.trim(),
-            location_address: locationAddress.trim() || null,
-            start_at: startDate.toISOString(),
-            created_by: user.id,
-            creator_user_id: user.id,
-            organizer_type: organizerType,
-            organizer_id: organizerId,
-            organizer_group_id: organizerType === 'community' ? organizerId : null,
-          })
+          .insert(insertPayload)
           .select()
           .single();
 

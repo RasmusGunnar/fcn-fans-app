@@ -3,22 +3,22 @@
 // NO hardcoded numbers or color strings allowed.
 
 import React from 'react';
-import { View, StyleSheet, Image, Linking, Pressable, Alert } from 'react-native';
-import { Text } from '../ui';
-import { Avatar } from '../Avatar';
-import { OptionsMenu, OptionsMenuOption } from '../OptionsMenu';
-import { CardHeader } from './CardHeader';
-import { CardMedia } from './CardMedia';
-import { CardRoot } from './CardRoot';
-import { defaultTheme } from '../../theme';
-import { NewsItem } from '../../types/news';
+import { Alert, Image, Linking, Pressable, StyleSheet, View } from 'react-native';
 import { useAuth } from '../../auth/AuthProvider';
 import { supabase } from '../../lib/supabase';
 import type { CommentPreview } from '../../services/likesApi';
+import { defaultTheme } from '../../theme';
 import type { CategoryKey } from '../../theme/categories';
-import { buildCardBehaviorModel } from './cardBehaviorModel';
+import { NewsItem } from '../../types/news';
 import { resolveActorLine, type ProfileMap } from '../../utils/actor';
 import { canDeleteFeedItem } from '../../utils/permissions';
+import { Avatar } from '../Avatar';
+import { OptionsMenu, OptionsMenuOption } from '../OptionsMenu';
+import { Text } from '../ui';
+import { buildCardBehaviorModel } from './cardBehaviorModel';
+import { CardHeader } from './CardHeader';
+import { CardMedia } from './CardMedia';
+import { CardRoot } from './CardRoot';
 
 function getTimeAgo(isoDate: string): string {
   const now = new Date();
@@ -75,10 +75,7 @@ export function NewsCard({
 
   const resolvedActor = resolveActorLine({
     actorType: newsItem.actorType,
-    authorId:
-      newsItem.actorType === 'user'
-        ? newsItem.actorId || newsItem.createdBy
-        : undefined,
+    authorId: newsItem.actorType === 'user' ? newsItem.actorId || newsItem.createdBy : undefined,
     authorEmail: newsItem.actorName || undefined,
     profileMap,
     communityName: newsItem.actorType === 'community' ? communityMap[newsItem.actorId] : undefined,
@@ -86,13 +83,13 @@ export function NewsCard({
   const authorName = resolvedActor.displayName;
 
   // Resolve avatar URL: prefer profileMap lookup for the actor, fall back to current user's avatar
-  const actorUserId = newsItem.actorType === 'user'
-    ? (newsItem.actorId || newsItem.createdBy)
-    : newsItem.createdBy;
+  const actorUserId =
+    newsItem.actorType === 'user' ? newsItem.actorId || newsItem.createdBy : newsItem.createdBy;
   const actorProfile = profileMap?.[actorUserId];
-  const resolvedAvatarUrl = actorProfile?.avatar_url
-    ?? (currentUserId === newsItem.createdBy ? userAvatarUrl : undefined)
-    ?? undefined;
+  const resolvedAvatarUrl =
+    actorProfile?.avatar_url ??
+    (currentUserId === newsItem.createdBy ? userAvatarUrl : undefined) ??
+    undefined;
 
   const handleOpenLink = () => {
     Linking.openURL(newsItem.url).catch((err) => {
@@ -163,12 +160,7 @@ export function NewsCard({
     >
       <CardHeader
         avatarSlot={
-          <Avatar
-            userId={actorUserId}
-            avatarUrl={resolvedAvatarUrl}
-            size={40}
-            label={authorName}
-          />
+          <Avatar userId={actorUserId} avatarUrl={resolvedAvatarUrl} size={40} label={authorName} />
         }
         nameLine={cardModel.nameLine}
         fallbackTitle={authorName}
@@ -229,10 +221,8 @@ const styles = StyleSheet.create({
   siteName: {
     textTransform: 'uppercase',
   },
-  title: {
-  },
-  description: {
-  },
+  title: {},
+  description: {},
 
   ctaButton: {
     marginTop: theme.spacing[2],

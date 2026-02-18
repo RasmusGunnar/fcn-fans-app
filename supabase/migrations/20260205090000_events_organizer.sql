@@ -44,56 +44,86 @@ DROP POLICY IF EXISTS "Allow creators to update their own events" ON public.even
 DROP POLICY IF EXISTS "Allow creators to delete their own events" ON public.events;
 
 -- Authenticated users can create events if they set creator_user_id = auth.uid()
-CREATE POLICY "Events: insert by authenticated" ON public.events
-  FOR INSERT TO authenticated
-  WITH CHECK (auth.uid() = creator_user_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'events'
+      AND policyname = 'Events: insert by authenticated'
+  ) THEN
+    CREATE POLICY "Events: insert by authenticated" ON public.events
+      FOR INSERT TO authenticated
+      WITH CHECK (auth.uid() = creator_user_id);
+  END IF;
+END $$;
 
 -- Update allowed for creator, app admin, or community owner/admin
-CREATE POLICY "Events: update by owner/admin" ON public.events
-  FOR UPDATE TO authenticated
-  USING (
-    auth.uid() = creator_user_id
-    OR EXISTS (SELECT 1 FROM public.app_admins a WHERE a.user_id = auth.uid())
-    OR (
-      organizer_type = 'community'
-      AND EXISTS (
-        SELECT 1
-        FROM public.community_members cm
-        WHERE cm.community_id = organizer_id
-          AND cm.user_id = auth.uid()
-          AND cm.role IN ('owner','admin')
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'events'
+      AND policyname = 'Events: update by owner/admin'
+  ) THEN
+    CREATE POLICY "Events: update by owner/admin" ON public.events
+      FOR UPDATE TO authenticated
+      USING (
+        auth.uid() = creator_user_id
+        OR EXISTS (SELECT 1 FROM public.app_admins a WHERE a.user_id = auth.uid())
+        OR (
+          organizer_type = 'community'
+          AND EXISTS (
+            SELECT 1
+            FROM public.community_members cm
+            WHERE cm.community_id = organizer_id
+              AND cm.user_id = auth.uid()
+              AND cm.role IN ('owner','admin')
+          )
+        )
       )
-    )
-  )
-  WITH CHECK (
-    auth.uid() = creator_user_id
-    OR EXISTS (SELECT 1 FROM public.app_admins a WHERE a.user_id = auth.uid())
-    OR (
-      organizer_type = 'community'
-      AND EXISTS (
-        SELECT 1
-        FROM public.community_members cm
-        WHERE cm.community_id = organizer_id
-          AND cm.user_id = auth.uid()
-          AND cm.role IN ('owner','admin')
-      )
-    )
-  );
+      WITH CHECK (
+        auth.uid() = creator_user_id
+        OR EXISTS (SELECT 1 FROM public.app_admins a WHERE a.user_id = auth.uid())
+        OR (
+          organizer_type = 'community'
+          AND EXISTS (
+            SELECT 1
+            FROM public.community_members cm
+            WHERE cm.community_id = organizer_id
+              AND cm.user_id = auth.uid()
+              AND cm.role IN ('owner','admin')
+          )
+        )
+      );
+  END IF;
+END $$;
 
 -- Delete allowed for creator, app admin, or community owner/admin
-CREATE POLICY "Events: delete by owner/admin" ON public.events
-  FOR DELETE TO authenticated
-  USING (
-    auth.uid() = creator_user_id
-    OR EXISTS (SELECT 1 FROM public.app_admins a WHERE a.user_id = auth.uid())
-    OR (
-      organizer_type = 'community'
-      AND EXISTS (
-        SELECT 1
-        FROM public.community_members cm
-        WHERE cm.community_id = organizer_id
-          AND cm.user_id = auth.uid()
-          AND cm.role IN ('owner','admin')
-      )
-    )
-  );
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'events'
+      AND policyname = 'Events: delete by owner/admin'
+  ) THEN
+    CREATE POLICY "Events: delete by owner/admin" ON public.events
+      FOR DELETE TO authenticated
+      USING (
+        auth.uid() = creator_user_id
+        OR EXISTS (SELECT 1 FROM public.app_admins a WHERE a.user_id = auth.uid())
+        OR (
+          organizer_type = 'community'
+          AND EXISTS (
+            SELECT 1
+            FROM public.community_members cm
+            WHERE cm.community_id = organizer_id
+              AND cm.user_id = auth.uid()
+              AND cm.role IN ('owner','admin')
+          )
+        )
+      );
+  END IF;
+END $$;
