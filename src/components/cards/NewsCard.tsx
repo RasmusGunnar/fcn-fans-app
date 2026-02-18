@@ -4,8 +4,8 @@
 
 import React from 'react';
 import { View, StyleSheet, Image, Linking, Pressable, Alert } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { Text } from '../ui';
+import { Avatar } from '../Avatar';
 import { OptionsMenu, OptionsMenuOption } from '../OptionsMenu';
 import { CardHeader } from './CardHeader';
 import { CardMedia } from './CardMedia';
@@ -85,8 +85,14 @@ export function NewsCard({
   });
   const authorName = resolvedActor.displayName;
 
-  const isOwnPost = currentUserId && newsItem.createdBy === currentUserId;
-  const avatarSource = isOwnPost && userAvatarUrl ? { uri: userAvatarUrl } : null;
+  // Resolve avatar URL: prefer profileMap lookup for the actor, fall back to current user's avatar
+  const actorUserId = newsItem.actorType === 'user'
+    ? (newsItem.actorId || newsItem.createdBy)
+    : newsItem.createdBy;
+  const actorProfile = profileMap?.[actorUserId];
+  const resolvedAvatarUrl = actorProfile?.avatar_url
+    ?? (currentUserId === newsItem.createdBy ? userAvatarUrl : undefined)
+    ?? undefined;
 
   const handleOpenLink = () => {
     Linking.openURL(newsItem.url).catch((err) => {
@@ -157,29 +163,25 @@ export function NewsCard({
     >
       <CardHeader
         avatarSlot={
-          <View style={styles.avatar}>
-            {avatarSource ? (
-              <Image source={avatarSource} style={styles.avatarImage} />
-            ) : (
-              <Ionicons
-                name={newsItem.actorType === 'user' ? 'person' : 'people'}
-                size={20}
-                color={theme.colors.bg.card}
-              />
-            )}
-          </View>
+          <Avatar
+            userId={actorUserId}
+            avatarUrl={resolvedAvatarUrl}
+            size={40}
+            label={authorName}
+          />
         }
         nameLine={cardModel.nameLine}
         fallbackTitle={authorName}
         subtitle={timeAgo}
+        rightSlot={
+          showDeleteOption && newsMenuOptions.length > 0 ? (
+            <OptionsMenu options={newsMenuOptions} />
+          ) : undefined
+        }
       />
 
-      {showDeleteOption && newsMenuOptions.length > 0 ? (
-        <OptionsMenu options={newsMenuOptions} />
-      ) : null}
-
       {newsItem.imageUrl ? (
-        <CardMedia aspectRatio={16 / 9}>
+        <CardMedia aspectRatio={16 / 9} fullBleed style={{ marginTop: theme.spacing[3] }}>
           <Image source={{ uri: newsItem.imageUrl }} style={styles.mediaImage} resizeMode="cover" />
         </CardMedia>
       ) : null}
@@ -200,13 +202,6 @@ export function NewsCard({
             {newsItem.description}
           </Text>
         )}
-        <View style={styles.linkIndicator}>
-          <Ionicons name="open-outline" size={14} color={theme.colors.primary} />
-          <Text variant="caption" color="primary" style={styles.linkText}>
-            Åbn link
-          </Text>
-        </View>
-
         {newsItem.url ? (
           <Pressable style={styles.ctaButton} onPress={handleOpenLink}>
             <Text variant="body" color="primary" style={styles.ctaText}>
@@ -222,19 +217,6 @@ export function NewsCard({
 const theme = defaultTheme;
 
 const styles = StyleSheet.create({
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  avatarImage: {
-    width: 40,
-    height: 40,
-  },
   mediaImage: {
     width: '100%',
     height: '100%',
@@ -242,6 +224,7 @@ const styles = StyleSheet.create({
   },
   linkContent: {
     gap: theme.spacing[1],
+    marginTop: theme.spacing[3],
   },
   siteName: {
     textTransform: 'uppercase',
@@ -250,16 +233,10 @@ const styles = StyleSheet.create({
   },
   description: {
   },
-  linkIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing[1],
-    marginTop: theme.spacing[1],
-  },
-  linkText: {
-  },
+
   ctaButton: {
     marginTop: theme.spacing[2],
+    marginBottom: theme.spacing[3],
     borderWidth: theme.layout.borderWidth,
     borderColor: theme.colors.state.success,
     backgroundColor: 'transparent',

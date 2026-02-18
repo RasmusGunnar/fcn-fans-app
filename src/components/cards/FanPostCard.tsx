@@ -22,13 +22,82 @@ import { Post } from '../../types/post';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../auth/AuthProvider';
 import * as Linking from 'expo-linking';
-import { Video, ResizeMode } from 'expo-av';
 import { getPublicUrl } from '../../lib/storageUrl';
+import { FeedVideo } from '../feed/FeedVideo';
 import { canEditPost, canDeleteFeedItem } from '../../utils/permissions';
 import type { CommentPreview } from '../../services/likesApi';
 import type { CategoryKey } from '../../theme/categories';
 import { buildCardBehaviorModel } from './cardBehaviorModel';
 import { resolveActorLine, type ProfileMap } from '../../utils/actor';
+
+// ── Image ratio detection ───────────────────────────────────────
+// Global cache so we never call Image.getSize twice for the same URI
+const ratioCache = new Map<string, number>();
+
+/**
+ * Map a natural w/h ratio to an Instagram-style feed bucket.
+ *   portrait  (ratio < 0.9)  → 4/5
+ *   square    (0.9 ≤ r ≤ 1.1) → 1
+ *   landscape (ratio > 1.1)  → 16/9
+ */
+function pickImageRatio(w: number, h: number): number {
+  const r = w / h;
+  if (r < 0.9) return 4 / 5;
+  if (r <= 1.1) return 1;
+  return 16 / 9;
+}
+
+const IMAGE_RATIO_FALLBACK = 4 / 5; // Instagram default while loading
+
+/**
+ * Hook: resolve the best aspectRatio for a given image URI.
+ * - If metadata (width/height) is available from post.media, use it immediately.
+ * - Otherwise call Image.getSize once, cache the result, and re-render.
+ * - Fallback while loading: 4:5 (portrait, Instagram feed default).
+ */
+function useImageRatio(
+  uri: string | null,
+  metaWidth?: number,
+  metaHeight?: number,
+): number {
+  // Fast path: metadata available
+  const metaRatio = useMemo(() => {
+    if (metaWidth && metaHeight && metaWidth > 0 && metaHeight > 0) {
+      return pickImageRatio(metaWidth, metaHeight);
+    }
+    return null;
+  }, [metaWidth, metaHeight]);
+
+  const [detected, setDetected] = useState<number | null>(() => {
+    if (metaRatio != null) return metaRatio;
+    if (uri && ratioCache.has(uri)) return ratioCache.get(uri)!;
+    return null;
+  });
+
+  useEffect(() => {
+    // If we already have a ratio (meta or cached), skip getSize
+    if (metaRatio != null || !uri) return;
+    if (ratioCache.has(uri)) {
+      setDetected(ratioCache.get(uri)!);
+      return;
+    }
+    let cancelled = false;
+    Image.getSize(
+      uri,
+      (w, h) => {
+        const r = pickImageRatio(w, h);
+        ratioCache.set(uri, r);
+        if (!cancelled) setDetected(r);
+      },
+      () => {
+        // getSize failed – keep fallback
+      },
+    );
+    return () => { cancelled = true; };
+  }, [uri, metaRatio]);
+
+  return metaRatio ?? detected ?? IMAGE_RATIO_FALLBACK;
+}
 
 function getTimeAgo(isoDate: string): string {
   const now = new Date();
@@ -153,6 +222,13 @@ export function FanPostCard({
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(post.text);
   const [imageLoadError, setImageLoadError] = useState(false);
+
+  // Instagram-style aspect ratio for images (portrait→4:5, square→1:1, landscape→16:9)
+  const imageAspectRatio = useImageRatio(
+    mediaKind === 'image' ? mediaUri : null,
+    m0?.width,
+    m0?.height,
+  );
 
   const { user, isAppAdmin } = useAuth();
 
@@ -329,10 +405,12 @@ export function FanPostCard({
         nameLine={cardModel.nameLine}
         fallbackTitle={headerTitle}
         subtitle={headerSubtitle}
+        rightSlot={
+          (showEditOption || showDeleteOption) && postMenuOptions.length > 0 ? (
+            <OptionsMenu options={postMenuOptions} />
+          ) : undefined
+        }
       />
-      {(showEditOption || showDeleteOption) && postMenuOptions.length > 0 ? (
-        <OptionsMenu options={postMenuOptions} />
-      ) : null}
       {isEditing ? (
         <View style={styles.editContainer}>
           <TextInput
@@ -369,7 +447,7 @@ export function FanPostCard({
                 Ukendt mediaformat
               </Text>
               {__DEV__ && (
-                <Text variant="caption" color="secondary" style={{ marginTop: 4 }}>
+                <Text variant="caption" color="secondary" style={{ marginTop: theme.spacing[1] }}>
                   Type: {m0.type || 'none'}
                   {m0.bucket || m0.path ? ` • ${m0.bucket || '?'}/${m0.path || '?'}` : ''}
                   {Object.keys(m0).length > 0 ? ` • Keys: ${Object.keys(m0).join(', ')}` : ''}
@@ -382,7 +460,7 @@ export function FanPostCard({
                 Media kunne ikke indlæses
               </Text>
               {__DEV__ && (
-                <Text variant="caption" color="secondary" style={{ marginTop: 4 }}>
+                <Text variant="caption" color="secondary" style={{ marginTop: theme.spacing[1] }}>
                   Type: {mediaKind || 'unknown'}
                   {m0.bucket && m0.path ? ` • ${m0.bucket}/${m0.path}` : ''}
                 </Text>
@@ -390,12 +468,12 @@ export function FanPostCard({
             </View>
           ) : mediaKind === 'video' ? (
             <View style={styles.mediaContainer}>
-              <Video
-                source={{ uri: mediaUri }}
-                style={styles.video}
-                resizeMode={ResizeMode.COVER}
-                shouldPlay={false}
-                useNativeControls
+              <FeedVideo
+                uri={mediaUri}
+                isActive={isActiveVideo}
+                isAppActive={isAppActive}
+                naturalWidth={m0?.width}
+                naturalHeight={m0?.height}
                 onError={(e) => {
                   console.error('[VideoError]', { postId: post.id, error: e });
                 }}
@@ -408,13 +486,13 @@ export function FanPostCard({
                   Billede kunne ikke indlæses
                 </Text>
                 {__DEV__ && (
-                  <Text variant="caption" color="secondary" style={{ marginTop: 4 }}>
+                  <Text variant="caption" color="secondary" style={{ marginTop: theme.spacing[1] }}>
                     {mediaUri}
                   </Text>
                 )}
               </View>
             ) : (
-              <View style={styles.mediaContainer}>
+              <View style={[styles.mediaContainer, { aspectRatio: imageAspectRatio }]}>
                 <Image
                   source={{ uri: mediaUri }}
                   style={styles.image}
@@ -438,7 +516,7 @@ export function FanPostCard({
                 Uventet mediaformat
               </Text>
               {__DEV__ && (
-                <Text variant="caption" color="secondary" style={{ marginTop: 4 }}>
+                <Text variant="caption" color="secondary" style={{ marginTop: theme.spacing[1] }}>
                   Kind: {mediaKind} • URI: {mediaUri ? 'yes' : 'no'}
                 </Text>
               )}
@@ -451,8 +529,6 @@ export function FanPostCard({
 }
 
 const theme = defaultTheme;
-
-const cardPadding = theme.components.card.padding;
 
 const styles = StyleSheet.create({
   text: {
@@ -468,14 +544,13 @@ const styles = StyleSheet.create({
   },
   // FULL-BLEED: Media wrapper with negative margins
   mediaOuter: {
-    marginHorizontal: -cardPadding,
+    marginHorizontal: -theme.layout.cardPadding,
     marginTop: theme.spacing[3],
     alignSelf: 'stretch',
   },
-  // BASELINE: Simple 1:1 media containers - sharp corners
+  // Media container: width fills parent, aspect ratio determined by child (FeedVideo or image)
   mediaContainer: {
     width: '100%',
-    aspectRatio: 1,
     backgroundColor: theme.colors.border.default,
   },
   video: {

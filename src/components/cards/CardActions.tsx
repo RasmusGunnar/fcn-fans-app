@@ -58,6 +58,7 @@ export function CardActions({
             name={liked ? 'heart' : 'heart-outline'}
             size={iconSize}
             color={liked ? theme.colors.primary : theme.colors.text.muted}
+            style={liked ? styles.likeIconActive : undefined}
           />
           <Text
             variant="caption"
@@ -117,7 +118,11 @@ const styles = StyleSheet.create({
   actionPressed: {
     opacity: 0.7,
   },
+  likeIconActive: {
+    transform: [{ scale: 1.1 }],
+  },
   countText: {
+    fontSize: theme.typography.caption.fontSize,
     fontWeight: theme.typography.caption.fontWeight as any,
   },
 });
