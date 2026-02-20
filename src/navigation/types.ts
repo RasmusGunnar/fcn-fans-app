@@ -1,5 +1,4 @@
 // Central navigation param lists used across screens
-import type { Fixture } from '../services/fixtures';
 
 export type AuthStackParamList = {
   Welcome: undefined;
@@ -17,9 +16,7 @@ export type RootStackParamList = {
   // tabs container (if used)
   AppTabs?: undefined;
 
-  // event flow
-  Event: { eventId: string };
-  CreateEvent: { communityId?: string | null; matchId?: string | null };
+  // event flow (Supabase-backed)
   CreateNewEvent: undefined;
   EditEvent: { eventId: string };
 
@@ -30,7 +27,6 @@ export type RootStackParamList = {
   // community flow
   Communities: undefined;
   CreateCommunity: undefined;
-  CommunityHub: { communityId: string };
 
   // match details
   MatchDetails: { fixtureId: string };

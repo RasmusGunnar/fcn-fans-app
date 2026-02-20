@@ -51,6 +51,9 @@ export interface Event {
   organizer_id?: string | null;
   created_at: string;
   organizer?: FanGroup | null;
+  // Cover image
+  cover_bucket?: string | null;
+  cover_path?: string | null;
   // Location/geocoding fields
   address_line1?: string | null;
   postal_code?: string | null;
@@ -137,6 +140,9 @@ export type FeedItem =
       fixtureId: string | null;
       organizerName: string | null;
       description: string | null;
+      lat?: number | null;
+      lng?: number | null;
+      venue?: string | null;
     }
   | {
       kind: 'event';
@@ -153,6 +159,8 @@ export type FeedItem =
       lng?: number | null;
       created_by?: string | null;
       organizer_group_id?: string | null;
+      cover_bucket?: string | null;
+      cover_path?: string | null;
     };
 
 // ===== API FUNCTIONS =====
@@ -237,7 +245,7 @@ export async function fetchBusTripsUpcoming(limit = 20): Promise<BusTrip[]> {
     const { data, error } = await supabase
       .from('bus_trips')
       .select(
-        'id, title, start_at, departure_place, total_seats, seats_taken, price_dkk, fixture_id, organizer_group_id',
+        'id, title, start_at, departure_place, total_seats, seats_taken, price_dkk, fixture_id, organizer_group_id, fixtures:fixtures(lat,lng,venue,venue_city,place_name)',
       )
       .gte('start_at', new Date().toISOString())
       .order('start_at', { ascending: true })
@@ -258,15 +266,16 @@ export async function fetchBusTripsUpcoming(limit = 20): Promise<BusTrip[]> {
 /**
  * Fetch upcoming events from Supabase.
  * Uses select('*') to avoid 42703 errors from missing columns.
+ * Includes a 2-hour lookback so events that just started still appear.
  */
 export async function fetchEventsUpcoming(limit = 20, communityId?: string): Promise<Event[]> {
-  const nowISO = new Date().toISOString();
+  const cutoff = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(); // now − 2 h
 
   try {
     let query = supabase
       .from('events')
       .select('*')
-      .gte('start_at', nowISO)
+      .gte('start_at', cutoff)
       .order('start_at', { ascending: true })
       .limit(limit);
 
@@ -277,20 +286,10 @@ export async function fetchEventsUpcoming(limit = 20, communityId?: string): Pro
     const { data, error } = await query;
 
     if (error) {
-      if (__DEV__) {
-        console.error('[eventsApi] fetchEventsUpcoming error:', error.code, error.message);
-      }
+      console.warn('[eventsApi] fetchEventsUpcoming error:', error.code, error.message);
       return [];
     }
 
-    if (__DEV__) {
-      console.log(
-        '[eventsApi] fetchEventsUpcoming count:',
-        (data ?? []).length,
-        'filter: start_at >=',
-        nowISO,
-      );
-    }
     return (data || []) as unknown as Event[];
   } catch (err) {
     console.error('[eventsApi] Unexpected error fetching events:', err);
@@ -316,6 +315,10 @@ export async function fetchFeedUpcoming(): Promise<FeedItem[]> {
     const busTrips = results[1].status === 'fulfilled' ? results[1].value : [];
     const events = results[2].status === 'fulfilled' ? results[2].value : [];
 
+    console.log(
+      `[eventsApi] fetchFeedUpcoming — matches: ${matches.length}, busTrips: ${busTrips.length}, events: ${events.length}`,
+    );
+
     // Map to FeedItem union type
     const matchItems: FeedItem[] = matches.map((m) => ({
       kind: 'match' as const,
@@ -333,19 +336,25 @@ export async function fetchFeedUpcoming(): Promise<FeedItem[]> {
       lng: m.lng,
     }));
 
-    const busTripItems: FeedItem[] = busTrips.map((bt) => ({
-      kind: 'bus_trip' as const,
-      id: bt.id,
-      title: bt.title,
-      startAt: bt.start_at,
-      departurePlace: bt.departure_place,
-      seatsLeft: (bt.total_seats ?? 0) - (bt.seats_taken ?? 0),
-      totalSeats: bt.total_seats,
-      priceDkk: bt.price_dkk,
-      fixtureId: bt.fixture_id,
-      organizerName: null,
-      description: bt.description,
-    }));
+    const busTripItems: FeedItem[] = busTrips.map((bt) => {
+      const fix = (bt as any).fixtures as { lat?: number | null; lng?: number | null; venue?: string | null; venue_city?: string | null; place_name?: string | null } | null;
+      return {
+        kind: 'bus_trip' as const,
+        id: bt.id,
+        title: bt.title,
+        startAt: bt.start_at,
+        departurePlace: bt.departure_place,
+        seatsLeft: (bt.total_seats ?? 0) - (bt.seats_taken ?? 0),
+        totalSeats: bt.total_seats,
+        priceDkk: bt.price_dkk,
+        fixtureId: bt.fixture_id,
+        organizerName: null,
+        description: bt.description,
+        lat: fix?.lat ?? null,
+        lng: fix?.lng ?? null,
+        venue: fix?.venue ?? null,
+      };
+    });
 
     const eventItems: FeedItem[] = events.map((e) => ({
       kind: 'event' as const,
@@ -362,6 +371,8 @@ export async function fetchFeedUpcoming(): Promise<FeedItem[]> {
       creator_user_id: e.creator_user_id ?? null,
       created_by: e.created_by,
       organizer_group_id: e.organizer_group_id,
+      cover_bucket: e.cover_bucket ?? null,
+      cover_path: e.cover_path ?? null,
     }));
 
     // Merge and sort by start time ascending
@@ -409,13 +420,10 @@ export async function fetchEventById(id: string): Promise<Event | null> {
     const { data, error } = await supabase.from('events').select('*').eq('id', id).single();
 
     if (error) {
-      if (__DEV__) {
-        console.error('[eventsApi] fetchEventById error:', error.code, error.message);
-      }
+      console.warn('[eventsApi] fetchEventById error:', error.code, error.message);
       return null;
     }
 
-    console.log('[eventsApi] Event fetched successfully:', data);
     return data as unknown as Event;
   } catch (err) {
     console.warn('[eventsApi] Error fetching event by id', err);

@@ -6,7 +6,6 @@ import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { CommentPreview } from '../../services/likesApi';
 import { defaultTheme } from '../../theme';
-import { targetKey } from '../../utils/targetKey';
 import { Avatar } from '../Avatar';
 import { CardActions } from '../cards/CardActions';
 import { CommentTargetType, InlineComments } from '../comments/InlineComments';
@@ -62,12 +61,6 @@ export function FeedCardShell({
   const commentsCount = actions.comments ?? 0;
   const likesCount = actions.likes ?? 0;
   const liked = actions.liked ?? false;
-
-  // Dev log to verify correct data is passed
-  if (__DEV__) {
-    const key = targetKey(targetType as any, targetId);
-    console.log('[FeedCardShell]', { key, commentsCount, likesCount, liked });
-  }
 
   // Helper to get display name for comment author
   const getAuthorDisplayName = (comment: CommentPreview): string => {

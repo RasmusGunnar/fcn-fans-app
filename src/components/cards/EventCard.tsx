@@ -4,7 +4,7 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { useAuth } from '../../auth/AuthProvider';
 import type { CommentPreview } from '../../services/likesApi';
 import { defaultTheme } from '../../theme';
@@ -44,12 +44,8 @@ export function EventCard({
 }: EventCardProps) {
   const { user, isAppAdmin } = useAuth();
 
-  // Defensive guard: vm can be undefined at runtime if caller passes stale props
-  // or if toEventCardVM returned null and the guard was bypassed.
-  if (!vm) {
-    if (__DEV__) console.warn('[EventCard] vm is undefined — skipping render');
-    return null;
-  }
+  // Defensive guard — should never happen if callers use toEventCardVM
+  if (!vm) return null;
 
   return (
     <CardRoot
@@ -71,8 +67,11 @@ export function EventCard({
       {/* ── Hero area (full-bleed) with badge overlay ────────────── */}
       <View style={styles.heroOuter}>
         <View style={styles.heroPlaceholder}>
-          {/* E1: solid placeholder — heroImageUrl will be used in E2 */}
-          <View style={styles.heroOverlay} />
+          {vm.heroImageUrl ? (
+            <Image source={{ uri: vm.heroImageUrl }} style={styles.heroImage} resizeMode="cover" />
+          ) : (
+            <View style={styles.heroOverlay} />
+          )}
           {/* Badge positioned top-left over hero */}
           <View style={styles.badgeOverlay}>
             <EventSubtypeBadge subtype={vm.badgeType} overlay />
@@ -186,6 +185,10 @@ const styles = StyleSheet.create({
   heroOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: theme.colors.overlay.medium,
+  },
+  heroImage: {
+    width: '100%',
+    height: '100%',
   },
   badgeOverlay: {
     position: 'absolute' as const,

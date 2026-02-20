@@ -1,8 +1,6 @@
-// deno-lint-ignore-file no-explicit-any
+﻿// deno-lint-ignore-file no-explicit-any
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-
-// ===== TYPES =====
 
 type NormalizedFixture = {
   provider: string;
@@ -16,6 +14,8 @@ type NormalizedFixture = {
   away_team: string;
   home_logo_url: string | null;
   away_logo_url: string | null;
+  home_team_provider_id: string | null;
+  away_team_provider_id: string | null;
   updated_at: string;
 };
 
@@ -24,7 +24,6 @@ interface GeocodingResult {
   lng: number;
   place_name: string;
 }
-
 interface GeocodingSummary {
   scanned: number;
   geocoded: number;
@@ -32,457 +31,383 @@ interface GeocodingSummary {
   failed: number;
 }
 
-// ===== PROVIDER ADAPTERS =====
+const SPORTSDB_BASE_DEFAULT = 'https://www.thesportsdb.com/api/v1/json';
+const DEFAULT_FCN_TEAM_ID = '133890';
 
-const API_FOOTBALL_BASE = 'https://v3.football.api-sports.io';
+function toIsoKickoff(dateEvent?: string | null, strTime?: string | null): string {
+  const d = (dateEvent || '').trim();
+  const t = (strTime || '').trim();
+  if (!d) return new Date().toISOString();
+  if (t) {
+    // Ensure we end with Z for UTC
+    const tt = t.endsWith('Z') ? t : `${t}Z`;
+    return `${d}T${tt}`;
+  }
+  return `${d}T00:00:00Z`;
+}
 
-/**
- * Fetch fixtures from API-FOOTBALL provider
- */
-async function fetchFixturesFromApiFootball(
-  apiKey: string,
-  teamSearch: string,
-): Promise<
-  | { fixtures: NormalizedFixture[]; teamName?: string; teamId?: string }
-  | { error: string; details?: any }
-> {
+function normalizeSportsDbEvents(events: any[]): NormalizedFixture[] {
+  return events.map((e: any) => ({
+    provider: 'sportsdb',
+    provider_fixture_id: String(e.idEvent),
+    kickoff_at: toIsoKickoff(e.dateEvent, e.strTime),
+    competition: e.strLeague || null,
+    round: e.intRound ? String(e.intRound) : e.strRound || null,
+    venue: e.strVenue || null,
+    venue_city: e.strCity && String(e.strCity).trim() ? String(e.strCity) : null,
+    home_team: e.strHomeTeam || 'Unknown',
+    away_team: e.strAwayTeam || 'Unknown',
+    home_logo_url: e.strHomeTeamBadge || null,
+    away_logo_url: e.strAwayTeamBadge || null,
+    home_team_provider_id: e.idHomeTeam ? String(e.idHomeTeam) : null,
+    away_team_provider_id: e.idAwayTeam ? String(e.idAwayTeam) : null,
+    updated_at: new Date().toISOString(),
+  }));
+}
+
+async function fetchSportsDbJson(
+  url: string,
+): Promise<{ ok: true; data: any } | { ok: false; error: any }> {
   try {
-    // Step 1: Resolve team ID
-    console.log(`[api-football] Searching for team: ${teamSearch}`);
-    const teamSearchRes = await fetch(
-      `${API_FOOTBALL_BASE}/teams?search=${encodeURIComponent(teamSearch)}`,
-      {
-        headers: {
-          'x-apisports-key': apiKey,
-        },
-      },
-    );
-
-    if (!teamSearchRes.ok) {
+    const res = await fetch(url);
+    const text = await res.text().catch(() => '');
+    if (!res.ok) return { ok: false, error: { status: res.status, body: text.slice(0, 2000) } };
+    try {
+      return { ok: true, data: JSON.parse(text) };
+    } catch {
       return {
-        error: 'Failed to search teams',
-        details: { status: teamSearchRes.status },
+        ok: false,
+        error: { status: res.status, body: text.slice(0, 2000), message: 'Non-JSON response' },
       };
     }
-
-    const raw = await teamSearchRes.text();
-    console.log('[api-football] Raw response:', raw.slice(0, 2000));
-    const teamSearchData = JSON.parse(raw);
-
-    // Check for API errors (e.g., access suspended, rate limit)
-    if (teamSearchData.errors && Object.keys(teamSearchData.errors).length > 0) {
-      console.error('[api-football] API returned errors:', teamSearchData.errors);
-      return {
-        error: 'API-Football provider error',
-        details: teamSearchData.errors,
-      };
-    }
-
-    const teams = teamSearchData?.response || [];
-
-    if (teams.length === 0) {
-      console.log('[api-football] Team not found:', {
-        search: teamSearch,
-        status: teamSearchRes.status,
-        rateLimitRemaining: teamSearchRes.headers.get('x-ratelimit-remaining'),
-        response: raw.slice(0, 2000),
-      });
-      return {
-        error: 'Team not found',
-        details: { search: teamSearch },
-      };
-    }
-
-    const fcnTeamId = teams[0].team.id;
-    const fcnTeamName = teams[0].team.name;
-    console.log(`[api-football] Found team ID: ${fcnTeamId} (${fcnTeamName})`);
-
-    // Step 2: Fetch next 10 fixtures
-    console.log(`[api-football] Fetching next 10 fixtures for team ${fcnTeamId}...`);
-    const fixturesRes = await fetch(`${API_FOOTBALL_BASE}/fixtures?team=${fcnTeamId}&next=10`, {
-      headers: {
-        'x-apisports-key': apiKey,
-      },
-    });
-
-    if (!fixturesRes.ok) {
-      return {
-        error: 'Failed to fetch fixtures',
-        details: { status: fixturesRes.status },
-      };
-    }
-
-    const fixturesData = await fixturesRes.json();
-
-    // Check for API errors
-    if (fixturesData.errors && Object.keys(fixturesData.errors).length > 0) {
-      console.error('[api-football] API returned errors:', fixturesData.errors);
-      return {
-        error: 'API-Football provider error',
-        details: fixturesData.errors,
-      };
-    }
-
-    const fixtures = fixturesData?.response || [];
-    console.log(`[api-football] Retrieved ${fixtures.length} fixtures`);
-
-    // Step 3: Map to normalized format
-    const normalized: NormalizedFixture[] = fixtures.map((f: any) => ({
-      provider: 'api-football',
-      provider_fixture_id: String(f.fixture.id),
-      kickoff_at: f.fixture.date,
-      competition: f.league?.name || null,
-      round: f.league?.round || null,
-      venue: f.fixture?.venue?.name || null,
-      venue_city: f.fixture?.venue?.city || null,
-      home_team: f.teams.home.name,
-      away_team: f.teams.away.name,
-      home_logo_url: f.teams.home.logo || null,
-      away_logo_url: f.teams.away.logo || null,
-      updated_at: new Date().toISOString(),
-    }));
-
-    return {
-      fixtures: normalized,
-      teamName: fcnTeamName,
-      teamId: String(fcnTeamId),
-    };
-  } catch (err) {
-    console.error('[api-football] Unexpected error:', err);
-    return {
-      error: 'Unexpected provider error',
-      details: String(err),
-    };
+  } catch (e) {
+    return { ok: false, error: String(e) };
   }
 }
 
-/**
- * Fetch fixtures from RapidAPI provider (stub - TODO)
- */
-async function fetchFixturesFromRapidApi(
+function uniqByProviderFixtureId(fixtures: NormalizedFixture[]): NormalizedFixture[] {
+  const map = new Map<string, NormalizedFixture>();
+  for (const f of fixtures) map.set(f.provider_fixture_id, f);
+  return Array.from(map.values());
+}
+
+function isFcnFixture(f: NormalizedFixture, fcnTeamId: string): boolean {
+  return f.home_team_provider_id === fcnTeamId || f.away_team_provider_id === fcnTeamId;
+}
+
+async function fetchSportsDbSeason(
   apiKey: string,
-  teamSearch: string,
-): Promise<
-  | { fixtures: NormalizedFixture[]; teamName?: string; teamId?: string }
-  | { error: string; details?: any }
-> {
-  console.warn('[rapidapi] Provider not yet implemented');
-  return {
-    error: 'RapidAPI provider not implemented',
-    details: 'TODO: implement RapidAPI adapter',
-  };
+  leagueId: string,
+  season: string,
+  baseUrl: string,
+) {
+  const base = baseUrl.replace(/\/$/, '');
+  const url = `${base}/${encodeURIComponent(apiKey)}/eventsseason.php?id=${encodeURIComponent(leagueId)}&s=${encodeURIComponent(season)}`;
+  console.log('[sportsdb] season url:', url);
+
+  const r = await fetchSportsDbJson(url);
+  if (!r.ok) return { error: 'sportsdb season failed', details: r.error };
+
+  const events = r.data?.events;
+  if (!Array.isArray(events)) return { fixtures: [] as NormalizedFixture[] };
+
+  const fixtures = normalizeSportsDbEvents(events).sort((a, b) =>
+    a.kickoff_at.localeCompare(b.kickoff_at),
+  );
+  return { fixtures };
+}
+
+async function fetchSportsDbTeamNext(apiKey: string, teamId: string, baseUrl: string) {
+  const base = baseUrl.replace(/\/$/, '');
+  const url = `${base}/${encodeURIComponent(apiKey)}/eventsnext.php?id=${encodeURIComponent(teamId)}`;
+  console.log('[sportsdb] team next url:', url);
+
+  const r = await fetchSportsDbJson(url);
+  if (!r.ok) return { error: 'sportsdb team next failed', details: r.error };
+
+  const events = r.data?.events;
+  if (!Array.isArray(events)) return { fixtures: [] as NormalizedFixture[] };
+
+  const fixtures = normalizeSportsDbEvents(events);
+  return { fixtures };
+}
+
+async function fetchSportsDbTeamLast(apiKey: string, teamId: string, baseUrl: string) {
+  const base = baseUrl.replace(/\/$/, '');
+  const url = `${base}/${encodeURIComponent(apiKey)}/eventslast.php?id=${encodeURIComponent(teamId)}`;
+  console.log('[sportsdb] team last url:', url);
+
+  const r = await fetchSportsDbJson(url);
+  if (!r.ok) return { error: 'sportsdb team last failed', details: r.error };
+
+  const events = r.data?.results; // eventslast returns {results:[...]}
+  if (!Array.isArray(events)) return { fixtures: [] as NormalizedFixture[] };
+
+  const fixtures = normalizeSportsDbEvents(events);
+  return { fixtures };
 }
 
 // ===== GEOCODING =====
-
-/**
- * Geocode an address using OpenStreetMap Nominatim
- * With simple rate limiting (1 second delay)
- */
 async function geocodeAddress(addressText: string): Promise<GeocodingResult | null> {
-  if (!addressText || !addressText.trim()) {
-    return null;
-  }
-
+  if (!addressText || !addressText.trim()) return null;
   try {
-    // Rate limit: wait 1 second between requests
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
     const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addressText)}&limit=1`;
-    console.log(`[geocoding] Requesting: ${url}`);
-
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'FCN-Fans-Sync/1.0',
-      },
-    });
-
-    if (!response.ok) {
-      console.warn(`[geocoding] HTTP error: ${response.status}`);
-      return null;
-    }
+    const response = await fetch(url, { headers: { 'User-Agent': 'FCN-Fans-Sync/1.0' } });
+    if (!response.ok) return null;
 
     const data = await response.json();
-    if (!Array.isArray(data) || data.length === 0) {
-      console.warn(`[geocoding] No results for: ${addressText}`);
-      return null;
-    }
+    if (!Array.isArray(data) || data.length === 0) return null;
 
     const first = data[0];
-    const result: GeocodingResult = {
+    return {
       lat: parseFloat(first.lat),
       lng: parseFloat(first.lon),
       place_name: first.display_name || addressText,
     };
-
-    console.log(`[geocoding] Success: ${result.place_name}`);
-    return result;
-  } catch (err) {
-    console.error('[geocoding] Error geocoding address:', err);
+  } catch {
     return null;
   }
 }
 
-/**
- * Geocode fixtures that don't have lat/lng yet
- */
+const VENUE_ALIASES: Record<string, string[]> = {
+  'Energi Viborg Arena': ['Viborg Stadion, Viborg, Denmark', 'Viborg Stadion, Denmark'],
+  'Monjasa Park': [
+    'Monjasa Park, Fredericia, Denmark',
+    'Fredericia Stadion, Fredericia, Denmark',
+    'Fredericia Stadion, Denmark',
+  ],
+  'Vejlby Stadion': [
+    'Vejlby Stadion, Risskov, Denmark',
+    'Vejlby Stadion, Aarhus, Denmark',
+    'Vejlby, Aarhus, Denmark',
+  ],
+};
+
 async function geocodeFixtures(supabase: any): Promise<GeocodingSummary> {
-  console.log('[geocoding] Checking for fixtures needing geocoding...');
-  const { data: fixturesNeedingGeocode, error: geocodeQueryError } = await supabase
+  const { data, error } = await supabase
     .from('fixtures')
     .select('id, venue, venue_city, lat, lng')
     .or('lat.is.null,lng.is.null')
-    // deno-lint-ignore-file no-explicit-any
-    import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+    .limit(1);
 
-    const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    const CRON_SECRET = Deno.env.get('CRON_SECRET');
-    const SPORTSDB_API_KEY = Deno.env.get('SPORTSDB_API_KEY');
-    const SPORTSDB_BASE_URL = Deno.env.get('SPORTSDB_BASE_URL') || 'https://www.thesportsdb.com/api/v1/json';
-    const SPORTSDB_LEAGUE_ID = Deno.env.get('SPORTSDB_LEAGUE_ID') || '4340';
+  if (error || !data || data.length === 0)
+    return { scanned: 0, geocoded: 0, skipped: 0, failed: 0 };
 
-    const supabase = createClient(SUPABASE_URL ?? '', SUPABASE_SERVICE_ROLE_KEY ?? '', {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
+  let geocoded = 0;
+  let skipped = 0;
+  let failed = 0;
 
-    function stableStringify(value: any): string {
-      if (value === null || typeof value !== 'object') return JSON.stringify(value);
-      if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
-      const keys = Object.keys(value).sort();
-      return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(value[k])}`).join(',')}}`;
+  for (const f of data) {
+    if (!f.venue) {
+      skipped++;
+      continue;
     }
 
-    async function sha256(input: string): Promise<string> {
-      const data = new TextEncoder().encode(input);
-      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+    // Rate-limit: delay per fixture (~800ms)
+    await new Promise((resolve) => setTimeout(resolve, 800));
+
+    // Build candidate list
+    const candidates: string[] = [];
+    const aliases = VENUE_ALIASES[String(f.venue)];
+    if (aliases) candidates.push(...aliases);
+    if (f.venue_city) candidates.push(`${f.venue}, ${f.venue_city}, Denmark`);
+    candidates.push(`${f.venue}, Denmark`);
+
+    let geo: GeocodingResult | null = null;
+    for (const candidate of candidates) {
+      geo = await geocodeAddress(candidate);
+      if (geo) break;
     }
 
-    function addSeconds(date: Date, seconds: number): Date {
-      return new Date(date.getTime() + seconds * 1000);
+    if (!geo) {
+      failed++;
+      continue;
     }
 
-    function toInt(value: any): number | null {
-      const n = Number(value);
-      return Number.isFinite(n) ? n : null;
+    const { error: uerr } = await supabase
+      .from('fixtures')
+      .update({
+        lat: geo.lat,
+        lng: geo.lng,
+        place_name: geo.place_name,
+        geocoded_at: new Date().toISOString(),
+      })
+      .eq('id', f.id);
+
+    if (uerr) failed++;
+    else geocoded++;
+  }
+
+  return { scanned: data.length, geocoded, skipped, failed };
+}
+
+// ===== MAIN =====
+type JobName =
+  | 'fixtures_season'
+  | 'fixtures_fcn_upcoming'
+  | 'fixtures_fcn_recent'
+  | 'geocode_only'
+  | 'ping';
+
+async function readBody(req: Request): Promise<{ job: JobName; season?: string }> {
+  try {
+    const txt = await req.text();
+    if (!txt) return { job: 'fixtures_fcn_upcoming' };
+    const body = JSON.parse(txt);
+    const raw = (body?.job_name || 'fixtures_fcn_upcoming') as string;
+
+    // tolerate legacy names if they exist anywhere
+    const job =
+      raw === 'fixtures_next_14_days'
+        ? 'fixtures_fcn_upcoming'
+        : raw === 'fixtures_recent'
+          ? 'fixtures_fcn_recent'
+          : (raw as JobName);
+
+    const season = typeof body?.season === 'string' ? body.season : undefined;
+    return { job, season };
+  } catch {
+    return { job: 'fixtures_fcn_upcoming' };
+  }
+}
+
+serve(async (req) => {
+  try {
+    // Auth: ONLY x-sync-secret (Verify JWT is OFF in Supabase settings)
+    const syncSecret = Deno.env.get('SYNC_SECRET');
+    const providedSecret = req.headers.get('x-sync-secret');
+    if (!syncSecret || !providedSecret || providedSecret !== syncSecret) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
-    function toKickoff(dateEvent: any, timeEvent: any): string | null {
-      const date = String(dateEvent ?? '').trim();
-      if (!date) return null;
-      const time = String(timeEvent ?? '').trim();
-      if (!time) return new Date(`${date}T00:00:00Z`).toISOString();
+    const { job, season } = await readBody(req);
+    console.log('[main] job=', job, 'season=', season);
 
-      const safeTime = time.includes(':') ? time : `${time}:00`;
-      const iso = `${date}T${safeTime.endsWith('Z') ? safeTime : `${safeTime}Z`}`;
-      const parsed = new Date(iso);
-      return Number.isNaN(parsed.getTime()) ? new Date(`${date}T00:00:00Z`).toISOString() : parsed.toISOString();
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return new Response(
+        JSON.stringify({ error: 'Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY' }),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
+    }
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    const sportsDbKey = Deno.env.get('SPORTSDB_API_KEY');
+    const leagueId = Deno.env.get('SPORTSDB_LEAGUE_ID') || '4340';
+    const baseUrl = (Deno.env.get('SPORTSDB_BASE_URL') || SPORTSDB_BASE_DEFAULT).replace(/\/$/, '');
+    const fcnTeamId = Deno.env.get('SPORTSDB_FCN_TEAM_ID') || DEFAULT_FCN_TEAM_ID;
+    const seasonValue = season || Deno.env.get('SPORTSDB_SEASON') || '2025-2026';
+
+    if (!sportsDbKey) {
+      return new Response(JSON.stringify({ error: 'Missing SPORTSDB_API_KEY' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
-    async function getCache(cacheKey: string) {
-      try {
-        const { data, error } = await supabase
-          .from('api_cache')
-          .select('cache_key, response_json, expires_at, status_code')
-          .eq('cache_key', cacheKey)
-          .maybeSingle();
-
-        if (error || !data) return null;
-        return data;
-      } catch {
-        return null;
-      }
+    if (job === 'ping') {
+      return new Response(JSON.stringify({ success: true, time: new Date().toISOString() }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
-    async function setCache(params: {
-      cache_key: string;
-      endpoint: string;
-      params_json: any;
-      response_json: any;
-      status_code: number;
-      expires_at: string;
-      fetched_at: string;
-    }) {
-      try {
-        await supabase.from('api_cache').upsert(params, { onConflict: 'cache_key' });
-      } catch {
-        // ignore cache failures
-      }
+    if (job === 'geocode_only') {
+      const geocoding = await geocodeFixtures(supabase);
+      return new Response(JSON.stringify({ success: true, mode: 'geocode-only', geocoding }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
-    async function tryInsertSyncRun(jobName: string) {
-      try {
-        const { data, error } = await supabase
-          .from('sync_runs')
-          .insert({ job_name: jobName, started_at: new Date().toISOString(), ok: false })
-          .select('id')
-          .single();
+    // Fetch logic
+    let fixtures: NormalizedFixture[] = [];
+    const nowIso = new Date().toISOString();
 
-        if (error || !data) return null;
-        return data as { id: string };
-      } catch {
-        return null;
-      }
-    }
-
-    async function tryUpdateSyncRun(id: string, ok: boolean, stats: any) {
-      try {
-        await supabase
-          .from('sync_runs')
-          .update({ ok, finished_at: new Date().toISOString(), stats_json: stats })
-          .eq('id', id);
-      } catch {
-        // ignore
-      }
-    }
-
-    function normalizeEvent(event: any) {
-      if (!event) return null;
-      const externalId = toInt(event.idEvent);
-      if (!externalId) return null;
-
-      return {
-        external_id: externalId,
-        kickoff_at: toKickoff(event.dateEvent, event.strTime),
-        status_short: event.strStatus ?? '',
-        status_long: event.strStatus ?? '',
-        elapsed: null,
-        home_goals: toInt(event.intHomeScore),
-        away_goals: toInt(event.intAwayScore),
-        raw: event,
-        updated_at: new Date().toISOString(),
-      };
-    }
-
-    async function upsertFixtures(rows: any[]) {
-      if (!rows.length) return 0;
-      const chunkSize = 200;
-      let total = 0;
-
-      for (let i = 0; i < rows.length; i += chunkSize) {
-        const chunk = rows.slice(i, i + chunkSize);
-        const { error } = await supabase
-          .from('fixtures')
-          .upsert(chunk, { onConflict: 'external_id' });
-
-        if (error) {
-          console.error('[sync_fcn_fixtures] Upsert error:', error);
-          throw error;
-        }
-        total += chunk.length;
-      }
-
-      return total;
-    }
-
-    serve(async (req) => {
-      if (req.method !== 'POST') {
-        return new Response('Method not allowed', { status: 405 });
-      }
-
-      if (CRON_SECRET && req.headers.get('X-CRON-SECRET') !== CRON_SECRET) {
-        return new Response('Unauthorized', { status: 401 });
-      }
-
-      if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-        return new Response('Missing Supabase env vars', { status: 500 });
-      }
-
-      if (!SPORTSDB_API_KEY) {
-        return new Response('Missing SPORTSDB_API_KEY', { status: 500 });
-      }
-
-      let body: any;
-      try {
-        body = await req.json();
-      } catch {
-        return new Response('Invalid JSON body', { status: 400 });
-      }
-
-      const jobName = body?.job_name;
-      if (!jobName) {
-        return new Response('Missing job_name', { status: 400 });
-      }
-
-      let endpoint = '';
-      let ttlSeconds = 0;
-
-      if (jobName === 'fixtures_next_14_days') {
-        endpoint = `/eventsnextleague.php?id=${SPORTSDB_LEAGUE_ID}`;
-        ttlSeconds = 6 * 60 * 60;
-      } else if (jobName === 'fixtures_recent') {
-        endpoint = `/eventspastleague.php?id=${SPORTSDB_LEAGUE_ID}`;
-        ttlSeconds = 60 * 60;
-      } else {
-        return new Response('Unsupported job_name', { status: 400 });
-      }
-
-      const syncRun = await tryInsertSyncRun(jobName);
-
-      try {
-        const url = `${SPORTSDB_BASE_URL}/${SPORTSDB_API_KEY}${endpoint}`;
-        const paramsKey = stableStringify({ endpoint, league: SPORTSDB_LEAGUE_ID });
-        const cacheKey = await sha256(`${url}|${paramsKey}`);
-
-        const cached = await getCache(cacheKey);
-        const now = new Date();
-        const cachedValid = cached && new Date(cached.expires_at) > now;
-
-        let responseJson: any;
-        let statusCode = 200;
-        let cacheHit = false;
-
-        if (cachedValid) {
-          responseJson = cached.response_json;
-          statusCode = cached.status_code ?? 200;
-          cacheHit = true;
-        } else {
-          const res = await fetch(url);
-          statusCode = res.status;
-          responseJson = await res.json();
-
-          const fetchedAt = new Date();
-          const expiresAt = addSeconds(fetchedAt, ttlSeconds);
-          await setCache({
-            cache_key: cacheKey,
-            endpoint,
-            params_json: { league_id: SPORTSDB_LEAGUE_ID },
-            response_json: responseJson,
-            status_code: statusCode,
-            fetched_at: fetchedAt.toISOString(),
-            expires_at: expiresAt.toISOString(),
-          });
-        }
-
-        const events = Array.isArray(responseJson?.events) ? responseJson.events : [];
-        const normalized = events.map(normalizeEvent).filter(Boolean);
-
-        const upserted = await upsertFixtures(normalized);
-        const stats = {
-          job_name: jobName,
-          provider: 'thesportsdb',
-          cache_hit: cacheHit,
-          fetched: events.length,
-          upserted,
-          status_code: statusCode,
-        };
-
-        if (syncRun?.id) {
-          await tryUpdateSyncRun(syncRun.id, true, stats);
-        }
-
-        return new Response(JSON.stringify(stats), {
-          status: 200,
+    if (job === 'fixtures_season') {
+      const r = await fetchSportsDbSeason(sportsDbKey, leagueId, seasonValue, baseUrl);
+      if ('error' in r)
+        return new Response(JSON.stringify({ error: r.error, details: r.details }), {
+          status: 500,
           headers: { 'Content-Type': 'application/json' },
         });
-      } catch (err: any) {
-        console.error('[sync_fcn_fixtures] Error:', err);
-        if (syncRun?.id) {
-          await tryUpdateSyncRun(syncRun.id, false, { error: String(err) });
-        }
-        return new Response('Sync failed', { status: 500 });
-      }
+      fixtures = r.fixtures;
+    }
+
+    if (job === 'fixtures_fcn_upcoming') {
+      const seasonRes = await fetchSportsDbSeason(sportsDbKey, leagueId, seasonValue, baseUrl);
+      if (!('error' in seasonRes)) fixtures.push(...seasonRes.fixtures);
+
+      const nextRes = await fetchSportsDbTeamNext(sportsDbKey, fcnTeamId, baseUrl);
+      if (!('error' in nextRes)) fixtures.push(...nextRes.fixtures);
+
+      fixtures = uniqByProviderFixtureId(fixtures)
+        .filter((f) => isFcnFixture(f, fcnTeamId))
+        .filter((f) => f.kickoff_at >= nowIso)
+        .sort((a, b) => a.kickoff_at.localeCompare(b.kickoff_at));
+    }
+
+    if (job === 'fixtures_fcn_recent') {
+      const lastRes = await fetchSportsDbTeamLast(sportsDbKey, fcnTeamId, baseUrl);
+      if ('error' in lastRes)
+        return new Response(JSON.stringify({ error: lastRes.error, details: lastRes.details }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+      fixtures = lastRes.fixtures
+        .filter((f) => isFcnFixture(f, fcnTeamId))
+        .sort((a, b) => b.kickoff_at.localeCompare(a.kickoff_at));
+    }
+
+    const fetched = fixtures.length;
+
+    const { data, error } = await supabase
+      .from('fixtures')
+      .upsert(fixtures, { onConflict: 'provider_fixture_id' })
+      .select();
+
+    if (error) {
+      console.error('[db] upsert error:', error);
+      return new Response(
+        JSON.stringify({ error: 'Database upsert failed', db_error: error, fetched }),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
+    }
+
+    const geocoding = { scanned: 0, geocoded: 0, skipped: 0, failed: 0 };
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        mode: 'full-sync',
+        job,
+        provider: 'sportsdb',
+        season: seasonValue,
+        fetched,
+        synced: data?.length || 0,
+        geocoding,
+      }),
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      },
+    );
+  } catch (e) {
+    console.error('[main] unexpected error:', e);
+    return new Response(JSON.stringify({ error: 'Internal server error', details: String(e) }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
     });
+  }
+});

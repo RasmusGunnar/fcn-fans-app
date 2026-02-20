@@ -1,33 +1,56 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-  Pressable,
-  Alert,
-  Platform,
-  ActivityIndicator,
-} from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Card } from '../components/ui/Card';
-import { PrimaryButton } from '../components/PrimaryButton';
-import { OutlineButton } from '../components/ui/OutlineButton';
-import { colors, spacing } from '../theme';
+import { useNavigation } from '@react-navigation/native';
+import React, { useEffect, useState } from 'react';
+import {
+  ActionSheetIOS,
+  ActivityIndicator,
+  Alert,
+  Image,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../auth/AuthProvider';
-import { supabase } from '../lib/supabase';
-import { countOwnedCommunities } from '../services/profileApi';
 import { ActorSelector } from '../components/ActorSelector';
+import { PrimaryButton } from '../components/PrimaryButton';
+import { Card } from '../components/ui/Card';
+import { OutlineButton } from '../components/ui/OutlineButton';
+import { getPublicUrl } from '../lib/storageUrl';
+import { supabase } from '../lib/supabase';
+import { deleteEventCover, pickAndUploadEventCover } from '../lib/uploadEventCover';
+import { countOwnedCommunities } from '../services/profileApi';
 import { useFeed } from '../state/FeedContext';
+import { colors, spacing } from '../theme';
 import type { Actor } from '../types/news';
 import { resolveProfileDisplayName } from '../utils/actor';
 
 type EventType = 'event' | 'bus_trip';
+
+async function geocodeNominatim(
+  q: string,
+): Promise<{ lat: number; lng: number; place_name: string } | null> {
+  if (!q.trim()) return null;
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`;
+    const res = await fetch(url, { headers: { Accept: 'application/json' } });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!Array.isArray(data) || data.length === 0) return null;
+    return {
+      lat: parseFloat(data[0].lat),
+      lng: parseFloat(data[0].lon),
+      place_name: data[0].display_name || q,
+    };
+  } catch {
+    return null;
+  }
+}
 
 export default function CreateNewEventScreen() {
   const navigation = useNavigation();
@@ -45,8 +68,17 @@ export default function CreateNewEventScreen() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [locationName, setLocationName] = useState('');
-  const [locationAddress, setLocationAddress] = useState('');
-  const [startDate, setStartDate] = useState(new Date());
+  const [addressLine1, setAddressLine1] = useState('');
+  const [postalCode, setPostalCode] = useState('');
+  const [city, setCity] = useState('');
+  const [country, setCountry] = useState('Danmark');
+
+  // Cover image
+  const [coverBucket, setCoverBucket] = useState<string | null>(null);
+  const [coverPath, setCoverPath] = useState<string | null>(null);
+  const [uploadingCover, setUploadingCover] = useState(false);
+  // Default: 1 hour from now so the event is clearly in the future
+  const [startDate, setStartDate] = useState(() => new Date(Date.now() + 60 * 60 * 1000));
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
 
@@ -84,14 +116,36 @@ export default function CreateNewEventScreen() {
   useEffect(() => {
     if (!user?.id) return;
     const displayName = resolveProfileDisplayName(profileMap, user.id, user.email || undefined);
-    setSelectedActor((prev) =>
-      prev ?? {
-        type: 'user',
-        id: user.id,
-        name: displayName,
-      },
+    setSelectedActor(
+      (prev) =>
+        prev ?? {
+          type: 'user',
+          id: user.id,
+          name: displayName,
+        },
     );
   }, [user?.id, user?.email, profileMap]);
+
+  // -- Cover image helpers (need a temp ID for upload path) --
+  const tempEventId = React.useRef(`new-${Date.now()}`).current;
+
+  const pickCover = (source: 'gallery' | 'camera') => {
+    setUploadingCover(true);
+    pickAndUploadEventCover(tempEventId, source)
+      .then((result) => {
+        if (result) {
+          setCoverBucket(result.bucket);
+          setCoverPath(result.path);
+        }
+      })
+      .finally(() => setUploadingCover(false));
+  };
+
+  const removeCover = () => {
+    if (coverPath) deleteEventCover(coverPath);
+    setCoverBucket(null);
+    setCoverPath(null);
+  };
 
   const handleDateChange = (event: any, selectedDate?: Date) => {
     setShowDatePicker(false);
@@ -163,11 +217,39 @@ export default function CreateNewEventScreen() {
         const organizerType = selectedActor.type === 'community' ? 'community' : 'fan';
         const organizerId = selectedActor.id;
 
-        const insertPayload = {
+        const addressText = [addressLine1, [postalCode, city].filter(Boolean).join(' '), country]
+          .filter(Boolean)
+          .join(', ');
+
+        // Geocode the location
+        const geocodeInput =
+          (addressText ?? '').trim() ||
+          [addressLine1.trim(), locationName.trim()].filter(Boolean).join(', ').trim();
+        let geo: { lat: number; lng: number; place_name: string } | null = null;
+        if (geocodeInput) {
+          console.log('[event geocode] query=', geocodeInput);
+          geo = await geocodeNominatim(geocodeInput);
+          console.log('[event geocode] geo=', geo);
+          if (!geo) {
+            Alert.alert(
+              'Adresse ikke fundet',
+              'Kunne ikke finde adressen – event vises ikke på kortet.',
+            );
+          }
+        }
+
+        const insertPayload: Record<string, any> = {
           title: title.trim(),
           description: description.trim() || null,
           location_name: locationName.trim(),
-          location_address: locationAddress.trim() || null,
+          location_address: addressLine1.trim() || null,
+          address_line1: addressLine1.trim() || null,
+          postal_code: postalCode.trim() || null,
+          city: city.trim() || null,
+          country: country.trim() || 'Danmark',
+          address_text: addressText || null,
+          cover_bucket: coverBucket,
+          cover_path: coverPath,
           start_at: startDate.toISOString(),
           created_by: user.id,
           creator_user_id: user.id,
@@ -176,8 +258,18 @@ export default function CreateNewEventScreen() {
           organizer_group_id: organizerType === 'community' ? organizerId : null,
         };
 
+        if (geo) {
+          insertPayload.lat = geo.lat;
+          insertPayload.lng = geo.lng;
+          insertPayload.place_name = geo.place_name;
+          insertPayload.geocoded_at = new Date().toISOString();
+        }
+
         if (__DEV__) {
-          console.log('[CreateNewEventScreen] INSERT payload:', JSON.stringify(insertPayload, null, 2));
+          console.log(
+            '[CreateNewEventScreen] INSERT payload:',
+            JSON.stringify(insertPayload, null, 2),
+          );
         }
 
         // Create event
@@ -448,27 +540,119 @@ export default function CreateNewEventScreen() {
 
         {/* Event-specific fields */}
         {eventType === 'event' && (
-          <Card style={styles.card}>
-            <Text style={styles.sectionTitle}>Sted</Text>
+          <>
+            {/* Cover Image */}
+            <Card style={styles.card}>
+              <Text style={styles.sectionTitle}>Cover billede</Text>
+              <Pressable
+                onPress={() => {
+                  if (Platform.OS === 'ios') {
+                    const opts = [
+                      'Vælg fra galleri',
+                      'Tag billede',
+                      ...(coverPath ? ['Fjern billede'] : []),
+                      'Annullér',
+                    ];
+                    ActionSheetIOS.showActionSheetWithOptions(
+                      {
+                        options: opts,
+                        cancelButtonIndex: opts.length - 1,
+                        destructiveButtonIndex: coverPath ? opts.length - 2 : undefined,
+                      },
+                      (idx) => {
+                        if (idx === 0) pickCover('gallery');
+                        else if (idx === 1) pickCover('camera');
+                        else if (coverPath && idx === 2) removeCover();
+                      },
+                    );
+                  } else {
+                    Alert.alert('Cover billede', 'Vælg en mulighed', [
+                      { text: 'Galleri', onPress: () => pickCover('gallery') },
+                      { text: 'Kamera', onPress: () => pickCover('camera') },
+                      ...(coverPath
+                        ? [{ text: 'Fjern', style: 'destructive' as const, onPress: removeCover }]
+                        : []),
+                      { text: 'Annullér', style: 'cancel' as const },
+                    ]);
+                  }
+                }}
+                style={styles.coverPicker}
+              >
+                {uploadingCover ? (
+                  <View style={styles.coverPlaceholder}>
+                    <ActivityIndicator color={colors.fcnRed} />
+                  </View>
+                ) : coverPath && coverBucket ? (
+                  <Image
+                    source={{ uri: getPublicUrl(coverBucket, coverPath) || undefined }}
+                    style={styles.coverPreview}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={styles.coverPlaceholder}>
+                    <Ionicons name="image-outline" size={spacing.xl} color={colors.subtext} />
+                    <Text style={styles.coverPlaceholderText}>Tryk for at tilføje billede</Text>
+                  </View>
+                )}
+              </Pressable>
+            </Card>
 
-            <Text style={styles.label}>Stednavn *</Text>
-            <TextInput
-              style={styles.input}
-              value={locationName}
-              onChangeText={setLocationName}
-              placeholder="F.eks. Farum Kro"
-              placeholderTextColor={colors.subtext}
-            />
+            {/* Location */}
+            <Card style={styles.card}>
+              <Text style={styles.sectionTitle}>Sted</Text>
 
-            <Text style={styles.label}>Adresse</Text>
-            <TextInput
-              style={styles.input}
-              value={locationAddress}
-              onChangeText={setLocationAddress}
-              placeholder="F.eks. Hovedgaden 10, 3520 Farum"
-              placeholderTextColor={colors.subtext}
-            />
-          </Card>
+              <Text style={styles.label}>Stednavn *</Text>
+              <TextInput
+                style={styles.input}
+                value={locationName}
+                onChangeText={setLocationName}
+                placeholder="F.eks. Farum Kro"
+                placeholderTextColor={colors.subtext}
+              />
+
+              <Text style={styles.label}>Adresse</Text>
+              <TextInput
+                style={styles.input}
+                value={addressLine1}
+                onChangeText={setAddressLine1}
+                placeholder="F.eks. Pernille Højers Vej 1"
+                placeholderTextColor={colors.subtext}
+              />
+
+              <View style={styles.rowFields}>
+                <View style={styles.fieldHalf}>
+                  <Text style={styles.label}>Postnr.</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={postalCode}
+                    onChangeText={setPostalCode}
+                    placeholder="3520"
+                    placeholderTextColor={colors.subtext}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                  />
+                </View>
+                <View style={styles.fieldHalf}>
+                  <Text style={styles.label}>By</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={city}
+                    onChangeText={setCity}
+                    placeholder="Farum"
+                    placeholderTextColor={colors.subtext}
+                  />
+                </View>
+              </View>
+
+              <Text style={styles.label}>Land</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.bg, color: colors.subtext }]}
+                value={country}
+                onChangeText={setCountry}
+                placeholderTextColor={colors.subtext}
+              />
+            </Card>
+          </>
         )}
 
         {/* Bus trip-specific fields */}
@@ -670,5 +854,36 @@ const createStyles = () =>
     },
     buttonContainer: {
       marginTop: spacing.md,
+    },
+    rowFields: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+    },
+    fieldHalf: {
+      flex: 1,
+    },
+    coverPicker: {
+      width: '100%',
+      aspectRatio: 16 / 9,
+      borderRadius: spacing.sm,
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderStyle: 'dashed',
+    },
+    coverPreview: {
+      width: '100%',
+      height: '100%',
+    },
+    coverPlaceholder: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: colors.bg,
+    },
+    coverPlaceholderText: {
+      fontSize: 13,
+      color: colors.subtext,
+      marginTop: spacing.xs,
     },
   });

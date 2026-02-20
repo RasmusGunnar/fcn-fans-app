@@ -225,13 +225,6 @@ export function FanPostCard({
   const [editText, setEditText] = useState(post.text);
   const [imageLoadError, setImageLoadError] = useState(false);
 
-  // Instagram-style aspect ratio for images (portrait→4:5, square→1:1, landscape→16:9)
-  const imageAspectRatio = useImageRatio(
-    mediaKind === 'image' ? mediaUri : null,
-    m0?.width,
-    m0?.height,
-  );
-
   const { user, isAppAdmin } = useAuth();
 
   // BASELINE: Deterministic media parsing with DEV logging
@@ -252,27 +245,12 @@ export function FanPostCard({
     return null;
   }, [m0]);
 
-  // DEV-only logging for first 2 posts
-  useEffect(() => {
-    if (!__DEV__) return;
-    const logKey = `media-debug-${post.id}`;
-    const alreadyLogged = (globalThis as any)[logKey];
-    if (!alreadyLogged) {
-      (globalThis as any)[logKey] = true;
-      const logCount = ((globalThis as any).__mediaDebugCount || 0) + 1;
-      (globalThis as any).__mediaDebugCount = logCount;
-      if (logCount <= 2) {
-        console.log('[media-debug]', {
-          id: post.id,
-          rawType: typeof post.media,
-          isArray: Array.isArray(post.media),
-          firstMedia: m0,
-          kind: mediaKind,
-          urlExists: !!mediaUri,
-        });
-      }
-    }
-  }, [post.id, post.media, m0, mediaKind, mediaUri]);
+  // Instagram-style aspect ratio for images (portrait→4:5, square→1:1, landscape→16:9)
+  const imageAspectRatio = useImageRatio(
+    mediaKind === 'image' ? mediaUri : null,
+    m0?.width,
+    m0?.height,
+  );
 
   // BASELINE: Remove complex video state management - keep only essential edit handlers
 
@@ -361,7 +339,7 @@ export function FanPostCard({
         ? undefined
         : onOpenDetail;
 
-  const resolvedCategoryKey = categoryKey ?? 'fan';
+  const resolvedCategoryKey = categoryKey ?? 'fan'; // eslint-disable-line @typescript-eslint/no-unused-vars
   const resolvedAuthor = resolveActorLine({
     actorType: isCommunityPost ? 'community' : 'user',
     authorId: post.authorId,
@@ -382,8 +360,6 @@ export function FanPostCard({
       targetId={post.id}
       currentUserId={user?.id}
       isAppAdmin={isAppAdmin}
-      profileMap={profileMap}
-      categoryKey={resolvedCategoryKey}
       onOpenDetail={computedOnOpenDetail}
       commentPreviews={commentPreviews}
       onNewComment={onNewComment}
@@ -470,6 +446,13 @@ export function FanPostCard({
             </View>
           ) : mediaKind === 'video' ? (
             <View style={styles.mediaContainer}>
+              {__DEV__ &&
+                (console.log('[FanPostCard:Video]', {
+                  postId: post.id,
+                  source: { uri: mediaUri },
+                  typeof: typeof mediaUri,
+                }),
+                null)}
               <FeedVideo
                 uri={mediaUri}
                 isActive={isActiveVideo}
@@ -495,6 +478,13 @@ export function FanPostCard({
               </View>
             ) : (
               <View style={[styles.mediaContainer, { aspectRatio: imageAspectRatio }]}>
+                {__DEV__ &&
+                  (console.log('[FanPostCard:Image]', {
+                    postId: post.id,
+                    source: { uri: mediaUri },
+                    typeof: typeof mediaUri,
+                  }),
+                  null)}
                 <Image
                   source={{ uri: mediaUri }}
                   style={styles.image}

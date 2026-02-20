@@ -141,8 +141,6 @@ export function NewsCard({
       targetId={newsItem.id || newsItem.url}
       currentUserId={user?.id}
       isAppAdmin={isAppAdmin}
-      profileMap={profileMap}
-      categoryKey={categoryKey}
       onOpenDetail={
         cardModel.pressBehavior === 'open_external'
           ? () => Linking.openURL(cardModel.externalUrl!)
@@ -174,6 +172,13 @@ export function NewsCard({
 
       {newsItem.imageUrl ? (
         <CardMedia aspectRatio={16 / 9} fullBleed style={{ marginTop: theme.spacing[3] }}>
+          {__DEV__ &&
+            (console.log('[NewsCard:Image]', {
+              id: newsItem.id,
+              source: { uri: newsItem.imageUrl },
+              typeof: typeof newsItem.imageUrl,
+            }),
+            null)}
           <Image source={{ uri: newsItem.imageUrl }} style={styles.mediaImage} resizeMode="cover" />
         </CardMedia>
       ) : null}

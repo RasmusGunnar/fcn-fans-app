@@ -1,0 +1,12 @@
+# Supabase project configuration
+# https://supabase.com/docs/guides/functions/auth#disabling-default-jwt-verification
+
+# sync_fcn_fixtures: uses x-sync-secret header instead of JWT.
+# This disables the gateway-level JWT check so cron jobs can call it
+# with only the x-sync-secret header.
+[functions.sync_fcn_fixtures]
+verify_jwt = false
+
+# sync-fixtures: also uses secret-header auth, no JWT needed.
+[functions.sync-fixtures]
+verify_jwt = false

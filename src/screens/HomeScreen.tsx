@@ -103,29 +103,6 @@ export default function HomeScreen() {
     return () => subscription.remove();
   }, []);
 
-  // Debug logging for testing
-  if (__DEV__) {
-    console.log('[HomeScreen]', { userId: user?.id, isAppAdmin });
-    console.log('[HomeScreen] feedItems type', {
-      isArray: Array.isArray(feedItems),
-      value: feedItems ? 'defined' : 'undefined',
-      length: safeFeedItems.length,
-    });
-
-    // Log first item's data
-    if (safeFeedItems.length > 0) {
-      const firstItem = safeFeedItems[0];
-      const firstKey = getFeedItemKey(firstItem);
-      console.log('[HomeScreen] First item render data:', {
-        key: firstKey,
-        kind: firstItem.kind,
-        commentCount: safeCommentCountMap[firstKey],
-        previewCount: safeCommentPreviewMap[firstKey]?.length || 0,
-        hasLikeData: !!safeLikeMap[firstKey],
-      });
-    }
-  }
-
   const loadNextFixture = async () => {
     setLoadingFixture(true);
     const fixture = await fetchNextFixture();
@@ -191,6 +168,13 @@ export default function HomeScreen() {
         isActiveVideo={isActiveVideo}
         isAppActive={isAppActive}
         onActivateVideo={() => setCurrentPlayingVideoPostId(key)}
+        onPressEvent={(eventId) => (navigation as any).navigate('EventDetails', { eventId })}
+        onPressBusTrip={(busTripId) =>
+          (navigation as any).navigate('BusTripDetails', { busTripId })
+        }
+        onPressMatch={(matchId) =>
+          (navigation as any).navigate('MatchDetails', { fixtureId: matchId })
+        }
       />
     );
   };

@@ -1,6 +1,7 @@
 // ✅ DESIGN SYSTEM GUARDRAIL: This file is a pure data mapper — no UI, no theme imports.
 
 import type { EventSubtype } from '../components/ui/EventSubtypeBadge';
+import { getPublicUrl } from '../lib/storageUrl';
 import { formatEventDate } from '../services/profileApi';
 import type { FeedItem } from '../types/feed';
 
@@ -59,11 +60,10 @@ function safeDateText(iso: string | null | undefined): string | null {
 // ─── Mapper ──────────────────────────────────────────────────────────────────
 
 export function toEventCardVM(item: FeedItem, ctx: EventCardVMContext = {}): EventCardVM | null {
-  // Defensive: item itself must have an id and a kind we handle
-  if (!item || !item.id) {
-    if (__DEV__) console.warn('[toEventCardVM] item missing or no id', item);
-    return null;
-  }
+  if (!item) return null;
+
+  // Derive a stable id — prefer item.id, fall back to data.id
+  const id: string = item.id || (item as any).data?.id || `unknown-${Date.now()}`;
 
   // Defensive: item.data may be undefined at runtime despite TS types
   const d: any = (item as any).data ?? {};
@@ -80,7 +80,7 @@ export function toEventCardVM(item: FeedItem, ctx: EventCardVMContext = {}): Eve
         : (d.venueCity ?? null);
 
       return {
-        id: item.id,
+        id,
         kind: 'match',
         heroImageUrl: null,
         badgeType: 'match',
@@ -100,11 +100,14 @@ export function toEventCardVM(item: FeedItem, ctx: EventCardVMContext = {}): Eve
     case 'event': {
       const orgGroupId = d.organizerGroupId ?? d.organizer_group_id ?? null;
       const orgName = d.organizerName ?? (orgGroupId && ctx.communityMap?.[orgGroupId]) ?? null;
+      const coverBucket = d.coverBucket ?? d.cover_bucket ?? null;
+      const coverPath = d.coverPath ?? d.cover_path ?? null;
+      const heroImageUrl = coverBucket && coverPath ? getPublicUrl(coverBucket, coverPath) : null;
 
       return {
-        id: item.id,
+        id,
         kind: 'event',
-        heroImageUrl: null,
+        heroImageUrl,
         badgeType: 'event',
         title: d.title ?? 'Event',
         description: d.description ?? null,
@@ -124,7 +127,7 @@ export function toEventCardVM(item: FeedItem, ctx: EventCardVMContext = {}): Eve
       const orgName = d.organizerName ?? (orgGroupId && ctx.communityMap?.[orgGroupId]) ?? null;
 
       return {
-        id: item.id,
+        id,
         kind: 'bus_trip',
         heroImageUrl: null,
         badgeType: 'bus_trip',
@@ -141,9 +144,6 @@ export function toEventCardVM(item: FeedItem, ctx: EventCardVMContext = {}): Eve
     }
 
     default:
-      if (__DEV__) {
-        console.warn('[toEventCardVM] unhandled item.kind:', (item as any).kind);
-      }
       return null;
   }
 }
