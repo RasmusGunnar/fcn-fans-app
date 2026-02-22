@@ -47,6 +47,9 @@ export function EventCard({
   // Defensive guard — should never happen if callers use toEventCardVM
   if (!vm) return null;
 
+  const isMatch = vm.kind === 'match';
+  const hasLogos = isMatch && (vm.homeLogo || vm.awayLogo);
+
   return (
     <CardRoot
       targetType={vm.targetType}
@@ -69,13 +72,46 @@ export function EventCard({
         <View style={styles.heroPlaceholder}>
           {vm.heroImageUrl ? (
             <Image source={{ uri: vm.heroImageUrl }} style={styles.heroImage} resizeMode="cover" />
+          ) : isMatch ? (
+            <View style={styles.heroFallbackMatch} />
           ) : (
             <View style={styles.heroOverlay} />
           )}
+
+          {/* Semi-transparent dark overlay (always on for match) */}
+          {(vm.heroImageUrl || isMatch) && <View style={styles.heroDarkOverlay} />}
+
           {/* Badge positioned top-left over hero */}
           <View style={styles.badgeOverlay}>
             <EventSubtypeBadge subtype={vm.badgeType} overlay />
           </View>
+
+          {/* H2H logos + VS inside the hero area */}
+          {hasLogos ? (
+            <View style={styles.h2hOverlay}>
+              <View style={styles.h2hBadge}>
+                {vm.homeLogo ? (
+                  <Image
+                    source={{ uri: vm.homeLogo }}
+                    style={styles.h2hLogoImg}
+                    resizeMode="cover"
+                  />
+                ) : null}
+              </View>
+              <Text variant="h2" color="inverse" style={styles.h2hVs}>
+                VS
+              </Text>
+              <View style={styles.h2hBadge}>
+                {vm.awayLogo ? (
+                  <Image
+                    source={{ uri: vm.awayLogo }}
+                    style={styles.h2hLogoImg}
+                    resizeMode="cover"
+                  />
+                ) : null}
+              </View>
+            </View>
+          ) : null}
         </View>
       </View>
 
@@ -190,10 +226,47 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  heroFallbackMatch: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: theme.colors.primary,
+    opacity: 0.85,
+  },
+  heroDarkOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: theme.colors.overlay.heroScrim,
+  },
   badgeOverlay: {
     position: 'absolute' as const,
     top: theme.spacing[3],
     left: theme.spacing[3],
+  },
+
+  // Head-to-head overlay (positioned centred inside hero)
+  h2hOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: theme.spacing[4],
+  },
+  h2hBadge: {
+    width: theme.spacing[12],
+    height: theme.spacing[12],
+    borderRadius: theme.radius.pill,
+    backgroundColor: 'transparent',
+    overflow: 'hidden' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  h2hLogoImg: {
+    width: theme.spacing[12],
+    height: theme.spacing[12],
+  },
+  h2hVs: {
+    fontWeight: '700',
+    textShadowColor: theme.colors.overlay.textShadow,
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
 
   // Content

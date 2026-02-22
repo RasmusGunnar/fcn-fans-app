@@ -4,6 +4,7 @@
 
 import React from 'react';
 import { Alert, Image, Linking, Pressable, StyleSheet, View } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../auth/AuthProvider';
 import { supabase } from '../../lib/supabase';
 import type { CommentPreview } from '../../services/likesApi';
@@ -70,6 +71,7 @@ export function NewsCard({
   onNewComment,
   onDeleted = () => {},
 }: NewsCardProps) {
+  const navigation = useNavigation<any>();
   const { user, isAppAdmin } = useAuth();
   const timeAgo = getTimeAgo(newsItem.createdAt);
 
@@ -163,6 +165,11 @@ export function NewsCard({
         nameLine={cardModel.nameLine}
         fallbackTitle={authorName}
         subtitle={timeAgo}
+        onPressAuthor={
+          actorUserId
+            ? () => navigation.navigate('PublicProfile', { userId: actorUserId })
+            : undefined
+        }
         rightSlot={
           showDeleteOption && newsMenuOptions.length > 0 ? (
             <OptionsMenu options={newsMenuOptions} />

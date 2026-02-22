@@ -10,6 +10,7 @@ import {
   fetchCommentCounts,
   fetchCommentPreviews,
   fetchLikeStates,
+  fetchMyLikedIds,
   toggleLike as toggleLikeApi,
   type CommentPreview,
   type LikeTargetType,
@@ -386,6 +387,41 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       });
 
       setLikeMap(newLikeMap);
+
+      // ── Rehydrate likedByMe from likes_v2 for current user ──
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        const currentUserId = session?.user?.id;
+        if (currentUserId) {
+          const [myPostLikes, myNewsLikes, myEventLikes, myBusTripLikes] = await Promise.all([
+            fetchMyLikedIds(currentUserId, 'post', postIds).catch(() => new Set<string>()),
+            fetchMyLikedIds(currentUserId, 'news', newsIds).catch(() => new Set<string>()),
+            fetchMyLikedIds(currentUserId, 'event', eventIds).catch(() => new Set<string>()),
+            fetchMyLikedIds(currentUserId, 'bus_trip', busTripIds).catch(() => new Set<string>()),
+          ]);
+
+          const patchedLikeMap = { ...newLikeMap };
+          const patchLiked = (kind: LikeTargetType, ids: string[], mySet: Set<string>) => {
+            for (const id of ids) {
+              if (mySet.has(id)) {
+                const key = targetKey(kind, id);
+                patchedLikeMap[key] = { ...patchedLikeMap[key], liked: true };
+              }
+            }
+          };
+          patchLiked('post', postIds, myPostLikes);
+          patchLiked('news', newsIds, myNewsLikes);
+          patchLiked('event', eventIds, myEventLikes);
+          patchLiked('bus_trip', busTripIds, myBusTripLikes);
+
+          setLikeMap(patchedLikeMap);
+        }
+      } catch (e) {
+        console.warn('[FeedProvider] likedByMe rehydration failed:', e);
+      }
+
       setCommentCountMap(newCommentCountMap);
       setCommentPreviewMap(newCommentPreviewMap);
     } catch (e: any) {

@@ -31,6 +31,9 @@ export type RootStackParamList = {
   // match details
   MatchDetails: { fixtureId: string };
 
+  // public profile
+  PublicProfile: { userId: string };
+
   // other screens
   Matchday: undefined;
   Home?: undefined;

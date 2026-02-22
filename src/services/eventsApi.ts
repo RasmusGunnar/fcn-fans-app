@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { getMatchHeroUrl, getTeamHeroImage } from './sportsdb';
 
 // ===== TYPES =====
 
@@ -77,11 +78,15 @@ export interface Fixture {
   venue_city: string | null;
   competition: string | null;
   round: string | null;
+  home_team_provider_id?: string | null;
+  away_team_provider_id?: string | null;
   // Location/geocoding fields
   lat?: number | null;
   lng?: number | null;
   place_name?: string | null;
   geocoded_at?: string | null;
+  // SportsDB raw JSON (for hero images etc.)
+  raw?: Record<string, unknown> | null;
 }
 
 const FCN_FIXTURES_VIEW = 'v_fcn_fixtures';
@@ -125,6 +130,8 @@ export type FeedItem =
       venueCity: string | null;
       round: string | null;
       competition: string | null;
+      homeTeamProviderId?: string | null;
+      heroUrl?: string | null;
       lat?: number | null;
       lng?: number | null;
     }
@@ -320,6 +327,7 @@ export async function fetchFeedUpcoming(): Promise<FeedItem[]> {
     );
 
     // Map to FeedItem union type
+    // Build match items and resolve hero images from team API when raw is empty
     const matchItems: FeedItem[] = matches.map((m) => ({
       kind: 'match' as const,
       id: m.id,
@@ -332,9 +340,23 @@ export async function fetchFeedUpcoming(): Promise<FeedItem[]> {
       venueCity: m.venue_city,
       round: m.round,
       competition: m.competition,
+      homeTeamProviderId: m.home_team_provider_id ?? null,
+      heroUrl: getMatchHeroUrl(m),
       lat: m.lat,
       lng: m.lng,
     }));
+
+    // Enrich: for matches without a heroUrl, try the team API (cached per session)
+    await Promise.all(
+      matchItems.map(async (item) => {
+        if (item.kind !== 'match') return;
+        if (item.heroUrl) return;
+        const pid = item.homeTeamProviderId;
+        if (!pid) return;
+        const teamHero = await getTeamHeroImage(pid);
+        if (teamHero) (item as any).heroUrl = teamHero;
+      }),
+    );
 
     const busTripItems: FeedItem[] = busTrips.map((bt) => {
       const fix = (bt as any).fixtures as { lat?: number | null; lng?: number | null; venue?: string | null; venue_city?: string | null; place_name?: string | null } | null;

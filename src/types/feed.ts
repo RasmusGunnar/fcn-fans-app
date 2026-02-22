@@ -49,6 +49,8 @@ export type FeedMatchData = {
   venueCity?: string | null;
   competition?: string | null;
   round?: string | null;
+  homeTeamProviderId?: string | null;
+  heroUrl?: string | null;
 };
 
 /**

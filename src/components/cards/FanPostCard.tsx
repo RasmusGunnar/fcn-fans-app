@@ -5,6 +5,7 @@
 import * as Linking from 'expo-linking';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Image, Pressable, Share, StyleSheet, TextInput, View } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../auth/AuthProvider';
 import { getPublicUrl } from '../../lib/storageUrl';
 import { supabase } from '../../lib/supabase';
@@ -219,6 +220,7 @@ export function FanPostCard({
   isAppActive = true,
   onActivateVideo,
 }: FanPostCardProps) {
+  const navigation = useNavigation<any>();
   const timeAgo = getTimeAgo(post.createdAt);
   const groupDisplay = post.communityName || post.factionName;
   const [isEditing, setIsEditing] = useState(false);
@@ -383,6 +385,11 @@ export function FanPostCard({
         nameLine={cardModel.nameLine}
         fallbackTitle={headerTitle}
         subtitle={headerSubtitle}
+        onPressAuthor={
+          post.authorId
+            ? () => navigation.navigate('PublicProfile', { userId: post.authorId })
+            : undefined
+        }
         rightSlot={
           (showEditOption || showDeleteOption) && postMenuOptions.length > 0 ? (
             <OptionsMenu options={postMenuOptions} />

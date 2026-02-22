@@ -172,6 +172,34 @@ export async function fetchCommentPreviews(
 }
 
 /**
+ * Fetch the set of target_ids that the given user has liked.
+ * Used to rehydrate likedByMe state on app start / feed refresh.
+ */
+export async function fetchMyLikedIds(
+  userId: string,
+  targetType: LikeTargetType,
+  targetIds: string[],
+): Promise<Set<string>> {
+  if (!userId || targetIds.length === 0) return new Set();
+
+  const { data, error } = await supabase
+    .from('likes_v2')
+    .select('target_id')
+    .eq('user_id', userId)
+    .eq('target_type', targetType)
+    .in('target_id', targetIds);
+
+  if (error) {
+    if (__DEV__) {
+      console.warn('[fetchMyLikedIds] Error:', error);
+    }
+    return new Set();
+  }
+
+  return new Set((data || []).map((r) => r.target_id));
+}
+
+/**
  * Toggle like for a target (insert if not liked, delete if liked)
  */
 export async function toggleLike(

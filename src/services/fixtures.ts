@@ -16,11 +16,16 @@ export interface Fixture {
   away_logo_url: string | null;
   created_at: string;
   updated_at: string;
+  // Provider team IDs (for hero images etc.)
+  home_team_provider_id?: string | null;
+  away_team_provider_id?: string | null;
   // Location/geocoding fields
   lat?: number | null;
   lng?: number | null;
   place_name?: string | null;
   geocoded_at?: string | null;
+  // SportsDB raw JSON (for hero images etc.)
+  raw?: Record<string, unknown> | null;
 }
 
 const FCN_FIXTURES_VIEW = 'v_fcn_fixtures';

@@ -27,6 +27,7 @@ import {
 import { useFeed } from '../state/FeedContext';
 import { colors, spacing, defaultTheme as theme } from '../theme';
 import { getFeedItemKey } from '../types/feed';
+import { getMatchHeroUrl, getTeamHeroImage } from '../services/sportsdb';
 
 export default function HomeScreen() {
   const navigation = useNavigation();
@@ -50,6 +51,7 @@ export default function HomeScreen() {
   } = useFeed();
   const [nextFixture, setNextFixture] = useState<Fixture | null>(null);
   const [loadingFixture, setLoadingFixture] = useState(false);
+  const [nextFixtureHeroUrl, setNextFixtureHeroUrl] = useState<string | null>(null);
   const [currentPlayingVideoPostId, setCurrentPlayingVideoPostId] = useState<string | null>(null);
   const [isAppActive, setIsAppActive] = useState(true);
 
@@ -107,6 +109,12 @@ export default function HomeScreen() {
     setLoadingFixture(true);
     const fixture = await fetchNextFixture();
     setNextFixture(fixture);
+    // Resolve hero: try raw first, then team API
+    let hero = getMatchHeroUrl(fixture as any);
+    if (!hero && fixture?.home_team_provider_id) {
+      hero = await getTeamHeroImage(fixture.home_team_provider_id);
+    }
+    setNextFixtureHeroUrl(hero);
     setLoadingFixture(false);
   };
 
@@ -214,39 +222,52 @@ export default function HomeScreen() {
                 </View>
               ) : nextFixture ? (
                 <>
-                  <View style={styles.matchRow}>
-                    <View style={styles.team}>
-                      {nextFixture.home_logo_url ? (
-                        <Image
-                          source={{ uri: nextFixture.home_logo_url }}
-                          style={styles.teamLogo}
-                        />
-                      ) : (
-                        <View style={styles.teamCircle}>
-                          <Text style={styles.teamText}>
-                            {nextFixture.home_team.substring(0, 3).toUpperCase()}
-                          </Text>
+                  {/* Hero + H2H overlay */}
+                  {(() => {
+                    return (
+                      <View style={styles.heroContainer}>
+                        {nextFixtureHeroUrl ? (
+                          <Image
+                            source={{ uri: nextFixtureHeroUrl }}
+                            style={styles.heroImg}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <View style={styles.heroFallback} />
+                        )}
+                        <View style={styles.heroDark} />
+                        <View style={styles.h2hOverlay}>
+                          <View style={styles.h2hBadge}>
+                            {nextFixture.home_logo_url ? (
+                              <Image
+                                source={{ uri: nextFixture.home_logo_url }}
+                                style={styles.h2hLogoImg}
+                                resizeMode="cover"
+                              />
+                            ) : (
+                              <Text style={styles.teamText}>
+                                {nextFixture.home_team.substring(0, 3).toUpperCase()}
+                              </Text>
+                            )}
+                          </View>
+                          <Text style={styles.h2hVsText}>VS</Text>
+                          <View style={styles.h2hBadge}>
+                            {nextFixture.away_logo_url ? (
+                              <Image
+                                source={{ uri: nextFixture.away_logo_url }}
+                                style={styles.h2hLogoImg}
+                                resizeMode="cover"
+                              />
+                            ) : (
+                              <Text style={styles.teamText}>
+                                {nextFixture.away_team.substring(0, 3).toUpperCase()}
+                              </Text>
+                            )}
+                          </View>
                         </View>
-                      )}
-                      <Text style={styles.teamName}>{nextFixture.home_team}</Text>
-                    </View>
-                    <Text style={styles.vs}>VS</Text>
-                    <View style={styles.team}>
-                      {nextFixture.away_logo_url ? (
-                        <Image
-                          source={{ uri: nextFixture.away_logo_url }}
-                          style={styles.teamLogo}
-                        />
-                      ) : (
-                        <View style={styles.teamCircle}>
-                          <Text style={styles.teamText}>
-                            {nextFixture.away_team.substring(0, 3).toUpperCase()}
-                          </Text>
-                        </View>
-                      )}
-                      <Text style={styles.teamName}>{nextFixture.away_team}</Text>
-                    </View>
-                  </View>
+                      </View>
+                    );
+                  })()}
                   <View style={styles.matchDetails}>
                     <View style={styles.detailRow}>
                       <Text style={styles.icon}></Text>
@@ -317,6 +338,56 @@ const createStyles = () =>
     container: { flex: 1, backgroundColor: colors.bg },
     content: { paddingHorizontal: spacing[0], paddingVertical: spacing.md },
     card: { marginBottom: spacing.md },
+    heroContainer: {
+      width: '100%',
+      height: 160,
+      borderRadius: theme.radius.md,
+      overflow: 'hidden' as const,
+      position: 'relative' as const,
+      marginBottom: spacing.md,
+    },
+    heroImg: {
+      ...StyleSheet.absoluteFillObject,
+      width: '100%',
+      height: '100%',
+    },
+    heroFallback: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: colors.fcnRed,
+      opacity: 0.85,
+    },
+    heroDark: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: theme.colors.overlay.heroScrim,
+    },
+    h2hOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+      gap: spacing.lg,
+    },
+    h2hBadge: {
+      width: 56,
+      height: 56,
+      borderRadius: theme.radius.pill,
+      backgroundColor: 'transparent',
+      overflow: 'hidden' as const,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+    },
+    h2hLogoImg: {
+      width: 56,
+      height: 56,
+    },
+    h2hVsText: {
+      fontSize: 22,
+      fontWeight: '800' as const,
+      color: theme.colors.text.inverse,
+      textShadowColor: theme.colors.overlay.textShadow,
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 3,
+    },
     matchRow: {
       flexDirection: 'row',
       alignItems: 'center',

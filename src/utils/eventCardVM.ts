@@ -36,6 +36,11 @@ export interface EventCardVM {
 
   // Feed interaction (passthrough)
   targetType: 'match' | 'event' | 'bus_trip';
+
+  // Match-specific (optional)
+  homeTeamProviderId?: string | null;
+  homeLogo?: string | null;
+  awayLogo?: string | null;
 }
 
 // ─── Context the caller must supply ─────────────────────────────────────────
@@ -82,7 +87,7 @@ export function toEventCardVM(item: FeedItem, ctx: EventCardVMContext = {}): Eve
       return {
         id,
         kind: 'match',
-        heroImageUrl: null,
+        heroImageUrl: d.heroUrl ?? null,
         badgeType: 'match',
         title: `${home} vs ${away}`,
         description: d.round ?? d.competition ?? null,
@@ -93,6 +98,9 @@ export function toEventCardVM(item: FeedItem, ctx: EventCardVMContext = {}): Eve
         statusLine: null,
         ctaLabel: 'Køb billetter',
         targetType: 'match',
+        homeTeamProviderId: d.homeTeamProviderId ?? d.home_team_provider_id ?? null,
+        homeLogo: d.homeLogo ?? d.home_logo_url ?? null,
+        awayLogo: d.awayLogo ?? d.away_logo_url ?? null,
       };
     }
 

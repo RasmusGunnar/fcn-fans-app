@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import CommunitiesScreen from '../screens/CommunitiesScreen';
 import CommunityDetailScreen from '../screens/CommunityDetailScreen';
 import CreateCommunityScreen from '../screens/CreateCommunityScreen';
+import PublicProfileScreen from '../screens/PublicProfileScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -12,6 +13,7 @@ export function CommunitiesStack() {
       <Stack.Screen name="CommunitiesList" component={CommunitiesScreen} />
       <Stack.Screen name="CommunityDetail" component={CommunityDetailScreen} />
       <Stack.Screen name="CreateCommunity" component={CreateCommunityScreen} />
+      <Stack.Screen name="PublicProfile" component={PublicProfileScreen} />
     </Stack.Navigator>
   );
 }

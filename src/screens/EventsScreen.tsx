@@ -218,6 +218,8 @@ export default function EventsScreen() {
           venueCity: item.venueCity,
           competition: item.competition,
           round: item.round,
+          homeTeamProviderId: item.homeTeamProviderId ?? null,
+          heroUrl: item.heroUrl ?? null,
         },
       };
     }
