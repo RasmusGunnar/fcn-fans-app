@@ -84,17 +84,20 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
   return (
     <View style={[styles.container, paddingBottom > 0 && { paddingBottom }]}>
       {songs.map((song) => (
-        <SongAccordionCard
-          key={song.id}
-          title={song.title}
-          lyrics={song.lyrics}
-          spotifyUrl={song.spotifyUrl}
-          isExpanded={expandedSongId === song.id}
-          onToggle={() => toggleSong(song.id)}
-        />
+        <View key={song.id} style={styles.card}>
+          <SongAccordionCard
+            title={song.title}
+            lyrics={song.lyrics}
+            spotifyUrl={song.spotifyUrl}
+            isExpanded={expandedSongId === song.id}
+            onToggle={() => toggleSong(song.id)}
+          />
+        </View>
       ))}
 
-      <SongSuggestCard onPressSuggest={handleSuggestSong} />
+      <View style={styles.card}>
+        <SongSuggestCard onPressSuggest={handleSuggestSong} />
+      </View>
     </View>
   );
 }
@@ -102,5 +105,9 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
 const styles = StyleSheet.create({
   container: {
     paddingTop: theme.spacing[4],
+    paddingHorizontal: theme.spacing[4],
+  },
+  card: {
+    width: '100%',
   },
 });

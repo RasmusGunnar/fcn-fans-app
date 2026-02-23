@@ -27,8 +27,8 @@ export async function uploadMediaToSupabase(
   userId: string,
   asset: PickedMedia,
 ): Promise<{
+  bucket?: string;
   path: string;
-  publicUrl: string;
   type: 'image' | 'video';
   width?: number;
   height?: number;
@@ -180,3 +180,5 @@ async function cryptoRandom(): Promise<string> {
   // Use expo-crypto for secure random UUID generation
   return Crypto.randomUUID();
 }
+
+

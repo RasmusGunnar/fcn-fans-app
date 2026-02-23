@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Pressable, Text, StyleSheet, ViewStyle } from 'react-native';
+import { View, Pressable, Text, StyleSheet, ViewStyle, ScrollView } from 'react-native';
 import { defaultTheme } from '../../theme';
 
 const theme = defaultTheme;
@@ -23,7 +23,12 @@ export function SegmentedControl<Key extends string>({
   style,
 }: SegmentedControlProps<Key>) {
   return (
-    <View style={[styles.railContainer, style]}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={[styles.railContainer, style]}
+      contentContainerStyle={styles.railContent}
+    >
       {items.map((item) => {
         const isActive = item.key === activeKey;
         return (
@@ -32,30 +37,36 @@ export function SegmentedControl<Key extends string>({
             onPress={() => onChange(item.key)}
             style={[styles.button, isActive && styles.buttonActive]}
           >
-            <Text style={[styles.text, isActive && styles.textActive]}>
+            <Text
+              style={[styles.text, isActive && styles.textActive]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
               {item.label}
             </Text>
           </Pressable>
         );
       })}
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   railContainer: {
-    paddingHorizontal: theme.spacing[4],
-    paddingVertical: theme.spacing[3],
     backgroundColor: theme.colors.bg.subtle,
     borderRadius: theme.radius.lg,
     marginHorizontal: theme.spacing[4],
     marginVertical: theme.spacing[2],
+    overflow: 'hidden',
+  },
+  railContent: {
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing[2],
   },
   button: {
-    flex: 1,
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
     borderRadius: theme.radius.pill,

@@ -26,6 +26,8 @@ export type RootStackParamList = {
   CreateNewEvent: undefined;
   Create: undefined;
 
+  MatchDetails: { fixtureId: string };
+
   // Existing routes are declared in stack navigators
 };
 

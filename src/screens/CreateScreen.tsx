@@ -25,6 +25,7 @@ export default function CreateScreen() {
   const [attachment, setAttachment] = useState<PickedMedia | null>(
     route?.params?.initialAttachment ?? null,
   );
+  const [loading, setLoading] = useState(false);
 
   const handlePublish = async () => {
     if (!text.trim()) {
@@ -45,7 +46,7 @@ export default function CreateScreen() {
         // Uploaded already has bucket from upload.ts, but verify it
         mediaArray = [
           {
-            bucket: uploaded.bucket ?? 'post-media',
+            bucket: 'post-media',
             path: uploaded.path,
             type: uploaded.type,
             width: uploaded.width,
@@ -384,3 +385,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 });
+
+

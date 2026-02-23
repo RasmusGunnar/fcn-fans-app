@@ -87,17 +87,6 @@ function VideoCard({ video }: { video: Video }) {
     }
   };
 
-  const tagColor =
-    video.tag === 'Highlights'
-      ? theme.colors.brand.accent
-      : video.tag === 'Kamp'
-        ? theme.colors.error
-        : video.tag === 'Interview'
-          ? theme.colors.info
-          : video.tag === 'Akademi'
-            ? theme.colors.warning
-            : theme.colors.brand.accent;
-
   return (
     <Pressable onPress={handlePress}>
       <Card style={styles.card}>
@@ -132,18 +121,6 @@ function VideoCard({ video }: { video: Video }) {
               {video.year && (
                 <View style={[styles.tag, { backgroundColor: theme.colors.bg.subtle }]}>
                   <Text style={styles.tagText}>{video.year}</Text>
-                </View>
-              )}
-              {video.tag && (
-                <View
-                  style={[
-                    styles.tag,
-                    { backgroundColor: tagColor, opacity: 0.15 },
-                  ]}
-                >
-                  <Text style={[styles.tagText, { color: tagColor }]}>
-                    {video.tag}
-                  </Text>
                 </View>
               )}
             </View>
@@ -189,8 +166,10 @@ export function VideosView({ paddingBottom = 0 }: VideosViewProps) {
 const styles = StyleSheet.create({
   container: {
     gap: theme.spacing[3],
+    paddingHorizontal: theme.spacing[4],
   },
   card: {
+    width: '100%',
   },
   cardContent: {
     overflow: 'hidden',
@@ -247,6 +226,7 @@ const styles = StyleSheet.create({
     ...theme.typography.small,
   },
   emptyCard: {
+    width: '100%',
   },
   emptyContent: {
     padding: theme.spacing[6],

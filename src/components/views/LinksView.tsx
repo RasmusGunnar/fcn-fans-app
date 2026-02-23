@@ -132,8 +132,10 @@ export function LinksView({ paddingBottom = 0 }: LinksViewProps) {
 const styles = StyleSheet.create({
   container: {
     gap: theme.spacing[3],
+    paddingHorizontal: theme.spacing[4],
   },
   card: {
+    width: '100%',
   },
   cardContent: {
     padding: theme.components.card.padding,
@@ -168,6 +170,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   emptyCard: {
+    width: '100%',
   },
   emptyContent: {
     padding: theme.spacing[6],

@@ -16,7 +16,7 @@ type LibrarySegmentKey = 'songs' | 'standings' | 'links' | 'videos';
 const segments = [
   { key: 'songs', label: 'Sange' },
   { key: 'standings', label: 'Stillingen' },
-  { key: 'links', label: 'Fan Links' },
+  { key: 'links', label: 'Links' },
   { key: 'videos', label: 'Videoer' },
 ] as const satisfies ReadonlyArray<{ key: LibrarySegmentKey; label: string }>;
 
@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: theme.spacing[4],
+    paddingHorizontal: theme.spacing[0],
     paddingTop: theme.spacing[2],
   },
   comingSoonCard: {
