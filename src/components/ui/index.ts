@@ -37,3 +37,5 @@ export { Chip } from './Chip';
 export type { ChipProps } from './Chip';
 
 export { OutlineButton } from './OutlineButton';
+export { SegmentedControl } from './SegmentedControl';
+export type { SegmentedControlProps } from './SegmentedControl';

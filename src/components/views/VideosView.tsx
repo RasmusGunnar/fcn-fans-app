@@ -18,6 +18,15 @@ interface Video {
 
 const videos: Video[] = [
   {
+    id: 'mesterskab-2012',
+    title: 'Mesterskabskampen – guld 2012',
+    description: 'FCN sikrer mesterskabet med 3-0 over AC Horsens.',
+    url: 'https://youtu.be/7IGuaIGKg4c?si=QnxG4XttsnPXSlMJ',
+    year: '2012',
+    tag: 'Highlights',
+    thumbnail: { uri: 'https://i.ytimg.com/vi/7IGuaIGKg4c/hqdefault.jpg' },
+  },
+  {
     id: 'fcn-highlights-2025',
     title: 'FCN Highlights 2024/25',
     description: 'Sæsonens bedste øjeblikke',
