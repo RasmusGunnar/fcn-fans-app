@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { HomeStack } from './HomeStack';
 import { CommunitiesStack } from './CommunitiesStack';
 import { EventsStack } from './EventsStack';
-import SongsScreen from '../screens/SongsScreen';
+import { LibraryStack } from './LibraryStack';
 import { ProfileStack } from './ProfileStack';
 import { colors, spacing } from '../theme';
 import CreateSheet from '../screens/CreateSheet';
@@ -34,7 +34,7 @@ const tabData = [
   },
   {
     name: 'Songs',
-    label: 'Sange',
+    label: 'Bibliotek',
     iconActive: 'musical-notes' as const,
     iconInactive: 'musical-notes-outline' as const,
   },
@@ -115,7 +115,7 @@ export function AppTabs() {
       <Tab.Screen name="Home" component={HomeStack} />
       <Tab.Screen name="Communities" component={CommunitiesStack} />
       <Tab.Screen name="Events" component={EventsStack} />
-      <Tab.Screen name="Songs" component={SongsScreen} />
+      <Tab.Screen name="Songs" component={LibraryStack} />
       <Tab.Screen
         name="Profile"
         component={ProfileStack}

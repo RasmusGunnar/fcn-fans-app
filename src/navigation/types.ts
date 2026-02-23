@@ -8,36 +8,25 @@ export type AuthStackParamList = {
 
 export type AppTabsParamList = {
   Home: undefined;
+  Communities: undefined;
+  Events: undefined;
+  Songs: undefined;
   Profile: undefined;
+};
+
+export type LibraryStackParamList = {
+  LibraryMain: undefined;
+  // Future: add detail screens here (e.g., SongDetails, LinkDetails, VideoDetails)
 };
 
 // Root stack used by screens that live outside the tab navigator (events, communities, etc.)
 export type RootStackParamList = {
-  // tabs container (if used)
-  AppTabs?: undefined;
+  Main: undefined;
 
-  // event flow (Supabase-backed)
   CreateNewEvent: undefined;
-  EditEvent: { eventId: string };
+  Create: undefined;
 
-  // events module
-  BusTripDetails: { busTripId: string };
-  EventDetails: { eventId: string };
-
-  // community flow
-  Communities: undefined;
-  CreateCommunity: undefined;
-
-  // match details
-  MatchDetails: { fixtureId: string };
-
-  // public profile
-  PublicProfile: { userId: string };
-
-  // other screens
-  Matchday: undefined;
-  Home?: undefined;
-  Profile?: undefined;
+  // Existing routes are declared in stack navigators
 };
 
 export default {};

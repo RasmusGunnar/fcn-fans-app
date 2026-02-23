@@ -27,13 +27,13 @@ export function SongAccordionCard({
       <Pressable onPress={onToggle} style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={styles.iconContainer}>
-            <Ionicons name="musical-notes" size={20} color={theme.colors.primary} />
+            <Ionicons name="musical-notes" size={theme.spacing[5]} color={theme.colors.primary} />
           </View>
           <Text style={styles.title}>{title}</Text>
         </View>
         <Ionicons
           name={isExpanded ? 'chevron-up' : 'chevron-down'}
-          size={20}
+          size={theme.spacing[5]}
           color={theme.colors.text.secondary}
         />
       </Pressable>
@@ -69,8 +69,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   iconContainer: {
-    width: 40,
-    height: 40,
+    width: theme.spacing[10],
+    height: theme.spacing[10],
     borderRadius: theme.radius.pill,
     backgroundColor: theme.colors.pill.yellow.bg,
     alignItems: 'center',
@@ -78,8 +78,7 @@ const styles = StyleSheet.create({
     marginRight: theme.spacing[2],
   },
   title: {
-    fontSize: 18,
-    fontWeight: '600',
+    ...theme.typography.h3,
     color: theme.colors.text.primary,
     flex: 1,
   },
@@ -93,8 +92,7 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing[2],
   },
   lyrics: {
-    fontSize: 14,
+    ...theme.typography.small,
     color: theme.colors.text.primary,
-    lineHeight: 20,
   },
 });
