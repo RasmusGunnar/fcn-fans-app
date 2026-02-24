@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ViewStyle, TextStyle } from 'react-native';
 import { useTheme, Theme } from '../../theme';
 
-export type BadgeVariant = 'brand' | 'success' | 'warning' | 'neutral' | 'error';
+export type BadgeVariant = 'brand' | 'success' | 'warning' | 'neutral' | 'error' | 'info';
 
 export interface BadgeProps {
   label: string;
@@ -20,6 +20,11 @@ export function Badge({ label, variant = 'neutral', size = 'md' }: BadgeProps) {
         return {
           container: { backgroundColor: theme.colors.pill.red.bg },
           text: { color: theme.colors.pill.red.text },
+        };
+      case 'info':
+        return {
+          container: { backgroundColor: theme.colors.state.info },
+          text: { color: theme.colors.text.inverse },
         };
       case 'success':
         return {
