@@ -23,6 +23,7 @@ import { useTheme } from '../theme';
 import type { RootStackParamList } from '../navigation/types';
 import { formatDateDa, type Fixture } from '../services/fixtures';
 import { fetchFixtureById } from '../services/eventsApi';
+import { getMatchHeroUrl, getTeamHeroImage } from '../services/sportsdb';
 
 type MatchDetailsRouteProp = RouteProp<RootStackParamList, 'MatchDetails'>;
 
@@ -36,6 +37,7 @@ export default function MatchDetailsScreen() {
   const styles = createStyles(theme);
   const [fixture, setFixture] = useState<Fixture | null>(null);
   const [loading, setLoading] = useState(true);
+  const [heroUrl, setHeroUrl] = useState<string | null>(null);
 
   // Fetch fixture by ID
   useEffect(() => {
@@ -50,6 +52,12 @@ export default function MatchDetailsScreen() {
     const data = await fetchFixtureById(fixtureId);
     if (data) {
       setFixture(data as any);
+      // Resolve hero: try raw first, then team API
+      let hero = getMatchHeroUrl(data as any);
+      if (!hero && data.home_team_provider_id) {
+        hero = await getTeamHeroImage(data.home_team_provider_id);
+      }
+      setHeroUrl(hero);
     }
     setLoading(false);
   };
@@ -117,46 +125,57 @@ export default function MatchDetailsScreen() {
         style={styles.scrollView}
         contentContainerStyle={{ paddingBottom: insets.bottom + spacing.lg }}
       >
-        {/* Match Card */}
+        {/* Hero with H2H overlay */}
+        {(() => {
+          return (
+            <View style={styles.heroContainer}>
+              {heroUrl ? (
+                <Image source={{ uri: heroUrl }} style={styles.heroImage} resizeMode="cover" />
+              ) : (
+                <View style={[styles.heroFallback, { backgroundColor: theme.colors.primary }]} />
+              )}
+              <View style={styles.heroDarkOverlay} />
+              <View style={styles.h2hOverlay}>
+                <View style={styles.h2hBadge}>
+                  {fixture.home_logo_url ? (
+                    <Image
+                      source={{ uri: fixture.home_logo_url }}
+                      style={styles.h2hLogoImg}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Text style={[styles.teamText, { color: theme.colors.primary }]}>
+                      {fixture.home_team.substring(0, 3).toUpperCase()}
+                    </Text>
+                  )}
+                </View>
+                <Text style={[styles.h2hVsText, { color: theme.colors.text.inverse }]}>VS</Text>
+                <View style={styles.h2hBadge}>
+                  {fixture.away_logo_url ? (
+                    <Image
+                      source={{ uri: fixture.away_logo_url }}
+                      style={styles.h2hLogoImg}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Text style={[styles.teamText, { color: theme.colors.primary }]}>
+                      {fixture.away_team.substring(0, 3).toUpperCase()}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            </View>
+          );
+        })()}
+
+        {/* Match Info Card */}
         <Card style={styles.matchCard}>
-          <View style={styles.matchRow}>
-            <View style={styles.team}>
-              {fixture.home_logo_url ? (
-                <Image source={{ uri: fixture.home_logo_url }} style={styles.teamLogo} />
-              ) : (
-                <View style={[styles.teamCircle, { backgroundColor: theme.colors.primary }]}>
-                  <Text style={[styles.teamText, { color: theme.colors.bg.card }]}>
-                    {fixture.home_team.substring(0, 3).toUpperCase()}
-                  </Text>
-                </View>
-              )}
-              <Text style={[styles.teamName, { color: theme.colors.text.primary }]}>
-                {fixture.home_team}
-              </Text>
-            </View>
-            <Text style={[styles.vs, { color: theme.colors.text.primary }]}>VS</Text>
-            <View style={styles.team}>
-              {fixture.away_logo_url ? (
-                <Image source={{ uri: fixture.away_logo_url }} style={styles.teamLogo} />
-              ) : (
-                <View style={[styles.teamCircle, { backgroundColor: theme.colors.primary }]}>
-                  <Text style={[styles.teamText, { color: theme.colors.bg.card }]}>
-                    {fixture.away_team.substring(0, 3).toUpperCase()}
-                  </Text>
-                </View>
-              )}
-              <Text style={[styles.teamName, { color: theme.colors.text.primary }]}>
-                {fixture.away_team}
-              </Text>
-            </View>
-          </View>
           {(fixture.competition || fixture.round) && (
             <Text style={[styles.leagueText, { color: theme.colors.text.secondary }]}>
               {fixture.competition}
               {fixture.round ? ` - ${fixture.round}` : ''}
             </Text>
           )}
-          <View style={[styles.divider, { backgroundColor: theme.colors.border.default }]} />
           <ListRowIcon icon="calendar" title={formatDateDa(fixture.kickoff_at)} />
           {fixture.venue && (
             <ListRowIcon
@@ -232,6 +251,52 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
     scrollView: {
       flex: 1,
+    },
+    heroContainer: {
+      width: '100%',
+      height: 200,
+      position: 'relative',
+      overflow: 'hidden',
+    },
+    heroImage: {
+      ...StyleSheet.absoluteFillObject,
+      width: '100%',
+      height: '100%',
+    },
+    heroFallback: {
+      ...StyleSheet.absoluteFillObject,
+      opacity: 0.85,
+    },
+    heroDarkOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: theme.colors.overlay.heroScrim,
+    },
+    h2hOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.lg,
+    },
+    h2hBadge: {
+      width: theme.spacing[14],
+      height: theme.spacing[14],
+      borderRadius: theme.radius.pill,
+      backgroundColor: 'transparent',
+      overflow: 'hidden',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    h2hLogoImg: {
+      width: theme.spacing[14],
+      height: theme.spacing[14],
+    },
+    h2hVsText: {
+      fontSize: theme.typography.h1.fontSize,
+      fontWeight: '800',
+      textShadowColor: theme.colors.overlay.textShadow,
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 3,
     },
     matchCard: {
       margin: spacing.md,

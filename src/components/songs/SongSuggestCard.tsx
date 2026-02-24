@@ -14,7 +14,7 @@ export function SongSuggestCard({ onPressSuggest }: SongSuggestCardProps) {
   return (
     <View style={styles.card}>
       <View style={styles.iconContainer}>
-        <Ionicons name="musical-notes" size={24} color={theme.colors.primary} />
+        <Ionicons name="musical-notes" size={theme.components.icon.size.md} color={theme.colors.primary} />
       </View>
       <Text style={styles.title}>Kender du en sang vi mangler?</Text>
       <Text style={styles.subtitle}>Del den med resten af fællesskabet</Text>
@@ -28,7 +28,7 @@ const theme = defaultTheme;
 const styles = StyleSheet.create({
   card: {
     backgroundColor: theme.colors.ctaBg,
-    borderWidth: 2,
+    borderWidth: theme.border.hairline,
     borderColor: theme.colors.primary,
     borderStyle: 'dashed',
     borderRadius: theme.radius.md,
@@ -38,8 +38,8 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing[3],
   },
   iconContainer: {
-    width: 48,
-    height: 48,
+    width: theme.spacing[12],
+    height: theme.spacing[12],
     borderRadius: theme.radius.pill,
     backgroundColor: theme.colors.bg.card,
     alignItems: 'center',
@@ -47,14 +47,13 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing[2],
   },
   title: {
-    fontSize: 18,
-    fontWeight: '600',
+    ...theme.typography.h3,
     color: theme.colors.text.primary,
     textAlign: 'center',
     marginBottom: theme.spacing[1],
   },
   subtitle: {
-    fontSize: 14,
+    ...theme.typography.small,
     color: theme.colors.text.secondary,
     textAlign: 'center',
     marginBottom: theme.spacing[6],

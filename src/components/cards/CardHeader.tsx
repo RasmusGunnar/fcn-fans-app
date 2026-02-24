@@ -7,6 +7,7 @@ export type CardHeaderProps = {
   subtitle?: string | undefined;
   avatarSlot?: React.ReactNode;
   rightSlot?: React.ReactNode;
+  onPressAuthor?: () => void;
 };
 
 export function CardHeader({
@@ -15,6 +16,7 @@ export function CardHeader({
   subtitle,
   avatarSlot,
   rightSlot,
+  onPressAuthor,
 }: CardHeaderProps) {
   const title = nameLine ?? fallbackTitle;
 
@@ -24,6 +26,7 @@ export function CardHeader({
       subtitle={subtitle ?? undefined}
       avatarSlot={avatarSlot}
       rightSlot={rightSlot}
+      onPressAuthor={onPressAuthor}
     />
   );
 }

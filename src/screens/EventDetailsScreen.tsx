@@ -1,6 +1,10 @@
+// DESIGN SYSTEM GUARDRAIL: This file uses theme tokens via defaultTheme.
+// All spacing, colors, and radius values must use theme.spacing[N], theme.colors.*, theme.radius.*
+// NO hardcoded numbers or color strings allowed.
+
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -11,8 +15,6 @@ import {
   ScrollView,
   Share,
   StyleSheet,
-  Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,14 +22,56 @@ import { useAuth } from '../auth/AuthProvider';
 import { OptionsMenu, OptionsMenuOption } from '../components/OptionsMenu';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { InlineComments } from '../components/comments/InlineComments';
+import { Avatar } from '../components/Avatar';
 import { Card } from '../components/ui/Card';
+import { Text } from '../components/ui';
+import { EventSubtypeBadge } from '../components/ui/EventSubtypeBadge';
 import { useCommunityRole } from '../hooks/useCommunityRole';
 import { supabase } from '../lib/supabase';
+import { getPublicUrl } from '../lib/storageUrl';
 import { fetchEventById, type Event } from '../services/eventsApi';
 import { defaultTheme as theme } from '../theme';
 import { canDeleteEvent, canEditEvent } from '../utils/permissions';
 
 type EventDetailsRouteProp = RouteProp<{ EventDetails: { eventId: string } }, 'EventDetails'>;
+
+// --- Helpers ---
+
+function formatDateDa(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleDateString('da-DK', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
+function formatTimeDa(iso: string): string {
+  return new Date(iso).toLocaleTimeString('da-DK', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function buildAddressDisplay(event: Event): string | null {
+  const parts: string[] = [];
+  if (event.address_line1) parts.push(event.address_line1);
+  if (event.postal_code || event.city) {
+    parts.push([event.postal_code, event.city].filter(Boolean).join(' '));
+  }
+  if (parts.length > 0) return parts.join(', ');
+  return event.location_address || null;
+}
+
+function getCoverUrl(event: Event): string | null {
+  if (event.cover_bucket && event.cover_path) {
+    return getPublicUrl(event.cover_bucket, event.cover_path);
+  }
+  return null;
+}
+
+// --- Component ---
 
 export default function EventDetailsScreen() {
   const navigation = useNavigation();
@@ -38,38 +82,32 @@ export default function EventDetailsScreen() {
   const [loading, setLoading] = useState(true);
   const { user, isAppAdmin } = useAuth();
 
-  // Get community role for the event's organizer group (if set)
   const { role: communityRole } = useCommunityRole(event?.organizer_group_id);
+
+  const loadEvent = useCallback(async () => {
+    setLoading(true);
+    const data = await fetchEventById(eventId);
+    setEvent(data);
+    setLoading(false);
+  }, [eventId]);
 
   useEffect(() => {
     loadEvent();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventId]);
+  }, [loadEvent]);
 
-  const loadEvent = async () => {
-    console.log('[EventDetailsScreen] Loading event:', eventId);
-    setLoading(true);
-    const data = await fetchEventById(eventId);
-    if (__DEV__) {
-      console.log('[EventDetailsScreen] Event data received:', {
-        id: data?.id,
-        title: data?.title,
-        created_by: data?.created_by,
-        organizer_group_id: data?.organizer_group_id,
-        hasAllFields: !!(data?.created_by !== undefined && data?.organizer_group_id !== undefined),
-      });
-    }
-    setEvent(data);
-    setLoading(false);
-  };
+  // Re-fetch when returning from edit screen
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      if (event) loadEvent();
+    });
+    return unsubscribe;
+  }, [navigation, loadEvent, event]);
 
   const handleShare = async () => {
     if (!event) return;
     try {
       await Share.share({
-        message: `${event.title}\n${event.description || ''}\n📅 ${new Date(
-          event.start_at,
-        ).toLocaleDateString('da-DK')}`,
+        message: `${event.title}\n${event.description || ''}\n\u{1F4C5} ${formatDateDa(event.start_at)}`,
         title: event.title,
       });
     } catch (error) {
@@ -77,280 +115,240 @@ export default function EventDetailsScreen() {
     }
   };
 
-  const handleSetReminder = () => {
-    // TODO: Implement calendar integration
-    console.log('Set reminder for event:', eventId);
-  };
-
   const handleEditEvent = () => {
-    // Navigate to edit screen
     (navigation as any).navigate('EditEvent', { eventId });
   };
 
   const handleDeleteEvent = async () => {
-    const { error } = await supabase.from('events').delete().eq('id', eventId);
-    if (error) {
-      Alert.alert('Fejl', 'Kunne ikke slette eventet. Du har muligvis ikke rettigheder til dette.');
-      console.warn('Delete event error', error);
-    } else {
-      Alert.alert('Slettet', 'Eventet er blevet slettet', [
-        {
-          text: 'OK',
-          onPress: () => navigation.goBack(),
+    Alert.alert('Slet event', 'Er du sikker på du vil slette dette event?', [
+      { text: 'Annullér', style: 'cancel' },
+      {
+        text: 'Slet',
+        style: 'destructive',
+        onPress: async () => {
+          const { error } = await supabase.from('events').delete().eq('id', eventId);
+          if (error) {
+            Alert.alert('Fejl', 'Kunne ikke slette eventet.');
+          } else {
+            navigation.goBack();
+          }
         },
-      ]);
-    }
+      },
+    ]);
   };
 
+  // --- Loading ---
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
           <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={theme.colors.bg.card} />
+            <Ionicons name="arrow-back" size={theme.components.icon.size.md} color={theme.colors.bg.card} />
           </Pressable>
-          <Text style={styles.headerTitle}>Event detaljer</Text>
+          <Text variant="h3" color="inverse">Event detaljer</Text>
         </View>
-        <View style={styles.loadingContainer}>
+        <View style={styles.centered}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text style={styles.loadingText}>Henter event...</Text>
+          <Text variant="body" color="secondary" style={styles.mt3}>Henter event...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
+  // --- Not found ---
   if (!event) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
           <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={theme.colors.bg.card} />
+            <Ionicons name="arrow-back" size={theme.components.icon.size.md} color={theme.colors.bg.card} />
           </Pressable>
-          <Text style={styles.headerTitle}>Event detaljer</Text>
+          <Text variant="h3" color="inverse">Event detaljer</Text>
         </View>
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorIcon}>📅</Text>
-          <Text style={styles.errorText}>Kunne ikke finde eventet</Text>
+        <View style={styles.centered}>
+          <Ionicons name="calendar-outline" size={theme.spacing[16]} color={theme.colors.text.muted} />
+          <Text variant="body" color="secondary" style={styles.mt3}>Kunne ikke finde eventet</Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  const startDate = new Date(event.start_at);
-  const dateStr = startDate.toLocaleDateString('da-DK', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
-  const timeStr = startDate.toLocaleTimeString('da-DK', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  // --- Derived ---
+  const coverUrl = getCoverUrl(event);
+  const dateStr = formatDateDa(event.start_at);
+  const timeStr = formatTimeDa(event.start_at);
+  const endStr = event.end_at ? formatTimeDa(event.end_at) : null;
+  const addressDisplay = buildAddressDisplay(event);
 
-  const endStr = event.end_at
-    ? new Date(event.end_at).toLocaleTimeString('da-DK', {
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-    : null;
-
-  // Permission checks - use isAppAdmin from context and community role
   const showEditOption = canEditEvent(
-    user?.id,
-    isAppAdmin,
-    {
-      created_by: event.created_by,
-      organizer_group_id: event.organizer_group_id,
-    },
+    user?.id, isAppAdmin,
+    { created_by: event.created_by, organizer_group_id: event.organizer_group_id },
     communityRole,
   );
   const showDeleteOption = canDeleteEvent(
-    user?.id,
-    isAppAdmin,
-    {
-      created_by: event.created_by,
-      organizer_group_id: event.organizer_group_id,
-    },
+    user?.id, isAppAdmin,
+    { created_by: event.created_by, organizer_group_id: event.organizer_group_id },
     communityRole,
   );
 
-  const eventMenuOptions: OptionsMenuOption[] = [];
+  const menuOptions: OptionsMenuOption[] = [];
   if (showEditOption) {
-    eventMenuOptions.push({ label: 'Redigér', onPress: handleEditEvent, icon: 'create-outline' });
+    menuOptions.push({ label: 'Redigér', onPress: handleEditEvent, icon: 'create-outline' });
   }
   if (showDeleteOption) {
-    eventMenuOptions.push({
-      label: 'Slet',
-      onPress: handleDeleteEvent,
-      destructive: true,
-      icon: 'trash-outline',
-    });
-  }
-
-  // Debug logging for permissions
-  if (__DEV__) {
-    console.log('EVENT PERM', {
-      isAppAdmin,
-      created_by: event.created_by,
-      org: event.organizer_group_id,
-      showEditOption,
-      showDeleteOption,
-      menuOptionsCount: eventMenuOptions.length,
-      userId: user?.id,
-      userIdMatchesCreator: event.created_by === user?.id,
-      communityRole,
-    });
+    menuOptions.push({ label: 'Slet', onPress: handleDeleteEvent, destructive: true, icon: 'trash-outline' });
   }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Custom Header */}
       <View style={styles.header}>
         <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={theme.colors.bg.card} />
+          <Ionicons name="arrow-back" size={theme.components.icon.size.md} color={theme.colors.bg.card} />
         </Pressable>
-        <Text style={styles.headerTitle}>Event detaljer</Text>
+        <Text variant="h3" color="inverse" style={styles.headerTitle}>Event detaljer</Text>
         <View style={{ flex: 1 }} />
-        {eventMenuOptions.length > 0 && (
-          <OptionsMenu options={eventMenuOptions} iconColor={theme.colors.bg.card} iconSize={24} />
+        {menuOptions.length > 0 && (
+          <OptionsMenu options={menuOptions} iconColor={theme.colors.bg.card} iconSize={theme.components.icon.size.md} />
         )}
       </View>
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={insets.top + 44}
+        keyboardVerticalOffset={insets.top + theme.spacing[11]}
       >
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={{ paddingBottom: insets.bottom + theme.spacing[6] }}
+          contentContainerStyle={{ paddingBottom: insets.bottom + theme.spacing[8] }}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Header Card with Icon */}
-          <Card style={styles.headerCard}>
-            <View style={styles.iconCircle}>
-              <Text style={styles.iconEmoji}>🎉</Text>
-            </View>
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>EVENT</Text>
-            </View>
-            <Text style={styles.title}>{event.title}</Text>
-            {event.organizer && (
-              <Text style={styles.subtitle}>Arrangeret af {event.organizer.name}</Text>
+          {/* Cover Image / Placeholder */}
+          <View style={styles.coverContainer}>
+            {coverUrl ? (
+              <Image source={{ uri: coverUrl }} style={styles.coverImage} resizeMode="cover" />
+            ) : (
+              <View style={styles.coverPlaceholder}>
+                <Ionicons name="image-outline" size={theme.spacing[12]} color={theme.colors.text.muted} />
+              </View>
             )}
-          </Card>
+            <View style={styles.badgeOverlay}>
+              <EventSubtypeBadge subtype="event" overlay />
+            </View>
+          </View>
 
-          {/* Event Details */}
-          <Card style={styles.detailsCard}>
-            <Text style={styles.sectionTitle}>Detaljer</Text>
+          {/* Title + organizer */}
+          <View style={styles.section}>
+            <Text variant="h2" color="primary" style={styles.title}>
+              {event.title}
+            </Text>
+            {event.organizer && (
+              <Text variant="body" color="secondary">
+                Arrangeret af {event.organizer.name}
+              </Text>
+            )}
+          </View>
 
-            <View style={styles.detailRow}>
-              <Ionicons name="calendar" size={20} color={theme.colors.primary} />
-              <View style={styles.detailText}>
-                <Text style={styles.detailLabel}>Dato og tidspunkt</Text>
-                <Text style={styles.detailValue}>
+          {/* Details card */}
+          <Card style={styles.card}>
+            <Text variant="h3" color="primary" style={styles.sectionTitle}>Detaljer</Text>
+            <View style={styles.metaRow}>
+              <View style={styles.metaIconCircle}>
+                <Ionicons name="calendar-outline" size={theme.components.icon.size.sm} color={theme.colors.primary} />
+              </View>
+              <View style={styles.metaContent}>
+                <Text variant="caption" color="muted">Dato og tidspunkt</Text>
+                <Text variant="body" color="primary" style={styles.metaValue}>
                   {dateStr}, kl. {timeStr}
-                  {endStr && ` - ${endStr}`}
+                  {endStr && ` \u2013 ${endStr}`}
                 </Text>
               </View>
             </View>
 
-            {event.location_name && (
-              <View style={styles.detailRow}>
-                <Ionicons name="location" size={20} color={theme.colors.primary} />
-                <View style={styles.detailText}>
-                  <Text style={styles.detailLabel}>Sted</Text>
-                  <Text style={styles.detailValue}>{event.location_name}</Text>
-                  {event.location_address && (
-                    <Text style={styles.detailSubvalue}>{event.location_address}</Text>
+            {(event.location_name || addressDisplay) && (
+              <View style={styles.metaRow}>
+                <View style={styles.metaIconCircle}>
+                  <Ionicons name="location-outline" size={theme.components.icon.size.sm} color={theme.colors.primary} />
+                </View>
+                <View style={styles.metaContent}>
+                  <Text variant="caption" color="muted">Sted</Text>
+                  {event.location_name && (
+                    <Text variant="body" color="primary" style={styles.metaValue}>
+                      {event.location_name}
+                    </Text>
+                  )}
+                  {addressDisplay && (
+                    <Text variant="caption" color="secondary">{addressDisplay}</Text>
                   )}
                 </View>
               </View>
             )}
-
-            <View style={styles.detailRow}>
-              <Ionicons name="people" size={20} color={theme.colors.primary} />
-              <View style={styles.detailText}>
-                <Text style={styles.detailLabel}>Deltagere</Text>
-                <Text style={styles.detailValue}>42 interesserede</Text>
-              </View>
-            </View>
           </Card>
 
           {/* Description */}
-          {event.description && (
-            <Card style={styles.descriptionCard}>
-              <Text style={styles.sectionTitle}>Om eventet</Text>
-              <Text style={styles.description}>{event.description}</Text>
+          {event.description ? (
+            <Card style={styles.card}>
+              <Text variant="h3" color="primary" style={styles.sectionTitle}>Om eventet</Text>
+              <Text variant="body" color="primary" style={styles.description}>
+                {event.description}
+              </Text>
             </Card>
-          )}
+          ) : null}
 
-          {/* Action Buttons */}
-          <View style={styles.actionsContainer}>
-            <TouchableOpacity style={styles.actionButton} onPress={handleSetReminder}>
-              <Ionicons name="notifications-outline" size={24} color={theme.colors.primary} />
-              <Text style={styles.actionText}>Påmindelse</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton} onPress={handleShare}>
-              <Ionicons name="share-outline" size={24} color={theme.colors.primary} />
-              <Text style={styles.actionText}>Del</Text>
-            </TouchableOpacity>
+          {/* Quick actions */}
+          <View style={styles.actionsRow}>
+            <Pressable style={styles.actionButton} onPress={handleShare}>
+              <Ionicons name="share-outline" size={theme.components.icon.size.md} color={theme.colors.primary} />
+              <Text variant="caption" color="primary" style={styles.actionLabel}>Del</Text>
+            </Pressable>
           </View>
 
           {/* Organizer */}
           {event.organizer && (
-            <Card style={styles.organizerCard}>
-              <Text style={styles.sectionTitle}>Arrangør</Text>
-              <View style={styles.organizerInfo}>
-                {event.organizer.logo_url ? (
-                  <Image source={{ uri: event.organizer.logo_url }} style={styles.organizerLogo} />
-                ) : (
-                  <View style={styles.organizerLogoPlaceholder}>
-                    <Text style={styles.organizerLogoText}>
-                      {event.organizer.name.substring(0, 2).toUpperCase()}
-                    </Text>
-                  </View>
-                )}
-                <View style={styles.organizerText}>
-                  <Text style={styles.organizerName}>{event.organizer.name}</Text>
+            <Card style={styles.card}>
+              <Text variant="h3" color="primary" style={styles.sectionTitle}>Arrangør</Text>
+              <View style={styles.organizerRow}>
+                <Avatar
+                  avatarUrl={event.organizer.logo_url}
+                  size={theme.spacing[12]}
+                  label={event.organizer.name}
+                />
+                <View style={styles.organizerInfo}>
+                  <Text variant="body" color="primary" style={{ fontWeight: '600' }}>
+                    {event.organizer.name}
+                  </Text>
                   {event.organizer.description && (
-                    <Text style={styles.organizerDescription}>{event.organizer.description}</Text>
+                    <Text variant="caption" color="secondary" numberOfLines={2}>
+                      {event.organizer.description}
+                    </Text>
                   )}
                 </View>
               </View>
             </Card>
           )}
 
-          {/* CTA Button */}
+          {/* CTA */}
           <View style={styles.ctaContainer}>
-            <PrimaryButton
-              title="Tilmeld mig"
-              onPress={() => {
-                // TODO: Implement RSVP
-                console.log('RSVP to event:', eventId);
-              }}
-            />
+            <PrimaryButton title="Tilmeld mig" onPress={() => {}} />
           </View>
 
-          {/* Comments Section */}
-          {event && (
-            <View style={styles.commentsSection}>
-              <InlineComments
-                targetType="event"
-                targetId={event.id}
-                currentUserId={user?.id || ''}
-                isAppAdmin={isAppAdmin}
-                variant="inline"
-                maxInlineComments={Infinity}
-              />
-            </View>
-          )}
+          {/* Comments */}
+          <View style={styles.section}>
+            <InlineComments
+              targetType="event"
+              targetId={event.id}
+              currentUserId={user?.id || ''}
+              isAppAdmin={isAppAdmin}
+              variant="inline"
+              maxInlineComments={Infinity}
+            />
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
+
+// --- Styles ---
 
 const styles = StyleSheet.create({
   container: {
@@ -361,7 +359,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: theme.spacing[4],
-    paddingVertical: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
     backgroundColor: theme.colors.primary,
   },
   backButton: {
@@ -369,199 +367,112 @@ const styles = StyleSheet.create({
     marginRight: theme.spacing[2],
   },
   headerTitle: {
-    fontSize: 18,
     fontWeight: '700',
-    color: theme.colors.bg.card,
   },
   scrollView: {
     flex: 1,
     backgroundColor: theme.colors.bg.default,
   },
-  loadingContainer: {
+  centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: theme.colors.bg.default,
   },
-  loadingText: {
-    marginTop: theme.spacing[4],
-    fontSize: 14,
-    color: theme.colors.text.secondary,
+  mt3: {
+    marginTop: theme.spacing[3],
   },
-  errorContainer: {
+  coverContainer: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    backgroundColor: theme.colors.bg.subtle,
+    overflow: 'hidden',
+  },
+  coverImage: {
+    width: '100%',
+    height: '100%',
+  },
+  coverPlaceholder: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: theme.colors.bg.default,
+    backgroundColor: theme.colors.bg.subtle,
   },
-  errorIcon: {
-    fontSize: 64,
-    marginBottom: theme.spacing[4],
+  badgeOverlay: {
+    position: 'absolute',
+    top: theme.spacing[3],
+    left: theme.spacing[3],
   },
-  errorText: {
-    fontSize: 16,
-    color: theme.colors.text.primary,
+  section: {
+    paddingHorizontal: theme.spacing[5],
+    paddingVertical: theme.spacing[4],
   },
-  headerCard: {
-    margin: theme.spacing[4],
-    alignItems: 'center',
+  card: {
+    marginHorizontal: theme.spacing[4],
+    marginBottom: theme.spacing[3],
   },
-  iconCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.colors.primary + '15',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: theme.spacing[4],
-  },
-  iconEmoji: {
-    fontSize: 40,
-  },
-  badge: {
-    backgroundColor: theme.colors.state.success,
-    paddingHorizontal: theme.spacing[2],
-    paddingVertical: theme.spacing[1],
-    borderRadius: theme.radius.sm,
-    marginBottom: theme.spacing[2],
-  },
-  badgeText: {
-    color: theme.colors.bg.card,
-    fontSize: 12,
+  sectionTitle: {
+    marginBottom: theme.spacing[3],
     fontWeight: '700',
   },
   title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: theme.colors.text.primary,
-    textAlign: 'center',
     marginBottom: theme.spacing[1],
   },
-  subtitle: {
-    fontSize: 14,
-    color: theme.colors.text.secondary,
-    textAlign: 'center',
-  },
-  detailsCard: {
-    margin: theme.spacing[4],
-    marginTop: theme.spacing[0],
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: theme.colors.text.primary,
-    marginBottom: theme.spacing[4],
-  },
-  detailRow: {
+  metaRow: {
     flexDirection: 'row',
-    marginBottom: theme.spacing[4],
+    alignItems: 'flex-start',
+    marginBottom: theme.spacing[3],
   },
-  detailText: {
+  metaIconCircle: {
+    width: theme.spacing[9],
+    height: theme.spacing[9],
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.bg.subtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: theme.spacing[3],
+  },
+  metaContent: {
     flex: 1,
-    marginLeft: theme.spacing[2],
+    paddingTop: theme.spacing[1],
   },
-  detailLabel: {
-    fontSize: 12,
-    color: theme.colors.text.secondary,
-    marginBottom: theme.spacing[0],
-  },
-  detailValue: {
-    fontSize: 14,
+  metaValue: {
     fontWeight: '600',
-    color: theme.colors.text.primary,
-  },
-  detailSubvalue: {
-    fontSize: 13,
-    color: theme.colors.text.secondary,
-    marginTop: theme.spacing[0],
-  },
-  descriptionCard: {
-    margin: theme.spacing[4],
     marginTop: theme.spacing[0],
   },
   description: {
-    fontSize: 14,
-    color: theme.colors.text.primary,
-    lineHeight: 22,
+    lineHeight: theme.spacing[6],
   },
-  actionsContainer: {
+  actionsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginHorizontal: theme.spacing[4],
-    marginBottom: theme.spacing[4],
+    justifyContent: 'center',
+    paddingHorizontal: theme.spacing[4],
+    marginBottom: theme.spacing[3],
+    gap: theme.spacing[4],
   },
   actionButton: {
     alignItems: 'center',
-    padding: theme.spacing[4],
-    flex: 1,
+    paddingVertical: theme.spacing[3],
+    paddingHorizontal: theme.spacing[6],
     backgroundColor: theme.colors.bg.card,
     borderRadius: theme.radius.md,
-    marginHorizontal: theme.spacing[1],
-    borderWidth: 1,
+    borderWidth: theme.layout.borderHairline,
     borderColor: theme.colors.border.default,
   },
-  actionText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.colors.text.primary,
+  actionLabel: {
     marginTop: theme.spacing[1],
+    fontWeight: '600',
   },
-  organizerCard: {
-    margin: theme.spacing[4],
-    marginTop: theme.spacing[0],
-  },
-  organizerInfo: {
+  organizerRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: theme.spacing[3],
   },
-  organizerLogo: {
-    width: 50,
-    height: 50,
-    borderRadius: theme.radius.pill,
-    marginRight: theme.spacing[4],
-  },
-  organizerLogoPlaceholder: {
-    width: 50,
-    height: 50,
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: theme.spacing[4],
-  },
-  organizerLogoText: {
-    color: theme.colors.bg.card,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  organizerText: {
+  organizerInfo: {
     flex: 1,
-  },
-  organizerName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.colors.text.primary,
-    marginBottom: theme.spacing[1],
-  },
-  organizerDescription: {
-    fontSize: 13,
-    color: theme.colors.text.secondary,
   },
   ctaContainer: {
     marginHorizontal: theme.spacing[4],
     marginBottom: theme.spacing[4],
-  },
-  commentsSection: {
-    margin: theme.spacing[4],
-    marginTop: theme.spacing[0],
-  },
-  commentsCard: {
-    margin: theme.spacing[4],
-    marginTop: theme.spacing[0],
-  },
-  placeholderText: {
-    fontSize: 14,
-    color: theme.colors.text.secondary,
-    fontStyle: 'italic',
   },
 });

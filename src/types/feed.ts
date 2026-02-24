@@ -2,9 +2,9 @@
  * Unified feed item types for the home screen feed
  */
 
-import { Post } from './post';
-import { NewsItem } from './news';
 import { targetKey } from '../utils/targetKey';
+import { NewsItem } from './news';
+import { Post } from './post';
 
 export type FeedEventData = {
   id: string;
@@ -20,6 +20,8 @@ export type FeedEventData = {
   createdBy?: string | null;
   createdAt?: string | null;
   eventType?: 'event' | 'bus_trip' | string | null;
+  coverBucket?: string | null;
+  coverPath?: string | null;
 };
 
 export type FeedBusTripData = {
@@ -47,6 +49,8 @@ export type FeedMatchData = {
   venueCity?: string | null;
   competition?: string | null;
   round?: string | null;
+  homeTeamProviderId?: string | null;
+  heroUrl?: string | null;
 };
 
 /**

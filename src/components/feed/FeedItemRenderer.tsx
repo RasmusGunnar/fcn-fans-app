@@ -1,10 +1,11 @@
 import React from 'react';
 import { Alert } from 'react-native';
 import type { CommentPreview } from '../../services/likesApi';
-import type { FeedItem } from '../../types/feed';
-import { FanPostCard, NewsCard, EventCard } from '../cards';
-import { MatchCard } from '../events/MatchCard';
 import type { CategoryKey } from '../../theme/categories';
+import type { FeedItem } from '../../types/feed';
+import { toEventCardVM } from '../../utils/eventCardVM';
+import { EventCard } from '../cards/EventCard';
+import { FanPostCard, NewsCard } from '../cards';
 
 export type FeedItemRendererProps = {
   item: FeedItem;
@@ -21,10 +22,12 @@ export type FeedItemRendererProps = {
   removeNews: (newsId: string) => void;
   incrementCommentCount: (kind: any, id: string) => void;
   addCommentPreview: (kind: any, id: string, comment: CommentPreview) => void;
+  isActiveVideo?: boolean;
+  isAppActive?: boolean;
+  onActivateVideo?: () => void;
   onPressEvent?: (eventId: string) => void;
   onPressBusTrip?: (busTripId: string) => void;
   onPressMatch?: (matchId: string) => void;
-  isActiveVideo?: boolean;
 };
 
 export function FeedItemRenderer({
@@ -42,10 +45,12 @@ export function FeedItemRenderer({
   removeNews,
   incrementCommentCount,
   addCommentPreview,
+  isActiveVideo,
+  isAppActive,
+  onActivateVideo,
   onPressEvent,
   onPressBusTrip,
   onPressMatch,
-  isActiveVideo = false,
 }: FeedItemRendererProps) {
   switch (item.kind) {
     case 'post': {
@@ -63,6 +68,9 @@ export function FeedItemRenderer({
           likes={likeState.likes}
           commentsCount={commentCount}
           commentPreviews={commentPreviews}
+          isActiveVideo={isActiveVideo}
+          isAppActive={isAppActive}
+          onActivateVideo={onActivateVideo}
           onToggleLike={() => {
             if (user?.id) {
               toggleLike('post', item.id, user.id);
@@ -73,7 +81,6 @@ export function FeedItemRenderer({
             incrementCommentCount('post', item.id);
             addCommentPreview('post', item.id, comment);
           }}
-          isActiveVideo={isActiveVideo}
         />
       );
     }
@@ -110,20 +117,20 @@ export function FeedItemRenderer({
 
     case 'event':
     case 'bus_trip':
+    case 'match': {
+      const vm = toEventCardVM(item, { communityMap, profileMap: safeProfileMap });
+      if (!vm) return null;
+
+      const handleDetail = () => {
+        if (item.kind === 'bus_trip') onPressBusTrip?.(item.id);
+        else if (item.kind === 'match') onPressMatch?.(item.id);
+        else onPressEvent?.(item.id);
+      };
+
       return (
         <EventCard
           key={itemKey}
-          eventId={item.id}
-          title={item.data.title}
-          description={item.data.description ?? null}
-          date={item.data.startAt ?? ''}
-          location={item.data.location ?? ''}
-          spotsLeft={0}
-          categoryKey={item.kind === 'bus_trip' ? 'bus_trip' : 'event'}
-          profileMap={safeProfileMap}
-          communityMap={communityMap}
-          organizerType={item.data.organizerType ?? null}
-          organizerId={item.data.organizerId ?? null}
+          vm={vm}
           liked={likeState.liked}
           likes={likeState.likes}
           comments={commentCount}
@@ -132,21 +139,8 @@ export function FeedItemRenderer({
               toggleLike(item.kind, item.id, user.id);
             }
           }}
-          onPressComment={() => {}}
           onPressShare={() => {}}
-          onPressDetail={
-            item.kind === 'bus_trip'
-              ? onPressBusTrip
-                ? () => onPressBusTrip(item.id)
-                : undefined
-              : onPressEvent
-                ? () => onPressEvent(item.id)
-                : undefined
-          }
-          communityName={item.data.organizerName ?? null}
-          communityId={item.data.organizerGroupId ?? null}
-          eventType={item.kind === 'bus_trip' ? 'bustur' : 'event'}
-          targetType={item.kind}
+          onPressDetail={handleDetail}
           commentPreviews={commentPreviews}
           onNewComment={(comment) => {
             incrementCommentCount(item.kind, item.id);
@@ -154,32 +148,7 @@ export function FeedItemRenderer({
           }}
         />
       );
-
-    case 'match':
-      return (
-        <MatchCard
-          matchId={item.id}
-          home={item.data.home ?? ''}
-          away={item.data.away ?? ''}
-          homeLogo={item.data.homeLogo ?? null}
-          awayLogo={item.data.awayLogo ?? null}
-          kickoffAt={item.data.kickoffAt ?? ''}
-          venue={item.data.venue ?? null}
-          venueCity={item.data.venueCity ?? null}
-          competition={item.data.competition ?? null}
-          round={item.data.round ?? null}
-          profileMap={safeProfileMap}
-          onPress={onPressMatch ? () => onPressMatch(item.id) : () => {}}
-          liked={likeState.liked}
-          likes={likeState.likes}
-          comments={commentCount}
-          onToggleLike={() => {
-            if (user?.id) {
-              toggleLike('match', item.id, user.id);
-            }
-          }}
-        />
-      );
+    }
 
     default:
       return null;

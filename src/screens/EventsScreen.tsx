@@ -1,35 +1,39 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  FlatList,
-  StyleSheet,
   ActivityIndicator,
   RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
   TouchableOpacity,
+  View,
 } from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import MapView, { Marker, Region } from 'react-native-maps';
-import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import MapView, { Marker, Region } from 'react-native-maps';
+import { useAuth } from '../auth/AuthProvider';
 import { AppHeader } from '../components/AppHeader';
-import { MapMarkerIcon } from '../components/MapMarkerIcon';
-import { fetchFeedUpcoming, type FeedItem } from '../services/eventsApi';
-import { fetchUpcomingFcntFixtures, type Fixture } from '../services/fixtures';
+import { IconButton } from '../components/ui/IconButton';
+import { SegmentedControl } from '../components/ui/SegmentedControl';
 import { FeedItemRenderer } from '../components/feed/FeedItemRenderer';
+import { MapMarkerIcon } from '../components/MapMarkerIcon';
+import { getPublicUrl } from '../lib/storageUrl';
+import { supabase } from '../lib/supabase';
+import { fetchFeedUpcoming, type FeedItem } from '../services/eventsApi';
+import { useFeed } from '../state/FeedContext';
+import { defaultTheme as theme } from '../theme';
 import type { FeedItem as HomeFeedItem } from '../types/feed';
 import { targetKey } from '../utils/targetKey';
-import { defaultTheme as theme } from '../theme';
-import { useAuth } from '../auth/AuthProvider';
-import { useFeed } from '../state/FeedContext';
 
 type ViewMode = 'list' | 'map';
+type EventFilterKey = 'all' | 'matches' | 'bus_trips' | 'events';
 
-// Normalized map item type
+// Normalized map item type (for Kort view)
 type MapItem = {
   id: string;
-  kind: 'match' | 'event';
+  kind: 'match' | 'event' | 'bus_trip';
   title: string;
   datetime: string;
   lat: number;
@@ -37,7 +41,7 @@ type MapItem = {
   subtitle?: string;
   venue?: string;
   logoUrl?: string | null;
-  feedItem: FeedItem | Fixture; // Keep original for navigation
+  feedItem: FeedItem;
 };
 
 const FARUM_REGION: Region = {
@@ -64,31 +68,33 @@ export default function EventsScreen() {
     addCommentPreview,
   } = useFeed();
 
-  const [upcomingMatches, setUpcomingMatches] = useState<Fixture[]>([]);
+  // Rate-limit fixture sync: at most once per 30 min (in-memory)
+  const lastSyncRef = useRef<number>(0);
+
+  // Single unified feed: matches + events + bus_trips, already sorted chronologically
   const [feed, setFeed] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [selectedEventType, setSelectedEventType] = useState<EventFilterKey>('all');
   const [selectedItem, setSelectedItem] = useState<MapItem | null>(null);
+
+  const eventFilterSegments = [
+    { key: 'all', label: 'Alle' },
+    { key: 'matches', label: 'Kampe' },
+    { key: 'bus_trips', label: 'Busture' },
+    { key: 'events', label: 'Events' },
+  ] as const satisfies ReadonlyArray<{ key: EventFilterKey; label: string }>;
 
   const snapPoints = useMemo(() => ['20%', '45%', '85%'], []);
 
   const loadFeed = async () => {
-    const [upcoming, feedItems] = await Promise.all([
-      fetchUpcomingFcntFixtures(30),
-      fetchFeedUpcoming(),
-    ]);
-    setUpcomingMatches(upcoming);
+    // fetchFeedUpcoming already fetches matches + bus_trips + events and
+    // returns them sorted chronologically by start time.
+    const feedItems = await fetchFeedUpcoming();
     setFeed(feedItems);
     setLoading(false);
-
-    if (__DEV__) {
-      console.log('[EventsScreen] match counts', {
-        upcoming: upcoming.length,
-        total: upcoming.length,
-      });
-    }
   };
 
   const onRefresh = async () => {
@@ -97,80 +103,133 @@ export default function EventsScreen() {
     setRefreshing(false);
   };
 
-  useEffect(() => {
-    loadFeed();
-  }, []);
-
+  // On focus: optionally trigger fixture sync (admin-only, 30 min rate-limit), then load feed.
   useFocusEffect(
     React.useCallback(() => {
-      loadFeed();
-    }, []),
+      const syncThenLoad = async () => {
+        const now = Date.now();
+        const THIRTY_MIN = 30 * 60 * 1000;
+        if (user && isAppAdmin && now - lastSyncRef.current > THIRTY_MIN) {
+          lastSyncRef.current = now;
+          console.log('[EventsScreen] focus → invoking sync-fixtures');
+          try {
+            const { data, error } = await supabase.functions.invoke('sync-fixtures');
+            if (error) console.warn('[EventsScreen] sync-fixtures error:', error);
+            else if (__DEV__) console.log('[EventsScreen] sync-fixtures result:', data);
+          } catch (e) {
+            console.warn('[EventsScreen] sync-fixtures call failed:', e);
+          }
+        } else {
+          console.log('[EventsScreen] focus → sync skipped (not admin or rate-limited)');
+        }
+        await loadFeed();
+      };
+      syncThenLoad();
+    }, [user, isAppAdmin]),
   );
 
-  const allMatches = useMemo(() => [...upcomingMatches], [upcomingMatches]);
-  const eventsOnly = useMemo(
-    () => feed.filter((item) => item.kind !== 'match'),
-    [feed],
+  // ── Map items (only entries with lat/lng) ──────────────────────────────────
+
+  function resolveImageUrl(raw: string | null | undefined, kind: 'profile' | 'community'): string | null {
+    if (!raw || !raw.trim()) return null;
+    if (raw.startsWith('http')) return raw;
+    // Storage path → full public URL
+    const bucket = kind === 'profile' ? 'avatars' : 'community-logos';
+    return getPublicUrl(bucket, raw);
+  }
+
+  function getEventOrganizerLogo(item: Extract<FeedItem, { kind: 'event' }>): string | null {
+    const pm = profileMap || {};
+    const groupId = item.organizer_group_id ?? null;
+    const userId = item.organizer_id ?? item.creator_user_id ?? item.created_by ?? null;
+
+    // Community logo: not available in communityMap (name-only), skip
+    // Profile avatar: resolve from profileMap
+    if (userId && pm[userId]) {
+      const url = resolveImageUrl(pm[userId].avatar_url, 'profile');
+      if (url) return url;
+    }
+    return null;
+  }
+
+  const mapItems: MapItem[] = useMemo(
+    () =>
+      feed
+        .map((item): MapItem | null => {
+          if (item.kind === 'match') {
+            const lat = item.lat;
+            const lng = item.lng;
+            if (typeof lat !== 'number' || typeof lng !== 'number') return null;
+            return {
+              id: item.id,
+              kind: 'match',
+              title: `${item.home} - ${item.away}`,
+              datetime: item.kickoffAt,
+              lat,
+              lng,
+              venue: item.venue || undefined,
+              subtitle: item.venue || item.venueCity || undefined,
+              logoUrl: item.homeLogo,
+              feedItem: item,
+            };
+          }
+          if (item.kind === 'event') {
+            const lat = item.lat;
+            const lng = item.lng;
+            if (typeof lat !== 'number' || typeof lng !== 'number') return null;
+            return {
+              id: item.id,
+              kind: 'event',
+              title: item.title,
+              datetime: item.startAt,
+              lat,
+              lng,
+              subtitle: item.location || undefined,
+              logoUrl: getEventOrganizerLogo(item),
+              feedItem: item,
+            };
+          }
+          if (item.kind === 'bus_trip') {
+            const lat = item.lat;
+            const lng = item.lng;
+            if (typeof lat !== 'number' || typeof lng !== 'number') return null;
+            return {
+              id: item.id,
+              kind: 'bus_trip' as const,
+              title: item.title,
+              datetime: item.startAt,
+              lat,
+              lng,
+              subtitle: item.departurePlace || item.venue || undefined,
+              logoUrl: null,
+              feedItem: item,
+            };
+          }
+          return null;
+        })
+        .filter((item): item is MapItem => item !== null),
+    [feed, profileMap, communityMap],
   );
 
-  // Convert match fixtures to map items (only items with lat/lng)
-  const mapItems: MapItem[] = [
-    ...allMatches.map((item): MapItem | null => {
-      const lat = item.lat;
-      const lng = item.lng;
-      if (typeof lat !== 'number' || typeof lng !== 'number') return null;
+  // ── Filter feed by event type ──────────────────────────────────────────────
 
-      return {
-        id: item.id,
-        kind: 'match',
-        title: `${item.home_team} - ${item.away_team}`,
-        datetime: item.kickoff_at,
-        lat,
-        lng,
-        venue: item.venue || undefined,
-        subtitle: item.venue || item.venue_city || undefined,
-        logoUrl: item.home_logo_url,
-        feedItem: item,
-      };
-    }),
-    ...eventsOnly.map((item): MapItem | null => {
-      if (item.kind !== 'event') return null;
-      const lat = (item as any).lat;
-      const lng = (item as any).lng;
-      if (typeof lat !== 'number' || typeof lng !== 'number') return null;
+  const filteredFeed = useMemo(() => {
+    if (selectedEventType === 'all') {
+      return feed;
+    }
+    const kindMap: Record<EventFilterKey, FeedItem['kind']> = {
+      all: 'match',
+      matches: 'match',
+      bus_trips: 'bus_trip',
+      events: 'event',
+    };
+    const targetKind = kindMap[selectedEventType];
+    return feed.filter((item) => item.kind === targetKind);
+  }, [feed, selectedEventType]);
 
-      return {
-        id: item.id,
-        kind: 'event',
-        title: item.title,
-        datetime: item.startAt,
-        lat,
-        lng,
-        subtitle: item.location || undefined,
-        logoUrl: null,
-        feedItem: item,
-      };
-    }),
-  ].filter((item): item is MapItem => item !== null);
+  // ── FeedItem (eventsApi) → HomeFeedItem (types/feed) mapper ────────────────
 
-  const toHomeFeedItem = (item: Fixture): HomeFeedItem => ({
-    kind: 'match',
-    id: item.id,
-    data: {
-      id: item.id,
-      kickoffAt: item.kickoff_at,
-      home: item.home_team,
-      away: item.away_team,
-      homeLogo: item.home_logo_url,
-      awayLogo: item.away_logo_url,
-      venue: item.venue,
-      venueCity: item.venue_city,
-      competition: item.competition,
-      round: item.round,
-    },
-  });
-
-  const toHomeFeedItemFromFeed = (item: FeedItem): HomeFeedItem => {
+  const toHomeFeedItem = useCallback((item: FeedItem): HomeFeedItem => {
     if (item.kind === 'match') {
       return {
         kind: 'match',
@@ -186,6 +245,8 @@ export default function EventsScreen() {
           venueCity: item.venueCity,
           competition: item.competition,
           round: item.round,
+          homeTeamProviderId: item.homeTeamProviderId ?? null,
+          heroUrl: item.heroUrl ?? null,
         },
       };
     }
@@ -208,6 +269,7 @@ export default function EventsScreen() {
       };
     }
 
+    // event — include coverBucket/coverPath so EventCard can show the hero image
     return {
       kind: 'event',
       id: item.id,
@@ -225,50 +287,24 @@ export default function EventsScreen() {
         createdBy: item.created_by ?? null,
         createdAt: null,
         eventType: 'event',
+        coverBucket: item.cover_bucket ?? null,
+        coverPath: item.cover_path ?? null,
       },
     };
-  };
+  }, []);
 
-  const renderMatchItem = (item: Fixture) => {
-    const feedItem = toHomeFeedItem(item);
-    const key = targetKey(feedItem.kind, feedItem.id);
+  // ── Render a single feed item (match, event, or bus_trip) ──────────────────
+
+  const renderFeedItem = (item: FeedItem) => {
+    const homeFeedItem = toHomeFeedItem(item);
+    const key = targetKey(homeFeedItem.kind, homeFeedItem.id);
     const likeState = likeMap[key] || { liked: false, likes: 0 };
     const commentCount = commentCountMap[key] || 0;
     const commentPreviews = commentPreviewMap[key] || [];
 
     return (
       <FeedItemRenderer
-        item={feedItem}
-        itemKey={key}
-        user={user}
-        isAppAdmin={isAppAdmin}
-        likeState={likeState}
-        commentCount={commentCount}
-        commentPreviews={commentPreviews}
-        safeProfileMap={profileMap || {}}
-        communityMap={communityMap || {}}
-        toggleLike={toggleLike}
-        removePost={() => {}}
-        removeNews={() => {}}
-        incrementCommentCount={incrementCommentCount}
-        addCommentPreview={addCommentPreview}
-        onPressMatch={(matchId) =>
-          (navigation as any).navigate('MatchDetails', { fixtureId: matchId })
-        }
-      />
-    );
-  };
-
-  const renderEventItem = ({ item }: { item: FeedItem }) => {
-    const feedItem = toHomeFeedItemFromFeed(item);
-    const key = targetKey(feedItem.kind, feedItem.id);
-    const likeState = likeMap[key] || { liked: false, likes: 0 };
-    const commentCount = commentCountMap[key] || 0;
-    const commentPreviews = commentPreviewMap[key] || [];
-
-    return (
-      <FeedItemRenderer
-        item={feedItem}
+        item={homeFeedItem}
         itemKey={key}
         user={user}
         isAppAdmin={isAppAdmin}
@@ -293,16 +329,7 @@ export default function EventsScreen() {
     );
   };
 
-  const renderSection = (title: string, items: Fixture[]) => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      {items.length === 0 ? (
-        <Text style={styles.sectionEmpty}>Ingen FCN-kampe fundet endnu</Text>
-      ) : (
-        items.map((item) => <View key={item.id}>{renderMatchItem(item)}</View>)
-      )}
-    </View>
-  );
+  // ── Map callbacks ──────────────────────────────────────────────────────────
 
   const handleMarkerPress = useCallback((item: MapItem) => {
     setSelectedItem(item);
@@ -311,7 +338,6 @@ export default function EventsScreen() {
 
   const handleSheetChange = useCallback((index: number) => {
     if (index === -1) {
-      // Sheet closed
       setSelectedItem(null);
     }
   }, []);
@@ -321,6 +347,8 @@ export default function EventsScreen() {
 
     if (selectedItem.kind === 'match') {
       (navigation as any).navigate('MatchDetails', { fixtureId: selectedItem.id });
+    } else if (selectedItem.kind === 'bus_trip') {
+      (navigation as any).navigate('BusTripDetails', { busTripId: selectedItem.id });
     } else if (selectedItem.kind === 'event') {
       (navigation as any).navigate('EventDetails', { eventId: selectedItem.id });
     }
@@ -329,7 +357,7 @@ export default function EventsScreen() {
     setSelectedItem(null);
   }, [selectedItem, navigation]);
 
-  // Fit map to markers on mount
+  // Fit map to markers when entering map view
   useEffect(() => {
     if (viewMode === 'map' && mapItems.length > 0 && mapRef.current) {
       const coordinates = mapItems.map((item) => ({
@@ -337,7 +365,6 @@ export default function EventsScreen() {
         longitude: item.lng,
       }));
 
-      // Add a small delay to ensure map is mounted
       setTimeout(() => {
         mapRef.current?.fitToCoordinates(coordinates, {
           edgePadding: { top: 50, right: 50, bottom: 300, left: 50 },
@@ -348,33 +375,42 @@ export default function EventsScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewMode, mapItems.length]);
 
+  // ── Render ─────────────────────────────────────────────────────────────────
+
   return (
     <GestureHandlerRootView style={styles.container}>
       <AppHeader
         title="Events & Kampe"
-        subtitle="Kommende events"
+        subtitle="Kommende begivenheder"
         onPressProfile={() => (navigation as any).navigate('Profile')}
       />
 
-      {/* View Mode Toggle */}
-      <View style={styles.toggleContainer}>
-        <TouchableOpacity
-          style={[styles.toggleButton, viewMode === 'list' && styles.toggleButtonActive]}
-          onPress={() => setViewMode('list')}
-        >
-          <Text style={[styles.toggleText, viewMode === 'list' && styles.toggleTextActive]}>
-            📋 Liste
-          </Text>
-        </TouchableOpacity>
+      {/* Event Filter Segmented + View Mode Toggle */}
+      <View style={styles.controlsBar}>
+        <SegmentedControl
+          items={eventFilterSegments}
+          activeKey={selectedEventType}
+          onChange={setSelectedEventType}
+          style={styles.segmentedControlContainer}
+        />
 
-        <TouchableOpacity
-          style={[styles.toggleButton, viewMode === 'map' && styles.toggleButtonActive]}
-          onPress={() => setViewMode('map')}
-        >
-          <Text style={[styles.toggleText, viewMode === 'map' && styles.toggleTextActive]}>
-            🗺️ Kort
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.viewToggleContainer}>
+          <IconButton
+            icon={viewMode === 'list' ? 'list' : 'list-outline'}
+            size="sm"
+            variant="filled"
+            color={viewMode === 'list' ? theme.colors.text.primary : theme.colors.text.secondary}
+            onPress={() => setViewMode('list')}
+          />
+
+          <IconButton
+            icon={viewMode === 'map' ? 'map' : 'map-outline'}
+            size="sm"
+            variant="filled"
+            color={viewMode === 'map' ? theme.colors.text.primary : theme.colors.text.secondary}
+            onPress={() => setViewMode('map')}
+          />
+        </View>
       </View>
 
       {loading ? (
@@ -383,13 +419,11 @@ export default function EventsScreen() {
           <Text style={styles.loadingText}>Henter events...</Text>
         </View>
       ) : viewMode === 'list' ? (
-        <FlatList
-          data={eventsOnly}
-          renderItem={renderEventItem}
-          keyExtractor={(item) => `${item.kind}-${item.id}`}
-          contentContainerStyle={{
-            paddingBottom: tabBarHeight + theme.spacing[6],
-          }}
+        /* Unified chronological list: matches, events, bus_trips mixed and sorted
+           by start time. ScrollView + .map() — dataset is small enough (<60 items). */
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={{ paddingBottom: tabBarHeight + theme.spacing[6] }}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -398,29 +432,27 @@ export default function EventsScreen() {
               colors={[theme.colors.primary]}
             />
           }
-          ListHeaderComponent={
-            <View>
-              {renderSection('Kommende kampe', upcomingMatches)}
-            </View>
-          }
-          ListEmptyComponent={
+        >
+          {filteredFeed.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyIcon}>📅</Text>
-              <Text style={styles.emptyText}>Ingen kommende events</Text>
+              <Text style={styles.emptyText}>Ingen kommende begivenheder</Text>
               <Text style={styles.emptySubtext}>Tjek tilbage senere</Text>
             </View>
-          }
-        />
+          ) : (
+            filteredFeed.map((item) => <View key={`${item.kind}-${item.id}`}>{renderFeedItem(item)}</View>)
+          )}
+        </ScrollView>
       ) : (
         <View style={styles.mapContainer}>
           {mapItems.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyIcon}>📍</Text>
-              {allMatches.length > 0 || eventsOnly.length > 0 ? (
+              {feed.length > 0 ? (
                 <>
                   <Text style={styles.emptyText}>Mangler lokationer</Text>
                   <Text style={styles.emptySubtext}>
-                    {mapItems.length} af {allMatches.length + eventsOnly.length} events har koordinater
+                    {mapItems.length} af {feed.length} events har koordinater
                   </Text>
                   <Text style={styles.emptyHint}>Kør fixtures sync for at geocode stadions</Text>
                 </>
@@ -441,7 +473,7 @@ export default function EventsScreen() {
                     onPress={() => handleMarkerPress(item)}
                     tracksViewChanges={false}
                   >
-                    <MapMarkerIcon logoUrl={item.logoUrl} type={item.kind} />
+                    <MapMarkerIcon logoUrl={item.logoUrl} type={item.kind === 'bus_trip' ? 'event' : item.kind} />
                   </Marker>
                 ))}
               </MapView>
@@ -477,7 +509,7 @@ export default function EventsScreen() {
                       onPress={handleBottomSheetCTA}
                     >
                       <Text style={styles.bottomSheetButtonText}>
-                        {selectedItem.kind === 'match' ? 'Se kampdetaljer' : 'Se event'}
+                        {selectedItem.kind === 'match' ? 'Se kampdetaljer' : selectedItem.kind === 'bus_trip' ? 'Se bustur' : 'Se event'}
                       </Text>
                     </TouchableOpacity>
                   </BottomSheetView>
@@ -496,13 +528,29 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.bg.default,
   },
+  scrollView: {
+    flex: 1,
+  },
+  controlsBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
+    gap: theme.spacing[2],
+  },
   toggleContainer: {
     flexDirection: 'row',
-    marginHorizontal: theme.spacing[4],
+    marginHorizontal: theme.spacing[2],
     marginVertical: theme.spacing[2],
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.border.light,
-    padding: theme.spacing[1],
+    gap: theme.spacing[2],
+    alignItems: 'center',
+  },
+  segmentedControlContainer: {
+    flex: 1,
+  },
+  viewToggleContainer: {
+    flexDirection: 'row',
+    gap: theme.spacing[1],
   },
   toggleButton: {
     flex: 1,
@@ -559,22 +607,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: theme.spacing[1],
     fontStyle: 'italic',
-  },
-  section: {
-    paddingTop: theme.spacing[2],
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.colors.text.primary,
-    paddingHorizontal: theme.spacing[4],
-    paddingVertical: theme.spacing[2],
-  },
-  sectionEmpty: {
-    fontSize: 14,
-    color: theme.colors.text.secondary,
-    paddingHorizontal: theme.spacing[4],
-    paddingBottom: theme.spacing[4],
   },
   mapContainer: {
     flex: 1,

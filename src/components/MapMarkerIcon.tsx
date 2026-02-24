@@ -18,7 +18,7 @@ export function MapMarkerIcon({ logoUrl, type }: MapMarkerIconProps) {
         {/* Logo badge at top */}
         <View style={styles.badge}>
           {logoUrl ? (
-            <Image source={{ uri: logoUrl }} style={styles.logo} resizeMode="contain" />
+            <Image source={{ uri: logoUrl }} style={styles.logo} resizeMode="cover" />
           ) : (
             <View style={styles.fallback}>
               <View style={styles.fallbackDot} />
@@ -54,14 +54,15 @@ function createStyles(theme: Theme) {
       width: theme.spacing[8],
       height: theme.spacing[8],
       borderRadius: theme.radius.pill,
-      backgroundColor: theme.colors.bg.elevated,
+      backgroundColor: 'transparent',
       justifyContent: 'center',
       alignItems: 'center',
       overflow: 'hidden',
     },
     logo: {
-      width: 28,
-      height: 28,
+      width: theme.spacing[8],
+      height: theme.spacing[8],
+      borderRadius: theme.radius.pill,
     },
     fallback: {
       width: 28,

@@ -12,6 +12,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { defaultTheme } from '../../theme';
@@ -73,8 +74,9 @@ export function InlineComments({
   const listRef = useRef<FlatList<Comment> | null>(null);
   const commentPositions = useRef<Record<string, number>>({});
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<any>();
   const keyboardVerticalOffset =
-    variant === 'screen' ? keyboardVerticalOffsetOverride ?? insets.top + 44 : 0;
+    variant === 'screen' ? (keyboardVerticalOffsetOverride ?? insets.top + 44) : 0;
 
   const resolveActor = useCallback(
     (authorId: string, authorDisplayName?: string | null, authorAvatarUrl?: string | null) => {
@@ -477,21 +479,31 @@ export function InlineComments({
         }}
       >
         <View style={styles.commentRow}>
-          <View style={styles.commentAvatarWrap}>
-            <Avatar
-              userId={comment.author_id}
-              avatarUrl={resolvedAuthor.avatarUrl}
-              size={32}
-              label={resolvedAuthor.displayName}
-            />
-          </View>
+          <Pressable
+            onPress={() => navigation.navigate('PublicProfile', { userId: comment.author_id })}
+          >
+            <View style={styles.commentAvatarWrap}>
+              <Avatar
+                userId={comment.author_id}
+                avatarUrl={resolvedAuthor.avatarUrl}
+                size={32}
+                label={resolvedAuthor.displayName}
+              />
+            </View>
+          </Pressable>
 
           <View style={styles.commentBody}>
             <View style={styles.commentHeaderRow}>
               <View style={styles.commentHeaderText}>
-                <Text variant="caption" color="primary" style={styles.commentAuthor}>
-                  {resolvedAuthor.displayName}
-                </Text>
+                <Pressable
+                  onPress={() =>
+                    navigation.navigate('PublicProfile', { userId: comment.author_id })
+                  }
+                >
+                  <Text variant="caption" color="primary" style={styles.commentAuthor}>
+                    {resolvedAuthor.displayName}
+                  </Text>
+                </Pressable>
                 <Text variant="caption" color="secondary" style={styles.commentTime}>
                   {getTimeAgo(comment.created_at)}
                 </Text>
@@ -504,9 +516,7 @@ export function InlineComments({
                 <Ionicons
                   name={comment.likedByMe ? 'heart' : 'heart-outline'}
                   size={theme.spacing[5]}
-                  color={
-                    comment.likedByMe ? theme.colors.primary : theme.colors.text.muted
-                  }
+                  color={comment.likedByMe ? theme.colors.primary : theme.colors.text.muted}
                 />
                 {comment.likeCount > 0 ? (
                   <Text variant="caption" color={comment.likedByMe ? 'primary' : 'muted'}>
@@ -558,19 +568,31 @@ export function InlineComments({
                   );
                   return (
                     <View key={reply.id} style={styles.replyRow}>
-                      <View style={styles.replyAvatarWrap}>
-                        <Avatar
-                          userId={reply.author_id}
-                          avatarUrl={resolvedReply.avatarUrl}
-                          size={26}
-                          label={resolvedReply.displayName}
-                        />
-                      </View>
+                      <Pressable
+                        onPress={() =>
+                          navigation.navigate('PublicProfile', { userId: reply.author_id })
+                        }
+                      >
+                        <View style={styles.replyAvatarWrap}>
+                          <Avatar
+                            userId={reply.author_id}
+                            avatarUrl={resolvedReply.avatarUrl}
+                            size={26}
+                            label={resolvedReply.displayName}
+                          />
+                        </View>
+                      </Pressable>
                       <View style={styles.replyContent}>
                         <View style={styles.replyHeaderRow}>
-                          <Text variant="caption" color="primary" style={styles.replyAuthor}>
-                            {resolvedReply.displayName}
-                          </Text>
+                          <Pressable
+                            onPress={() =>
+                              navigation.navigate('PublicProfile', { userId: reply.author_id })
+                            }
+                          >
+                            <Text variant="caption" color="primary" style={styles.replyAuthor}>
+                              {resolvedReply.displayName}
+                            </Text>
+                          </Pressable>
                           <Text variant="caption" color="secondary" style={styles.replyTime}>
                             {getTimeAgo(reply.created_at)}
                           </Text>
@@ -601,9 +623,7 @@ export function InlineComments({
     );
   };
 
-  const commentsToDisplay = variant === 'inline' 
-    ? comments.slice(0, maxInlineComments) 
-    : comments;
+  const commentsToDisplay = variant === 'inline' ? comments.slice(0, maxInlineComments) : comments;
 
   const renderContent = () => {
     if (loading) {
@@ -698,12 +718,7 @@ export function InlineComments({
         </View>
       ) : null}
 
-      <View
-        style={[
-          styles.composerContainer,
-          { paddingBottom: theme.spacing[2] + insets.bottom },
-        ]}
-      >
+      <View style={[styles.composerContainer, { paddingBottom: theme.spacing[2] + insets.bottom }]}>
         <View style={styles.inputContainer}>
           <TextInput
             ref={inputRef}
@@ -869,8 +884,7 @@ const styles = StyleSheet.create({
   commentAuthor: {
     fontWeight: theme.typography.caption.fontWeight as any,
   },
-  commentTime: {
-  },
+  commentTime: {},
   commentLikeButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -943,8 +957,7 @@ const styles = StyleSheet.create({
   replyAuthor: {
     fontWeight: theme.typography.caption.fontWeight as any,
   },
-  replyTime: {
-  },
+  replyTime: {},
   replyText: {
     marginTop: theme.spacing[1],
   },

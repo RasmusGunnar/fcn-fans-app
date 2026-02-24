@@ -1,5 +1,5 @@
 import React, { ReactNode } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { Pressable, View, StyleSheet } from 'react-native';
 import { useTheme, Theme } from '../theme';
 import { Text } from './ui';
 
@@ -8,6 +8,7 @@ interface FeedCardHeaderProps {
   title?: string;
   subtitle?: string;
   rightSlot?: ReactNode; // OptionsMenu or other right-aligned content
+  onPressAuthor?: () => void; // Navigate to author profile
 }
 
 /**
@@ -19,28 +20,41 @@ export function FeedCardHeader({
   title,
   subtitle,
   rightSlot,
+  onPressAuthor,
 }: FeedCardHeaderProps) {
   const theme = useTheme();
   const styles = createStyles(theme);
   const showHeaderRow = Boolean(avatarSlot || title || subtitle || rightSlot);
 
+  const authorContent = (
+    <>
+      {avatarSlot ? avatarSlot : null}
+      <View style={[styles.headerInfo, !avatarSlot && styles.headerInfoNoAvatar]}>
+        {!!title && (
+          <Text variant="bodyBold" style={styles.title}>
+            {title}
+          </Text>
+        )}
+        {subtitle && (
+          <Text variant="small" color="muted" style={styles.subtitle}>
+            {subtitle}
+          </Text>
+        )}
+      </View>
+    </>
+  );
+
   return (
     <View style={styles.container}>
       {showHeaderRow && (
         <View style={styles.header}>
-          {avatarSlot ? avatarSlot : null}
-          <View style={[styles.headerInfo, !avatarSlot && styles.headerInfoNoAvatar]}>
-            {!!title && (
-              <Text variant="bodyBold" style={styles.title}>
-                {title}
-              </Text>
-            )}
-            {subtitle && (
-              <Text variant="small" color="muted" style={styles.subtitle}>
-                {subtitle}
-              </Text>
-            )}
-          </View>
+          {onPressAuthor ? (
+            <Pressable onPress={onPressAuthor} style={styles.authorArea}>
+              {authorContent}
+            </Pressable>
+          ) : (
+            authorContent
+          )}
           {rightSlot ? <View style={styles.rightSlot}>{rightSlot}</View> : null}
         </View>
       )}
@@ -65,6 +79,11 @@ function createStyles(theme: Theme) {
     },
     headerInfoNoAvatar: {
       marginLeft: theme.spacing[0],
+    },
+    authorArea: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      flex: 1,
     },
     rightSlot: {
       marginLeft: theme.spacing[1],

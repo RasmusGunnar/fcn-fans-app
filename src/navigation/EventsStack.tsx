@@ -5,6 +5,7 @@ import MatchDetailsScreen from '../screens/MatchDetailsScreen';
 import BusTripDetailsScreen from '../screens/BusTripDetailsScreen';
 import EventDetailsScreen from '../screens/EventDetailsScreen';
 import EditEventScreen from '../screens/EditEventScreen';
+import PublicProfileScreen from '../screens/PublicProfileScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -16,6 +17,7 @@ export function EventsStack() {
       <Stack.Screen name="BusTripDetails" component={BusTripDetailsScreen} />
       <Stack.Screen name="EventDetails" component={EventDetailsScreen} />
       <Stack.Screen name="EditEvent" component={EditEventScreen} />
+      <Stack.Screen name="PublicProfile" component={PublicProfileScreen} />
     </Stack.Navigator>
   );
 }

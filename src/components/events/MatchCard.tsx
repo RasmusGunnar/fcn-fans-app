@@ -7,7 +7,6 @@ import { View, StyleSheet, Image } from 'react-native';
 import { CardRoot, CardHeader } from '../cards';
 import { Button, Text } from '../ui';
 import { EventSubtypeBadge } from '../ui/EventSubtypeBadge';
-import type { ProfileMap } from '../../utils/actor';
 import { useAuth } from '../../auth/AuthProvider';
 import { defaultTheme } from '../../theme';
 import { matchProvider } from '../../services/matches';
@@ -30,7 +29,6 @@ interface MatchCardProps {
   onPress: () => void;
   onToggleLike?: () => void;
   onPressShare?: () => void;
-  profileMap?: ProfileMap;
 }
 
 export function MatchCard({
@@ -50,7 +48,6 @@ export function MatchCard({
   onPress,
   onToggleLike = () => {},
   onPressShare = () => {},
-  profileMap,
 }: MatchCardProps) {
   const { user, isAppAdmin } = useAuth();
   const [matchData, setMatchData] = useState<Match | null>(null);
@@ -89,9 +86,6 @@ export function MatchCard({
       targetId={matchId}
       currentUserId={user?.id}
       isAppAdmin={isAppAdmin}
-      profileMap={profileMap}
-      categoryKey="match"
-      badgeSlot={<EventSubtypeBadge subtype="match" />}
       onOpenDetail={onPress}
       actions={{
         liked,

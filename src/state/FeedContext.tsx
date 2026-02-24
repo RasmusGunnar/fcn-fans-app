@@ -10,6 +10,7 @@ import {
   fetchCommentCounts,
   fetchCommentPreviews,
   fetchLikeStates,
+  fetchMyLikedIds,
   toggleLike as toggleLikeApi,
   type CommentPreview,
   type LikeTargetType,
@@ -114,9 +115,6 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
                 avatar_url: profile.avatar_url,
               };
             });
-            if (__DEV__) {
-              console.log('[FeedProvider] Profiles fetched:', profiles.length);
-            }
           }
         } catch (e) {
           console.warn('[FeedProvider] Failed to fetch profiles:', e);
@@ -140,10 +138,6 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       }));
 
       setPosts(transformedPosts);
-
-      if (__DEV__) {
-        console.log('[FeedProvider] Posts fetched:', transformedPosts.length);
-      }
     } catch (e: any) {
       const errorMsg = e?.message || String(e);
       setError(errorMsg);
@@ -154,9 +148,6 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
     // Fetch news items in separate try/catch
     try {
       newsItems = await fetchNewsItems(50);
-      if (__DEV__) {
-        console.log('[FeedProvider] News items fetched:', newsItems.length);
-      }
 
       // Build community map from news items and posts
       const communityIds = newsItems
@@ -181,12 +172,6 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
               newCommunityMap[c.id] = c.name;
             });
             setCommunityMap(newCommunityMap);
-            if (__DEV__) {
-              console.log(
-                '[FeedProvider] Community map populated:',
-                Object.keys(newCommunityMap).length,
-              );
-            }
           }
         } catch (e) {
           console.warn('[FeedProvider] Failed to fetch community names:', e);
@@ -209,11 +194,6 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       ]);
       upcomingEvents = results[0].status === 'fulfilled' ? results[0].value : [];
       upcomingBusTrips = results[1].status === 'fulfilled' ? results[1].value : [];
-
-      if (__DEV__) {
-        console.log('[FeedProvider] Upcoming events fetched:', upcomingEvents.length);
-        console.log('[FeedProvider] Upcoming bus trips fetched:', upcomingBusTrips.length);
-      }
     } catch (e: any) {
       console.warn('[FeedProvider] fetchEventsUpcoming/busTrips failed:', e?.message || e);
       upcomingEvents = [];
@@ -248,6 +228,8 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
               createdBy: event.created_by ?? null,
               createdAt: event.created_at ?? null,
               eventType: 'event',
+              coverBucket: (event as any).cover_bucket ?? null,
+              coverPath: (event as any).cover_path ?? null,
             },
           }),
         ),
@@ -371,17 +353,6 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       const safeBusTripComments = busTripComments || new Map();
       const safeBusTripPreviews = busTripPreviews || new Map();
 
-      if (__DEV__) {
-        console.log('[FeedProvider] combine inputs', {
-          hasPostLikes: safePostLikes instanceof Map && safePostLikes.size > 0,
-          hasPostComments: safePostComments instanceof Map && safePostComments.size > 0,
-          hasPostPreviews: safePostPreviews instanceof Map && safePostPreviews.size > 0,
-          hasNewsLikes: safeNewsLikes instanceof Map && safeNewsLikes.size > 0,
-          hasNewsComments: safeNewsComments instanceof Map && safeNewsComments.size > 0,
-          hasNewsPreviews: safeNewsPreviews instanceof Map && safeNewsPreviews.size > 0,
-        });
-      }
-
       // Build maps with "${kind}:${id}" keys
       const newLikeMap: Record<string, { liked: boolean; likes: number }> = {};
       const newCommentCountMap: Record<string, number> = {};
@@ -416,30 +387,43 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       });
 
       setLikeMap(newLikeMap);
+
+      // ── Rehydrate likedByMe from likes_v2 for current user ──
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        const currentUserId = session?.user?.id;
+        if (currentUserId) {
+          const [myPostLikes, myNewsLikes, myEventLikes, myBusTripLikes] = await Promise.all([
+            fetchMyLikedIds(currentUserId, 'post', postIds).catch(() => new Set<string>()),
+            fetchMyLikedIds(currentUserId, 'news', newsIds).catch(() => new Set<string>()),
+            fetchMyLikedIds(currentUserId, 'event', eventIds).catch(() => new Set<string>()),
+            fetchMyLikedIds(currentUserId, 'bus_trip', busTripIds).catch(() => new Set<string>()),
+          ]);
+
+          const patchedLikeMap = { ...newLikeMap };
+          const patchLiked = (kind: LikeTargetType, ids: string[], mySet: Set<string>) => {
+            for (const id of ids) {
+              if (mySet.has(id)) {
+                const key = targetKey(kind, id);
+                patchedLikeMap[key] = { ...patchedLikeMap[key], liked: true };
+              }
+            }
+          };
+          patchLiked('post', postIds, myPostLikes);
+          patchLiked('news', newsIds, myNewsLikes);
+          patchLiked('event', eventIds, myEventLikes);
+          patchLiked('bus_trip', busTripIds, myBusTripLikes);
+
+          setLikeMap(patchedLikeMap);
+        }
+      } catch (e) {
+        console.warn('[FeedProvider] likedByMe rehydration failed:', e);
+      }
+
       setCommentCountMap(newCommentCountMap);
       setCommentPreviewMap(newCommentPreviewMap);
-
-      if (__DEV__) {
-        console.log('[FeedProvider] Combined feed:', {
-          postsCount: safePostsArray.length,
-          newsCount: safeNewsArray.length,
-          totalCount: combinedFeed.length,
-          likesLoaded: Object.keys(newLikeMap || {}).length,
-          commentsLoaded: Object.keys(newCommentCountMap || {}).length,
-          previewsLoaded: Object.keys(newCommentPreviewMap || {}).length,
-        });
-
-        // Log sample of data for first item
-        if (combinedFeed.length > 0) {
-          const firstKey = targetKey(combinedFeed[0].kind as any, combinedFeed[0].id);
-          console.log('[FeedProvider] First item data sample:', {
-            key: firstKey,
-            likes: newLikeMap[firstKey],
-            commentCount: newCommentCountMap[firstKey],
-            previewCount: newCommentPreviewMap[firstKey]?.length || 0,
-          });
-        }
-      }
     } catch (e: any) {
       console.error('[FeedProvider] Error merging feed:', e?.message || e);
     }
@@ -448,14 +432,6 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const addPost = useCallback((post: Post) => {
-    if (__DEV__) {
-      console.log('[FeedProvider] addPost called:', {
-        postId: post.id,
-        hasMedia: !!post.media,
-        media: post.media,
-      });
-    }
-
     // Dedupe: if post with same ID exists, replace it; otherwise prepend
     setPosts((prev) => {
       const existingIndex = prev.findIndex((p) => p.id === post.id);
