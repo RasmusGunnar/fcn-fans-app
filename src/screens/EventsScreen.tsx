@@ -15,6 +15,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import MapView, { Marker, Region } from 'react-native-maps';
 import { useAuth } from '../auth/AuthProvider';
 import { AppHeader } from '../components/AppHeader';
+import { IconButton } from '../components/ui/IconButton';
+import { SegmentedControl } from '../components/ui/SegmentedControl';
 import { FeedItemRenderer } from '../components/feed/FeedItemRenderer';
 import { MapMarkerIcon } from '../components/MapMarkerIcon';
 import { getPublicUrl } from '../lib/storageUrl';
@@ -26,6 +28,7 @@ import type { FeedItem as HomeFeedItem } from '../types/feed';
 import { targetKey } from '../utils/targetKey';
 
 type ViewMode = 'list' | 'map';
+type EventFilterKey = 'all' | 'matches' | 'bus_trips' | 'events';
 
 // Normalized map item type (for Kort view)
 type MapItem = {
@@ -74,7 +77,15 @@ export default function EventsScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [selectedEventType, setSelectedEventType] = useState<EventFilterKey>('all');
   const [selectedItem, setSelectedItem] = useState<MapItem | null>(null);
+
+  const eventFilterSegments = [
+    { key: 'all', label: 'Alle' },
+    { key: 'matches', label: 'Kampe' },
+    { key: 'bus_trips', label: 'Busture' },
+    { key: 'events', label: 'Events' },
+  ] as const satisfies ReadonlyArray<{ key: EventFilterKey; label: string }>;
 
   const snapPoints = useMemo(() => ['20%', '45%', '85%'], []);
 
@@ -199,6 +210,22 @@ export default function EventsScreen() {
         .filter((item): item is MapItem => item !== null),
     [feed, profileMap, communityMap],
   );
+
+  // ── Filter feed by event type ──────────────────────────────────────────────
+
+  const filteredFeed = useMemo(() => {
+    if (selectedEventType === 'all') {
+      return feed;
+    }
+    const kindMap: Record<EventFilterKey, FeedItem['kind']> = {
+      all: 'match',
+      matches: 'match',
+      bus_trips: 'bus_trip',
+      events: 'event',
+    };
+    const targetKind = kindMap[selectedEventType];
+    return feed.filter((item) => item.kind === targetKind);
+  }, [feed, selectedEventType]);
 
   // ── FeedItem (eventsApi) → HomeFeedItem (types/feed) mapper ────────────────
 
@@ -358,25 +385,32 @@ export default function EventsScreen() {
         onPressProfile={() => (navigation as any).navigate('Profile')}
       />
 
-      {/* View Mode Toggle */}
-      <View style={styles.toggleContainer}>
-        <TouchableOpacity
-          style={[styles.toggleButton, viewMode === 'list' && styles.toggleButtonActive]}
-          onPress={() => setViewMode('list')}
-        >
-          <Text style={[styles.toggleText, viewMode === 'list' && styles.toggleTextActive]}>
-            📋 Liste
-          </Text>
-        </TouchableOpacity>
+      {/* Event Filter Segmented + View Mode Toggle */}
+      <View style={styles.controlsBar}>
+        <SegmentedControl
+          items={eventFilterSegments}
+          activeKey={selectedEventType}
+          onChange={setSelectedEventType}
+          style={styles.segmentedControlContainer}
+        />
 
-        <TouchableOpacity
-          style={[styles.toggleButton, viewMode === 'map' && styles.toggleButtonActive]}
-          onPress={() => setViewMode('map')}
-        >
-          <Text style={[styles.toggleText, viewMode === 'map' && styles.toggleTextActive]}>
-            🗺️ Kort
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.viewToggleContainer}>
+          <IconButton
+            icon={viewMode === 'list' ? 'list' : 'list-outline'}
+            size="sm"
+            variant="filled"
+            color={viewMode === 'list' ? theme.colors.text.primary : theme.colors.text.secondary}
+            onPress={() => setViewMode('list')}
+          />
+
+          <IconButton
+            icon={viewMode === 'map' ? 'map' : 'map-outline'}
+            size="sm"
+            variant="filled"
+            color={viewMode === 'map' ? theme.colors.text.primary : theme.colors.text.secondary}
+            onPress={() => setViewMode('map')}
+          />
+        </View>
       </View>
 
       {loading ? (
@@ -399,14 +433,14 @@ export default function EventsScreen() {
             />
           }
         >
-          {feed.length === 0 ? (
+          {filteredFeed.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyIcon}>📅</Text>
               <Text style={styles.emptyText}>Ingen kommende begivenheder</Text>
               <Text style={styles.emptySubtext}>Tjek tilbage senere</Text>
             </View>
           ) : (
-            feed.map((item) => <View key={`${item.kind}-${item.id}`}>{renderFeedItem(item)}</View>)
+            filteredFeed.map((item) => <View key={`${item.kind}-${item.id}`}>{renderFeedItem(item)}</View>)
           )}
         </ScrollView>
       ) : (
@@ -497,13 +531,26 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  controlsBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
+    gap: theme.spacing[2],
+  },
   toggleContainer: {
     flexDirection: 'row',
-    marginHorizontal: theme.spacing[4],
+    marginHorizontal: theme.spacing[2],
     marginVertical: theme.spacing[2],
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.border.light,
-    padding: theme.spacing[1],
+    gap: theme.spacing[2],
+    alignItems: 'center',
+  },
+  segmentedControlContainer: {
+    flex: 1,
+  },
+  viewToggleContainer: {
+    flexDirection: 'row',
+    gap: theme.spacing[1],
   },
   toggleButton: {
     flex: 1,

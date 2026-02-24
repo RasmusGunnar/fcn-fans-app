@@ -7,7 +7,7 @@ import { SegmentedControl } from '../components/ui/SegmentedControl';
 import { SongsView } from '../components/views/SongsView';
 import { LinksView as LinksViewComponent } from '../components/views/LinksView';
 import { VideosView as VideosViewComponent } from '../components/views/VideosView';
-import { supabase } from '../lib/supabase';
+import { supabase, supabaseUrl } from '../lib/supabase';
 import { defaultTheme } from '../theme';
 
 const theme = defaultTheme;
@@ -19,8 +19,8 @@ declare const process: {
   };
 };
 
-const STANDINGS_LEAGUE_ID = process.env.EXPO_PUBLIC_SPORTSDB_LEAGUE_ID ?? '4326';
-const STANDINGS_SEASON = process.env.EXPO_PUBLIC_SPORTSDB_SEASON ?? '2024-2025';
+const STANDINGS_LEAGUE_ID = process.env.EXPO_PUBLIC_SPORTSDB_LEAGUE_ID ?? '4340';
+const STANDINGS_SEASON = process.env.EXPO_PUBLIC_SPORTSDB_SEASON ?? '2025-2026';
 
 type LibrarySegmentKey = 'songs' | 'standings' | 'links' | 'videos';
 
@@ -56,12 +56,16 @@ function StandingsView() {
     const loadStandings = async () => {
       const { data, error } = await supabase
         .from('standings_cache')
-        .select('rows, updated_at')
+        .select('rows, updated_at, league_id, season')
         .eq('league_id', STANDINGS_LEAGUE_ID)
         .eq('season', STANDINGS_SEASON)
         .order('updated_at', { ascending: false })
         .limit(1)
         .maybeSingle();
+
+      console.log('[StandingsView] query', { error, hasData: !!data, data });
+      console.log('[StandingsView] firstRow', data?.rows?.[0]);
+      console.log('[StandingsView] rows.length', data?.rows?.length);
 
       if (!isActive) return;
       if (error || !data?.rows || data.rows.length === 0) {
@@ -162,6 +166,10 @@ function StandingsView() {
 export default function LibraryScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const [activeSegment, setActiveSegment] = useState<LibrarySegmentKey>('songs');
+
+  useEffect(() => {
+    console.log('[LibraryScreen] Supabase Project URL:', supabaseUrl);
+  }, []);
 
   const handleSegmentPress = (segment: LibrarySegmentKey) => {
     setActiveSegment(segment);

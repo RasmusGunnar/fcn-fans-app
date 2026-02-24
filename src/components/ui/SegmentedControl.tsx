@@ -23,52 +23,60 @@ export function SegmentedControl<Key extends string>({
   style,
 }: SegmentedControlProps<Key>) {
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      style={[styles.railContainer, style]}
-      contentContainerStyle={styles.railContent}
-    >
-      {items.map((item) => {
-        const isActive = item.key === activeKey;
-        return (
-          <Pressable
-            key={item.key}
-            onPress={() => onChange(item.key)}
-            style={[styles.button, isActive && styles.buttonActive]}
-          >
-            <Text
-              style={[styles.text, isActive && styles.textActive]}
-              numberOfLines={1}
-              ellipsizeMode="tail"
+    <View style={[styles.railContainer, style]}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.scrollView}
+        contentContainerStyle={styles.railContent}
+      >
+        {items.map((item) => {
+          const isActive = item.key === activeKey;
+          return (
+            <Pressable
+              key={item.key}
+              onPress={() => onChange(item.key)}
+              style={[styles.button, isActive && styles.buttonActive]}
             >
-              {item.label}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </ScrollView>
+              <Text
+                style={[styles.text, isActive && styles.textActive]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {item.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   railContainer: {
+    height: theme.spacing[10],
     backgroundColor: theme.colors.bg.subtle,
-    borderRadius: theme.radius.lg,
-    marginHorizontal: theme.spacing[4],
+    borderRadius: theme.radius.pill,
     marginVertical: theme.spacing[2],
     overflow: 'hidden',
+    alignItems: 'center',
+  },
+  scrollView: {
+    flexGrow: 0,
   },
   railContent: {
-    paddingHorizontal: theme.spacing[4],
-    paddingVertical: theme.spacing[3],
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[1],
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing[2],
+    justifyContent: 'center',
+    flexGrow: 1,
+    gap: theme.spacing[1],
   },
   button: {
-    paddingVertical: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
+    height: theme.spacing[8],
+    paddingHorizontal: theme.spacing[2],
     borderRadius: theme.radius.pill,
     backgroundColor: 'transparent',
     alignItems: 'center',
@@ -79,10 +87,10 @@ const styles = StyleSheet.create({
   },
   text: {
     color: theme.colors.text.secondary,
-    ...theme.typography.caption,
+    ...theme.typography.small,
   },
   textActive: {
     color: theme.colors.text.inverse,
-    ...theme.typography.caption,
+    ...theme.typography.small,
   },
 });
