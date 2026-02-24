@@ -68,16 +68,38 @@ export default function CommunitiesScreen() {
   ] as const;
 
   const filteredCommunities = useMemo(() => {
-    if (activeSegment === 'mine') {
-      return communities.filter((community) => !!myCommunityRoles[community.id]);
-    }
-    if (activeSegment === 'fan_factions') {
-      return communities.filter((community) => community.type === 'fan_faction');
-    }
-    if (activeSegment === 'communities') {
-      return communities.filter((community) => community.type === 'community');
-    }
-    return communities;
+    const baseList = (() => {
+      if (activeSegment === 'mine') {
+        return communities.filter((community) => !!myCommunityRoles[community.id]);
+      }
+      if (activeSegment === 'fan_factions') {
+        return communities.filter((community) => community.type === 'fan_faction');
+      }
+      if (activeSegment === 'communities') {
+        return communities.filter((community) => community.type === 'community');
+      }
+      return communities;
+    })();
+
+    const wildTigersName = 'wild tigers';
+    const typeRank = (community: CommunityData) => (community.type === 'fan_faction' ? 0 : 1);
+    const isWildTigers = (community: CommunityData) =>
+      community.name?.trim().toLowerCase() === wildTigersName;
+
+    const sorted = [...baseList].sort((a, b) => {
+      const typeDiff = typeRank(a) - typeRank(b);
+      if (typeDiff !== 0) return typeDiff;
+
+      const aIsWild = isWildTigers(a) ? 0 : 1;
+      const bIsWild = isWildTigers(b) ? 0 : 1;
+      if (aIsWild !== bIsWild) return aIsWild - bIsWild;
+
+      const aName = a.name?.toLowerCase() ?? '';
+      const bName = b.name?.toLowerCase() ?? '';
+      return aName.localeCompare(bName, 'da');
+    });
+
+    return sorted;
   }, [activeSegment, communities, myCommunityRoles]);
 
   const hasCoords = useMemo(
@@ -220,14 +242,13 @@ export default function CommunitiesScreen() {
             <View style={styles.cards}>
               {filteredCommunities.map((community) => {
                 const isFaction = community.type === 'fan_faction';
-                const badgeLabel = isFaction ? 'FANFRAKTION' : 'LOKALT/FÆLLESSKAB';
+                const badgeLabel = isFaction ? 'FANFRAKTION' : 'LOKALT';
                 const ctaLabel = isFaction ? 'Gå til fraktion →' : 'Gå til fællesskab →';
                 const accentColor = isFaction ? theme.colors.brand.accent : theme.colors.state.info;
+                const badgeVariant = isFaction ? 'brandSoft' : 'infoSoft';
 
                 return (
-                  <Card key={community.id} style={styles.card}>
-                    <Badge label={badgeLabel} variant={isFaction ? 'brand' : 'info'} size="sm" />
-
+                  <Card key={community.id} variant="feedItem" style={styles.card}>
                     <View style={styles.cardHeader}>
                       <View style={styles.avatar}>
                         {community.avatar_url ? (
@@ -235,21 +256,34 @@ export default function CommunitiesScreen() {
                         ) : (
                           <Ionicons
                             name={isFaction ? 'star' : 'people'}
-                            size={theme.components.icon.size.lg}
+                            size={theme.components.icon.size.md}
                             color={accentColor}
                           />
                         )}
                       </View>
 
                       <View style={styles.cardContent}>
-                        <Text variant="h3">{community.name}</Text>
-                        <Text variant="body" color="secondary">
+                        <View style={styles.titleRow}>
+                          <Text variant="bodyBold">{community.name}</Text>
+                          <View style={styles.badgeWrap}>
+                            <Badge label={badgeLabel} variant={badgeVariant} size="sm" />
+                          </View>
+                        </View>
+                        <Text variant="small" color="secondary" numberOfLines={2} ellipsizeMode="tail">
                           {community.description || 'Ingen beskrivelse'}
                         </Text>
                         {community.member_count !== undefined && (
-                          <Text variant="small" color="muted" style={styles.memberCount}>
-                            {community.member_count} medlem{community.member_count !== 1 ? 'mer' : ''}
-                          </Text>
+                          <View style={styles.memberRow}>
+                            <Ionicons
+                              name="people"
+                              size={theme.spacing[3]}
+                              color={theme.colors.text.muted}
+                              style={styles.memberIcon}
+                            />
+                            <Text variant="caption" color="muted">
+                              {community.member_count} medlem{community.member_count !== 1 ? 'mer' : ''}
+                            </Text>
+                          </View>
                         )}
                       </View>
                     </View>
@@ -262,7 +296,7 @@ export default function CommunitiesScreen() {
                         pressed && styles.ctaButtonPressed,
                       ]}
                     >
-                      <Text variant="bodyBold" style={styles.ctaText}>
+                      <Text variant="small" style={styles.ctaText}>
                         {ctaLabel}
                       </Text>
                     </Pressable>
@@ -330,19 +364,21 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
     listContent: {
       paddingHorizontal: theme.spacing[2],
-      paddingVertical: theme.spacing[3],
+      paddingVertical: theme.spacing[2],
     },
     cards: {
-      gap: theme.spacing[3],
+      gap: theme.spacing[2],
       marginBottom: theme.spacing[4],
     },
     card: {
-      gap: theme.spacing[3],
+      padding: theme.spacing[2],
+      gap: theme.spacing[2],
+      borderRadius: theme.radius.lg,
     },
     cardHeader: {
       flexDirection: 'row',
-      alignItems: 'center',
-      gap: theme.spacing[3],
+      alignItems: 'flex-start',
+      gap: theme.spacing[2],
     },
     avatar: {
       width: theme.spacing[12],
@@ -361,20 +397,37 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       flex: 1,
       gap: theme.spacing[1],
     },
-    memberCount: {
-      marginTop: theme.spacing[1],
+    memberRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing[1],
+    },
+    memberIcon: {
+      marginTop: theme.layout.borderHairline,
+    },
+    titleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: theme.spacing[2],
+    },
+    badgeWrap: {
+      alignSelf: 'flex-start',
     },
     ctaButton: {
-      height: theme.components.button.size.lg.height,
-      borderRadius: theme.components.button.radius,
+      height: theme.spacing[9],
+      paddingHorizontal: theme.spacing[3],
+      borderRadius: theme.radius.md,
       alignItems: 'center',
       justifyContent: 'center',
+      alignSelf: 'stretch',
     },
     ctaButtonPressed: {
       opacity: 0.85,
     },
     ctaText: {
       color: theme.colors.text.inverse,
+      textAlign: 'center',
     },
     emptyState: {
       alignItems: 'center',
