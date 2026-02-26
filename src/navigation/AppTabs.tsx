@@ -1,15 +1,15 @@
-import React, { useState } from 'react';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { HomeStack } from './HomeStack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import React, { useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import CreateSheet from '../screens/CreateSheet';
+import { colors } from '../theme';
 import { CommunitiesStack } from './CommunitiesStack';
 import { EventsStack } from './EventsStack';
+import { HomeStack } from './HomeStack';
 import { LibraryStack } from './LibraryStack';
 import { ProfileStack } from './ProfileStack';
-import { colors, spacing } from '../theme';
-import CreateSheet from '../screens/CreateSheet';
 
 const Tab = createBottomTabNavigator();
 
@@ -116,11 +116,7 @@ export function AppTabs() {
       <Tab.Screen name="Communities" component={CommunitiesStack} />
       <Tab.Screen name="Events" component={EventsStack} />
       <Tab.Screen name="Songs" component={LibraryStack} />
-      <Tab.Screen
-        name="Profile"
-        component={ProfileStack}
-        options={{ tabBarButton: () => null }}
-      />
+      <Tab.Screen name="Profile" component={ProfileStack} options={{ tabBarButton: () => null }} />
     </Tab.Navigator>
   );
 }

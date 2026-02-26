@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, View, Text, Image } from 'react-native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import React, { useEffect, useState } from 'react';
+import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppHeader } from '../components/AppHeader';
 import { Card } from '../components/ui/Card';
 import { SegmentedControl } from '../components/ui/SegmentedControl';
-import { SongsView } from '../components/views/SongsView';
 import { LinksView as LinksViewComponent } from '../components/views/LinksView';
+import { SongsView } from '../components/views/SongsView';
 import { VideosView as VideosViewComponent } from '../components/views/VideosView';
 import { supabase, supabaseUrl } from '../lib/supabase';
 import { defaultTheme } from '../theme';
@@ -29,7 +29,7 @@ const segments = [
   { key: 'standings', label: 'Stillingen' },
   { key: 'links', label: 'Links' },
   { key: 'videos', label: 'Videoer' },
-] as const satisfies ReadonlyArray<{ key: LibrarySegmentKey; label: string }>;
+] as const satisfies readonly { key: LibrarySegmentKey; label: string }[];
 
 type StandingsRow = {
   rank?: number | null;
@@ -123,7 +123,13 @@ function StandingsView() {
               key={`${row.teamId ?? name}-${index}`}
               style={[styles.standingsRow, isFcn && styles.standingsRowHighlight]}
             >
-              <Text style={[styles.standingsCell, styles.cellRank, isFcn && styles.standingsCellHighlight]}>
+              <Text
+                style={[
+                  styles.standingsCell,
+                  styles.cellRank,
+                  isFcn && styles.standingsCellHighlight,
+                ]}
+              >
                 {row.rank ?? '-'}
               </Text>
               <View style={styles.teamCell}>
@@ -131,28 +137,68 @@ function StandingsView() {
                   <Image source={{ uri: row.teamBadge }} style={styles.teamBadge} />
                 ) : null}
                 <Text
-                  style={[styles.standingsCell, styles.cellTeam, isFcn && styles.standingsCellHighlight]}
+                  style={[
+                    styles.standingsCell,
+                    styles.cellTeam,
+                    isFcn && styles.standingsCellHighlight,
+                  ]}
                   numberOfLines={1}
                 >
                   {name || '-'}
                 </Text>
               </View>
-              <Text style={[styles.standingsCell, styles.cellStat, isFcn && styles.standingsCellHighlight]}>
+              <Text
+                style={[
+                  styles.standingsCell,
+                  styles.cellStat,
+                  isFcn && styles.standingsCellHighlight,
+                ]}
+              >
                 {row.played ?? '-'}
               </Text>
-              <Text style={[styles.standingsCell, styles.cellStat, isFcn && styles.standingsCellHighlight]}>
+              <Text
+                style={[
+                  styles.standingsCell,
+                  styles.cellStat,
+                  isFcn && styles.standingsCellHighlight,
+                ]}
+              >
                 {row.wins ?? '-'}
               </Text>
-              <Text style={[styles.standingsCell, styles.cellStat, isFcn && styles.standingsCellHighlight]}>
+              <Text
+                style={[
+                  styles.standingsCell,
+                  styles.cellStat,
+                  isFcn && styles.standingsCellHighlight,
+                ]}
+              >
                 {row.draws ?? '-'}
               </Text>
-              <Text style={[styles.standingsCell, styles.cellStat, isFcn && styles.standingsCellHighlight]}>
+              <Text
+                style={[
+                  styles.standingsCell,
+                  styles.cellStat,
+                  isFcn && styles.standingsCellHighlight,
+                ]}
+              >
                 {row.losses ?? '-'}
               </Text>
-              <Text style={[styles.standingsCell, styles.cellStat, isFcn && styles.standingsCellHighlight]}>
+              <Text
+                style={[
+                  styles.standingsCell,
+                  styles.cellStat,
+                  isFcn && styles.standingsCellHighlight,
+                ]}
+              >
                 {row.gf != null && row.ga != null ? `${row.gf}-${row.ga}` : '-'}
               </Text>
-              <Text style={[styles.standingsCell, styles.cellStat, isFcn && styles.standingsCellHighlight]}>
+              <Text
+                style={[
+                  styles.standingsCell,
+                  styles.cellStat,
+                  isFcn && styles.standingsCellHighlight,
+                ]}
+              >
                 {row.points ?? '-'}
               </Text>
             </View>
@@ -179,11 +225,7 @@ export default function LibraryScreen() {
     <View style={styles.container}>
       <AppHeader title="Bibliotek" subtitle="Ressourcer til FCN fans" />
 
-      <SegmentedControl
-        items={segments}
-        activeKey={activeSegment}
-        onChange={handleSegmentPress}
-      />
+      <SegmentedControl items={segments} activeKey={activeSegment} onChange={handleSegmentPress} />
 
       <ScrollView
         style={styles.content}

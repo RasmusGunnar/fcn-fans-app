@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
-import { View, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import React, { useState } from 'react';
+import { StyleSheet, View } from 'react-native';
+import { defaultTheme } from '../../theme';
 import { SongAccordionCard } from '../songs/SongAccordionCard';
 import { SongSuggestCard } from '../songs/SongSuggestCard';
-import { defaultTheme } from '../../theme';
 
 const theme = defaultTheme;
 

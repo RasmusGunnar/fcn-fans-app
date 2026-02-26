@@ -1,8 +1,8 @@
-import React, { useMemo } from 'react';
-import { View, Pressable, Text, StyleSheet, Linking, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Card } from '../ui/Card';
+import React from 'react';
+import { Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { defaultTheme } from '../../theme';
+import { Card } from '../ui/Card';
 
 const theme = defaultTheme;
 
@@ -79,7 +79,11 @@ function LinkCard({ link }: { link: Link }) {
         <View style={styles.cardContent}>
           <View style={styles.headerRow}>
             <View style={styles.iconBox}>
-              <Ionicons name={link.iconKey} size={theme.components.icon.size.md} color={theme.colors.brand.accent} />
+              <Ionicons
+                name={link.iconKey}
+                size={theme.components.icon.size.md}
+                color={theme.colors.brand.accent}
+              />
             </View>
             <View style={styles.titleBox}>
               <Text style={styles.linkTitle}>{link.title}</Text>
@@ -118,7 +122,11 @@ export function LinksView({ paddingBottom = 0 }: LinksViewProps) {
       {links.length === 0 ? (
         <Card style={styles.emptyCard}>
           <View style={styles.emptyContent}>
-            <Ionicons name="link-outline" size={theme.components.icon.size.lg} color={theme.colors.text.secondary} />
+            <Ionicons
+              name="link-outline"
+              size={theme.components.icon.size.lg}
+              color={theme.colors.text.secondary}
+            />
             <Text style={styles.emptyText}>Ingen links tilgængelige</Text>
           </View>
         </Card>

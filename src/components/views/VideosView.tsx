@@ -1,8 +1,17 @@
-import React from 'react';
-import { View, Pressable, Text, StyleSheet, Image, Linking, Alert, ImageSourcePropType } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Card } from '../ui/Card';
+import React from 'react';
+import {
+  Alert,
+  Image,
+  ImageSourcePropType,
+  Linking,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { defaultTheme } from '../../theme';
+import { Card } from '../ui/Card';
 
 const theme = defaultTheme;
 
@@ -152,7 +161,11 @@ export function VideosView({ paddingBottom = 0 }: VideosViewProps) {
       {videos.length === 0 ? (
         <Card style={styles.emptyCard}>
           <View style={styles.emptyContent}>
-            <Ionicons name="play-circle-outline" size={theme.spacing[12]} color={theme.colors.text.secondary} />
+            <Ionicons
+              name="play-circle-outline"
+              size={theme.spacing[12]}
+              color={theme.colors.text.secondary}
+            />
             <Text style={styles.emptyText}>Ingen videoer tilgængelige</Text>
           </View>
         </Card>

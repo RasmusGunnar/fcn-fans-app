@@ -1,9 +1,9 @@
-import React from 'react';
-import { View, Text, Pressable, StyleSheet, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import React from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { defaultTheme } from '../../theme';
 import { Card } from '../ui/Card';
 import { SpotifyButton } from '../ui/SpotifyButton';
-import { defaultTheme } from '../../theme';
 
 interface SongAccordionCardProps {
   title: string;

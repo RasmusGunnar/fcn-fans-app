@@ -1,8 +1,8 @@
-import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { PrimaryButton } from '../PrimaryButton';
+import React from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { defaultTheme } from '../../theme';
+import { PrimaryButton } from '../PrimaryButton';
 
 interface SongSuggestCardProps {
   onPressSuggest: () => void;
@@ -14,7 +14,11 @@ export function SongSuggestCard({ onPressSuggest }: SongSuggestCardProps) {
   return (
     <View style={styles.card}>
       <View style={styles.iconContainer}>
-        <Ionicons name="musical-notes" size={theme.components.icon.size.md} color={theme.colors.primary} />
+        <Ionicons
+          name="musical-notes"
+          size={theme.components.icon.size.md}
+          color={theme.colors.primary}
+        />
       </View>
       <Text style={styles.title}>Kender du en sang vi mangler?</Text>
       <Text style={styles.subtitle}>Del den med resten af fællesskabet</Text>
