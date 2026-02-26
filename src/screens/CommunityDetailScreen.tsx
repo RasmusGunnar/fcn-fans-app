@@ -5,6 +5,7 @@ import {
   ScrollView,
   StyleSheet,
   Pressable,
+  Modal,
   TextInput,
   ActivityIndicator,
   Image,
@@ -13,9 +14,7 @@ import {
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Card } from '../components/ui/Card';
-import { PrimaryButton } from '../components/PrimaryButton';
-import { FanPostCard } from '../components/cards/FanPostCard';
+import { IconButton } from '../components/ui';
 import { Post } from '../types/post';
 import { useTheme } from '../theme';
 import { useAuth } from '../auth/AuthProvider';
@@ -84,6 +83,7 @@ export default function CommunityDetailScreen() {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
+  const [showEditSheet, setShowEditSheet] = useState(false);
 
   const [postText, setPostText] = useState('');
   const [posts, setPosts] = useState<Post[]>([]);
@@ -287,12 +287,27 @@ export default function CommunityDetailScreen() {
   const canManage = effectiveRole === 'owner' || effectiveRole === 'admin';
   const isMember = !!effectiveRole;
 
-  const styles = makeStyles(theme);
+  // Layout constants from contract (P0 spec)
+  const LAYOUT = {
+    heroHeight: theme.spacing[16] + theme.spacing[8],
+    avatarSize: theme.spacing[12],
+    avatarOverlap: theme.spacing[6],
+    screenPaddingX: theme.spacing[4],
+    sectionGap: theme.spacing[6],
+  };
+
+  // Accent color based on type
+  const accentColor =
+    community?.type === 'fan_faction' ? theme.colors.primary : theme.colors.state.info;
+
+  const nextFixture = fixtures[0];
+
+  const styles = makeStyles(theme, accentColor, LAYOUT);
 
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.header}>
+        <View style={[styles.header, { backgroundColor: theme.colors.primary }]}>
           <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color={theme.colors.bg.card} />
           </Pressable>
@@ -310,7 +325,7 @@ export default function CommunityDetailScreen() {
   if (!community) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.header}>
+        <View style={[styles.header, { backgroundColor: theme.colors.primary }]}>
           <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color={theme.colors.bg.card} />
           </Pressable>
@@ -324,242 +339,190 @@ export default function CommunityDetailScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <Text style={{ fontSize: 12, opacity: 0.7, padding: theme.spacing[1] }}>
-        DEBUG: Community Detail v2
-      </Text>
-      {/* Custom Header */}
+      {/* 1. Accent Header */}
       <View style={styles.header}>
         <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={theme.colors.bg.card} />
         </Pressable>
         <View style={styles.headerContent}>
           <Text style={styles.headerTitle}>{community.name}</Text>
-          <Text style={styles.headerSubtitle}>
-            {memberCount > 0
-              ? `${memberCount} medlem${memberCount !== 1 ? 'mer' : ''}`
-              : 'Fællesskab'}
-          </Text>
         </View>
+        <Pressable onPress={() => Alert.alert('Del', 'Delefunktion kommer snart')} style={styles.shareButton}>
+          <Ionicons name="share-outline" size={24} color={theme.colors.bg.card} />
+        </Pressable>
       </View>
 
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={{ paddingBottom: insets.bottom + theme.spacing[6] }}
       >
-        {/* Community Info Card */}
-        <Card style={styles.infoCard}>
-          <View style={styles.infoHeader}>
-            <Pressable
-              style={styles.avatar}
-              onPress={canManage ? handleUploadAvatar : undefined}
-              disabled={uploadingAvatar}
-            >
-              {community.avatar_url ? (
-                <Image source={{ uri: community.avatar_url }} style={styles.avatarImage} />
-              ) : (
+        {/* 2. Hero Section - gradient placeholder (no cover_image field exists) */}
+        <View style={styles.heroSection} />
+
+        {/* 3. Avatar - centered, overlapping hero */}
+        <View style={styles.avatarContainer}>
+          <Pressable
+            style={styles.avatarWrapper}
+            onPress={canManage ? handleUploadAvatar : undefined}
+            disabled={uploadingAvatar}
+          >
+            {community.avatar_url ? (
+              <Image source={{ uri: community.avatar_url }} style={styles.avatarImage} />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
                 <Ionicons
                   name={community.type === 'fan_faction' ? 'star' : 'people-circle'}
-                  size={60}
-                  color={theme.colors.primary}
+                  size={LAYOUT.avatarSize * 0.6}
+                  color={accentColor}
                 />
-              )}
-              {canManage && (
-                <View style={styles.avatarBadge}>
-                  <Ionicons name="camera" size={16} color={theme.colors.bg.card} />
-                </View>
-              )}
-            </Pressable>
-            <View style={styles.infoContent}>
-              {!isEditing ? (
-                <>
-                  <View
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                    }}
-                  >
-                    <Text style={styles.infoTitle}>{community.name}</Text>
-                    {canManage && (
-                      <Pressable onPress={handleStartEdit} style={styles.editButton}>
-                        <Ionicons name="create-outline" size={20} color={theme.colors.primary} />
-                      </Pressable>
-                    )}
-                  </View>
-                  <Text style={styles.infoDescription}>
-                    {community.description || 'Ingen beskrivelse'}
-                  </Text>
-                </>
-              ) : (
-                <>
-                  <TextInput
-                    style={styles.editInput}
-                    value={editName}
-                    onChangeText={setEditName}
-                    placeholder="Navn"
-                    placeholderTextColor={theme.colors.text.secondary}
-                  />
-                  <TextInput
-                    style={[styles.editInput, styles.editInputMultiline]}
-                    value={editDescription}
-                    onChangeText={setEditDescription}
-                    placeholder="Beskrivelse"
-                    placeholderTextColor={theme.colors.text.secondary}
-                    multiline
-                    numberOfLines={3}
-                  />
-                  <View style={styles.editActions}>
-                    <Pressable onPress={handleCancelEdit} style={styles.cancelButton}>
-                      <Text style={styles.cancelButtonText}>Annuller</Text>
-                    </Pressable>
-                    <Pressable onPress={handleSaveEdit} style={styles.saveButton}>
-                      <Text style={styles.saveButtonText}>Gem</Text>
-                    </Pressable>
-                  </View>
-                </>
-              )}
-              <View style={styles.metaRow}>
-                <Ionicons name="people" size={14} color={theme.colors.text.secondary} />
-                <Text style={styles.metaText}>
-                  {memberCount > 0
-                    ? `${memberCount} medlem${memberCount !== 1 ? 'mer' : ''}`
-                    : 'Ingen medlemmer'}
-                </Text>
-                {effectiveRole && (
-                  <>
-                    <Text style={styles.metaSeparator}>•</Text>
-                    <Text style={styles.metaText}>
-                      Din rolle:{' '}
-                      {effectiveRole === 'owner'
-                        ? 'Ejer'
-                        : effectiveRole === 'admin'
-                          ? 'Admin'
-                          : 'Medlem'}
-                    </Text>
-                  </>
-                )}
-              </View>
-            </View>
-          </View>
-          <PrimaryButton
-            title={
-              joining
-                ? 'Tilmelder...'
-                : effectiveRole === 'owner'
-                  ? 'Ejer af fællesskabet'
-                  : isMember
-                    ? 'Medlem af fællesskabet ✓'
-                    : 'Bliv medlem'
-            }
-            onPress={handleJoinLeave}
-            disabled={joining || effectiveRole === 'owner'}
-          />
-        </Card>
-
-        {/* Admin Panel - Only visible for owner/admin */}
-        {canManage && (
-          <Card style={styles.adminCard}>
-            <Pressable style={styles.adminHeader} onPress={() => setShowMembers(!showMembers)}>
-              <View style={styles.adminHeaderLeft}>
-                <Ionicons name="shield-checkmark" size={20} color={theme.colors.primary} />
-                <Text style={styles.sectionTitle}>ADMIN PANEL</Text>
-              </View>
-              <Ionicons
-                name={showMembers ? 'chevron-up' : 'chevron-down'}
-                size={20}
-                color={theme.colors.text.secondary}
-              />
-            </Pressable>
-
-            {showMembers && (
-              <View style={styles.membersList}>
-                <Text style={styles.membersTitle}>Medlemmer ({members.length})</Text>
-                {members.map((member) => (
-                  <View key={member.id} style={styles.memberRow}>
-                    <View style={styles.memberInfo}>
-                      {member.avatar_url ? (
-                        <Image source={{ uri: member.avatar_url }} style={styles.memberAvatar} />
-                      ) : (
-                        <View style={styles.memberAvatarPlaceholder}>
-                          <Ionicons name="person" size={20} color={theme.colors.text.secondary} />
-                        </View>
-                      )}
-                      <View style={styles.memberDetails}>
-                        <Text style={styles.memberName}>{member.display_name || 'Unavngivet'}</Text>
-                        <Text style={styles.memberRole}>
-                          {member.role === 'owner'
-                            ? 'Ejer'
-                            : member.role === 'admin'
-                              ? 'Admin'
-                              : 'Medlem'}
-                        </Text>
-                      </View>
-                    </View>
-                    {effectiveRole === 'owner' && member.role !== 'owner' && (
-                      <Pressable
-                        style={[
-                          styles.roleToggle,
-                          member.role === 'admin' && styles.roleToggleActive,
-                        ]}
-                        onPress={() => handleToggleRole(member.user_id, member.role)}
-                      >
-                        <Ionicons
-                          name={member.role === 'admin' ? 'shield-checkmark' : 'shield-outline'}
-                          size={20}
-                          color={
-                            member.role === 'admin'
-                              ? theme.colors.primary
-                              : theme.colors.text.secondary
-                          }
-                        />
-                      </Pressable>
-                    )}
-                  </View>
-                ))}
               </View>
             )}
-          </Card>
-        )}
+            {canManage && (
+              <View style={styles.avatarBadge}>
+                <Ionicons name="camera" size={16} color={theme.colors.bg.card} />
+              </View>
+            )}
+          </Pressable>
+        </View>
 
-        {/* Upcoming Fixtures Section */}
-        {fixtures.length > 0 && (
-          <Card style={styles.eventsCard}>
-            <Text style={styles.sectionTitle}>KOMMENDE KAMPE</Text>
-            {fixtures.map((fixture) => (
-              <Pressable
-                key={fixture.id}
-                style={styles.eventRow}
-                onPress={() =>
-                  (navigation as any).navigate('MatchDetails', { fixtureId: fixture.id })
-                }
+        {/* 4. Title */}
+        <View style={styles.titleSection}>
+          <View style={styles.titleRow}>
+            <Text style={styles.title}>{community.name}</Text>
+            {canManage && (
+              <IconButton
+                icon="create-outline"
+                size="sm"
+                variant="ghost"
+                color={accentColor}
+                onPress={() => setShowEditSheet(true)}
+              />
+            )}
+          </View>
+        </View>
+
+        {/* 5. CTA: Primary Button */}
+        <View style={styles.ctaContainer}>
+          <Pressable
+            onPress={handleJoinLeave}
+            disabled={joining || !!effectiveRole}
+            style={({ pressed }) => [
+              styles.ctaButton,
+              effectiveRole && styles.ctaButtonDisabled,
+              pressed && !effectiveRole && styles.ctaButtonPressed,
+            ]}
+          >
+            <Text style={[styles.ctaButtonText, effectiveRole && styles.ctaButtonTextDisabled]}>
+              {joining
+                ? 'Tilmelder...'
+                : effectiveRole
+                  ? effectiveRole === 'member'
+                    ? 'Medlem'
+                    : 'Ejer'
+                  : 'Bliv medlem'}
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* 6. Members Row */}
+        <View style={styles.membersRow}>
+          <View style={styles.membersLeft}>
+            <Ionicons name="people" size={16} color={theme.colors.text.secondary} />
+            <Text style={styles.membersText}>
+              {memberCount} medlem{memberCount !== 1 ? 'mer' : ''}
+            </Text>
+          </View>
+          {members.length > 0 && (
+            <View style={styles.membersAvatars}>
+              {members.slice(0, 3).map((member, idx) => (
+                <View key={member.id} style={[styles.memberAvatarBubble, { marginLeft: idx > 0 ? -theme.spacing[2] : 0 }]}>
+                  {member.avatar_url ? (
+                    <Image source={{ uri: member.avatar_url }} style={styles.memberAvatarImage} />
+                  ) : (
+                    <View style={styles.memberAvatarPlaceholder}>
+                      <Ionicons name="person" size={12} color={theme.colors.text.secondary} />
+                    </View>
+                  )}
+                </View>
+              ))}
+            </View>
+          )}
+          {canManage && (
+            <Pressable onPress={() => setShowMembers(!showMembers)}>
+              <Text style={styles.seeAllText}>Se alle</Text>
+            </Pressable>
+          )}
+        </View>
+
+        {/* 7. Om Os Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>OM OS</Text>
+          {!isEditing ? (
+            <Text style={styles.aboutText} numberOfLines={4}>
+              {community.description || 'Ingen beskrivelse endnu.'}
+            </Text>
+          ) : (
+            <View>
+              <TextInput
+                style={styles.editInput}
+                value={editName}
+                onChangeText={setEditName}
+                placeholder="Navn"
+                placeholderTextColor={theme.colors.text.secondary}
+              />
+              <TextInput
+                style={[styles.editInput, styles.editInputMultiline]}
+                value={editDescription}
+                onChangeText={setEditDescription}
+                placeholder="Beskrivelse"
+                placeholderTextColor={theme.colors.text.secondary}
+                multiline
+                numberOfLines={4}
+              />
+              <View style={styles.editActions}>
+                <Pressable onPress={handleCancelEdit} style={styles.cancelButton}>
+                  <Text style={styles.cancelButtonText}>Annuller</Text>
+                </Pressable>
+                <Pressable onPress={handleSaveEdit} style={[styles.saveButton, { backgroundColor: accentColor }]}>
+                  <Text style={styles.saveButtonText}>Gem</Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
+        </View>
+
+        {/* 8. Kommende Events Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>KOMMENDE EVENTS</Text>
+          {nextFixture && (
+            <Pressable
+              style={styles.eventRow}
+              onPress={() =>
+                (navigation as any).navigate('MatchDetails', { fixtureId: nextFixture.id })
+              }
+            >
+              <View style={styles.eventIcon}>
+                <Ionicons name="football" size={20} color={accentColor} />
+              </View>
+              <View style={styles.eventContent}
               >
-                <View style={styles.eventIcon}>
-                  <Ionicons name="football" size={20} color={theme.colors.primary} />
-                </View>
-                <View style={styles.eventContent}>
-                  <Text style={styles.eventTitle}>
-                    {fixture.home_team} vs {fixture.away_team}
-                  </Text>
-                  <Text style={styles.eventMeta}>{formatDateDa(fixture.kickoff_at)}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={theme.colors.text.secondary} />
-              </Pressable>
-            ))}
-          </Card>
-        )}
-
-        {/* Community Events Section */}
-        {!USE_UNIFIED_COMMUNITY_FEED && events.length > 0 && (
-          <Card style={styles.eventsCard}>
-            <Text style={styles.sectionTitle}>KOMMENDE ARRANGEMENTER</Text>
-            {events.map((event) => (
+                <Text style={styles.eventTitle}>
+                  {nextFixture.home_team} vs {nextFixture.away_team}
+                </Text>
+                <Text style={styles.eventMeta}>{formatDateDa(nextFixture.kickoff_at)}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={theme.colors.text.secondary} />
+            </Pressable>
+          )}
+          {events.length > 0 &&
+            events.map((event) => (
               <Pressable
                 key={event.id}
                 style={styles.eventRow}
                 onPress={() => (navigation as any).navigate('EventDetails', { eventId: event.id })}
               >
                 <View style={styles.eventIcon}>
-                  <Ionicons name="calendar" size={20} color={theme.colors.primary} />
+                  <Ionicons name="calendar" size={20} color={accentColor} />
                 </View>
                 <View style={styles.eventContent}>
                   <Text style={styles.eventTitle}>{event.title}</Text>
@@ -571,101 +534,170 @@ export default function CommunityDetailScreen() {
                 <Ionicons name="chevron-forward" size={20} color={theme.colors.text.secondary} />
               </Pressable>
             ))}
-          </Card>
-        )}
-
-        <View style={styles.updatesSection}>
-          <Text style={styles.sectionTitle}>FEED</Text>
-          {communityFeedItems.map((item) => {
-            const key = getFeedItemKey(item);
-            const likeState = safeLikeMap[key] || { liked: false, likes: 0 };
-            const commentCount = safeCommentCountMap[key] || 0;
-            const commentPreviews = safeCommentPreviewMap[key] || [];
-
-            return (
-              <FeedItemRenderer
-                key={key}
-                item={item}
-                itemKey={key}
-                user={user}
-                isAppAdmin={isAppAdmin}
-                likeState={likeState}
-                commentCount={commentCount}
-                commentPreviews={commentPreviews}
-                safeProfileMap={safeProfileMap}
-                communityMap={safeCommunityMap}
-                toggleLike={toggleLike}
-                removePost={removePost}
-                removeNews={removeNews}
-                incrementCommentCount={incrementCommentCount}
-                addCommentPreview={addCommentPreview}
-              />
-            );
-          })}
+          {!nextFixture && events.length === 0 && (
+            <Text style={styles.emptyText}>Ingen kommende aktiviteter endnu</Text>
+          )}
         </View>
 
-        {/* Composer Card - Only for members */}
+        {/* 9. Feed Section */}
+        <View style={styles.section}>
+          <View style={styles.feedHeader}>
+            <Text style={styles.sectionTitle}>FÆLLESSKAB FEED</Text>
+            {isMember && (
+              <Pressable onPress={() => setShowMembers(!showMembers)}>
+                <Text style={styles.newPostLink}>Nyt opslag</Text>
+              </Pressable>
+            )}
+          </View>
+          {communityFeedItems.length > 0 ? (
+            communityFeedItems.map((item) => {
+              const key = getFeedItemKey(item);
+              const likeState = safeLikeMap[key] || { liked: false, likes: 0 };
+              const commentCount = safeCommentCountMap[key] || 0;
+              const commentPreviews = safeCommentPreviewMap[key] || [];
+
+              return (
+                <FeedItemRenderer
+                  key={key}
+                  item={item}
+                  itemKey={key}
+                  user={user}
+                  isAppAdmin={isAppAdmin}
+                  likeState={likeState}
+                  commentCount={commentCount}
+                  commentPreviews={commentPreviews}
+                  safeProfileMap={safeProfileMap}
+                  communityMap={safeCommunityMap}
+                  toggleLike={toggleLike}
+                  removePost={removePost}
+                  removeNews={removeNews}
+                  incrementCommentCount={incrementCommentCount}
+                  addCommentPreview={addCommentPreview}
+                />
+              );
+            })
+          ) : (
+            <Text style={styles.emptyText}>Ingen opslag endnu</Text>
+          )}
+        </View>
+
+        {/* Composer - Only for members */}
         {isMember && (
-          <Card style={styles.composerCard}>
-            <Text style={styles.composerTitle}>Del noget med {community.name}…</Text>
+          <View style={styles.composerSection}>
             <PostComposer
               onSuccess={() => {
                 console.log('[CommunityDetail] Post created successfully');
                 loadData();
               }}
             />
-          </Card>
-        )}
-
-        {/* Old text composer removed - PostComposer handles everything */}
-        {/* Latest Updates */}
-        {!USE_UNIFIED_COMMUNITY_FEED && posts.length > 0 && (
-          <View style={styles.updatesSection}>
-            <Text style={styles.sectionTitle}>SENESTE OPDATERINGER</Text>
-            {posts.map((post) => (
-              <FanPostCard
-                key={post.id}
-                post={post}
-                liked={postLikes[post.id] || false}
-                onToggleLike={() => toggleLegacyPostLike(post.id)}
-                onPressShare={() => console.log('Share post', post.id)}
-              />
-            ))}
           </View>
         )}
+
       </ScrollView>
+
+      {canManage && (
+        <Modal
+          visible={showEditSheet}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setShowEditSheet(false)}
+        >
+          <View style={styles.editSheetOverlay}>
+            <Pressable style={styles.editSheetBackdrop} onPress={() => setShowEditSheet(false)} />
+            <View style={styles.editSheet}>
+              <Text style={styles.editSheetTitle}>Redigér</Text>
+              <Pressable
+                style={styles.editSheetAction}
+                onPress={() => {
+                  setShowEditSheet(false);
+                  handleStartEdit();
+                }}
+              >
+                <Ionicons name="create-outline" size={20} color={accentColor} />
+                <Text style={styles.editSheetActionText}>Redigér tekst</Text>
+              </Pressable>
+              <Pressable
+                style={styles.editSheetAction}
+                onPress={() => {
+                  setShowEditSheet(false);
+                  handleUploadAvatar();
+                }}
+              >
+                <Ionicons name="image-outline" size={20} color={accentColor} />
+                <Text style={styles.editSheetActionText}>Skift avatar</Text>
+              </Pressable>
+              <Pressable
+                style={styles.editSheetAction}
+                onPress={() => {
+                  setShowEditSheet(false);
+                  Alert.alert('Kommer snart', 'Kommer snart');
+                }}
+              >
+                <Ionicons name="image" size={20} color={accentColor} />
+                <Text style={styles.editSheetActionText}>Skift hero-billede</Text>
+              </Pressable>
+              <Pressable
+                style={styles.editSheetAction}
+                onPress={() => {
+                  setShowEditSheet(false);
+                  Alert.alert('Kommer snart', 'Kommer snart');
+                }}
+              >
+                <Ionicons name="people" size={20} color={accentColor} />
+                <Text style={styles.editSheetActionText}>Administrér administratorer</Text>
+              </Pressable>
+              <Pressable
+                style={styles.editSheetCancel}
+                onPress={() => setShowEditSheet(false)}
+              >
+                <Text style={styles.editSheetCancelText}>Annuller</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 }
 
-const makeStyles = (theme: ReturnType<typeof useTheme>) =>
+const makeStyles = (
+  theme: ReturnType<typeof useTheme>,
+  accentColor: string,
+  layout: {
+    heroHeight: number;
+    avatarSize: number;
+    avatarOverlap: number;
+    screenPaddingX: number;
+    sectionGap: number;
+  },
+) =>
   StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: theme.colors.bg.default,
     },
     header: {
-      backgroundColor: theme.colors.info,
+      backgroundColor: accentColor,
       flexDirection: 'row',
       alignItems: 'center',
+      justifyContent: 'space-between',
       paddingHorizontal: theme.spacing[4],
-      paddingVertical: theme.spacing[2],
+      paddingVertical: theme.spacing[3],
     },
     backButton: {
-      marginRight: theme.spacing[2],
+      padding: theme.spacing[1],
     },
     headerContent: {
       flex: 1,
+      alignItems: 'center',
     },
     headerTitle: {
-      fontSize: 18,
+      fontSize: theme.typography.h3.fontSize,
       fontWeight: '600',
       color: theme.colors.bg.card,
     },
-    headerSubtitle: {
-      fontSize: 14,
-      color: theme.colors.bg.card,
-      opacity: 0.8,
+    shareButton: {
+      padding: theme.spacing[1],
     },
     loadingContainer: {
       flex: 1,
@@ -675,81 +707,216 @@ const makeStyles = (theme: ReturnType<typeof useTheme>) =>
     scrollView: {
       flex: 1,
     },
-    infoCard: {
-      margin: theme.spacing[4],
+    heroSection: {
+      height: layout.heroHeight,
+      backgroundColor: accentColor,
+      opacity: 0.2,
     },
-    infoHeader: {
-      flexDirection: 'row',
+    avatarContainer: {
       alignItems: 'center',
+      marginTop: -layout.avatarOverlap,
       marginBottom: theme.spacing[4],
     },
-    avatar: {
-      marginRight: theme.spacing[4],
-      width: 80,
-      height: 80,
+    avatarWrapper: {
+      width: layout.avatarSize,
+      height: layout.avatarSize,
       borderRadius: theme.radius.pill,
       overflow: 'hidden',
-      justifyContent: 'center',
-      alignItems: 'center',
       position: 'relative',
+      backgroundColor: theme.colors.bg.card,
+      borderWidth: theme.spacing[1],
+      borderColor: theme.colors.bg.card,
     },
     avatarImage: {
-      width: 80,
-      height: 80,
-      borderRadius: theme.radius.pill,
+      width: '100%',
+      height: '100%',
+    },
+    avatarPlaceholder: {
+      width: '100%',
+      height: '100%',
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: theme.colors.bg.elevated,
     },
     avatarBadge: {
       position: 'absolute',
       bottom: 0,
       right: 0,
-      backgroundColor: theme.colors.primary,
-      width: 24,
-      height: 24,
+      backgroundColor: accentColor,
+      width: theme.spacing[6],
+      height: theme.spacing[6],
       borderRadius: theme.radius.pill,
       justifyContent: 'center',
       alignItems: 'center',
+      borderWidth: theme.spacing[1],
+      borderColor: theme.colors.bg.card,
+    },
+    titleSection: {
+      paddingHorizontal: layout.screenPaddingX,
+      marginBottom: theme.spacing[4],
+    },
+    titleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: theme.spacing[2],
+    },
+    title: {
+      fontSize: theme.typography.h2.fontSize,
+      fontWeight: '700',
+      color: theme.colors.text.primary,
+      textAlign: 'center',
+    },
+    ctaContainer: {
+      paddingHorizontal: layout.screenPaddingX,
+      marginBottom: theme.spacing[5],
+    },
+    ctaButton: {
+      height: theme.components.button.size.lg.height,
+      paddingHorizontal: theme.components.button.size.lg.px,
+      borderRadius: theme.components.button.radius,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: accentColor,
+    },
+    ctaButtonPressed: {
+      opacity: 0.8,
+    },
+    ctaButtonDisabled: {
+      backgroundColor: theme.components.button.disabled.bg,
+    },
+    ctaButtonText: {
+      fontSize: theme.typography.bodyBold.fontSize,
+      fontWeight: theme.typography.bodyBold.fontWeight as any,
+      color: theme.components.button.variants.primary.text,
+    },
+    ctaButtonTextDisabled: {
+      color: theme.components.button.disabled.text,
+    },
+    membersRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: layout.screenPaddingX,
+      paddingVertical: theme.spacing[3],
+      borderTopWidth: 1,
+      borderBottomWidth: 1,
+      borderColor: theme.colors.border.default,
+      marginBottom: layout.sectionGap,
+    },
+    membersLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing[2],
+      flex: 1,
+    },
+    membersText: {
+      fontSize: theme.typography.caption.fontSize,
+      color: theme.colors.text.secondary,
+    },
+    membersAvatars: {
+      flexDirection: 'row',
+      marginRight: theme.spacing[3],
+    },
+    memberAvatarBubble: {
+      width: theme.spacing[7],
+      height: theme.spacing[7],
+      borderRadius: theme.radius.pill,
+      overflow: 'hidden',
       borderWidth: 2,
       borderColor: theme.colors.bg.card,
     },
-    infoContent: {
-      flex: 1,
+    memberAvatarImage: {
+      width: '100%',
+      height: '100%',
     },
-    infoTitle: {
-      fontSize: 20,
+    memberAvatarPlaceholder: {
+      width: '100%',
+      height: '100%',
+      backgroundColor: theme.colors.bg.elevated,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    seeAllText: {
+      fontSize: theme.typography.caption.fontSize,
+      color: accentColor,
       fontWeight: '600',
-      color: theme.colors.text.primary,
-      marginBottom: theme.spacing[2],
     },
-    infoDescription: {
-      fontSize: 14,
-      color: theme.colors.text.primary,
-      lineHeight: 20,
-      marginBottom: theme.spacing[2],
+    section: {
+      paddingHorizontal: layout.screenPaddingX,
+      marginBottom: layout.sectionGap,
     },
-    metaRow: {
+    sectionTitle: {
+      fontSize: theme.typography.small.fontSize,
+      fontWeight: '700',
+      color: theme.colors.text.secondary,
+      letterSpacing: 0.5,
+      marginBottom: theme.spacing[3],
+    },
+    aboutText: {
+      fontSize: theme.typography.body.fontSize,
+      lineHeight: theme.typography.body.lineHeight,
+      color: theme.colors.text.primary,
+    },
+    emptyText: {
+      fontSize: theme.typography.body.fontSize,
+      color: theme.colors.text.secondary,
+      fontStyle: 'italic',
+    },
+    eventRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      flexWrap: 'wrap',
+      paddingVertical: theme.spacing[3],
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border.default,
     },
-    metaText: {
-      fontSize: 12,
+    eventIcon: {
+      width: theme.spacing[10],
+      height: theme.spacing[10],
+      borderRadius: theme.radius.md,
+      backgroundColor: theme.colors.bg.elevated,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: theme.spacing[3],
+    },
+    eventContent: {
+      flex: 1,
+    },
+    eventTitle: {
+      fontSize: theme.typography.body.fontSize,
+      fontWeight: '600',
+      color: theme.colors.text.primary,
+      marginBottom: theme.spacing[1],
+    },
+    eventMeta: {
+      fontSize: theme.typography.caption.fontSize,
       color: theme.colors.text.secondary,
-      marginLeft: theme.spacing[1],
     },
-    metaSeparator: {
-      fontSize: 12,
+    eventLocation: {
+      fontSize: theme.typography.small.fontSize,
       color: theme.colors.text.secondary,
-      marginHorizontal: theme.spacing[1],
+      marginTop: theme.spacing[0],
     },
-    adminCard: {
-      marginHorizontal: theme.spacing[4],
-      marginBottom: theme.spacing[4],
+    feedHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: theme.spacing[3],
+    },
+    newPostLink: {
+      fontSize: theme.typography.caption.fontSize,
+      color: accentColor,
+      fontWeight: '600',
+    },
+    composerSection: {
+      paddingHorizontal: layout.screenPaddingX,
+      marginBottom: layout.sectionGap,
     },
     adminHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingVertical: theme.spacing[2],
+      marginBottom: theme.spacing[3],
     },
     adminHeaderLeft: {
       flexDirection: 'row',
@@ -757,174 +924,134 @@ const makeStyles = (theme: ReturnType<typeof useTheme>) =>
       gap: theme.spacing[2],
     },
     membersList: {
-      marginTop: theme.spacing[4],
+      marginTop: theme.spacing[2],
     },
-    membersTitle: {
-      fontSize: 14,
-      fontWeight: '600',
-      color: theme.colors.text.primary,
-      marginBottom: theme.spacing[2],
-    },
-    memberRow: {
+    adminMemberRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: theme.spacing[2],
+      paddingVertical: theme.spacing[3],
       borderBottomWidth: 1,
       borderBottomColor: theme.colors.border.default,
     },
-    memberInfo: {
+    adminMemberInfo: {
       flexDirection: 'row',
       alignItems: 'center',
       flex: 1,
     },
-    memberAvatar: {
-      width: 40,
-      height: 40,
+    adminMemberAvatar: {
+      width: theme.spacing[10],
+      height: theme.spacing[10],
       borderRadius: theme.radius.pill,
-      marginRight: theme.spacing[2],
+      marginRight: theme.spacing[3],
     },
-    memberAvatarPlaceholder: {
-      width: 40,
-      height: 40,
+    adminMemberAvatarPlaceholder: {
+      width: theme.spacing[10],
+      height: theme.spacing[10],
       borderRadius: theme.radius.pill,
-      backgroundColor: theme.colors.bg.default,
+      backgroundColor: theme.colors.bg.elevated,
       justifyContent: 'center',
       alignItems: 'center',
-      marginRight: theme.spacing[2],
+      marginRight: theme.spacing[3],
     },
-    memberDetails: {
+    adminMemberDetails: {
       flex: 1,
     },
-    memberName: {
-      fontSize: 14,
+    adminMemberName: {
+      fontSize: theme.typography.body.fontSize,
       fontWeight: '600',
       color: theme.colors.text.primary,
+      marginBottom: theme.spacing[0],
     },
-    memberRole: {
-      fontSize: 12,
+    adminMemberRole: {
+      fontSize: theme.typography.caption.fontSize,
       color: theme.colors.text.secondary,
     },
     roleToggle: {
       padding: theme.spacing[2],
+      borderRadius: theme.radius.sm,
     },
     roleToggleActive: {
       backgroundColor: theme.colors.bg.elevated,
-      borderRadius: theme.radius.sm,
-    },
-    eventsCard: {
-      marginHorizontal: theme.spacing[4],
-      marginBottom: theme.spacing[4],
-    },
-    sectionTitle: {
-      fontSize: 14,
-      fontWeight: '600',
-      color: theme.colors.text.primary,
-      marginBottom: theme.spacing[4],
-    },
-    eventRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingVertical: theme.spacing[2],
-      borderBottomWidth: 1,
-      borderBottomColor: theme.colors.border.default,
-    },
-    eventIcon: {
-      width: 40,
-      height: 40,
-      borderRadius: theme.radius.pill,
-      backgroundColor: theme.colors.bg.default,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginRight: theme.spacing[2],
-    },
-    eventContent: {
-      flex: 1,
-    },
-    eventTitle: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: theme.colors.text.primary,
-    },
-    eventMeta: {
-      fontSize: 12,
-      color: theme.colors.text.secondary,
-    },
-    eventLocation: {
-      fontSize: 11,
-      color: theme.colors.text.secondary,
-      marginTop: theme.spacing[0],
-    },
-    composerCard: {
-      marginHorizontal: theme.spacing[4],
-      marginBottom: theme.spacing[4],
-    },
-    composerTitle: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: theme.colors.text.primary,
-      marginBottom: theme.spacing[2],
-    },
-    composerInput: {
-      borderWidth: 1,
-      borderColor: theme.colors.border.default,
-      borderRadius: theme.radius.sm,
-      padding: theme.spacing[2],
-      fontSize: 14,
-      color: theme.colors.text.primary,
-      minHeight: 80,
-      textAlignVertical: 'top',
-    },
-    composerActions: {
-      alignItems: 'flex-end',
-      marginTop: theme.spacing[2],
-    },
-    updatesSection: {
-      paddingHorizontal: theme.spacing[4],
-    },
-    editButton: {
-      padding: theme.spacing[1],
-      marginLeft: theme.spacing[1],
     },
     editInput: {
       borderWidth: 1,
       borderColor: theme.colors.border.default,
-      borderRadius: theme.spacing[2],
-      padding: theme.spacing[2],
-      fontSize: 14,
+      borderRadius: theme.radius.md,
+      padding: theme.spacing[3],
+      fontSize: theme.typography.body.fontSize,
       color: theme.colors.text.primary,
       marginBottom: theme.spacing[2],
     },
     editInputMultiline: {
-      minHeight: 80,
+      minHeight: theme.spacing[16] + theme.spacing[6],
       textAlignVertical: 'top',
     },
     editActions: {
       flexDirection: 'row',
       justifyContent: 'flex-end',
+      gap: theme.spacing[3],
+      marginTop: theme.spacing[2],
+    },
+    editSheetOverlay: {
+      flex: 1,
+      justifyContent: 'flex-end',
+      backgroundColor: theme.colors.overlay.medium,
+    },
+    editSheetBackdrop: {
+      flex: 1,
+    },
+    editSheet: {
+      backgroundColor: theme.colors.bg.card,
+      padding: theme.spacing[4],
+      borderTopLeftRadius: theme.radius.md,
+      borderTopRightRadius: theme.radius.md,
+    },
+    editSheetTitle: {
+      fontSize: theme.typography.h3.fontSize,
+      fontWeight: theme.typography.h3.fontWeight as any,
+      color: theme.colors.text.primary,
+      marginBottom: theme.spacing[4],
+    },
+    editSheetAction: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: theme.spacing[2],
       gap: theme.spacing[2],
-      marginTop: theme.spacing[1],
+    },
+    editSheetActionText: {
+      fontSize: theme.typography.body.fontSize,
+      color: theme.colors.text.primary,
+    },
+    editSheetCancel: {
+      marginTop: theme.spacing[4],
+      alignSelf: 'center',
+      paddingVertical: theme.spacing[2],
+      paddingHorizontal: theme.spacing[6],
+    },
+    editSheetCancelText: {
+      color: theme.colors.text.secondary,
+      fontSize: theme.typography.body.fontSize,
     },
     cancelButton: {
       paddingVertical: theme.spacing[2],
       paddingHorizontal: theme.spacing[4],
-      borderRadius: theme.spacing[2],
+      borderRadius: theme.radius.md,
       borderWidth: 1,
       borderColor: theme.colors.border.default,
     },
     cancelButtonText: {
-      fontSize: 14,
+      fontSize: theme.typography.body.fontSize,
       color: theme.colors.text.secondary,
       fontWeight: '600',
     },
     saveButton: {
       paddingVertical: theme.spacing[2],
       paddingHorizontal: theme.spacing[4],
-      borderRadius: theme.spacing[2],
-      backgroundColor: theme.colors.primary,
+      borderRadius: theme.radius.md,
     },
     saveButtonText: {
-      fontSize: 14,
+      fontSize: theme.typography.body.fontSize,
       color: theme.colors.bg.card,
       fontWeight: '600',
     },

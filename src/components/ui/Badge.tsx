@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, ViewStyle, TextStyle } from 'react-native';
-import { useTheme, Theme } from '../../theme';
+import { StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
+import { Theme, useTheme } from '../../theme';
 
 export type BadgeVariant =
   | 'brand'

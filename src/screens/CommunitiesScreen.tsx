@@ -3,17 +3,17 @@
 // DO NOT hardcode radius/spacing/colors/shadows; use theme tokens.
 // =====================================================
 
-import React, { useMemo, useState, useEffect } from 'react';
-import { View, ScrollView, StyleSheet, Pressable, ActivityIndicator, Image } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useNavigation } from '@react-navigation/native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import MapView, { Marker, Region } from 'react-native-maps';
 import { AppHeader } from '../components/AppHeader';
 import { Badge, Card, IconButton, SegmentedControl, Text } from '../components/ui';
-import { useTheme } from '../theme';
+import { Community as CommunityData, getCommunities } from '../services/communities';
 import { getMyCommunityRoles } from '../services/rbac';
-import { getCommunities, Community as CommunityData } from '../services/communities';
+import { useTheme } from '../theme';
 
 export default function CommunitiesScreen() {
   const navigation = useNavigation();
@@ -252,7 +252,10 @@ export default function CommunitiesScreen() {
                     <View style={styles.cardHeader}>
                       <View style={styles.avatar}>
                         {community.avatar_url ? (
-                          <Image source={{ uri: community.avatar_url }} style={styles.avatarImage} />
+                          <Image
+                            source={{ uri: community.avatar_url }}
+                            style={styles.avatarImage}
+                          />
                         ) : (
                           <Ionicons
                             name={isFaction ? 'star' : 'people'}
@@ -269,7 +272,12 @@ export default function CommunitiesScreen() {
                             <Badge label={badgeLabel} variant={badgeVariant} size="sm" />
                           </View>
                         </View>
-                        <Text variant="small" color="secondary" numberOfLines={2} ellipsizeMode="tail">
+                        <Text
+                          variant="small"
+                          color="secondary"
+                          numberOfLines={2}
+                          ellipsizeMode="tail"
+                        >
                           {community.description || 'Ingen beskrivelse'}
                         </Text>
                         {community.member_count !== undefined && (
@@ -281,7 +289,8 @@ export default function CommunitiesScreen() {
                               style={styles.memberIcon}
                             />
                             <Text variant="caption" color="muted">
-                              {community.member_count} medlem{community.member_count !== 1 ? 'mer' : ''}
+                              {community.member_count} medlem
+                              {community.member_count !== 1 ? 'mer' : ''}
                             </Text>
                           </View>
                         )}
