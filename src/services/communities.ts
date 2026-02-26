@@ -16,6 +16,7 @@ export interface Community {
   avatar_path: string | null;
   avatar_url: string | null;
   avatar_kind: 'logo' | 'image' | null;
+  cover_path: string | null;
   visibility: 'public' | 'private';
   created_at: string;
   created_by: string | null;
@@ -71,6 +72,9 @@ function base64ToUint8Array(b64: string): Uint8Array {
 async function cryptoRandom(): Promise<string> {
   return Crypto.randomUUID();
 }
+
+export const COMMUNITY_MEDIA_BUCKET = 'community-media';
+const COMMUNITY_COVER_MAX_WIDTH = 1600;
 
 // ===== API FUNCTIONS =====
 
@@ -559,6 +563,88 @@ export async function uploadCommunityAvatar(
     console.error('[communities] Unexpected error:', err);
     Alert.alert('Fejl', 'Noget gik galt. Prøv igen.');
     return false;
+  }
+}
+
+/**
+ * Upload community cover (hero) image.
+ * Stores path in communities.cover_path.
+ */
+export async function uploadCommunityCover(
+  communityId: string,
+  fileUri: string,
+): Promise<string | null> {
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      console.warn('[communities] User not authenticated');
+      return null;
+    }
+
+    const fileInfo = await FileSystem.getInfoAsync(fileUri);
+    if (!fileInfo.exists || fileInfo.size === 0) {
+      Alert.alert('Fejl', 'Filen kunne ikke findes eller er tom');
+      return null;
+    }
+
+    const manipResult = await ImageManipulator.manipulateAsync(
+      fileUri,
+      [{ resize: { width: COMMUNITY_COVER_MAX_WIDTH } }],
+      { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG, base64: true },
+    );
+
+    const base64 = manipResult.base64;
+    if (!base64) {
+      Alert.alert('Fejl', 'Kunne ikke konvertere billedet');
+      return null;
+    }
+
+    const bytes = base64ToUint8Array(base64);
+    if (bytes.length === 0) {
+      Alert.alert('Fejl', 'Konverteret billede er tomt (0 bytes)');
+      return null;
+    }
+
+    const fileName = `${Date.now()}-${await cryptoRandom()}.jpg`;
+    const path = `communities/${communityId}/cover/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(COMMUNITY_MEDIA_BUCKET)
+      .upload(path, bytes, {
+        contentType: 'image/jpeg',
+        upsert: false,
+        cacheControl: '3600',
+      });
+
+    if (uploadError) {
+      console.error('[communities] Cover upload error:', uploadError);
+      Alert.alert(
+        'Upload fejlede',
+        "Upload fejlede. Tjek at bucket 'community-media' findes og at storage policies tillader authenticated uploads.",
+      );
+      return null;
+    }
+
+    const { error: updateError } = await supabase
+      .from('communities')
+      .update({ cover_path: path })
+      .eq('id', communityId);
+
+    if (updateError) {
+      console.error('[communities] Cover update error:', updateError);
+      Alert.alert('Fejl', 'Kunne ikke opdatere community. Prøv igen.');
+      return null;
+    }
+
+    console.log('[communities] Successfully uploaded cover:', { communityId, path });
+    return path;
+  } catch (err) {
+    console.error('[communities] Unexpected cover upload error:', err);
+    Alert.alert('Fejl', 'Noget gik galt. Prøv igen.');
+    return null;
   }
 }
 
