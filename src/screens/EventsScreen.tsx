@@ -15,10 +15,10 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import MapView, { Marker, Region } from 'react-native-maps';
 import { useAuth } from '../auth/AuthProvider';
 import { AppHeader } from '../components/AppHeader';
-import { IconButton } from '../components/ui/IconButton';
-import { SegmentedControl } from '../components/ui/SegmentedControl';
 import { FeedItemRenderer } from '../components/feed/FeedItemRenderer';
 import { MapMarkerIcon } from '../components/MapMarkerIcon';
+import { IconButton } from '../components/ui/IconButton';
+import { SegmentedControl } from '../components/ui/SegmentedControl';
 import { getPublicUrl } from '../lib/storageUrl';
 import { supabase } from '../lib/supabase';
 import { fetchFeedUpcoming, type FeedItem } from '../services/eventsApi';
@@ -130,7 +130,10 @@ export default function EventsScreen() {
 
   // ── Map items (only entries with lat/lng) ──────────────────────────────────
 
-  function resolveImageUrl(raw: string | null | undefined, kind: 'profile' | 'community'): string | null {
+  function resolveImageUrl(
+    raw: string | null | undefined,
+    kind: 'profile' | 'community',
+  ): string | null {
     if (!raw || !raw.trim()) return null;
     if (raw.startsWith('http')) return raw;
     // Storage path → full public URL
@@ -440,7 +443,9 @@ export default function EventsScreen() {
               <Text style={styles.emptySubtext}>Tjek tilbage senere</Text>
             </View>
           ) : (
-            filteredFeed.map((item) => <View key={`${item.kind}-${item.id}`}>{renderFeedItem(item)}</View>)
+            filteredFeed.map((item) => (
+              <View key={`${item.kind}-${item.id}`}>{renderFeedItem(item)}</View>
+            ))
           )}
         </ScrollView>
       ) : (
@@ -473,7 +478,10 @@ export default function EventsScreen() {
                     onPress={() => handleMarkerPress(item)}
                     tracksViewChanges={false}
                   >
-                    <MapMarkerIcon logoUrl={item.logoUrl} type={item.kind === 'bus_trip' ? 'event' : item.kind} />
+                    <MapMarkerIcon
+                      logoUrl={item.logoUrl}
+                      type={item.kind === 'bus_trip' ? 'event' : item.kind}
+                    />
                   </Marker>
                 ))}
               </MapView>
@@ -509,7 +517,11 @@ export default function EventsScreen() {
                       onPress={handleBottomSheetCTA}
                     >
                       <Text style={styles.bottomSheetButtonText}>
-                        {selectedItem.kind === 'match' ? 'Se kampdetaljer' : selectedItem.kind === 'bus_trip' ? 'Se bustur' : 'Se event'}
+                        {selectedItem.kind === 'match'
+                          ? 'Se kampdetaljer'
+                          : selectedItem.kind === 'bus_trip'
+                            ? 'Se bustur'
+                            : 'Se event'}
                       </Text>
                     </TouchableOpacity>
                   </BottomSheetView>
