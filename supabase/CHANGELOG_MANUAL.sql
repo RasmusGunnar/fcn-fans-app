@@ -205,6 +205,29 @@ create policy "system_admin_delete_community_members" on public.community_member
   );
 
 -- =====================================================
+-- 2026-02-26: Communities - Hero Cover Image
+-- =====================================================
+-- Purpose: Add cover image path for community hero banner
+-- Status: ⚠️ MANUAL ACTION REQUIRED
+-- Run in: Supabase Dashboard → SQL Editor
+-- =====================================================
+
+alter table if exists public.communities
+  add column if not exists cover_path text;
+
+-- =====================================================
+-- 2026-02-26: Communities - Location Fields
+-- =====================================================
+-- Purpose: Add coarse location label + geohash for community
+-- Status: ⚠️ MANUAL ACTION REQUIRED
+-- Run in: Supabase Dashboard → SQL Editor
+-- =====================================================
+
+alter table if exists public.communities
+  add column if not exists location_label text,
+  add column if not exists location_geohash text;
+
+-- =====================================================
 -- FUTURE CHANGES
 -- =====================================================
 -- Add new manual changes below with:

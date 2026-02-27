@@ -17,6 +17,8 @@ export interface Community {
   avatar_url: string | null;
   avatar_kind: 'logo' | 'image' | null;
   cover_path: string | null;
+  location_label: string | null;
+  location_geohash: string | null;
   visibility: 'public' | 'private';
   created_at: string;
   created_by: string | null;
@@ -379,7 +381,7 @@ export async function listMembers(communityId: string): Promise<CommunityMember[
 
     if (memberError) {
       console.warn('[communities] Error fetching members:', memberError);
-      return [];
+      throw memberError;
     }
 
     if (!memberships || memberships.length === 0) {
@@ -412,7 +414,7 @@ export async function listMembers(communityId: string): Promise<CommunityMember[
     });
   } catch (err) {
     console.error('[communities] Unexpected error:', err);
-    return [];
+    throw err;
   }
 }
 
@@ -649,11 +651,11 @@ export async function uploadCommunityCover(
 }
 
 /**
- * Update community name and/or description
+ * Update community name, description, and/or location
  */
 export async function updateCommunity(
   communityId: string,
-  updates: { name?: string; description?: string | null },
+  updates: { name?: string; description?: string | null; location_label?: string | null },
 ): Promise<boolean> {
   try {
     const { error } = await supabase
@@ -662,6 +664,9 @@ export async function updateCommunity(
         ...(updates.name !== undefined && { name: updates.name.trim() }),
         ...(updates.description !== undefined && {
           description: updates.description?.trim() || null,
+        }),
+        ...(updates.location_label !== undefined && {
+          location_label: updates.location_label?.trim() || null,
         }),
       })
       .eq('id', communityId);
@@ -677,4 +682,16 @@ export async function updateCommunity(
     console.error('[communities] Unexpected error:', err);
     return false;
   }
+}
+
+/**
+ * Update member role (owner-only)
+ * Alias for setMemberRole with the same signature
+ */
+export async function updateMemberRole(
+  communityId: string,
+  userId: string,
+  role: 'admin' | 'member',
+): Promise<boolean> {
+  return setMemberRole(communityId, userId, role);
 }
