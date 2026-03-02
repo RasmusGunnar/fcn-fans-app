@@ -2,9 +2,9 @@
 // All spacing, colors, and radius values must use theme.spacing[N], theme.colors.*, theme.radius.*
 // NO hardcoded numbers or color strings allowed.
 
+import { useNavigation } from '@react-navigation/native';
 import React from 'react';
 import { Alert, Image, Linking, Pressable, StyleSheet, View } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../auth/AuthProvider';
 import { supabase } from '../../lib/supabase';
 import type { CommentPreview } from '../../services/likesApi';

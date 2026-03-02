@@ -1,13 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import React, { useEffect, useState } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFeed } from '../state/FeedContext';
+import { useAuth } from '../auth/AuthProvider';
+import { ActorSelector } from '../components/ActorSelector';
 import { NewsComposer } from '../components/NewsComposer';
 import { PostComposer } from '../components/PostComposer';
-import { ActorSelector } from '../components/ActorSelector';
+import { useFeed } from '../state/FeedContext';
 import { useTheme } from '../theme';
-import { useAuth } from '../auth/AuthProvider';
 import { Actor } from '../types/news';
 import { resolveProfileDisplayName } from '../utils/actor';
 

@@ -2,11 +2,11 @@
 // All spacing, colors, and radius values must use theme.spacing[N], theme.colors.*, theme.radius.*
 // NO hardcoded numbers or color strings allowed.
 
-import React from 'react';
-import { View, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Text } from '../ui';
+import React from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { defaultTheme } from '../../theme';
+import { Text } from '../ui';
 
 interface CardActionsProps {
   liked: boolean;
@@ -50,7 +50,11 @@ export function CardActions({
     <View style={styles.container} pointerEvents="box-none">
       <View style={styles.leftActions} pointerEvents="box-none">
         <Pressable
-          style={({ pressed }) => [styles.action, { gap: iconCountGap }, pressed && styles.actionPressed]}
+          style={({ pressed }) => [
+            styles.action,
+            { gap: iconCountGap },
+            pressed && styles.actionPressed,
+          ]}
           onPress={handleToggleLike}
           pointerEvents="auto"
         >
@@ -60,16 +64,16 @@ export function CardActions({
             color={liked ? theme.colors.primary : theme.colors.text.muted}
             style={liked ? styles.likeIconActive : undefined}
           />
-          <Text
-            variant="caption"
-            color={liked ? 'primary' : 'muted'}
-            style={styles.countText}
-          >
+          <Text variant="caption" color={liked ? 'primary' : 'muted'} style={styles.countText}>
             {likes}
           </Text>
         </Pressable>
         <Pressable
-          style={({ pressed }) => [styles.action, { gap: iconCountGap }, pressed && styles.actionPressed]}
+          style={({ pressed }) => [
+            styles.action,
+            { gap: iconCountGap },
+            pressed && styles.actionPressed,
+          ]}
           onPress={handlePressComment}
           pointerEvents="auto"
         >
@@ -80,7 +84,11 @@ export function CardActions({
         </Pressable>
       </View>
       <Pressable
-        style={({ pressed }) => [styles.action, styles.shareAction, pressed && styles.actionPressed]}
+        style={({ pressed }) => [
+          styles.action,
+          styles.shareAction,
+          pressed && styles.actionPressed,
+        ]}
         onPress={onPressShare}
         pointerEvents="auto"
       >

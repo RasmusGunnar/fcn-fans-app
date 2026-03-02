@@ -63,6 +63,7 @@ export default function EventsScreen() {
     likeMap,
     commentCountMap,
     commentPreviewMap,
+    attendanceMap,
     toggleLike,
     incrementCommentCount,
     addCommentPreview,
@@ -316,6 +317,7 @@ export default function EventsScreen() {
         commentPreviews={commentPreviews}
         safeProfileMap={profileMap || {}}
         communityMap={communityMap || {}}
+        attendanceMap={attendanceMap}
         toggleLike={toggleLike}
         removePost={() => {}}
         removeNews={() => {}}

@@ -14,18 +14,13 @@ import { useAuth } from '../auth/AuthProvider';
 import { AppHeader } from '../components/AppHeader';
 import { FanFactionCard } from '../components/cards/FanFactionCard';
 import { FeedItemRenderer } from '../components/feed/FeedItemRenderer';
-import { Card } from '../components/ui/Card';
 import NextMatchBadge from '../components/home/NextMatchBadge';
-import {
-  fetchNextFixture,
-  formatShortDateDa,
-  formatTime,
-  type Fixture,
-} from '../services/fixtures';
+import { Card } from '../components/ui/Card';
+import { fetchNextFixture, formatShortDateDa, type Fixture } from '../services/fixtures';
+import { getMatchHeroUrl, getTeamHeroImage } from '../services/sportsdb';
 import { useFeed } from '../state/FeedContext';
 import { colors, spacing } from '../theme';
 import { getFeedItemKey } from '../types/feed';
-import { getMatchHeroUrl, getTeamHeroImage } from '../services/sportsdb';
 
 export default function HomeScreen() {
   const navigation = useNavigation();
@@ -39,6 +34,7 @@ export default function HomeScreen() {
     likeMap,
     commentCountMap,
     commentPreviewMap,
+    attendanceMap,
     fetchPosts,
     removePost,
     removeNews,
@@ -166,6 +162,7 @@ export default function HomeScreen() {
         commentPreviews={commentPreviews}
         safeProfileMap={safeProfileMap}
         communityMap={communityMap || {}}
+        attendanceMap={attendanceMap}
         toggleLike={toggleLike}
         removePost={removePost}
         removeNews={removeNews}
@@ -186,15 +183,22 @@ export default function HomeScreen() {
   };
 
   // Map nextFixture to matchForBadge for NextMatchBadge
-  const matchForBadge = nextFixture && nextFixtureHeroUrl
-    ? {
-        coverUrl: nextFixtureHeroUrl,
-        title: `${nextFixture.home_team} vs ${nextFixture.away_team}`,
-        subtitle: nextFixture.kickoff_at
-          ? formatShortDateDa(nextFixture.kickoff_at)
-          : '',
-      }
-    : null;
+  const matchForBadge =
+    nextFixture && nextFixtureHeroUrl
+      ? {
+          id: nextFixture.id,
+          coverUrl: nextFixtureHeroUrl,
+          homeTeam: nextFixture.home_team,
+          awayTeam: nextFixture.away_team,
+          homeLogo: nextFixture.home_logo_url ?? null,
+          awayLogo: nextFixture.away_logo_url ?? null,
+          kickoff: nextFixture.kickoff_at ?? '',
+          venue: nextFixture.venue ?? null,
+          venueCity: nextFixture.venue_city ?? null,
+          title: `${nextFixture.home_team} vs ${nextFixture.away_team}`,
+          subtitle: nextFixture.kickoff_at ? formatShortDateDa(nextFixture.kickoff_at) : '',
+        }
+      : null;
 
   return (
     <FlatList
@@ -226,10 +230,13 @@ export default function HomeScreen() {
           {matchForBadge && (
             <NextMatchBadge
               match={matchForBadge}
+              onPress={() =>
+                (navigation as any).navigate('MatchDetails', { fixtureId: matchForBadge.id })
+              }
             />
           )}
           {loadingFixture && (
-            <View style={[styles.content, { paddingTop: spacing.lg }]}> 
+            <View style={[styles.content, { paddingTop: spacing.lg }]}>
               <Card style={styles.card}>
                 <View style={styles.loadingContainer}>
                   <Text style={styles.loadingText}>Henter kampdata...</Text>
@@ -238,7 +245,7 @@ export default function HomeScreen() {
             </View>
           )}
           {!loadingFixture && !nextFixture && (
-            <View style={[styles.content, { paddingTop: spacing.lg }]}> 
+            <View style={[styles.content, { paddingTop: spacing.lg }]}>
               <Card style={styles.card}>
                 <View style={styles.emptyContainer}>
                   <Text style={styles.emptyText}>Ingen kommende kampe endnu</Text>

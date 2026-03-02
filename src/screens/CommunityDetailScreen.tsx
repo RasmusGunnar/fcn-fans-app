@@ -1,47 +1,47 @@
-import React, { useState, useEffect } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { RouteProp, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
+import React, { useState } from 'react';
 import {
-  View,
-  Text,
+  ActivityIndicator,
+  Alert,
+  Image,
+  Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
-  Pressable,
-  Modal,
+  Text,
   TextInput,
-  ActivityIndicator,
-  Image,
-  Alert,
+  View,
 } from 'react-native';
-import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { IconButton } from '../components/ui';
-import { Post } from '../types/post';
-import { useTheme } from '../theme';
 import { useAuth } from '../auth/AuthProvider';
-import { useFeed } from '../state/FeedContext';
 import { FeedItemRenderer } from '../components/feed/FeedItemRenderer';
-import { getFeedItemKey } from '../types/feed';
+import { PostComposer } from '../components/PostComposer';
+import { IconButton } from '../components/ui';
+import { pickAndUploadCommunityImage } from '../lib/communityMediaUpload';
+import { getPublicUrl } from '../lib/storageUrl';
+import { supabase } from '../lib/supabase';
 import {
+  COMMUNITY_MEDIA_BUCKET,
+  Community as CommunityData,
+  CommunityMember,
   getCommunity,
+  getMemberCount,
   getMembership,
   joinCommunity,
   leaveCommunity,
   listMembers,
   setMemberRole,
+  updateCommunity,
   uploadCommunityAvatar,
   uploadCommunityCover,
-  updateCommunity,
-  getMemberCount,
-  CommunityMember,
-  Community as CommunityData,
-  COMMUNITY_MEDIA_BUCKET,
 } from '../services/communities';
-import { supabase } from '../lib/supabase';
-import { fetchUpcomingFixtures, Fixture, formatDateDa, formatShortDateDa } from '../services/fixtures';
-import { fetchEventsUpcoming, Event as CommunityEvent } from '../services/eventsApi';
-import { PostComposer } from '../components/PostComposer';
-import { pickAndUploadCommunityImage } from '../lib/communityMediaUpload';
-import { getPublicUrl } from '../lib/storageUrl';
+import { Event as CommunityEvent, fetchEventsUpcoming } from '../services/eventsApi';
+import { fetchUpcomingFixtures, Fixture, formatDateDa } from '../services/fixtures';
+import { useFeed } from '../state/FeedContext';
+import { useTheme } from '../theme';
+import { getFeedItemKey } from '../types/feed';
+import { Post } from '../types/post';
 import { resolveAvatarUrl } from '../utils/avatar';
 
 type CommunityDetailRouteProp = RouteProp<
@@ -66,6 +66,7 @@ export default function CommunityDetailScreen() {
     likeMap,
     commentCountMap,
     commentPreviewMap,
+    attendanceMap,
     toggleLike,
     removePost,
     removeNews,
@@ -312,16 +313,19 @@ export default function CommunityDetailScreen() {
     try {
       // Fetch all members
       const allMembers = await listMembers(id);
-      
+
       // Log for now - later we'll implement real DM/push
       console.log('[Broadcast] Sending message to', allMembers.length, 'members');
       console.log('[Broadcast] Message:', broadcastMessage);
-      
+
       // TODO: Implement actual DM creation + push notification
       // For each member: createDirectMessage(member.id, broadcastMessage)
       // For each member: sendPushNotification(member.id, ...)
-      
-      Alert.alert('Succes', `Besked sendt til ${allMembers.length} medlem${allMembers.length !== 1 ? 'mer' : ''}`);
+
+      Alert.alert(
+        'Succes',
+        `Besked sendt til ${allMembers.length} medlem${allMembers.length !== 1 ? 'mer' : ''}`,
+      );
       setBroadcastMessage('');
       setShowMessageModal(false);
     } catch (error) {
@@ -478,16 +482,13 @@ export default function CommunityDetailScreen() {
     const meta = [formatDateDa(params.dateIso), params.location].filter(Boolean).join(' • ');
 
     // Map type to icon
-    const iconName = params.type === 'match' ? 'football' : params.type === 'bus_trip' ? 'bus' : 'calendar';
+    const iconName =
+      params.type === 'match' ? 'football' : params.type === 'bus_trip' ? 'bus' : 'calendar';
 
     return (
       <Pressable style={styles.eventCard} onPress={params.onPress}>
         <View style={styles.eventIconBadge}>
-          <Ionicons
-            name={iconName}
-            size={theme.spacing[5]}
-            color={theme.colors.text.accent}
-          />
+          <Ionicons name={iconName} size={theme.spacing[5]} color={theme.colors.text.accent} />
         </View>
         <View style={styles.eventCardContent}>
           <Text style={styles.eventCardTitle} numberOfLines={2}>
@@ -697,11 +698,7 @@ export default function CommunityDetailScreen() {
           <Text style={styles.aboutText} numberOfLines={4}>
             {community.description || 'Ingen beskrivelse endnu.'}
           </Text>
-          {locationLabel && (
-            <Text style={styles.locationText}>
-              Område: {locationLabel}
-            </Text>
-          )}
+          {locationLabel && <Text style={styles.locationText}>Område: {locationLabel}</Text>}
         </View>
 
         {/* 8. Kommende Events Section */}
@@ -760,6 +757,7 @@ export default function CommunityDetailScreen() {
                   commentPreviews={commentPreviews}
                   safeProfileMap={safeProfileMap}
                   communityMap={safeCommunityMap}
+                  attendanceMap={attendanceMap}
                   toggleLike={toggleLike}
                   removePost={removePost}
                   removeNews={removeNews}
@@ -784,7 +782,6 @@ export default function CommunityDetailScreen() {
             />
           </View>
         )}
-
       </ScrollView>
 
       <Modal
@@ -838,56 +835,47 @@ export default function CommunityDetailScreen() {
                 <View style={styles.editSheetDivider} />
 
                 {/* Edit options */}
-                <Pressable
-                  style={styles.editSheetAction}
-                  onPress={handleEditHero}
-                >
+                <Pressable style={styles.editSheetAction} onPress={handleEditHero}>
                   <Ionicons name="image-outline" size={20} color={theme.colors.text.primary} />
                   <Text style={styles.editSheetActionText}>Skift hero-billede</Text>
                 </Pressable>
-                <Pressable
-                  style={styles.editSheetAction}
-                  onPress={handleRemoveHero}
-                >
-                  <Ionicons name="close-circle-outline" size={20} color={theme.colors.text.primary} />
+                <Pressable style={styles.editSheetAction} onPress={handleRemoveHero}>
+                  <Ionicons
+                    name="close-circle-outline"
+                    size={20}
+                    color={theme.colors.text.primary}
+                  />
                   <Text style={styles.editSheetActionText}>Fjern hero-billede</Text>
                 </Pressable>
-                <Pressable
-                  style={styles.editSheetAction}
-                  onPress={handleEditAvatar}
-                >
+                <Pressable style={styles.editSheetAction} onPress={handleEditAvatar}>
                   <Ionicons name="camera-outline" size={20} color={theme.colors.text.primary} />
                   <Text style={styles.editSheetActionText}>Skift logo/avatar</Text>
                 </Pressable>
-                <Pressable
-                  style={styles.editSheetAction}
-                  onPress={handleRemoveAvatar}
-                >
-                  <Ionicons name="close-circle-outline" size={20} color={theme.colors.text.primary} />
+                <Pressable style={styles.editSheetAction} onPress={handleRemoveAvatar}>
+                  <Ionicons
+                    name="close-circle-outline"
+                    size={20}
+                    color={theme.colors.text.primary}
+                  />
                   <Text style={styles.editSheetActionText}>Fjern logo/avatar</Text>
                 </Pressable>
 
-                <Pressable
-                  style={styles.editSheetAction}
-                  onPress={handleEditAbout}
-                >
-                  <Ionicons name="document-text-outline" size={20} color={theme.colors.text.primary} />
+                <Pressable style={styles.editSheetAction} onPress={handleEditAbout}>
+                  <Ionicons
+                    name="document-text-outline"
+                    size={20}
+                    color={theme.colors.text.primary}
+                  />
                   <Text style={styles.editSheetActionText}>Redigér "Om os"</Text>
                 </Pressable>
 
-                <Pressable
-                  style={styles.editSheetAction}
-                  onPress={handleEditLocation}
-                >
+                <Pressable style={styles.editSheetAction} onPress={handleEditLocation}>
                   <Ionicons name="location-outline" size={20} color={theme.colors.text.primary} />
                   <Text style={styles.editSheetActionText}>Redigér "Lokation"</Text>
                 </Pressable>
               </>
             )}
-            <Pressable
-              style={styles.editSheetCancel}
-              onPress={() => setShowEditSheet(false)}
-            >
+            <Pressable style={styles.editSheetCancel} onPress={() => setShowEditSheet(false)}>
               <Text style={styles.editSheetCancelText}>Annuller</Text>
             </Pressable>
           </View>

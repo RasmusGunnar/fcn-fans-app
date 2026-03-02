@@ -1,21 +1,21 @@
-
+// PATCH: NextMatchBadge UI polish (edge-to-edge + bottom row)
 import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
-import {
-  Image,
-  ImageBackground,
-  Pressable,
-  View,
-  Text,
-  StyleSheet,
-  Platform,
-} from 'react-native';
+import { Image, ImageBackground, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../../theme';
-import AttendanceBubbles from '../social/AttendanceBubbles';
+import { AttendanceBubbles } from '../social/AttendanceBubbles';
 
 interface NextMatchBadgeProps {
   match: {
+    id: string;
     coverUrl: string;
+    homeTeam: string;
+    awayTeam: string;
+    homeLogo: string | null;
+    awayLogo: string | null;
+    kickoff: string;
+    venue: string | null;
+    venueCity: string | null;
     title: string;
     subtitle: string;
   };
@@ -31,13 +31,15 @@ interface NextMatchBadgeProps {
   onPress: () => void;
 }
 
-const NextMatchBadge: React.FC<NextMatchBadgeProps> = ({ match, weather, matchAttendance, onPress }) => {
-  if (!match) return null;
+const NextMatchBadge: React.FC<NextMatchBadgeProps> = ({
+  match,
+  weather,
+  matchAttendance,
+  onPress,
+}) => {
   const theme = useTheme();
   const styles = createStyles(theme);
-  // Use theme gradients for overlays
-  const gradientColors = theme.gradients.imageHeaderOverlay.colors.slice().reverse();
-  const footerGradientColors = theme.gradients.imageHeaderOverlay.colors;
+  if (!match) return null;
 
   return (
     <Pressable
@@ -67,16 +69,69 @@ const NextMatchBadge: React.FC<NextMatchBadgeProps> = ({ match, weather, matchAt
             style={styles.bottomScrim}
           />
 
+          {/* Top label badge */}
+          <View style={styles.topLabelChip}>
+            <Text style={styles.labelText}>NÆSTE HJEMMEKAMP</Text>
+          </View>
+
           {/* Main content */}
           <View style={styles.contentWrapper}>
             <View style={styles.mainContent}>
-              {/* Top label */}
-              <View style={styles.topLabelChip}>
-                <Text style={styles.labelText}>NÆSTE HJEMMEKAMP</Text>
+              {/* Matchup Area: Logos + VS + Teams + Kickoff + Venue */}
+              <View style={styles.matchupArea}>
+                <View style={styles.matchupRow}>
+                  {/* Home Team Logo */}
+                  {match.homeLogo ? (
+                    <View style={styles.teamLogoContainer}>
+                      <Image
+                        source={{ uri: match.homeLogo }}
+                        style={styles.teamLogo}
+                        resizeMode="contain"
+                      />
+                    </View>
+                  ) : (
+                    <View style={[styles.teamLogoContainer, styles.teamLogoPlaceholder]}>
+                      <Text style={styles.teamInitial}>{match.homeTeam.charAt(0)}</Text>
+                    </View>
+                  )}
+
+                  {/* VS */}
+                  <Text style={styles.vsText}>VS</Text>
+
+                  {/* Away Team Logo */}
+                  {match.awayLogo ? (
+                    <View style={styles.teamLogoContainer}>
+                      <Image
+                        source={{ uri: match.awayLogo }}
+                        style={styles.teamLogo}
+                        resizeMode="contain"
+                      />
+                    </View>
+                  ) : (
+                    <View style={[styles.teamLogoContainer, styles.teamLogoPlaceholder]}>
+                      <Text style={styles.teamInitial}>{match.awayTeam.charAt(0)}</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Team Names */}
+                <View style={styles.matchInfo}>
+                  <Text style={styles.teamNameSmall}>{match.homeTeam}</Text>
+                  <Text style={styles.teamNameSmall}>{match.awayTeam}</Text>
+                </View>
+
+                {/* Kickoff */}
+                {match.kickoff && <Text style={styles.matchDateTime}>{match.subtitle}</Text>}
+
+                {/* Venue */}
+                {(match.venue || match.venueCity) && (
+                  <Text style={styles.venueText}>
+                    {match.venue && match.venueCity
+                      ? `${match.venue}, ${match.venueCity}`
+                      : match.venue || match.venueCity || ''}
+                  </Text>
+                )}
               </View>
-              {/* Title and subtitle */}
-              <Text style={styles.title}>{match.title}</Text>
-              <Text style={styles.subtitle}>{match.subtitle}</Text>
             </View>
 
             {/* Footer bar with translucent background */}
@@ -102,9 +157,7 @@ const NextMatchBadge: React.FC<NextMatchBadgeProps> = ({ match, weather, matchAt
                     textVariant="caption"
                   />
                 ) : (
-                  <Text style={{ color: theme.colors.text.primary, fontWeight: '600' }}>
-                    0 deltager
-                  </Text>
+                  <Text style={styles.attendeeCount}>0 deltager</Text>
                 )}
               </View>
               {/* CTA */}
@@ -126,18 +179,17 @@ const NextMatchBadge: React.FC<NextMatchBadgeProps> = ({ match, weather, matchAt
 export default NextMatchBadge;
 
 const createStyles = (theme: ReturnType<typeof useTheme>) => {
-  const elevationStyle = Platform.OS === 'ios' 
-    ? theme.elevation.sm.ios 
-    : { elevation: theme.elevation.sm.android };
+  const elevationStyle =
+    Platform.OS === 'ios' ? theme.elevation.sm.ios : { elevation: theme.elevation.sm.android };
 
   return StyleSheet.create({
     outerWrapper: {
       width: '100%',
     },
     badgeCard: {
-      borderRadius: theme.radius.xl,
+      borderRadius: theme.radius.none,
       overflow: 'hidden',
-      borderWidth: theme.layout.borderHairline,
+      borderWidth: 0,
       borderColor: theme.colors.border.subtle,
       ...elevationStyle,
     },
@@ -164,11 +216,18 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => {
       justifyContent: 'space-between',
     },
     mainContent: {
-      paddingTop: theme.spacing[4],
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingTop: theme.spacing[6],
+      paddingBottom: theme.spacing[12],
       paddingHorizontal: theme.spacing[4],
     },
     topLabelChip: {
-      alignSelf: 'flex-start',
+      position: 'absolute',
+      top: theme.spacing[3],
+      left: theme.spacing[3],
+      zIndex: 10,
       backgroundColor: theme.colors.brand.accent,
       borderRadius: theme.radius.pill,
       paddingHorizontal: theme.spacing[3],
@@ -180,6 +239,26 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => {
       fontWeight: '700',
       letterSpacing: 0.8,
     },
+    title: {
+      color: theme.colors.text.inverse,
+      fontSize: 18,
+      fontWeight: '700',
+      textAlign: 'center',
+      textShadowColor: theme.colors.overlay.textShadow,
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 2,
+    },
+    subtitle: {
+      color: theme.colors.text.inverse,
+      fontSize: 14,
+      fontWeight: '600',
+      opacity: 0.9,
+      marginTop: theme.spacing[2],
+      textAlign: 'center',
+      textShadowColor: theme.colors.overlay.textShadow,
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 2,
+    },
     matchupArea: {
       alignItems: 'center',
       marginTop: theme.spacing[3],
@@ -189,6 +268,37 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => {
       alignItems: 'center',
       justifyContent: 'center',
       gap: theme.spacing[5],
+    },
+    teamLogoContainer: {
+      width: 56,
+      height: 56,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    teamLogo: {
+      width: '100%',
+      height: '100%',
+    },
+    teamLogoPlaceholder: {
+      backgroundColor: theme.colors.overlay.medium,
+      borderRadius: theme.radius.lg,
+    },
+    teamInitial: {
+      color: theme.colors.text.inverse,
+      fontSize: 20,
+      fontWeight: '700',
+    },
+    vsText: {
+      color: theme.colors.text.inverse,
+      fontSize: 14,
+      fontWeight: '700',
+      opacity: 0.8,
+    },
+    teamNameSmall: {
+      color: theme.colors.text.inverse,
+      fontSize: 12,
+      fontWeight: '600',
+      marginTop: theme.spacing[1],
     },
     matchInfo: {
       alignItems: 'center',
@@ -214,12 +324,16 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => {
       textShadowRadius: 2,
     },
     footerBar: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       backgroundColor: theme.colors.overlay.heavy,
       paddingHorizontal: theme.spacing[4],
-      paddingVertical: theme.spacing[3],
+      paddingVertical: theme.spacing[4],
     },
     footerLeft: {
       flexDirection: 'row',

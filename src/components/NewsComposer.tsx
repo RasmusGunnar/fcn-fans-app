@@ -1,20 +1,20 @@
+import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  Pressable,
-  Image,
   ActivityIndicator,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useTheme, Theme } from '../theme';
-import { Card } from './ui/Card';
-import { PrimaryButton } from './PrimaryButton';
-import { Actor, LinkPreview } from '../types/news';
-import { fetchLinkPreview, insertNewsItem } from '../services/newsApi';
 import { supabase } from '../lib/supabase';
+import { fetchLinkPreview, insertNewsItem } from '../services/newsApi';
+import { Theme, useTheme } from '../theme';
+import { Actor, LinkPreview } from '../types/news';
+import { PrimaryButton } from './PrimaryButton';
+import { Card } from './ui/Card';
 
 interface NewsComposerProps {
   actor: Actor;
