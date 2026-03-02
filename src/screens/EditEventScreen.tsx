@@ -78,6 +78,10 @@ export default function EditEventScreen() {
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [showEndTimePicker, setShowEndTimePicker] = useState(false);
 
+  // Capacity fields
+  const [hasCapacityLimit, setHasCapacityLimit] = useState(false);
+  const [capacity, setCapacity] = useState('');
+
   // Cover image
   const [coverBucket, setCoverBucket] = useState<string | null>(null);
   const [coverPath, setCoverPath] = useState<string | null>(null);
@@ -104,6 +108,14 @@ export default function EditEventScreen() {
       setEndDate(data.end_at ? new Date(data.end_at) : null);
       setCoverBucket(data.cover_bucket || null);
       setCoverPath(data.cover_path || null);
+      // Load capacity
+      if (data.capacity !== undefined && data.capacity !== null) {
+        setHasCapacityLimit(true);
+        setCapacity(String(data.capacity));
+      } else {
+        setHasCapacityLimit(false);
+        setCapacity('');
+      }
     }
     setLoading(false);
   };
@@ -175,6 +187,12 @@ export default function EditEventScreen() {
       Alert.alert('Fejl', 'Titel er påkrævet');
       return;
     }
+    if (hasCapacityLimit) {
+      if (!capacity.trim() || isNaN(Number(capacity)) || Number(capacity) <= 0) {
+        Alert.alert('Fejl', 'Angiv et gyldigt antal pladser (større end 0)');
+        return;
+      }
+    }
 
     setSaving(true);
     try {
@@ -213,6 +231,7 @@ export default function EditEventScreen() {
         end_at: endDate ? endDate.toISOString() : null,
         cover_bucket: coverBucket,
         cover_path: coverPath,
+        capacity: hasCapacityLimit ? Number(capacity) : null,
       };
 
       if (geo) {
@@ -544,6 +563,51 @@ export default function EditEventScreen() {
               placeholderTextColor={theme.colors.text.muted}
             />
           </Card>
+
+          {/* Capacity */}
+          <Card style={styles.formCard}>
+            <Text variant="h3" color="primary" style={styles.sectionTitle}>
+              Kapacitet
+            </Text>
+
+            <Pressable
+              style={styles.checkboxRow}
+              onPress={() => {
+                setHasCapacityLimit(!hasCapacityLimit);
+                if (hasCapacityLimit) {
+                  setCapacity('');
+                }
+              }}
+            >
+              <View style={[styles.checkbox, !hasCapacityLimit && styles.checkboxChecked]}>
+                {!hasCapacityLimit && (
+                  <Ionicons name="checkmark" size={16} color={theme.colors.text.inverse} />
+                )}
+              </View>
+              <Text variant="body" color="primary" style={{ flex: 1 }}>
+                Ingen loft (ubegrænset antal deltagere)
+              </Text>
+            </Pressable>
+
+            {hasCapacityLimit && (
+              <>
+                <Text variant="body" color="primary" style={styles.label}>
+                  Antal pladser *
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  value={capacity}
+                  onChangeText={setCapacity}
+                  placeholder="F.eks. 50"
+                  placeholderTextColor={theme.colors.text.muted}
+                  keyboardType="numeric"
+                />
+                <Text variant="caption" color="secondary" style={styles.helperText}>
+                  Hvor mange deltagere må tilmelde sig dette event
+                </Text>
+              </>
+            )}
+          </Card>
         </ScrollView>
 
         {/* Sticky footer: respekterer safeArea + tabBar højde.
@@ -694,5 +758,29 @@ const styles = StyleSheet.create({
     paddingTop: theme.spacing[3],
     borderTopWidth: theme.layout.borderHairline,
     borderTopColor: theme.colors.border.subtle,
+  },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: theme.spacing[2],
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderWidth: 2,
+    borderColor: theme.colors.border.default,
+    borderRadius: theme.radius.sm,
+    marginRight: theme.spacing[3],
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.bg.card,
+  },
+  checkboxChecked: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
+  },
+  helperText: {
+    marginTop: theme.spacing[1],
+    fontStyle: 'italic',
   },
 });

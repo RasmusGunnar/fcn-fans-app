@@ -52,6 +52,7 @@ export interface Event {
   organizer_id?: string | null;
   created_at: string;
   organizer?: FanGroup | null;
+  capacity?: number | null;
   // Cover image
   cover_bucket?: string | null;
   cover_path?: string | null;
@@ -359,7 +360,13 @@ export async function fetchFeedUpcoming(): Promise<FeedItem[]> {
     );
 
     const busTripItems: FeedItem[] = busTrips.map((bt) => {
-      const fix = (bt as any).fixtures as { lat?: number | null; lng?: number | null; venue?: string | null; venue_city?: string | null; place_name?: string | null } | null;
+      const fix = (bt as any).fixtures as {
+        lat?: number | null;
+        lng?: number | null;
+        venue?: string | null;
+        venue_city?: string | null;
+        place_name?: string | null;
+      } | null;
       return {
         kind: 'bus_trip' as const,
         id: bt.id,

@@ -11,6 +11,7 @@ import { defaultTheme } from '../../theme';
 import type { EventCardVM } from '../../utils/eventCardVM';
 import { Avatar } from '../Avatar';
 import { contentPaddingX } from '../feed/FeedCardShell';
+import { AttendanceBubbles } from '../social/AttendanceBubbles';
 import { Text } from '../ui';
 import { EventSubtypeBadge } from '../ui/EventSubtypeBadge';
 import { CardRoot } from './CardRoot';
@@ -85,6 +86,22 @@ export function EventCard({
           <View style={styles.badgeOverlay}>
             <EventSubtypeBadge subtype={vm.badgeType} overlay />
           </View>
+
+          {/* "Deltager" badge - top-right if user is going */}
+          {vm.isGoing && (
+            <View style={styles.attendingBadgeOverlay}>
+              <View style={styles.attendingBadge}>
+                <Ionicons
+                  name="checkmark-circle"
+                  size={theme.components.icon.size.sm}
+                  color={theme.colors.text.inverse}
+                />
+                <Text variant="caption" color="inverse" style={styles.attendingBadgeText}>
+                  Deltager
+                </Text>
+              </View>
+            </View>
+          )}
 
           {/* H2H logos + VS inside the hero area */}
           {hasLogos ? (
@@ -184,6 +201,19 @@ export function EventCard({
         </View>
       ) : null}
 
+      {/* Attendance info */}
+      {vm.attendeeCount !== undefined && vm.attendeeCount > 0 && (
+        <View style={styles.attendanceRow}>
+          <AttendanceBubbles
+            avatars={vm.attendeeAvatars || []}
+            count={vm.attendeeCount}
+            max={5}
+            size={theme.spacing[6]}
+            textVariant="body"
+          />
+        </View>
+      )}
+
       {/* Status line (accent) */}
       {vm.statusLine ? (
         <Text variant="body" color="primary" style={styles.statusLine}>
@@ -239,6 +269,23 @@ const styles = StyleSheet.create({
     position: 'absolute' as const,
     top: theme.spacing[3],
     left: theme.spacing[3],
+  },
+  attendingBadgeOverlay: {
+    position: 'absolute' as const,
+    top: theme.spacing[3],
+    right: theme.spacing[3],
+  },
+  attendingBadge: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: theme.spacing[1],
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
+    backgroundColor: theme.colors.brand.accent,
+    borderRadius: theme.radius.md,
+  },
+  attendingBadgeText: {
+    fontWeight: '600',
   },
 
   // Head-to-head overlay (positioned centred inside hero)
@@ -311,6 +358,11 @@ const styles = StyleSheet.create({
   },
   organizerName: {
     fontWeight: '600',
+  },
+
+  // Attendance
+  attendanceRow: {
+    marginBottom: theme.spacing[3],
   },
 
   // Status

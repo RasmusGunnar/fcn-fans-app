@@ -47,6 +47,7 @@ interface FeedContextType {
   likeMap: Record<string, { liked: boolean; likes: number }>; // Like states by "${kind}:${id}"
   commentCountMap: Record<string, number>; // Comment counts by "${kind}:${id}"
   commentPreviewMap: Record<string, CommentPreview[]>; // Comment previews by "${kind}:${id}"
+  attendanceMap: Record<string, { count: number; avatars: string[]; isGoing: boolean }>; // Attendance by event/bus_trip ID
   addPost: (post: Post) => void;
   removePost: (postId: string) => void;
   removeNews: (newsId: string) => void;
@@ -70,6 +71,9 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
   const [likeMap, setLikeMap] = useState<Record<string, { liked: boolean; likes: number }>>({});
   const [commentCountMap, setCommentCountMap] = useState<Record<string, number>>({});
   const [commentPreviewMap, setCommentPreviewMap] = useState<Record<string, CommentPreview[]>>({});
+  const [attendanceMap, setAttendanceMap] = useState<
+    Record<string, { count: number; avatars: string[]; isGoing: boolean }>
+  >({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -422,6 +426,56 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         console.warn('[FeedProvider] likedByMe rehydration failed:', e);
       }
 
+      // ── Batch fetch attendance for events and bus trips ──
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        const currentUserId = session?.user?.id;
+
+        const allAttendableIds = [...eventIds, ...busTripIds];
+        if (allAttendableIds.length > 0) {
+          // Fetch all RSVPs for events & bus trips
+          const { data: rsvps, error: rsvpError } = await supabase
+            .from('rsvps')
+            .select('entity_type, entity_id, user_id, profiles:user_id(avatar_url)')
+            .in('entity_id', allAttendableIds)
+            .in('entity_type', ['event', 'bus_trip'])
+            .eq('status', 'going');
+
+          if (!rsvpError && rsvps) {
+            // Aggregate by entity_id
+            const attendanceByEntity: Record<
+              string,
+              { count: number; avatars: string[]; isGoing: boolean }
+            > = {};
+
+            rsvps.forEach((rsvp: any) => {
+              const entityId = rsvp.entity_id;
+              if (!attendanceByEntity[entityId]) {
+                attendanceByEntity[entityId] = { count: 0, avatars: [], isGoing: false };
+              }
+              attendanceByEntity[entityId].count += 1;
+              // Extract avatar_url from joined profiles
+              const avatarUrl = rsvp.profiles?.avatar_url;
+              if (avatarUrl && attendanceByEntity[entityId].avatars.length < 5) {
+                attendanceByEntity[entityId].avatars.push(avatarUrl);
+              }
+              // Check if current user is going
+              if (currentUserId && rsvp.user_id === currentUserId) {
+                attendanceByEntity[entityId].isGoing = true;
+              }
+            });
+
+            setAttendanceMap(attendanceByEntity);
+          } else {
+            console.warn('[FeedProvider] Attendance fetch failed:', rsvpError);
+          }
+        }
+      } catch (e) {
+        console.warn('[FeedProvider] Attendance fetch error:', e);
+      }
+
       setCommentCountMap(newCommentCountMap);
       setCommentPreviewMap(newCommentPreviewMap);
     } catch (e: any) {
@@ -548,6 +602,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         likeMap,
         commentCountMap,
         commentPreviewMap,
+        attendanceMap,
         addPost,
         removePost,
         removeNews,

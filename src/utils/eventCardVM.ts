@@ -41,6 +41,11 @@ export interface EventCardVM {
   homeTeamProviderId?: string | null;
   homeLogo?: string | null;
   awayLogo?: string | null;
+
+  // Attendance (optional)
+  attendeeCount?: number;
+  attendeeAvatars?: string[];
+  isGoing?: boolean;
 }
 
 // ─── Context the caller must supply ─────────────────────────────────────────
@@ -48,6 +53,7 @@ export interface EventCardVM {
 export interface EventCardVMContext {
   communityMap?: Record<string, string>;
   profileMap?: Record<string, { display_name: string | null; avatar_url: string | null }>;
+  attendanceMap?: Record<string, { count: number; avatars: string[]; isGoing: boolean }>;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -112,6 +118,9 @@ export function toEventCardVM(item: FeedItem, ctx: EventCardVMContext = {}): Eve
       const coverPath = d.coverPath ?? d.cover_path ?? null;
       const heroImageUrl = coverBucket && coverPath ? getPublicUrl(coverBucket, coverPath) : null;
 
+      // Lookup attendance from context
+      const attendance = ctx.attendanceMap?.[id];
+
       return {
         id,
         kind: 'event',
@@ -126,6 +135,9 @@ export function toEventCardVM(item: FeedItem, ctx: EventCardVMContext = {}): Eve
         statusLine: null,
         ctaLabel: 'Tilmeld dig',
         targetType: 'event',
+        attendeeCount: attendance?.count,
+        attendeeAvatars: attendance?.avatars,
+        isGoing: attendance?.isGoing,
       };
     }
 

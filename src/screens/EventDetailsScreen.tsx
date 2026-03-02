@@ -19,16 +19,17 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../auth/AuthProvider';
-import { OptionsMenu, OptionsMenuOption } from '../components/OptionsMenu';
-import { PrimaryButton } from '../components/PrimaryButton';
-import { InlineComments } from '../components/comments/InlineComments';
 import { Avatar } from '../components/Avatar';
-import { Card } from '../components/ui/Card';
+import { OptionsMenu, OptionsMenuOption } from '../components/OptionsMenu';
+import { InlineComments } from '../components/comments/InlineComments';
+import { AttendanceBubbles } from '../components/social/AttendanceBubbles';
 import { Text } from '../components/ui';
+import { Card } from '../components/ui/Card';
 import { EventSubtypeBadge } from '../components/ui/EventSubtypeBadge';
+import { useAttendance } from '../hooks/useAttendance';
 import { useCommunityRole } from '../hooks/useCommunityRole';
-import { supabase } from '../lib/supabase';
 import { getPublicUrl } from '../lib/storageUrl';
+import { supabase } from '../lib/supabase';
 import { fetchEventById, type Event } from '../services/eventsApi';
 import { defaultTheme as theme } from '../theme';
 import { canDeleteEvent, canEditEvent } from '../utils/permissions';
@@ -83,6 +84,7 @@ export default function EventDetailsScreen() {
   const { user, isAppAdmin } = useAuth();
 
   const { role: communityRole } = useCommunityRole(event?.organizer_group_id);
+  const attendance = useAttendance({ entityType: 'event', entityId: eventId });
 
   const loadEvent = useCallback(async () => {
     setLoading(true);
@@ -143,13 +145,21 @@ export default function EventDetailsScreen() {
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
           <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={theme.components.icon.size.md} color={theme.colors.bg.card} />
+            <Ionicons
+              name="arrow-back"
+              size={theme.components.icon.size.md}
+              color={theme.colors.bg.card}
+            />
           </Pressable>
-          <Text variant="h3" color="inverse">Event detaljer</Text>
+          <Text variant="h3" color="inverse">
+            Event detaljer
+          </Text>
         </View>
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text variant="body" color="secondary" style={styles.mt3}>Henter event...</Text>
+          <Text variant="body" color="secondary" style={styles.mt3}>
+            Henter event...
+          </Text>
         </View>
       </SafeAreaView>
     );
@@ -161,13 +171,25 @@ export default function EventDetailsScreen() {
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
           <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={theme.components.icon.size.md} color={theme.colors.bg.card} />
+            <Ionicons
+              name="arrow-back"
+              size={theme.components.icon.size.md}
+              color={theme.colors.bg.card}
+            />
           </Pressable>
-          <Text variant="h3" color="inverse">Event detaljer</Text>
+          <Text variant="h3" color="inverse">
+            Event detaljer
+          </Text>
         </View>
         <View style={styles.centered}>
-          <Ionicons name="calendar-outline" size={theme.spacing[16]} color={theme.colors.text.muted} />
-          <Text variant="body" color="secondary" style={styles.mt3}>Kunne ikke finde eventet</Text>
+          <Ionicons
+            name="calendar-outline"
+            size={theme.spacing[16]}
+            color={theme.colors.text.muted}
+          />
+          <Text variant="body" color="secondary" style={styles.mt3}>
+            Kunne ikke finde eventet
+          </Text>
         </View>
       </SafeAreaView>
     );
@@ -181,12 +203,14 @@ export default function EventDetailsScreen() {
   const addressDisplay = buildAddressDisplay(event);
 
   const showEditOption = canEditEvent(
-    user?.id, isAppAdmin,
+    user?.id,
+    isAppAdmin,
     { created_by: event.created_by, organizer_group_id: event.organizer_group_id },
     communityRole,
   );
   const showDeleteOption = canDeleteEvent(
-    user?.id, isAppAdmin,
+    user?.id,
+    isAppAdmin,
     { created_by: event.created_by, organizer_group_id: event.organizer_group_id },
     communityRole,
   );
@@ -196,19 +220,34 @@ export default function EventDetailsScreen() {
     menuOptions.push({ label: 'Redigér', onPress: handleEditEvent, icon: 'create-outline' });
   }
   if (showDeleteOption) {
-    menuOptions.push({ label: 'Slet', onPress: handleDeleteEvent, destructive: true, icon: 'trash-outline' });
+    menuOptions.push({
+      label: 'Slet',
+      onPress: handleDeleteEvent,
+      destructive: true,
+      icon: 'trash-outline',
+    });
   }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={theme.components.icon.size.md} color={theme.colors.bg.card} />
+          <Ionicons
+            name="arrow-back"
+            size={theme.components.icon.size.md}
+            color={theme.colors.bg.card}
+          />
         </Pressable>
-        <Text variant="h3" color="inverse" style={styles.headerTitle}>Event detaljer</Text>
+        <Text variant="h3" color="inverse" style={styles.headerTitle}>
+          Event detaljer
+        </Text>
         <View style={{ flex: 1 }} />
         {menuOptions.length > 0 && (
-          <OptionsMenu options={menuOptions} iconColor={theme.colors.bg.card} iconSize={theme.components.icon.size.md} />
+          <OptionsMenu
+            options={menuOptions}
+            iconColor={theme.colors.bg.card}
+            iconSize={theme.components.icon.size.md}
+          />
         )}
       </View>
 
@@ -228,7 +267,11 @@ export default function EventDetailsScreen() {
               <Image source={{ uri: coverUrl }} style={styles.coverImage} resizeMode="cover" />
             ) : (
               <View style={styles.coverPlaceholder}>
-                <Ionicons name="image-outline" size={theme.spacing[12]} color={theme.colors.text.muted} />
+                <Ionicons
+                  name="image-outline"
+                  size={theme.spacing[12]}
+                  color={theme.colors.text.muted}
+                />
               </View>
             )}
             <View style={styles.badgeOverlay}>
@@ -250,13 +293,21 @@ export default function EventDetailsScreen() {
 
           {/* Details card */}
           <Card style={styles.card}>
-            <Text variant="h3" color="primary" style={styles.sectionTitle}>Detaljer</Text>
+            <Text variant="h3" color="primary" style={styles.sectionTitle}>
+              Detaljer
+            </Text>
             <View style={styles.metaRow}>
               <View style={styles.metaIconCircle}>
-                <Ionicons name="calendar-outline" size={theme.components.icon.size.sm} color={theme.colors.primary} />
+                <Ionicons
+                  name="calendar-outline"
+                  size={theme.components.icon.size.sm}
+                  color={theme.colors.primary}
+                />
               </View>
               <View style={styles.metaContent}>
-                <Text variant="caption" color="muted">Dato og tidspunkt</Text>
+                <Text variant="caption" color="muted">
+                  Dato og tidspunkt
+                </Text>
                 <Text variant="body" color="primary" style={styles.metaValue}>
                   {dateStr}, kl. {timeStr}
                   {endStr && ` \u2013 ${endStr}`}
@@ -267,27 +318,62 @@ export default function EventDetailsScreen() {
             {(event.location_name || addressDisplay) && (
               <View style={styles.metaRow}>
                 <View style={styles.metaIconCircle}>
-                  <Ionicons name="location-outline" size={theme.components.icon.size.sm} color={theme.colors.primary} />
+                  <Ionicons
+                    name="location-outline"
+                    size={theme.components.icon.size.sm}
+                    color={theme.colors.primary}
+                  />
                 </View>
                 <View style={styles.metaContent}>
-                  <Text variant="caption" color="muted">Sted</Text>
+                  <Text variant="caption" color="muted">
+                    Sted
+                  </Text>
                   {event.location_name && (
                     <Text variant="body" color="primary" style={styles.metaValue}>
                       {event.location_name}
                     </Text>
                   )}
                   {addressDisplay && (
-                    <Text variant="caption" color="secondary">{addressDisplay}</Text>
+                    <Text variant="caption" color="secondary">
+                      {addressDisplay}
+                    </Text>
                   )}
                 </View>
               </View>
             )}
+
+            {/* Capacity */}
+            <View style={styles.metaRow}>
+              <View style={styles.metaIconCircle}>
+                <Ionicons
+                  name="people-outline"
+                  size={theme.components.icon.size.sm}
+                  color={theme.colors.primary}
+                />
+              </View>
+              <View style={styles.metaContent}>
+                <Text variant="caption" color="muted">
+                  Pladser
+                </Text>
+                {event.capacity !== undefined && event.capacity !== null ? (
+                  <Text variant="body" color="primary" style={styles.metaValue}>
+                    {attendance.countGoing} / {event.capacity} deltagere
+                  </Text>
+                ) : (
+                  <Text variant="body" color="primary" style={styles.metaValue}>
+                    Ingen loft
+                  </Text>
+                )}
+              </View>
+            </View>
           </Card>
 
           {/* Description */}
           {event.description ? (
             <Card style={styles.card}>
-              <Text variant="h3" color="primary" style={styles.sectionTitle}>Om eventet</Text>
+              <Text variant="h3" color="primary" style={styles.sectionTitle}>
+                Om eventet
+              </Text>
               <Text variant="body" color="primary" style={styles.description}>
                 {event.description}
               </Text>
@@ -297,15 +383,23 @@ export default function EventDetailsScreen() {
           {/* Quick actions */}
           <View style={styles.actionsRow}>
             <Pressable style={styles.actionButton} onPress={handleShare}>
-              <Ionicons name="share-outline" size={theme.components.icon.size.md} color={theme.colors.primary} />
-              <Text variant="caption" color="primary" style={styles.actionLabel}>Del</Text>
+              <Ionicons
+                name="share-outline"
+                size={theme.components.icon.size.md}
+                color={theme.colors.primary}
+              />
+              <Text variant="caption" color="primary" style={styles.actionLabel}>
+                Del
+              </Text>
             </Pressable>
           </View>
 
           {/* Organizer */}
           {event.organizer && (
             <Card style={styles.card}>
-              <Text variant="h3" color="primary" style={styles.sectionTitle}>Arrangør</Text>
+              <Text variant="h3" color="primary" style={styles.sectionTitle}>
+                Arrangør
+              </Text>
               <View style={styles.organizerRow}>
                 <Avatar
                   avatarUrl={event.organizer.logo_url}
@@ -326,10 +420,70 @@ export default function EventDetailsScreen() {
             </Card>
           )}
 
-          {/* CTA */}
-          <View style={styles.ctaContainer}>
-            <PrimaryButton title="Tilmeld mig" onPress={() => {}} />
-          </View>
+          {/* Attendance/RSVP UI */}
+          <Card style={styles.card}>
+            <Text variant="h3" color="primary" style={styles.sectionTitle}>
+              Deltagere
+            </Text>
+            <View style={styles.attendanceContainer}>
+              <AttendanceBubbles
+                avatars={attendance.avatars}
+                count={attendance.countGoing}
+                max={5}
+                size={theme.spacing[5]}
+                textVariant="caption"
+              />
+              <View style={styles.attendanceActions}>
+                <Pressable
+                  style={[
+                    styles.joinButton,
+                    {
+                      backgroundColor: attendance.isGoing
+                        ? theme.colors.primary
+                        : theme.colors.bg.card,
+                      borderColor: theme.colors.primary,
+                      borderWidth: 1,
+                    },
+                  ]}
+                  onPress={attendance.toggleGoing}
+                  disabled={attendance.loading}
+                >
+                  <Ionicons
+                    name={attendance.isGoing ? 'person' : 'person-add'}
+                    size={theme.components.icon.size.sm}
+                    color={attendance.isGoing ? theme.colors.text.inverse : theme.colors.primary}
+                  />
+                  <Text
+                    variant="body"
+                    style={{
+                      color: attendance.isGoing ? theme.colors.text.inverse : theme.colors.primary,
+                      fontWeight: '600',
+                      marginLeft: theme.spacing[2],
+                    }}
+                  >
+                    {attendance.isGoing ? 'Deltager' : 'Deltag'} ({attendance.countGoing})
+                  </Text>
+                </Pressable>
+                {attendance.countGoing > 0 && (
+                  <Pressable
+                    style={styles.viewAllButton}
+                    onPress={() =>
+                      (navigation as any).navigate('EventAttendees', { eventId: event.id })
+                    }
+                  >
+                    <Text variant="caption" color="primary" style={{ fontWeight: '600' }}>
+                      Se alle
+                    </Text>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={theme.components.icon.size.xs}
+                      color={theme.colors.primary}
+                    />
+                  </Pressable>
+                )}
+              </View>
+            </View>
+          </Card>
 
           {/* Comments */}
           <View style={styles.section}>
@@ -470,6 +624,29 @@ const styles = StyleSheet.create({
   },
   organizerInfo: {
     flex: 1,
+  },
+  attendanceContainer: {
+    alignItems: 'center',
+    gap: theme.spacing[3],
+  },
+  attendanceActions: {
+    width: '100%',
+    gap: theme.spacing[2],
+  },
+  joinButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: theme.spacing[3],
+    paddingHorizontal: theme.spacing[4],
+    borderRadius: theme.radius.md,
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: theme.spacing[2],
+    gap: theme.spacing[1],
   },
   ctaContainer: {
     marginHorizontal: theme.spacing[4],
