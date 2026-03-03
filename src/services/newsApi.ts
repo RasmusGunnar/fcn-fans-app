@@ -44,6 +44,7 @@ export async function insertNewsItem(params: {
   url: string;
   title?: string;
   description?: string;
+  note?: string;
   imageUrl?: string;
   siteName?: string;
   createdBy: string; // Add created_by to params
@@ -65,6 +66,7 @@ export async function insertNewsItem(params: {
       actor_type: params.actorType,
       actor_id: params.actorId,
       community_id: params.communityId,
+      note: params.note,
     };
 
     // REAL JSON log of complete payload
@@ -101,6 +103,24 @@ export async function insertNewsItem(params: {
         details: error.details,
         hint: error.hint,
       });
+
+      // Detect duplicate URL constraint violation
+      const isDuplicateUrl =
+        error.code === '23505' || // Postgres unique violation
+        error.message?.toLowerCase().includes('duplicate key') ||
+        error.message?.toLowerCase().includes('unique constraint') ||
+        error.details?.toLowerCase().includes('news_items_url_key') ||
+        error.hint?.toLowerCase().includes('duplicate');
+
+      if (isDuplicateUrl) {
+        const duplicateError = new Error(
+          'Det link er allerede delt i appen. Et link kan kun oprettes én gang.',
+        ) as any;
+        duplicateError.kind = 'DUPLICATE_URL';
+        duplicateError.originalCode = error.code;
+        throw duplicateError;
+      }
+
       throw error;
     }
 
@@ -116,6 +136,7 @@ export async function insertNewsItem(params: {
       url: data.url,
       title: data.title,
       description: data.description,
+      note: data.note,
       imageUrl: data.image_url,
       siteName: data.site_name,
       createdBy: data.created_by,
@@ -168,6 +189,7 @@ export async function fetchNewsItems(limit: number = 50): Promise<NewsItem[]> {
       url: item.url,
       title: item.title,
       description: item.description,
+      note: item.note,
       imageUrl: item.image_url,
       siteName: item.site_name,
       createdBy: item.created_by,

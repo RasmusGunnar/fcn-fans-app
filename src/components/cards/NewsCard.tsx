@@ -177,6 +177,20 @@ export function NewsCard({
         }
       />
 
+      {/* Render note FIRST if it exists */}
+      {newsItem.note && newsItem.note.trim() ? (
+        <View style={styles.noteBlock}>
+          <Text
+            variant="body"
+            color="primary"
+            numberOfLines={4}
+            ellipsizeMode="tail"
+          >
+            {newsItem.note}
+          </Text>
+        </View>
+      ) : null}
+
       {newsItem.imageUrl ? (
         <CardMedia aspectRatio={16 / 9} fullBleed style={{ marginTop: theme.spacing[3] }}>
           {__DEV__ &&
@@ -226,6 +240,11 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: theme.colors.border.default,
   },
+  noteBlock: {
+    marginTop: theme.spacing[3],
+    marginBottom: theme.spacing[3],
+    paddingHorizontal: theme.spacing[3],
+  },
   linkContent: {
     gap: theme.spacing[1],
     marginTop: theme.spacing[3],
@@ -235,7 +254,6 @@ const styles = StyleSheet.create({
   },
   title: {},
   description: {},
-
   ctaButton: {
     marginTop: theme.spacing[2],
     marginBottom: theme.spacing[3],
