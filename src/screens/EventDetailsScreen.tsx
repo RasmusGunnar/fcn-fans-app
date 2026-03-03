@@ -10,6 +10,7 @@ import {
   Alert,
   Image,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -114,6 +115,46 @@ export default function EventDetailsScreen() {
       });
     } catch (error) {
       console.error('Error sharing:', error);
+    }
+  };
+
+  const handleFindvej = async () => {
+    if (!event) return;
+    try {
+      let url: string | null = null;
+
+      // Try coordinates first
+      if (event.lat != null && event.lng != null) {
+        url =
+          Platform.OS === 'ios'
+            ? `http://maps.apple.com/?ll=${event.lat},${event.lng}`
+            : `geo:${event.lat},${event.lng}`;
+      }
+      // Fall back to address
+      else {
+        const addressParts = [];
+        if (event.location_address) addressParts.push(event.location_address);
+        else {
+          if (event.address_line1) addressParts.push(event.address_line1);
+          if (event.postal_code) addressParts.push(event.postal_code);
+          if (event.city) addressParts.push(event.city);
+        }
+
+        if (addressParts.length > 0) {
+          const address = addressParts.join(' ');
+          const encoded = encodeURIComponent(address);
+          url =
+            Platform.OS === 'ios'
+              ? `http://maps.apple.com/?q=${encoded}`
+              : `geo:0,0?q=${encoded}`;
+        }
+      }
+
+      if (url) {
+        await Linking.openURL(url);
+      }
+    } catch (error) {
+      console.error('Error opening maps:', error);
     }
   };
 
@@ -397,6 +438,31 @@ export default function EventDetailsScreen() {
                 Del
               </Text>
             </Pressable>
+            <Pressable
+              style={[
+                styles.actionButton,
+                !(event.lat != null && event.lng != null) &&
+                  !event.location_address &&
+                  !(event.address_line1 || event.postal_code || event.city) && {
+                    opacity: 0.5,
+                  },
+              ]}
+              onPress={handleFindvej}
+              disabled={
+                !(event.lat != null && event.lng != null) &&
+                !event.location_address &&
+                !(event.address_line1 || event.postal_code || event.city)
+              }
+            >
+              <Ionicons
+                name="location-outline"
+                size={theme.components.icon.size.md}
+                color={theme.colors.primary}
+              />
+              <Text variant="caption" color="primary" style={styles.actionLabel}>
+                Find vej
+              </Text>
+            </Pressable>
           </View>
 
           {/* Organizer */}
@@ -599,6 +665,7 @@ const styles = StyleSheet.create({
     gap: theme.spacing[4],
   },
   actionButton: {
+    flex: 1,
     alignItems: 'center',
     paddingVertical: theme.spacing[3],
     paddingHorizontal: theme.spacing[6],
