@@ -17,6 +17,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '../auth/AuthProvider';
 import { FeedItemRenderer } from '../components/feed/FeedItemRenderer';
 import { PostComposer } from '../components/PostComposer';
+import { MembersStatRow } from '../components/social/MembersStatRow';
 import { IconButton } from '../components/ui';
 import { pickAndUploadCommunityImage } from '../lib/communityMediaUpload';
 import { getPublicUrl } from '../lib/storageUrl';
@@ -648,49 +649,26 @@ export default function CommunityDetailScreen() {
         </View>
 
         {/* 6. Members Row */}
-        <View style={styles.membersRow}>
-          <View style={styles.membersLeft}>
-            <Ionicons name="people" size={16} color={theme.colors.text.secondary} />
-            <Text style={styles.membersText}>
-              {memberCount} medlem{memberCount !== 1 ? 'mer' : ''}
-            </Text>
-          </View>
-          {members.length > 0 && (
-            <View style={styles.membersAvatars}>
-              {members.slice(0, 5).map((member, idx) => {
-                const avatarUri = resolveAvatarUrl(member.avatar_url);
-                return (
-                  <View
-                    key={member.id}
-                    style={[
-                      styles.memberAvatarBubble,
-                      { marginLeft: idx > 0 ? -theme.spacing[2] : 0 },
-                    ]}
-                  >
-                    {avatarUri ? (
-                      <Image source={{ uri: avatarUri }} style={styles.memberAvatarImage} />
-                    ) : (
-                      <View style={styles.memberAvatarPlaceholder}>
-                        <Ionicons name="person" size={12} color={theme.colors.text.secondary} />
-                      </View>
-                    )}
-                  </View>
-                );
-              })}
-            </View>
-          )}
-          <Pressable
-            onPress={() =>
-              (navigation as any).navigate('CommunityMembers', {
-                communityId: id,
-                title: community.name,
-                communityType: community.type,
-              })
-            }
-          >
-            <Text style={styles.seeAllText}>Se alle</Text>
-          </Pressable>
-        </View>
+        <MembersStatRow
+          iconName="people"
+          label="Medlemmer"
+          valueText={`${memberCount} medlem${memberCount !== 1 ? 'mer' : ''}`}
+          avatars={members
+            .slice(0, 5)
+            .map((member) => resolveAvatarUrl(member.avatar_url))
+            .filter((url): url is string => !!url)}
+          actionText="Se alle"
+          horizontalPadding={LAYOUT.screenPaddingX}
+          showBorders
+          marginBottom={theme.spacing[2]}
+          onPress={() =>
+            (navigation as any).navigate('CommunityMembers', {
+              communityId: id,
+              title: community.name,
+              communityType: community.type,
+            })
+          }
+        />
 
         {/* 7. Om Os Section */}
         <View style={styles.section}>

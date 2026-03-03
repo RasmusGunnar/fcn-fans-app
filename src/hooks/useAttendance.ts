@@ -86,27 +86,33 @@ export function useAttendance({ entityType, entityId }: { entityType: 'event' | 
     setLoading(true);
     try {
       if (!user?.id) throw new Error('Ikke logget ind');
+      const userId = user.id;
+      console.log('[Attendance] toggle start', { entityId, entityType, userId, isGoing });
       if (isGoing) {
         // Delete RSVP
-        const { error: delError } = await supabase
+        const { data: deleteData, error: delError } = await supabase
           .from('rsvps')
           .delete()
           .eq('entity_type', entityType)
           .eq('entity_id', entityId)
-          .eq('user_id', user.id);
+          .eq('user_id', userId);
+        console.log('[Attendance] delete result', { data: deleteData, error: delError });
         if (delError) throw delError;
       } else {
         // Upsert RSVP
-        const { error: upsertError } = await supabase
+        const payload = [
+          {
+            entity_type: entityType,
+            entity_id: entityId,
+            user_id: userId,
+            status: 'going',
+          },
+        ];
+        console.log('[Attendance] insert payload', payload);
+        const { data: upsertData, error: upsertError } = await supabase
           .from('rsvps')
-          .upsert([
-            {
-              entity_type: entityType,
-              entity_id: entityId,
-              user_id: user.id,
-              status: 'going',
-            }
-          ], { onConflict: 'entity_type,entity_id,user_id' });
+          .upsert(payload, { onConflict: 'entity_type,entity_id,user_id' });
+        console.log('[Attendance] insert result', { data: upsertData, error: upsertError });
         if (upsertError) throw upsertError;
       }
       await fetchAttendance();

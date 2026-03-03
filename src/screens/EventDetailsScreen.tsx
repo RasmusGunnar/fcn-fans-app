@@ -342,8 +342,10 @@ export default function EventDetailsScreen() {
               </View>
             )}
 
-            {/* Capacity */}
-            <View style={styles.metaRow}>
+            <Pressable
+              style={styles.metaRow}
+              onPress={() => (navigation as any).navigate('EventAttendees', { eventId: event.id })}
+            >
               <View style={styles.metaIconCircle}>
                 <Ionicons
                   name="people-outline"
@@ -352,20 +354,23 @@ export default function EventDetailsScreen() {
                 />
               </View>
               <View style={styles.metaContent}>
-                <Text variant="caption" color="muted">
-                  Pladser
-                </Text>
-                {event.capacity !== undefined && event.capacity !== null ? (
-                  <Text variant="body" color="primary" style={styles.metaValue}>
-                    {attendance.countGoing} / {event.capacity} deltagere
-                  </Text>
-                ) : (
-                  <Text variant="body" color="primary" style={styles.metaValue}>
-                    Ingen loft
-                  </Text>
-                )}
+                <View style={styles.attendeesRow}>
+                  <AttendanceBubbles
+                    avatars={attendance.avatars}
+                    count={attendance.countGoing}
+                    max={5}
+                    size={theme.spacing[5]}
+                    textVariant="caption"
+                  />
+                  <Ionicons
+                    name="chevron-forward"
+                    size={theme.components.icon.size.sm}
+                    color={theme.colors.text.secondary}
+                    style={{ marginLeft: theme.spacing[2] }}
+                  />
+                </View>
               </View>
-            </View>
+            </Pressable>
           </Card>
 
           {/* Description */}
@@ -425,15 +430,7 @@ export default function EventDetailsScreen() {
             <Text variant="h3" color="primary" style={styles.sectionTitle}>
               Deltagere
             </Text>
-            <View style={styles.attendanceContainer}>
-              <AttendanceBubbles
-                avatars={attendance.avatars}
-                count={attendance.countGoing}
-                max={5}
-                size={theme.spacing[5]}
-                textVariant="caption"
-              />
-              <View style={styles.attendanceActions}>
+            <View style={styles.attendanceActions}>
                 <Pressable
                   style={[
                     styles.joinButton,
@@ -445,7 +442,17 @@ export default function EventDetailsScreen() {
                       borderWidth: 1,
                     },
                   ]}
-                  onPress={attendance.toggleGoing}
+                  onPress={() => {
+                    if (__DEV__) {
+                      console.log('[EventDetails] Deltag button pressed', {
+                        eventId,
+                        isGoing: attendance.isGoing,
+                        loading: attendance.loading,
+                        toggleGoingExists: !!attendance.toggleGoing,
+                      });
+                    }
+                    attendance.toggleGoing();
+                  }}
                   disabled={attendance.loading}
                 >
                   <Ionicons
@@ -464,24 +471,6 @@ export default function EventDetailsScreen() {
                     {attendance.isGoing ? 'Deltager' : 'Deltag'} ({attendance.countGoing})
                   </Text>
                 </Pressable>
-                {attendance.countGoing > 0 && (
-                  <Pressable
-                    style={styles.viewAllButton}
-                    onPress={() =>
-                      (navigation as any).navigate('EventAttendees', { eventId: event.id })
-                    }
-                  >
-                    <Text variant="caption" color="primary" style={{ fontWeight: '600' }}>
-                      Se alle
-                    </Text>
-                    <Ionicons
-                      name="chevron-forward"
-                      size={theme.components.icon.size.xs}
-                      color={theme.colors.primary}
-                    />
-                  </Pressable>
-                )}
-              </View>
             </View>
           </Card>
 
@@ -590,6 +579,11 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingTop: theme.spacing[1],
   },
+  attendeesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[2],
+  },
   metaValue: {
     fontWeight: '600',
     marginTop: theme.spacing[0],
@@ -625,10 +619,6 @@ const styles = StyleSheet.create({
   organizerInfo: {
     flex: 1,
   },
-  attendanceContainer: {
-    alignItems: 'center',
-    gap: theme.spacing[3],
-  },
   attendanceActions: {
     width: '100%',
     gap: theme.spacing[2],
@@ -640,13 +630,6 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing[3],
     paddingHorizontal: theme.spacing[4],
     borderRadius: theme.radius.md,
-  },
-  viewAllButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: theme.spacing[2],
-    gap: theme.spacing[1],
   },
   ctaContainer: {
     marginHorizontal: theme.spacing[4],
