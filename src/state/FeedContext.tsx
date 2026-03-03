@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
 import {
   fetchBusTripsUpcoming,
   fetchEventsUpcoming,
@@ -121,7 +122,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
             });
           }
         } catch (e) {
-          console.warn('[FeedProvider] Failed to fetch profiles:', e);
+          logger.warn('[FeedProvider] Failed to fetch profiles:', e);
         }
       }
 
@@ -145,7 +146,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
     } catch (e: any) {
       const errorMsg = e?.message || String(e);
       setError(errorMsg);
-      console.error('[FeedProvider] fetchPosts (posts) error:', errorMsg);
+      logger.error('[FeedProvider] fetchPosts (posts) error:', errorMsg);
       // Don't return - continue to try fetching news
     }
 
@@ -178,12 +179,12 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
             setCommunityMap(newCommunityMap);
           }
         } catch (e) {
-          console.warn('[FeedProvider] Failed to fetch community names:', e);
+          logger.warn('[FeedProvider] Failed to fetch community names:', e);
         }
       }
     } catch (e: any) {
       // News fetch failed, but don't block posts
-      console.warn(
+      logger.warn(
         '[FeedProvider] fetchNewsItems failed (will continue with posts only):',
         e?.message || e,
       );
@@ -199,7 +200,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       upcomingEvents = results[0].status === 'fulfilled' ? results[0].value : [];
       upcomingBusTrips = results[1].status === 'fulfilled' ? results[1].value : [];
     } catch (e: any) {
-      console.warn('[FeedProvider] fetchEventsUpcoming/busTrips failed:', e?.message || e);
+      logger.warn('[FeedProvider] fetchEventsUpcoming/busTrips failed:', e?.message || e);
       upcomingEvents = [];
       upcomingBusTrips = [];
     }
@@ -294,51 +295,51 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         busTripPreviews,
       ] = await Promise.all([
         fetchLikeStates('post', postIds).catch((err) => {
-          console.warn('[FeedProvider] postLikes failed:', err);
+          logger.warn('[FeedProvider] postLikes failed:', err);
           return new Map();
         }),
         fetchCommentCounts('post', postIds).catch((err) => {
-          console.warn('[FeedProvider] postComments failed:', err);
+          logger.warn('[FeedProvider] postComments failed:', err);
           return new Map();
         }),
         fetchCommentPreviews('post', postIds).catch((err) => {
-          console.warn('[FeedProvider] postPreviews failed:', err);
+          logger.warn('[FeedProvider] postPreviews failed:', err);
           return new Map();
         }),
         fetchLikeStates('news', newsIds).catch((err) => {
-          console.warn('[FeedProvider] newsLikes failed:', err);
+          logger.warn('[FeedProvider] newsLikes failed:', err);
           return new Map();
         }),
         fetchCommentCounts('news', newsIds).catch((err) => {
-          console.warn('[FeedProvider] newsComments failed:', err);
+          logger.warn('[FeedProvider] newsComments failed:', err);
           return new Map();
         }),
         fetchCommentPreviews('news', newsIds).catch((err) => {
-          console.warn('[FeedProvider] newsPreviews failed:', err);
+          logger.warn('[FeedProvider] newsPreviews failed:', err);
           return new Map();
         }),
         fetchLikeStates('event', eventIds).catch((err) => {
-          console.warn('[FeedProvider] eventLikes failed:', err);
+          logger.warn('[FeedProvider] eventLikes failed:', err);
           return new Map();
         }),
         fetchCommentCounts('event', eventIds).catch((err) => {
-          console.warn('[FeedProvider] eventComments failed:', err);
+          logger.warn('[FeedProvider] eventComments failed:', err);
           return new Map();
         }),
         fetchCommentPreviews('event', eventIds).catch((err) => {
-          console.warn('[FeedProvider] eventPreviews failed:', err);
+          logger.warn('[FeedProvider] eventPreviews failed:', err);
           return new Map();
         }),
         fetchLikeStates('bus_trip', busTripIds).catch((err) => {
-          console.warn('[FeedProvider] busTripLikes failed:', err);
+          logger.warn('[FeedProvider] busTripLikes failed:', err);
           return new Map();
         }),
         fetchCommentCounts('bus_trip', busTripIds).catch((err) => {
-          console.warn('[FeedProvider] busTripComments failed:', err);
+          logger.warn('[FeedProvider] busTripComments failed:', err);
           return new Map();
         }),
         fetchCommentPreviews('bus_trip', busTripIds).catch((err) => {
-          console.warn('[FeedProvider] busTripPreviews failed:', err);
+          logger.warn('[FeedProvider] busTripPreviews failed:', err);
           return new Map();
         }),
       ]);
@@ -423,7 +424,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
           setLikeMap(patchedLikeMap);
         }
       } catch (e) {
-        console.warn('[FeedProvider] likedByMe rehydration failed:', e);
+        logger.warn('[FeedProvider] likedByMe rehydration failed:', e);
       }
 
       // ── Batch fetch attendance for events and bus trips ──
@@ -469,17 +470,17 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
 
             setAttendanceMap(attendanceByEntity);
           } else {
-            console.warn('[FeedProvider] Attendance fetch failed:', rsvpError);
+            logger.warn('[FeedProvider] Attendance fetch failed:', rsvpError);
           }
         }
       } catch (e) {
-        console.warn('[FeedProvider] Attendance fetch error:', e);
+        logger.warn('[FeedProvider] Attendance fetch error:', e);
       }
 
       setCommentCountMap(newCommentCountMap);
       setCommentPreviewMap(newCommentPreviewMap);
     } catch (e: any) {
-      console.error('[FeedProvider] Error merging feed:', e?.message || e);
+      logger.error('[FeedProvider] Error merging feed:', e?.message || e);
     }
 
     setLoading(false);
@@ -547,7 +548,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       try {
         const success = await toggleLikeApi(kind, id, userId, currentState.liked);
         if (!success) {
-          console.warn('[toggleLike failed]', { targetType: kind, targetId: id, error: 'unknown' });
+          logger.warn('[toggleLike failed]', { targetType: kind, targetId: id, error: 'unknown' });
           // Revert on failure
           setLikeMap((prev) => ({
             ...prev,
@@ -555,9 +556,9 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
           }));
           return;
         }
-        console.log('[toggleLike ok]', { targetType: kind, targetId: id });
+        logger.log('[toggleLike ok]', { targetType: kind, targetId: id });
       } catch (error) {
-        console.warn('[toggleLike failed]', { targetType: kind, targetId: id, error });
+        logger.warn('[toggleLike failed]', { targetType: kind, targetId: id, error });
         // Revert on failure
         setLikeMap((prev) => ({
           ...prev,

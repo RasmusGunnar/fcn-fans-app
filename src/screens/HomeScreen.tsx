@@ -267,9 +267,9 @@ export default function HomeScreen() {
             likes={factionLikes}
             comments={1}
             onToggleLike={toggleFactionLike}
-            onPressComment={() => console.log('Faction comment')}
-            onPressShare={() => console.log('Faction share')}
-            onPressJoin={() => console.log('Navigate to Faction')}
+          onPressComment={() => logger.log('Faction comment')}
+          onPressShare={() => logger.log('Faction share')}
+          onPressJoin={() => logger.log('Navigate to Faction')}
           />
         </View>
       }

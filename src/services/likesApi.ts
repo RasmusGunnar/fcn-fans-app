@@ -1,3 +1,4 @@
+import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 
 export type LikeTargetType = 'post' | 'news' | 'event' | 'match' | 'bus_trip';
@@ -31,7 +32,7 @@ export async function fetchLikeStates(
 
   if (error) {
     if (__DEV__) {
-      console.warn('[fetchLikeStates] RPC error:', error);
+      logger.warn('[fetchLikeStates] RPC error:', error);
     }
     return new Map();
   }
@@ -66,7 +67,7 @@ export async function fetchCommentCounts(
 
   if (error) {
     if (__DEV__) {
-      console.warn('[fetchCommentCounts] RPC error:', error);
+      logger.warn('[fetchCommentCounts] RPC error:', error);
     }
     return new Map();
   }
@@ -119,7 +120,7 @@ export async function fetchCommentPreviews(
 
         if (error) {
           if (__DEV__) {
-            console.warn(`[fetchCommentPreviews] Error for ${targetId}:`, error);
+            logger.warn(`[fetchCommentPreviews] Error for ${targetId}:`, error);
           }
           resultMap.set(targetId, []);
           return;
@@ -135,7 +136,7 @@ export async function fetchCommentPreviews(
               .single();
 
             if (__DEV__ && profileError) {
-              console.warn(
+              logger.warn(
                 `[fetchCommentPreviews] Profile fetch error for ${comment.author_id.substring(0, 8)}:`,
                 profileError.message,
               );
@@ -164,7 +165,7 @@ export async function fetchCommentPreviews(
     );
   } catch (err) {
     if (__DEV__) {
-      console.warn('[fetchCommentPreviews] Error:', err);
+      logger.warn('[fetchCommentPreviews] Error:', err);
     }
   }
 
@@ -191,7 +192,7 @@ export async function fetchMyLikedIds(
 
   if (error) {
     if (__DEV__) {
-      console.warn('[fetchMyLikedIds] Error:', error);
+      logger.warn('[fetchMyLikedIds] Error:', error);
     }
     return new Set();
   }
@@ -218,7 +219,7 @@ export async function toggleLike(
       .eq('target_id', targetId);
 
     if (error) {
-      console.error('[toggleLike] Delete error:', error);
+      logger.error('[toggleLike] Delete error:', error);
       return false;
     }
     return true;
@@ -231,7 +232,7 @@ export async function toggleLike(
     });
 
     if (error) {
-      console.error('[toggleLike] Insert error:', error);
+      logger.error('[toggleLike] Insert error:', error);
       return false;
     }
     return true;

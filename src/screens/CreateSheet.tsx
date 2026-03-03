@@ -6,6 +6,7 @@ import { useAuth } from '../auth/AuthProvider';
 import { ActorSelector } from '../components/ActorSelector';
 import { NewsComposer } from '../components/NewsComposer';
 import { PostComposer } from '../components/PostComposer';
+import { logger } from '../lib/logger';
 import { useFeed } from '../state/FeedContext';
 import { useTheme } from '../theme';
 import { Actor } from '../types/news';
@@ -19,7 +20,7 @@ interface CreateSheetProps {
 type ContentType = null | 'post' | 'news';
 
 export default function CreateSheet({ visible, onClose }: CreateSheetProps) {
-  console.log('[CreateSheet] Component rendered', { visible });
+  logger.log('[CreateSheet] Component rendered', { visible });
   const insets = useSafeAreaInsets();
   const { fetchPosts, profileMap } = useFeed();
   const { user } = useAuth();
@@ -46,31 +47,31 @@ export default function CreateSheet({ visible, onClose }: CreateSheetProps) {
   // Reset state when modal closes
   useEffect(() => {
     if (!visible) {
-      console.log('[CreateSheet] Modal closed - resetting state');
+      logger.log('[CreateSheet] Modal closed - resetting state');
       setContentType(null);
     } else {
-      console.log('[CreateSheet] Modal opened - showing Step 1 (choose type)');
+      logger.log('[CreateSheet] Modal opened - showing Step 1 (choose type)');
     }
   }, [visible]);
 
   // Log when visibility changes
   useEffect(() => {
-    console.log('[CreateSheet] Visibility changed:', visible);
+    logger.log('[CreateSheet] Visibility changed:', visible);
   }, [visible]);
 
   const handleNewsSuccess = () => {
-    console.log('[CreateSheet] News success - closing modal');
+    logger.log('[CreateSheet] News success - closing modal');
     fetchPosts();
     onClose();
   };
 
   const handlePostSuccess = () => {
-    console.log('[CreateSheet] Post success - closing modal');
+    logger.log('[CreateSheet] Post success - closing modal');
     onClose();
   };
 
   const handleClose = () => {
-    console.log('[CreateSheet] Close button pressed - closing modal');
+    logger.log('[CreateSheet] Close button pressed - closing modal');
     onClose();
   };
 

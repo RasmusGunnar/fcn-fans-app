@@ -7,6 +7,7 @@ import { useAuth } from '../../auth/AuthProvider';
 import { uploadAvatar } from '../../lib/uploadAvatar';
 import { getPublicUrl } from '../../lib/storageUrl';
 import { supabase } from '../../lib/supabase';
+import { logger } from '../../lib/logger';
 import { ensureProfile } from '../../lib/profile';
 import { Avatar } from '../../components/Avatar';
 import type { OnboardingStackParamList } from '../../navigation/OnboardingStack';
@@ -83,7 +84,7 @@ export default function OnboardingProfileSetupScreen({ navigation }: Props) {
 
       if (updateError || !updated) {
         if (updateError) {
-          console.warn('[OnboardingProfile] Update failed, trying upsert:', updateError);
+          logger.warn('[OnboardingProfile] Update failed, trying upsert:', updateError);
         }
         const { data: upserted, error: upsertError } = await supabase
           .from('profiles')
@@ -92,7 +93,7 @@ export default function OnboardingProfileSetupScreen({ navigation }: Props) {
           .maybeSingle();
 
         if (upsertError || !upserted) {
-          console.warn('[OnboardingProfile] Upsert failed:', upsertError);
+          logger.warn('[OnboardingProfile] Upsert failed:', upsertError);
           Alert.alert('Fejl', 'Kunne ikke gemme profilen. Prøv igen.');
           return;
         }
@@ -100,7 +101,7 @@ export default function OnboardingProfileSetupScreen({ navigation }: Props) {
 
       navigation.navigate('OnboardingCommunities');
     } catch (e) {
-      console.warn('[OnboardingProfile] Unexpected save error:', e);
+      logger.warn('[OnboardingProfile] Unexpected save error:', e);
       Alert.alert('Fejl', 'Kunne ikke gemme profilen. Prøv igen.');
     } finally {
       setSaving(false);

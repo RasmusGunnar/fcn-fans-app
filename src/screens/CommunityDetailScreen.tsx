@@ -51,7 +51,7 @@ type CommunityDetailRouteProp = RouteProp<
 >;
 
 export default function CommunityDetailScreen() {
-  console.log('🚀 DEBUG: CommunityDetailScreen LOADED (v2)');
+  logger.log('[CommunityDetailScreen] Loaded');
 
   const navigation = useNavigation();
   const route = useRoute<CommunityDetailRouteProp>();
@@ -149,7 +149,7 @@ export default function CommunityDetailScreen() {
       const membersData = await listMembers(id);
       setMembers(membersData);
     } catch (error: any) {
-      console.warn('[CommunityDetail] Unable to load members preview:', error?.code || error);
+      logger.warn('[CommunityDetail] Unable to load members preview:', error?.code || error);
       setMembers([]);
     }
 
@@ -299,7 +299,7 @@ export default function CommunityDetailScreen() {
 
   const handleSharePost = () => {
     if (postText.trim()) {
-      console.log('Share post:', postText);
+      logger.log('Share post:', postText);
       setPostText('');
     }
   };
@@ -316,8 +316,8 @@ export default function CommunityDetailScreen() {
       const allMembers = await listMembers(id);
 
       // Log for now - later we'll implement real DM/push
-      console.log('[Broadcast] Sending message to', allMembers.length, 'members');
-      console.log('[Broadcast] Message:', broadcastMessage);
+      logger.log('[Broadcast] Sending message to', allMembers.length, 'members');
+      logger.log('[Broadcast] Message:', broadcastMessage);
 
       // TODO: Implement actual DM creation + push notification
       // For each member: createDirectMessage(member.id, broadcastMessage)
@@ -330,7 +330,7 @@ export default function CommunityDetailScreen() {
       setBroadcastMessage('');
       setShowMessageModal(false);
     } catch (error) {
-      console.error('[Broadcast] Error:', error);
+      logger.error('[Broadcast] Error:', error);
       Alert.alert('Fejl', 'Kunne ikke sende besked. Prøv igen.');
     } finally {
       setSendingMessage(false);
@@ -414,7 +414,7 @@ export default function CommunityDetailScreen() {
         Alert.alert('Fejl', 'Kunne ikke opdatere. Prøv igen.');
       }
     } catch (error) {
-      console.error('[CommunityDetail] Error saving about:', error);
+      logger.error('[CommunityDetail] Error saving about:', error);
       Alert.alert('Fejl', 'Kunne ikke opdatere. Prøv igen.');
     } finally {
       setSavingAbout(false);
@@ -436,7 +436,7 @@ export default function CommunityDetailScreen() {
         Alert.alert('Fejl', 'Kunne ikke opdatere. Prøv igen.');
       }
     } catch (error) {
-      console.error('[CommunityDetail] Error saving location:', error);
+      logger.error('[CommunityDetail] Error saving location:', error);
       Alert.alert('Fejl', 'Kunne ikke opdatere. Prøv igen.');
     } finally {
       setSavingLocation(false);
@@ -754,7 +754,7 @@ export default function CommunityDetailScreen() {
           <View style={styles.composerSection}>
             <PostComposer
               onSuccess={() => {
-                console.log('[CommunityDetail] Post created successfully');
+                logger.log('[CommunityDetail] Post created successfully');
                 loadData();
               }}
             />

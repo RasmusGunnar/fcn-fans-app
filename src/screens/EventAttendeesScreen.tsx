@@ -10,6 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar } from '../components/Avatar';
 import { Text } from '../components/ui';
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
 import { defaultTheme as theme } from '../theme';
 import { resolveAvatarUrl } from '../utils/avatar';
 
@@ -66,7 +67,7 @@ export default function EventAttendeesScreen() {
 
       setAttendees(attendeesList);
     } catch (error) {
-      console.error('Error loading attendees:', error);
+      logger.error('Error loading attendees:', error);
     } finally {
       setLoading(false);
     }

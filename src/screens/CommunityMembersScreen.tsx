@@ -67,7 +67,7 @@ export default function CommunityMembersScreen() {
         });
         setMembers(data);
       } catch (err: any) {
-        console.warn('[CommunityMembers] Error:', err?.code || err);
+        logger.warn('[CommunityMembers] Error:', err?.code || err);
         setError('Kunne ikke hente medlemmer. Prøv igen senere.');
       } finally {
         setLoading(false);
@@ -102,7 +102,7 @@ export default function CommunityMembersScreen() {
                 Alert.alert('Fejl', 'Kunne ikke opdatere rolle. Prøv igen.');
               }
             } catch (error) {
-              console.error('[CommunityMembers] Error updating role:', error);
+              logger.error('[CommunityMembers] Error updating role:', error);
               Alert.alert('Fejl', 'Kunne ikke opdatere rolle. Prøv igen.');
             } finally {
               setUpdatingUserId(null);

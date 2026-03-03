@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { logger } from '../lib/logger';
 import {
   View,
   Text,
@@ -26,7 +27,7 @@ interface PostComposerProps {
 }
 
 export function PostComposer({ onSuccess, actor }: PostComposerProps) {
-  console.log('[PostComposer] Component mounted');
+  logger.log('[PostComposer] Component mounted');
   const theme = useTheme();
   const styles = createStyles(theme);
   const { user } = useAuth();
@@ -36,49 +37,49 @@ export function PostComposer({ onSuccess, actor }: PostComposerProps) {
   const [loading, setLoading] = useState(false);
 
   const handlePickLibrary = async () => {
-    console.log('[PostComposer] Pick from library clicked');
+    logger.log('[PostComposer] Pick from library clicked');
     try {
       const asset = await pickFromLibrary();
       if (asset) {
-        console.log('[PostComposer] Media selected from library');
+        logger.log('[PostComposer] Media selected from library');
         setAttachment(asset);
       } else {
-        console.log('[PostComposer] Library picker cancelled (no asset returned)');
+        logger.log('[PostComposer] Library picker cancelled (no asset returned)');
       }
     } catch (e: any) {
-      console.error('[PostComposer] Pick library error:', e);
+      logger.error('[PostComposer] Pick library error:', e);
       alert('Kunne ikke vælge medie: ' + (e?.message || e));
     }
   };
 
   const handlePickCamera = async () => {
-    console.log('[PostComposer] Take photo clicked');
+    logger.log('[PostComposer] Take photo clicked');
     try {
       const asset = await pickCameraPhoto();
       if (asset) {
-        console.log('[PostComposer] Photo taken');
+        logger.log('[PostComposer] Photo taken');
         setAttachment(asset);
       } else {
-        console.log('[PostComposer] Camera cancelled (no asset returned)');
+        logger.log('[PostComposer] Camera cancelled (no asset returned)');
       }
     } catch (e: any) {
-      console.error('[PostComposer] Camera error:', e);
+      logger.error('[PostComposer] Camera error:', e);
       alert('Kunne ikke tage billede: ' + (e?.message || e));
     }
   };
 
   const handleRecordVideo = async () => {
-    console.log('[PostComposer] Record video clicked');
+    logger.log('[PostComposer] Record video clicked');
     try {
       const asset = await recordVideo();
       if (asset) {
-        console.log('[PostComposer] Video recorded');
+        logger.log('[PostComposer] Video recorded');
         setAttachment(asset);
       } else {
-        console.log('[PostComposer] Video recording cancelled (no asset returned)');
+        logger.log('[PostComposer] Video recording cancelled (no asset returned)');
       }
     } catch (e: any) {
-      console.error('[PostComposer] Record video error:', e);
+      logger.error('[PostComposer] Record video error:', e);
       alert('Kunne ikke optage video: ' + (e?.message || e));
     }
   };
@@ -95,7 +96,7 @@ export function PostComposer({ onSuccess, actor }: PostComposerProps) {
     try {
       // Upload attachment if present (reuse existing upload flow)
       if (attachment && user?.id) {
-        console.log('[PostComposer] Uploading attachment for user', { userId: user.id });
+        logger.log('[PostComposer] Uploading attachment for user', { userId: user.id });
         const uploaded = await uploadMediaToSupabase(user.id, attachment);
 
         // Sanity check: path must exist after upload
@@ -113,7 +114,7 @@ export function PostComposer({ onSuccess, actor }: PostComposerProps) {
             height: uploaded.height,
           },
         ];
-        console.log('[PostComposer] Attachment uploaded', {
+        logger.log('[PostComposer] Attachment uploaded', {
           bucket: 'post-media',
           path: uploaded.path,
         });
@@ -121,7 +122,7 @@ export function PostComposer({ onSuccess, actor }: PostComposerProps) {
         throw new Error('Vedhæftning valgt men bruger ikke logget ind');
       }
     } catch (e: any) {
-      console.error('[PostComposer] Upload error', e);
+      logger.error('[PostComposer] Upload error', e);
       alert('Upload fejlede: ' + (e?.message ?? String(e)));
       setLoading(false);
       return;
@@ -158,14 +159,14 @@ export function PostComposer({ onSuccess, actor }: PostComposerProps) {
             likedByMe: false,
             media: dbRecord.media, // Use DB media (may be parsed as array or string)
           };
-          console.log('[PostComposer] Post inserted and fetched from DB:', {
+          logger.log('[PostComposer] Post inserted and fetched from DB:', {
             postId: dbPost.id,
             media: dbPost.media,
           });
         }
       }
     } catch (e) {
-      console.warn('[PostComposer] Insert post error', e);
+      logger.warn('[PostComposer] Insert post error', e);
     }
 
     // Use DB-fetched post if available, otherwise fallback to locally constructed
@@ -188,14 +189,14 @@ export function PostComposer({ onSuccess, actor }: PostComposerProps) {
       await fetchPosts();
     } catch (e) {
       if (__DEV__) {
-        console.log('[PostComposer] Post-creation refresh skipped:', e);
+        logger.log('[PostComposer] Post-creation refresh skipped:', e);
       }
     }
 
     setLoading(false);
     setText('');
     setAttachment(null);
-    console.log('[PostComposer] Post published successfully, calling onSuccess');
+    logger.log('[PostComposer] Post published successfully, calling onSuccess');
     onSuccess?.();
   };
 

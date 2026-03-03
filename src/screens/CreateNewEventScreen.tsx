@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../auth/AuthProvider';
+import { logger } from '../lib/logger';
 import { ActorSelector } from '../components/ActorSelector';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { Card } from '../components/ui/Card';
@@ -106,7 +107,7 @@ export default function CreateNewEventScreen() {
       const ownedCount = await countOwnedCommunities(user.id);
       setCanCreateBusTrip(ownedCount > 0);
     } catch (error) {
-      console.error('Error checking permissions:', error);
+      logger.error('Error checking permissions:', error);
     } finally {
       setCheckingPermissions(false);
     }
@@ -237,9 +238,9 @@ export default function CreateNewEventScreen() {
           [addressLine1.trim(), locationName.trim()].filter(Boolean).join(', ').trim();
         let geo: { lat: number; lng: number; place_name: string } | null = null;
         if (geocodeInput) {
-          console.log('[event geocode] query=', geocodeInput);
-          geo = await geocodeNominatim(geocodeInput);
-          console.log('[event geocode] geo=', geo);
+          logger.log('[event geocode] query=', geocodeInput);
+        const geo = await geocodeNominatim(geocodeInput);
+          logger.log('[event geocode] geo=', geo);
           if (!geo) {
             Alert.alert(
               'Adresse ikke fundet',
@@ -292,7 +293,7 @@ export default function CreateNewEventScreen() {
 
         if (error) throw error;
 
-        console.log('[CreateNewEventScreen] Event created:', data);
+        logger.log('[CreateNewEventScreen] Event created:', data);
 
         // Auto-add to user's upcoming items
         const { error: upcomingError } = await supabase.from('user_upcoming_items').insert({
@@ -334,7 +335,7 @@ export default function CreateNewEventScreen() {
 
         if (error) throw error;
 
-        console.log('[CreateNewEventScreen] Bus trip created:', data);
+        logger.log('[CreateNewEventScreen] Bus trip created:', data);
 
         // Auto-add to user's upcoming items
         const { error: upcomingError } = await supabase.from('user_upcoming_items').insert({
@@ -360,7 +361,7 @@ export default function CreateNewEventScreen() {
         ]);
       }
     } catch (error: any) {
-      console.error('Error creating:', error);
+      logger.error('Error creating:', error);
       Alert.alert('Fejl', error.message || 'Kunne ikke oprette');
     } finally {
       setSubmitting(false);

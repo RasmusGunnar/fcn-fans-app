@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
 
 export interface CommentLikeToggleInput {
   commentId: string;
@@ -28,7 +29,7 @@ export interface AddCommentReplyInput {
 // TODO: Replace stubs with real API calls once backend supports comment likes/replies.
 export async function toggleCommentLike(input: CommentLikeToggleInput): Promise<boolean> {
   if (__DEV__) {
-    console.warn('[commentsApi] TODO: toggleCommentLike not wired', input);
+    logger.warn('[commentsApi] TODO: toggleCommentLike not wired', input);
   }
   return true;
 }
@@ -36,7 +37,7 @@ export async function toggleCommentLike(input: CommentLikeToggleInput): Promise<
 // TODO: Replace stub with real API call once backend supports replies.
 export async function addCommentReply(input: AddCommentReplyInput): Promise<CommentReplyRecord> {
   if (__DEV__) {
-    console.warn('[commentsApi] TODO: addCommentReply not wired', {
+    logger.warn('[commentsApi] TODO: addCommentReply not wired', {
       parentId: input.parentId,
       targetType: input.targetType,
       targetId: input.targetId,
@@ -69,7 +70,7 @@ export async function fetchUserCommentedPostIds(userId: string, limit = 25): Pro
       .limit(200); // over-fetch to account for duplicates
 
     if (error) {
-      if (__DEV__) console.warn('[commentsApi] fetchUserCommentedPostIds error:', error);
+      if (__DEV__) logger.warn('[commentsApi] fetchUserCommentedPostIds error:', error);
       return [];
     }
 

@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -13,6 +14,7 @@ import {
   findNodeHandle,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
 import { fetchLinkPreview, insertNewsItem } from '../services/newsApi';
 import { Theme, useTheme } from '../theme';
 import { Actor, LinkPreview } from '../types/news';
@@ -54,8 +56,30 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
   const [publishing, setPublishing] = useState(false);
   const [body, setBody] = useState('');
   const [lastFetchedUrl, setLastFetchedUrl] = useState<string | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const normalizedUrl = normalizeHttpUrl(url);
   const showPreviewSuccess = !!preview && !loadingPreview && normalizedUrl === lastFetchedUrl;
+
+  // Keyboard height tracking for stable scroll behavior
+  useEffect(() => {
+    const showListener = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
+      }
+    );
+    const hideListener = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        setKeyboardHeight(0);
+      }
+    );
+
+    return () => {
+      showListener.remove();
+      hideListener.remove();
+    };
+  }, []);
 
   const scrollToInput = (inputRef: React.RefObject<TextInput | null>, extraOffset: number = theme.spacing[6]) => {
     requestAnimationFrame(() => {
@@ -86,11 +110,11 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
     setPreviewError(null);
     setPreview(null);
 
-    console.log('[NewsComposer] Fetching preview for URL:', targetUrl);
+    logger.log('[NewsComposer] Fetching preview for URL:', targetUrl);
 
     try {
       const previewData = await fetchLinkPreview(targetUrl);
-      console.log('[NewsComposer] Preview fetched successfully:', {
+      logger.log('[NewsComposer] Preview fetched successfully:', {
         title: previewData.title,
         siteName: previewData.siteName,
         hasImage: !!previewData.imageUrl,
@@ -99,7 +123,7 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
       setPreview(previewData);
       setLastFetchedUrl(targetUrl);
     } catch (error) {
-      console.error('[NewsComposer] Preview fetch error:', {
+      logger.error('[NewsComposer] Preview fetch error:', {
         message: 'Kunne ikke hente preview',
         error,
       });
@@ -198,44 +222,11 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
         communityId: actor.type === 'community' ? actor.id : undefined,
       };
 
-      // ============================================================
-      // REAL JSON logs for debugging (only runs on "Del nyhed" click)
-      // ============================================================
-      console.log('\n\n');
-      console.log('###NEWSDBG### ===== START NEWS INSERT =====');
-      console.log(
-        '###NEWSDBG### selectedActor',
-        JSON.stringify({
-          type: actor.type,
-          id: actor.id,
-          name: actor.name,
-        }),
-      );
-      console.log(
-        '###NEWSDBG### payload',
-        JSON.stringify({
-          created_by: newsData.createdBy,
-          actor_type: newsData.actorType,
-          actor_id: newsData.actorId,
-          community_id: newsData.communityId,
-          url: newsData.url,
-          title: newsData.title,
-          description: newsData.description,
-          note: newsData.note,
-          image_url: newsData.imageUrl,
-          site_name: newsData.siteName,
-        }),
-      );
-      console.log('###NEWSDBG### ===========================');
-      console.log('\n');
+      logger.log('[NewsComposer] Publishing news with actor:', actor.type);
 
       await insertNewsItem(newsData);
 
-      console.log('\n');
-      console.log('###NEWSDBG### ===== SUCCESS =====');
-      console.log('###NEWSDBG### News published successfully');
-      console.log('###NEWSDBG### ===================');
-      console.log('\n\n');
+      logger.log('[NewsComposer] News published successfully');
 
       // Reset form
       setUrl('');
@@ -245,25 +236,15 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
       setLastFetchedUrl(null);
       onSuccess();
     } catch (error: any) {
-      console.log('\n\n');
-      console.log('###NEWSDBG### ===== ERROR =====');
-      console.log(
-        '###NEWSDBG### error',
-        JSON.stringify({
-          code: error?.code,
-          message: error?.message,
-          details: error?.details,
-          hint: error?.hint,
-          kind: error?.kind,
-        }),
-      );
-      console.log('###NEWSDBG### error raw', error);
-      console.log('###NEWSDBG### ===============');
-      console.log('\n\n');
+      logger.error('[NewsComposer] Publish error:', {
+        code: error?.code,
+        message: error?.message,
+        kind: error?.kind,
+      });
 
       // Handle duplicate URL error
       if (error?.kind === 'DUPLICATE_URL') {
-        console.error('[NewsComposer] Duplicate URL error detected');
+        logger.warn('[NewsComposer] Duplicate URL detected');
         alert(
           'Linket findes allerede\n\nDet link er allerede delt i appen. Et link kan kun oprettes én gang.\n\nTip: Find nyheden i feedet og kommentér i stedet på opslaget.',
         );
@@ -273,13 +254,7 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
         });
       } else {
         const errorMsg = error?.message || 'Kunne ikke dele nyhed';
-        console.error('[NewsComposer] Publish error:', {
-          message: errorMsg,
-          error,
-          code: error?.code,
-          details: error?.details,
-          hint: error?.hint,
-        });
+        logger.error('[NewsComposer] General publish error:', errorMsg);
         alert('Kunne ikke dele nyhed: ' + errorMsg);
       }
     } finally {
@@ -296,7 +271,9 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
       <ScrollView
         ref={scrollRef}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={{
+          paddingBottom: theme.spacing[16] + keyboardHeight,
+        }}
       >
         <View style={styles.container}>
           <View style={styles.bodySection}>

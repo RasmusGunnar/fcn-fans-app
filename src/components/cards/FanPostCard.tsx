@@ -277,7 +277,7 @@ export function FanPostCard({
       .eq('id', post.id);
     if (error) {
       Alert.alert('Fejl', 'Kunne ikke opdatere opslaget');
-      console.warn('Update post error', error);
+      logger.warn('Update post error', error);
     } else {
       post.text = editText.trim();
       setIsEditing(false);
@@ -293,7 +293,7 @@ export function FanPostCard({
     const { error } = await supabase.from('posts').delete().eq('id', post.id);
     if (error) {
       Alert.alert('Fejl', 'Kunne ikke slette opslaget');
-      console.warn('Delete post error', error);
+      logger.warn('Delete post error', error);
     } else {
       onDeleted(post.id);
     }
@@ -454,7 +454,7 @@ export function FanPostCard({
           ) : mediaKind === 'video' ? (
             <View style={styles.mediaContainer}>
               {__DEV__ &&
-                (console.log('[FanPostCard:Video]', {
+                (logger.log('[FanPostCard:Video]', {
                   postId: post.id,
                   source: { uri: mediaUri },
                   typeof: typeof mediaUri,
@@ -467,7 +467,7 @@ export function FanPostCard({
                 naturalWidth={m0?.width}
                 naturalHeight={m0?.height}
                 onError={(e) => {
-                  console.error('[VideoError]', { postId: post.id, error: e });
+                  logger.error('[VideoError]', { postId: post.id, error: e });
                 }}
               />
             </View>
@@ -486,7 +486,7 @@ export function FanPostCard({
             ) : (
               <View style={[styles.mediaContainer, { aspectRatio: imageAspectRatio }]}>
                 {__DEV__ &&
-                  (console.log('[FanPostCard:Image]', {
+                  (logger.log('[FanPostCard:Image]', {
                     postId: post.id,
                     source: { uri: mediaUri },
                     typeof: typeof mediaUri,
@@ -498,7 +498,7 @@ export function FanPostCard({
                   resizeMode="cover"
                   onError={(e) => {
                     if (__DEV__) {
-                      console.log('[ImageError]', {
+                      logger.log('[ImageError]', {
                         postId: post.id,
                         uri: mediaUri,
                         native: e?.nativeEvent,

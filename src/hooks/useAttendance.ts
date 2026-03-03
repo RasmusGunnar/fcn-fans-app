@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
 import { resolveAvatarUrl } from '../utils/avatar';
 import { useAuth } from '../auth/AuthProvider';
 
@@ -87,7 +88,7 @@ export function useAttendance({ entityType, entityId }: { entityType: 'event' | 
     try {
       if (!user?.id) throw new Error('Ikke logget ind');
       const userId = user.id;
-      console.log('[Attendance] toggle start', { entityId, entityType, userId, isGoing });
+      logger.log('[Attendance] toggle start', { entityId, entityType, userId, isGoing });
       if (isGoing) {
         // Delete RSVP
         const { data: deleteData, error: delError } = await supabase
@@ -96,7 +97,7 @@ export function useAttendance({ entityType, entityId }: { entityType: 'event' | 
           .eq('entity_type', entityType)
           .eq('entity_id', entityId)
           .eq('user_id', userId);
-        console.log('[Attendance] delete result', { data: deleteData, error: delError });
+        logger.log('[Attendance] delete result', { data: deleteData, error: delError });
         if (delError) throw delError;
       } else {
         // Upsert RSVP
@@ -108,11 +109,11 @@ export function useAttendance({ entityType, entityId }: { entityType: 'event' | 
             status: 'going',
           },
         ];
-        console.log('[Attendance] insert payload', payload);
+        logger.log('[Attendance] insert payload', payload);
         const { data: upsertData, error: upsertError } = await supabase
           .from('rsvps')
           .upsert(payload, { onConflict: 'entity_type,entity_id,user_id' });
-        console.log('[Attendance] insert result', { data: upsertData, error: upsertError });
+        logger.log('[Attendance] insert result', { data: upsertData, error: upsertError });
         if (upsertError) throw upsertError;
       }
       await fetchAttendance();

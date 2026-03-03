@@ -11,6 +11,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { Alert, Platform } from 'react-native';
 import { supabase } from './supabase';
+import { logger } from './logger';
 
 const BUCKET = 'event-media';
 const MAX_WIDTH = 1200; // px — good balance between quality and size
@@ -107,7 +108,7 @@ export async function pickAndUploadEventCover(
     const storagePath = `events/${eventId}/cover.jpg`;
 
     if (__DEV__) {
-      console.log('[uploadEventCover]', {
+      logger.log('[uploadEventCover]', {
         eventId,
         source,
         bytes: bytes.length,
@@ -123,18 +124,18 @@ export async function pickAndUploadEventCover(
     });
 
     if (uploadError) {
-      console.error('[uploadEventCover] Upload error:', uploadError);
+      logger.error('[uploadEventCover] Upload error:', uploadError);
       Alert.alert('Upload fejlede', uploadError.message || 'Ukendt fejl');
       return null;
     }
 
     if (__DEV__) {
-      console.log('[uploadEventCover] Success:', storagePath);
+      logger.log('[uploadEventCover] Success:', storagePath);
     }
 
     return { bucket: BUCKET, path: storagePath };
   } catch (err: any) {
-    console.error('[uploadEventCover] Unexpected error:', err);
+    logger.error('[uploadEventCover] Unexpected error:', err);
     Alert.alert('Fejl', err?.message || 'Kunne ikke uploade billede.');
     return null;
   }
@@ -147,12 +148,12 @@ export async function deleteEventCover(path: string): Promise<boolean> {
   try {
     const { error } = await supabase.storage.from(BUCKET).remove([path]);
     if (error) {
-      console.error('[deleteEventCover] Error:', error);
+      logger.error('[deleteEventCover] Error:', error);
       return false;
     }
     return true;
   } catch (err) {
-    console.error('[deleteEventCover] Unexpected error:', err);
+    logger.error('[deleteEventCover] Unexpected error:', err);
     return false;
   }
 }

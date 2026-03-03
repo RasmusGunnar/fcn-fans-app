@@ -7,6 +7,7 @@ import React from 'react';
 import { Alert, Image, Linking, Pressable, StyleSheet, View } from 'react-native';
 import { useAuth } from '../../auth/AuthProvider';
 import { supabase } from '../../lib/supabase';
+import { logger } from '../../lib/logger';
 import type { CommentPreview } from '../../services/likesApi';
 import { defaultTheme } from '../../theme';
 import type { CategoryKey } from '../../theme/categories';
@@ -95,7 +96,7 @@ export function NewsCard({
 
   const handleOpenLink = () => {
     Linking.openURL(newsItem.url).catch((err) => {
-      console.warn('[NewsCard] Failed to open URL:', err);
+      logger.warn('[NewsCard] Failed to open URL:', err);
     });
   };
 
@@ -111,7 +112,7 @@ export function NewsCard({
     const { error } = await supabase.from('news_items').delete().eq('id', newsItem.id);
     if (error) {
       Alert.alert('Fejl', 'Kunne ikke slette nyheden');
-      console.warn('Delete news error', error);
+      logger.warn('Delete news error', error);
     } else {
       onDeleted(newsItem.id);
     }
@@ -194,7 +195,7 @@ export function NewsCard({
       {newsItem.imageUrl ? (
         <CardMedia aspectRatio={16 / 9} fullBleed style={{ marginTop: theme.spacing[3] }}>
           {__DEV__ &&
-            (console.log('[NewsCard:Image]', {
+            (logger.log('[NewsCard:Image]', {
               id: newsItem.id,
               source: { uri: newsItem.imageUrl },
               typeof: typeof newsItem.imageUrl,
