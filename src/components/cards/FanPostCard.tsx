@@ -7,6 +7,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Image, Pressable, Share, StyleSheet, TextInput, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../auth/AuthProvider';
+import { logger } from '../../lib/logger';
 import { getPublicUrl } from '../../lib/storageUrl';
 import { supabase } from '../../lib/supabase';
 import type { CommentPreview } from '../../services/likesApi';
@@ -453,13 +454,6 @@ export function FanPostCard({
             </View>
           ) : mediaKind === 'video' ? (
             <View style={styles.mediaContainer}>
-              {__DEV__ &&
-                (logger.log('[FanPostCard:Video]', {
-                  postId: post.id,
-                  source: { uri: mediaUri },
-                  typeof: typeof mediaUri,
-                }),
-                null)}
               <FeedVideo
                 uri={mediaUri}
                 isActive={isActiveVideo}
@@ -485,25 +479,11 @@ export function FanPostCard({
               </View>
             ) : (
               <View style={[styles.mediaContainer, { aspectRatio: imageAspectRatio }]}>
-                {__DEV__ &&
-                  (logger.log('[FanPostCard:Image]', {
-                    postId: post.id,
-                    source: { uri: mediaUri },
-                    typeof: typeof mediaUri,
-                  }),
-                  null)}
                 <Image
                   source={{ uri: mediaUri }}
                   style={styles.image}
                   resizeMode="cover"
                   onError={(e) => {
-                    if (__DEV__) {
-                      logger.log('[ImageError]', {
-                        postId: post.id,
-                        uri: mediaUri,
-                        native: e?.nativeEvent,
-                      });
-                    }
                     setImageLoadError(true);
                   }}
                 />

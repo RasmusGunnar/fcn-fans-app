@@ -6,7 +6,6 @@ import { useAuth } from '../auth/AuthProvider';
 import { ActorSelector } from '../components/ActorSelector';
 import { NewsComposer } from '../components/NewsComposer';
 import { PostComposer } from '../components/PostComposer';
-import { logger } from '../lib/logger';
 import { useFeed } from '../state/FeedContext';
 import { useTheme } from '../theme';
 import { Actor } from '../types/news';
@@ -20,7 +19,6 @@ interface CreateSheetProps {
 type ContentType = null | 'post' | 'news';
 
 export default function CreateSheet({ visible, onClose }: CreateSheetProps) {
-  logger.log('[CreateSheet] Component rendered', { visible });
   const insets = useSafeAreaInsets();
   const { fetchPosts, profileMap } = useFeed();
   const { user } = useAuth();
@@ -47,31 +45,20 @@ export default function CreateSheet({ visible, onClose }: CreateSheetProps) {
   // Reset state when modal closes
   useEffect(() => {
     if (!visible) {
-      logger.log('[CreateSheet] Modal closed - resetting state');
       setContentType(null);
-    } else {
-      logger.log('[CreateSheet] Modal opened - showing Step 1 (choose type)');
     }
   }, [visible]);
 
-  // Log when visibility changes
-  useEffect(() => {
-    logger.log('[CreateSheet] Visibility changed:', visible);
-  }, [visible]);
-
   const handleNewsSuccess = () => {
-    logger.log('[CreateSheet] News success - closing modal');
     fetchPosts();
     onClose();
   };
 
   const handlePostSuccess = () => {
-    logger.log('[CreateSheet] Post success - closing modal');
     onClose();
   };
 
   const handleClose = () => {
-    logger.log('[CreateSheet] Close button pressed - closing modal');
     onClose();
   };
 

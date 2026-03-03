@@ -194,13 +194,6 @@ export function NewsCard({
 
       {newsItem.imageUrl ? (
         <CardMedia aspectRatio={16 / 9} fullBleed style={{ marginTop: theme.spacing[3] }}>
-          {__DEV__ &&
-            (logger.log('[NewsCard:Image]', {
-              id: newsItem.id,
-              source: { uri: newsItem.imageUrl },
-              typeof: typeof newsItem.imageUrl,
-            }),
-            null)}
           <Image source={{ uri: newsItem.imageUrl }} style={styles.mediaImage} resizeMode="cover" />
         </CardMedia>
       ) : null}

@@ -13,6 +13,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../theme';
+import { logger } from '../lib/logger';
 import { useAuth } from '../auth/AuthProvider';
 import { listMembers, CommunityMember, setMemberRole } from '../services/communities';
 import { resolveAvatarUrl } from '../utils/avatar';

@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../auth/AuthProvider';
+import { logger } from '../lib/logger';
 import { FeedItemRenderer } from '../components/feed/FeedItemRenderer';
 import { PostComposer } from '../components/PostComposer';
 import { MembersStatRow } from '../components/social/MembersStatRow';
@@ -51,8 +52,6 @@ type CommunityDetailRouteProp = RouteProp<
 >;
 
 export default function CommunityDetailScreen() {
-  logger.log('[CommunityDetailScreen] Loaded');
-
   const navigation = useNavigation();
   const route = useRoute<CommunityDetailRouteProp>();
   const { id } = route.params || {};
