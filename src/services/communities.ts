@@ -20,6 +20,10 @@ export interface Community {
   cover_path: string | null;
   location_label: string | null;
   location_geohash: string | null;
+  lat: number | null;
+  lng: number | null;
+  place_name: string | null;
+  geocoded_at: string | null;
   visibility: 'public' | 'private';
   created_at: string;
   created_by: string | null;
@@ -656,7 +660,14 @@ export async function uploadCommunityCover(
  */
 export async function updateCommunity(
   communityId: string,
-  updates: { name?: string; description?: string | null; location_label?: string | null },
+  updates: { 
+    name?: string; 
+    description?: string | null; 
+    location_label?: string | null;
+    cover_path?: string | null;
+    avatar_path?: string | null;
+    avatar_url?: string | null;
+  },
 ): Promise<boolean> {
   try {
     const { error } = await supabase
@@ -669,6 +680,9 @@ export async function updateCommunity(
         ...(updates.location_label !== undefined && {
           location_label: updates.location_label?.trim() || null,
         }),
+        ...(updates.cover_path !== undefined && { cover_path: updates.cover_path }),
+        ...(updates.avatar_path !== undefined && { avatar_path: updates.avatar_path }),
+        ...(updates.avatar_url !== undefined && { avatar_url: updates.avatar_url }),
       })
       .eq('id', communityId);
 

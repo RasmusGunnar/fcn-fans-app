@@ -4,7 +4,7 @@ import { useTheme, Theme } from '../theme';
 
 interface MapMarkerIconProps {
   logoUrl?: string | null;
-  type: 'match' | 'event';
+  type: 'match' | 'event' | 'community' | 'fan_faction';
 }
 
 export function MapMarkerIcon({ logoUrl, type }: MapMarkerIconProps) {

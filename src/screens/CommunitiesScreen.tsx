@@ -10,7 +10,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import MapView, { Marker, Region } from 'react-native-maps';
 import { AppHeader } from '../components/AppHeader';
+import { MapMarkerIcon } from '../components/MapMarkerIcon';
 import { Badge, Card, IconButton, SegmentedControl, Text } from '../components/ui';
+import { getPublicUrl } from '../lib/storageUrl';
 import { Community as CommunityData, getCommunities } from '../services/communities';
 import { getMyCommunityRoles } from '../services/rbac';
 import { useTheme } from '../theme';
@@ -102,36 +104,42 @@ export default function CommunitiesScreen() {
     return sorted;
   }, [activeSegment, communities, myCommunityRoles]);
 
-  const hasCoords = useMemo(
-    () =>
-      communities.some((community) => {
-        const lat = (community as any).lat;
-        const lng = (community as any).lng;
-        return typeof lat === 'number' && typeof lng === 'number';
-      }),
+  const hasCoords = (c: CommunityData) => 
+    typeof c.lat === 'number' && typeof c.lng === 'number';
+
+  const hasCoordsAny = useMemo(
+    () => communities.some(hasCoords),
     [communities],
   );
 
   const mapCommunities = useMemo(
-    () =>
-      communities.filter((community) => {
-        const lat = (community as any).lat;
-        const lng = (community as any).lng;
-        return typeof lat === 'number' && typeof lng === 'number';
-      }),
+    () => communities.filter(hasCoords),
     [communities],
   );
 
   const mapRegion = useMemo<Region | null>(() => {
     if (mapCommunities.length === 0) return null;
-    const first = mapCommunities[0] as any;
+    const first = mapCommunities[0];
     return {
-      latitude: first.lat,
-      longitude: first.lng,
+      latitude: first.lat!,
+      longitude: first.lng!,
       latitudeDelta: 0.4,
       longitudeDelta: 0.4,
     };
   }, [mapCommunities]);
+
+  const getCommunityMarkerLogo = (community: CommunityData): string | null => {
+    if (community.avatar_url) {
+      return community.avatar_url;
+    }
+    if (community.avatar_path) {
+      return getPublicUrl('avatars', community.avatar_path);
+    }
+    if (community.cover_path) {
+      return getPublicUrl('community-media', community.cover_path);
+    }
+    return null;
+  };
 
   if (loading) {
     return (
@@ -186,17 +194,20 @@ export default function CommunitiesScreen() {
         mapCommunities.length > 0 && mapRegion ? (
           <View style={styles.mapContainer}>
             <MapView style={styles.map} initialRegion={mapRegion}>
-              {mapCommunities.map((community) => {
-                const lat = (community as any).lat as number;
-                const lng = (community as any).lng as number;
-                return (
-                  <Marker
-                    key={community.id}
-                    coordinate={{ latitude: lat, longitude: lng }}
-                    title={community.name}
+              {mapCommunities.map((community) => (
+                <Marker
+                  key={community.id}
+                  coordinate={{ latitude: community.lat!, longitude: community.lng! }}
+                  title={community.name}
+                  onPress={() => navigateToDetail(community.id, community.name)}
+                  tracksViewChanges={false}
+                >
+                  <MapMarkerIcon
+                    logoUrl={getCommunityMarkerLogo(community)}
+                    type={community.type}
                   />
-                );
-              })}
+                </Marker>
+              ))}
             </MapView>
           </View>
         ) : (
@@ -210,7 +221,7 @@ export default function CommunitiesScreen() {
               Kortvisning kommer snart
             </Text>
             <Text variant="body" color="secondary" style={styles.mapPlaceholderText}>
-              {hasCoords
+              {hasCoordsAny
                 ? 'Kortvisning er midlertidigt slået fra'
                 : 'Der er endnu ingen koordinater for fællesskaber'}
             </Text>
