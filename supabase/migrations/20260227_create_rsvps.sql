@@ -30,14 +30,28 @@ before update on rsvps
 for each row execute procedure update_rsvps_updated_at();
 
 -- RLS policies
-alter table rsvps enable row level security;
+alter table public.rsvps enable row level security;
 
 -- Public read
-create policy rsvps_select_public on rsvps
+drop policy if exists rsvps_select_public on public.rsvps;
+create policy rsvps_select_public on public.rsvps
 for select using (true);
 
--- Only user can insert/update/delete their own RSVP
-create policy rsvps_modify_self on rsvps
-for insert with check (auth.uid() = user_id)
-for update using (auth.uid() = user_id)
-for delete using (auth.uid() = user_id);
+-- Users can insert their own RSVP
+drop policy if exists rsvps_insert_self on public.rsvps;
+create policy rsvps_insert_self on public.rsvps
+for insert
+with check (auth.uid() = user_id);
+
+-- Users can update their own RSVP
+drop policy if exists rsvps_update_self on public.rsvps;
+create policy rsvps_update_self on public.rsvps
+for update
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+-- Users can delete their own RSVP
+drop policy if exists rsvps_delete_self on public.rsvps;
+create policy rsvps_delete_self on public.rsvps
+for delete
+using (auth.uid() = user_id);
