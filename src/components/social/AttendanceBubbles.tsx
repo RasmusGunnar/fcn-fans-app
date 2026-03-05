@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Image } from 'react-native';
+import { View, Image, ViewStyle, ImageStyle } from 'react-native';
 import { Text } from '../ui/Text';
 import { useTheme } from '../../theme';
 
@@ -48,15 +48,15 @@ export function AttendanceBubbles({
   );
 }
 
-function stylesRow(theme: any, size: number) {
+function stylesRow(theme: any, size: number): ViewStyle {
   return {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing[1],
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    columnGap: theme.spacing[1],
   };
 }
 
-function bubbleStyle(theme: any, size: number, overlap: boolean) {
+function bubbleStyle(theme: any, size: number, overlap: boolean): ImageStyle {
   return {
     width: size,
     height: size,
@@ -68,14 +68,14 @@ function bubbleStyle(theme: any, size: number, overlap: boolean) {
   };
 }
 
-function extraBubbleStyle(theme: any, size: number, overlap: boolean) {
+function extraBubbleStyle(theme: any, size: number, overlap: boolean): ViewStyle {
   return {
     width: size,
     height: size,
     borderRadius: theme.radius.pill,
     backgroundColor: theme.colors.brand.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
     marginLeft: overlap ? -size / 3 : 0,
   };
 }

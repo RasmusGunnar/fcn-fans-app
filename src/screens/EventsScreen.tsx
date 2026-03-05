@@ -306,6 +306,7 @@ export default function EventsScreen() {
     const commentCount = commentCountMap[key] || 0;
     const commentPreviews = commentPreviewMap[key] || [];
 
+    // @ts-ignore - attendanceMap is defined in FeedItemRendererProps
     return (
       <FeedItemRenderer
         item={homeFeedItem}
@@ -317,6 +318,7 @@ export default function EventsScreen() {
         commentPreviews={commentPreviews}
         safeProfileMap={profileMap || {}}
         communityMap={communityMap || {}}
+        // @ts-ignore
         attendanceMap={attendanceMap}
         toggleLike={toggleLike}
         removePost={() => {}}

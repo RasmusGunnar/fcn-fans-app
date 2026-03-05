@@ -239,7 +239,7 @@ export default function CreateNewEventScreen() {
         let geo: { lat: number; lng: number; place_name: string } | null = null;
         if (geocodeInput) {
           logger.log('[event geocode] query=', geocodeInput);
-        const geo = await geocodeNominatim(geocodeInput);
+        geo = await geocodeNominatim(geocodeInput) as { lat: number; lng: number; place_name: string } | null;
           logger.log('[event geocode] geo=', geo);
           if (!geo) {
             Alert.alert(

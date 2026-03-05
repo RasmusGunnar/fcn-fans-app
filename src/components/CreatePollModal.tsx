@@ -97,7 +97,7 @@ const makeStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
     fontSize: theme.typography.body.fontSize,
     marginBottom: theme.spacing[2],
     color: theme.colors.text.primary,
-    backgroundColor: theme.colors.bg.input,
+    backgroundColor: theme.colors.bg.surface,
   },
   addButton: {
     alignSelf: 'flex-start',

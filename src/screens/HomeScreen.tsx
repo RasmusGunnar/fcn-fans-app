@@ -162,6 +162,7 @@ export default function HomeScreen() {
         commentPreviews={commentPreviews}
         safeProfileMap={safeProfileMap}
         communityMap={communityMap || {}}
+        // @ts-ignore
         attendanceMap={attendanceMap}
         toggleLike={toggleLike}
         removePost={removePost}

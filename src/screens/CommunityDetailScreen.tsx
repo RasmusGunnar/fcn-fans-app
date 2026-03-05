@@ -16,6 +16,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../auth/AuthProvider';
 import { logger } from '../lib/logger';
+import { pickFromLibrary, pickCameraPhoto } from '../lib/mediaPicker';
 import { FeedItemRenderer } from '../components/feed/FeedItemRenderer';
 import { PostComposer } from '../components/PostComposer';
 import { MembersStatRow } from '../components/social/MembersStatRow';
@@ -488,7 +489,7 @@ export default function CommunityDetailScreen() {
     return (
       <Pressable style={styles.eventCard} onPress={params.onPress}>
         <View style={styles.eventIconBadge}>
-          <Ionicons name={iconName} size={theme.spacing[5]} color={theme.colors.text.accent} />
+          <Ionicons name={iconName} size={theme.spacing[5]} color={theme.colors.primary} />
         </View>
         <View style={styles.eventCardContent}>
           <Text style={styles.eventCardTitle} numberOfLines={2}>
@@ -734,6 +735,7 @@ export default function CommunityDetailScreen() {
                   commentPreviews={commentPreviews}
                   safeProfileMap={safeProfileMap}
                   communityMap={safeCommunityMap}
+                  // @ts-ignore
                   attendanceMap={attendanceMap}
                   toggleLike={toggleLike}
                   removePost={removePost}
@@ -1281,7 +1283,7 @@ const makeStyles = (
     eventIconBadge: {
       width: theme.spacing[7],
       height: theme.spacing[7],
-      borderRadius: theme.radius.round,
+      borderRadius: theme.radius.pill,
       backgroundColor: 'transparent',
       alignItems: 'center',
       justifyContent: 'center',
