@@ -474,12 +474,21 @@ export default function EventsScreen() {
             </View>
           ) : (
             <>
-              <MapView ref={mapRef} style={styles.map} initialRegion={FARUM_REGION}>
+              <MapView 
+                ref={mapRef} 
+                style={styles.map} 
+                initialRegion={FARUM_REGION}
+                rotateEnabled={false}
+                pitchEnabled={false}
+              >
                 {mapItems.map((item) => (
                   <Marker
                     key={`${item.kind}-${item.id}`}
                     coordinate={{ latitude: item.lat, longitude: item.lng }}
                     onPress={() => handleMarkerPress(item)}
+                    anchor={{ x: 0.5, y: 1 }}
+                    centerOffset={{ x: 0, y: -16 }}
+                    flat={false}
                     tracksViewChanges={false}
                   >
                     <MapMarkerIcon

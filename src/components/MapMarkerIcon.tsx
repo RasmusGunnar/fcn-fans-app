@@ -37,7 +37,6 @@ function createStyles(theme: Theme) {
     container: {
       alignItems: 'center',
       width: 54,
-      height: 60,
     },
     pin: {
       width: 44,
@@ -85,7 +84,6 @@ function createStyles(theme: Theme) {
       borderLeftColor: 'transparent',
       borderRightColor: 'transparent',
       borderTopColor: theme.colors.primary,
-      marginTop: -3,
     },
   });
 }

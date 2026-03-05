@@ -5,8 +5,8 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { useNavigation } from '@react-navigation/native';
-import React, { useEffect, useMemo, useState } from 'react';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import MapView, { Marker, Region } from 'react-native-maps';
 import { AppHeader } from '../components/AppHeader';
@@ -16,6 +16,9 @@ import { getPublicUrl } from '../lib/storageUrl';
 import { Community as CommunityData, getCommunities } from '../services/communities';
 import { getMyCommunityRoles } from '../services/rbac';
 import { useTheme } from '../theme';
+
+// Marker anchor adjustment: y < 1 moves pin UP relative to coordinate
+const COMMUNITY_MARKER_ANCHOR_Y = 0.93;
 
 export default function CommunitiesScreen() {
   const navigation = useNavigation();
@@ -57,6 +60,13 @@ export default function CommunitiesScreen() {
     setCommunities(data);
     setLoading(false);
   };
+
+  // Refetch communities when screen is focused (e.g., after admin approval of fan faction requests)
+  useFocusEffect(
+    useCallback(() => {
+      loadCommunities();
+    }, []),
+  );
 
   const navigateToDetail = (id: string, title: string) => {
     (navigation as any).navigate('CommunityDetail', { id, title });
@@ -193,13 +203,21 @@ export default function CommunitiesScreen() {
       {viewMode === 'map' ? (
         mapCommunities.length > 0 && mapRegion ? (
           <View style={styles.mapContainer}>
-            <MapView style={styles.map} initialRegion={mapRegion}>
+            <MapView 
+              style={styles.map} 
+              initialRegion={mapRegion}
+              rotateEnabled={false}
+              pitchEnabled={false}
+            >
               {mapCommunities.map((community) => (
                 <Marker
                   key={community.id}
                   coordinate={{ latitude: community.lat!, longitude: community.lng! }}
                   title={community.name}
                   onPress={() => navigateToDetail(community.id, community.name)}
+                  anchor={{ x: 0.5, y: 1 }}
+                  centerOffset={{ x: 0, y: -16 }}
+                  flat={false}
                   tracksViewChanges={false}
                 >
                   <MapMarkerIcon

@@ -5,18 +5,23 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../auth/AuthProvider';
 import { logger } from '../lib/logger';
 import { pickFromLibrary, pickCameraPhoto } from '../lib/mediaPicker';
+import { geocodeAddress } from '../services/geocoding';
 import { FeedItemRenderer } from '../components/feed/FeedItemRenderer';
 import { PostComposer } from '../components/PostComposer';
 import { MembersStatRow } from '../components/social/MembersStatRow';
@@ -25,9 +30,15 @@ import { pickAndUploadCommunityImage } from '../lib/communityMediaUpload';
 import { getPublicUrl } from '../lib/storageUrl';
 import { supabase } from '../lib/supabase';
 import {
+  CommunityFanFactionRequest,
+  createFanFactionRequest,
+  getPendingRequestForCommunity,
+} from '../services/communityFanFactionRequests';
+import {
   COMMUNITY_MEDIA_BUCKET,
   Community as CommunityData,
   CommunityMember,
+  deleteCommunityAsAdmin,
   getCommunity,
   getMemberCount,
   getMembership,
@@ -97,6 +108,13 @@ export default function CommunityDetailScreen() {
   const [showEditLocation, setShowEditLocation] = useState(false);
   const [editLocationText, setEditLocationText] = useState('');
   const [savingLocation, setSavingLocation] = useState(false);
+  const [showFanFactionRequestModal, setShowFanFactionRequestModal] = useState(false);
+  const [fanFactionRequestNote, setFanFactionRequestNote] = useState('');
+  const [loadingFanFactionRequest, setLoadingFanFactionRequest] = useState(false);
+  const [submittingFanFactionRequest, setSubmittingFanFactionRequest] = useState(false);
+  const [pendingFanFactionRequest, setPendingFanFactionRequest] =
+    useState<CommunityFanFactionRequest | null>(null);
+  const [deletingCommunity, setDeletingCommunity] = useState(false);
 
   const [postText, setPostText] = useState('');
   const [posts, setPosts] = useState<Post[]>([]);
@@ -424,9 +442,39 @@ export default function CommunityDetailScreen() {
   const handleSaveLocation = async () => {
     setSavingLocation(true);
     try {
-      const success = await updateCommunity(id, {
-        location_label: editLocationText.trim() || null,
-      });
+      const trimmedLocation = editLocationText.trim();
+      const updatePayload: any = {
+        location_label: trimmedLocation || null,
+      };
+
+      // If location is provided, try to geocode
+      if (trimmedLocation) {
+        const addressQuery = trimmedLocation.toLowerCase().includes('danmark')
+          ? trimmedLocation
+          : `${trimmedLocation}, Danmark`;
+
+        logger.log('[CommunityDetail] Geocoding location:', addressQuery);
+        const geocodeResult = await geocodeAddress(addressQuery);
+
+        if (geocodeResult) {
+          // Success: update with coordinates
+          updatePayload.lat = geocodeResult.lat;
+          updatePayload.lng = geocodeResult.lng;
+          updatePayload.place_name = geocodeResult.place_name;
+          updatePayload.geocoded_at = new Date().toISOString();
+          logger.log('[CommunityDetail] Geocode success:', geocodeResult);
+        } else {
+          // Failure: just update location_label without coords
+          logger.warn('[CommunityDetail] Geocoding failed, continuing without coords');
+          Alert.alert(
+            'Info',
+            'Kunne ikke finde koordinater – prøv fx "Værløse, Danmark"',
+          );
+        }
+      }
+
+      logger.log('[CommunityDetail] Sending update payload to updateCommunity:', updatePayload);
+      const success = await updateCommunity(id, updatePayload);
 
       if (success) {
         Alert.alert('Succes', 'Lokation opdateret!');
@@ -441,6 +489,101 @@ export default function CommunityDetailScreen() {
     } finally {
       setSavingLocation(false);
     }
+  };
+
+  const loadPendingFanFactionRequest = async (communityId: string) => {
+    setLoadingFanFactionRequest(true);
+    try {
+      const request = await getPendingRequestForCommunity(communityId);
+      setPendingFanFactionRequest(request);
+    } finally {
+      setLoadingFanFactionRequest(false);
+    }
+  };
+
+  const openFanFactionRequestModal = async () => {
+    if (!community) return;
+    setShowEditSheet(false);
+    setFanFactionRequestNote('');
+    setShowFanFactionRequestModal(true);
+    await loadPendingFanFactionRequest(community.id);
+  };
+
+  const handleSubmitFanFactionRequest = async () => {
+    if (!community) return;
+
+    setSubmittingFanFactionRequest(true);
+    try {
+      const result = await createFanFactionRequest({
+        communityId: community.id,
+        note: fanFactionRequestNote,
+      });
+
+      if (result.reason === 'ok' && result.request) {
+        setPendingFanFactionRequest(result.request);
+        Alert.alert('Succes', 'Anmodning sendt. Status: Afventer godkendelse.');
+        return;
+      }
+
+      if (result.reason === 'already_pending') {
+        const existing = await getPendingRequestForCommunity(community.id);
+        setPendingFanFactionRequest(existing);
+        Alert.alert('Afventer', 'Der findes allerede en afventende anmodning.');
+        return;
+      }
+
+      if (result.reason === 'not_authenticated') {
+        Alert.alert('Fejl', 'Du skal være logget ind for at sende en anmodning.');
+        return;
+      }
+
+      Alert.alert('Fejl', 'Kunne ikke sende anmodning. Prøv igen.');
+    } catch (error) {
+      logger.error('[CommunityDetail] Error sending fan faction request:', error);
+      Alert.alert('Fejl', 'Kunne ikke sende anmodning. Prøv igen.');
+    } finally {
+      setSubmittingFanFactionRequest(false);
+    }
+  };
+
+  const handleDeleteCommunity = () => {
+    if (!community) return;
+
+    Alert.alert(
+      'Slet fællesskab',
+      `Er du sikker på, at du vil slette "${community.name}"? Dette kan ikke fortrydes.`,
+      [
+        { text: 'Annuller', onPress: () => {}, style: 'cancel' },
+        {
+          text: 'Slet',
+          style: 'destructive',
+          onPress: async () => {
+            setDeletingCommunity(true);
+            try {
+              const success = await deleteCommunityAsAdmin(community.id);
+              if (success) {
+                Alert.alert('Succes', 'Fællesskab slettet.', [
+                  {
+                    text: 'OK',
+                    onPress: () => {
+                      setShowEditSheet(false);
+                      navigation.goBack();
+                    },
+                  },
+                ]);
+              } else {
+                Alert.alert('Fejl', 'Kunne ikke slette fællesskab. Prøv igen.');
+              }
+            } catch (error) {
+              logger.error('[CommunityDetail] Error deleting community:', error);
+              Alert.alert('Fejl', 'Kunne ikke slette fællesskab. Prøv igen.');
+            } finally {
+              setDeletingCommunity(false);
+            }
+          },
+        },
+      ],
+    );
   };
 
   // Owner fallback: if user is owner but no membership record, treat as 'owner' role
@@ -852,6 +995,44 @@ export default function CommunityDetailScreen() {
                   <Ionicons name="location-outline" size={20} color={theme.colors.text.primary} />
                   <Text style={styles.editSheetActionText}>Redigér "Lokation"</Text>
                 </Pressable>
+
+                {community?.type === 'community' && (
+                  <Pressable style={styles.editSheetAction} onPress={openFanFactionRequestModal}>
+                    <Ionicons
+                      name="flag-outline"
+                      size={20}
+                      color={theme.colors.text.primary}
+                    />
+                    <Text style={styles.editSheetActionText}>
+                      {pendingFanFactionRequest
+                        ? 'Anmod om fanfraktion (Afventer)'
+                        : 'Anmod om fanfraktion'}
+                    </Text>
+                  </Pressable>
+                )}
+
+                {isAppAdmin && (
+                  <>
+                    <View style={styles.editSheetDivider} />
+                    <Pressable
+                      style={[
+                        styles.editSheetAction,
+                        { opacity: deletingCommunity ? 0.6 : 1 },
+                      ]}
+                      onPress={handleDeleteCommunity}
+                      disabled={deletingCommunity}
+                    >
+                      <Ionicons
+                        name="trash-bin-outline"
+                        size={20}
+                        color={theme.colors.state.error}
+                      />
+                      <Text style={[styles.editSheetActionText, { color: theme.colors.state.error }]}>
+                        {deletingCommunity ? 'Sletter...' : 'Slet fællesskab'}
+                      </Text>
+                    </Pressable>
+                  </>
+                )}
               </>
             )}
             <Pressable style={styles.editSheetCancel} onPress={() => setShowEditSheet(false)}>
@@ -859,6 +1040,94 @@ export default function CommunityDetailScreen() {
             </Pressable>
           </View>
         </View>
+      </Modal>
+
+      <Modal
+        visible={showFanFactionRequestModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowFanFactionRequestModal(false)}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={{ flex: 1 }}
+          >
+            <View style={styles.editSheetOverlay}>
+              <Pressable
+                style={styles.editSheetBackdrop}
+                onPress={() => setShowFanFactionRequestModal(false)}
+              />
+              <ScrollView
+                style={styles.editSheetScrollContainer}
+                keyboardShouldPersistTaps="handled"
+              >
+                <View style={styles.editSheet}>
+                  <Text style={styles.editSheetTitle}>Anmod om fanfraktion</Text>
+                  <Text style={styles.messageModalSubtitle}>
+                    Send en anmodning om at opgradere dette fællesskab til fanfraktion.
+                  </Text>
+
+                  {loadingFanFactionRequest ? (
+                    <View style={styles.requestLoadingRow}>
+                      <ActivityIndicator size="small" color={theme.colors.primary} />
+                    </View>
+                  ) : pendingFanFactionRequest ? (
+                    <View style={styles.requestStatusBox}>
+                      <Text style={styles.requestStatusText}>Status: Afventer godkendelse</Text>
+                    </View>
+                  ) : null}
+
+                  <TextInput
+                    style={[styles.editInput, styles.editInputMultiline]}
+                    value={fanFactionRequestNote}
+                    onChangeText={setFanFactionRequestNote}
+                    placeholder="Begrundelse (valgfri)"
+                    placeholderTextColor={theme.colors.text.secondary}
+                    multiline
+                    numberOfLines={4}
+                    returnKeyType="done"
+                    blurOnSubmit
+                    onSubmitEditing={() => Keyboard.dismiss()}
+                    editable={
+                      !submittingFanFactionRequest && !loadingFanFactionRequest && !pendingFanFactionRequest
+                    }
+                  />
+
+                  <View style={styles.messageModalActions}>
+                    <Pressable
+                      style={styles.cancelButton}
+                      onPress={() => setShowFanFactionRequestModal(false)}
+                      disabled={submittingFanFactionRequest}
+                    >
+                      <Text style={styles.cancelButtonText}>Annuller</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[
+                        styles.saveButton,
+                        { backgroundColor: accentColor },
+                        (loadingFanFactionRequest || submittingFanFactionRequest || !!pendingFanFactionRequest) &&
+                          styles.disabledSaveButton,
+                      ]}
+                      onPress={handleSubmitFanFactionRequest}
+                      disabled={
+                        loadingFanFactionRequest || submittingFanFactionRequest || !!pendingFanFactionRequest
+                      }
+                    >
+                      {submittingFanFactionRequest ? (
+                        <ActivityIndicator size="small" color={theme.colors.text.inverse} />
+                      ) : (
+                        <Text style={styles.saveButtonText}>
+                          {pendingFanFactionRequest ? 'Afventer' : 'Send anmodning'}
+                        </Text>
+                      )}
+                    </Pressable>
+                  </View>
+                </View>
+              </ScrollView>
+            </View>
+          </KeyboardAvoidingView>
+        </TouchableWithoutFeedback>
       </Modal>
 
       {/* Message broadcast modal */}
@@ -1410,6 +1679,10 @@ const makeStyles = (
     editSheetBackdrop: {
       flex: 1,
     },
+    editSheetScrollContainer: {
+      flex: 1,
+      maxHeight: '85%',
+    },
     editSheet: {
       backgroundColor: theme.colors.bg.card,
       padding: theme.spacing[4],
@@ -1466,6 +1739,23 @@ const makeStyles = (
       gap: theme.spacing[2],
       marginTop: theme.spacing[2],
     },
+    requestLoadingRow: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: theme.spacing[3],
+    },
+    requestStatusBox: {
+      backgroundColor: theme.colors.bg.elevated,
+      borderRadius: theme.radius.md,
+      paddingVertical: theme.spacing[2],
+      paddingHorizontal: theme.spacing[3],
+      marginBottom: theme.spacing[3],
+    },
+    requestStatusText: {
+      fontSize: theme.typography.caption.fontSize,
+      color: theme.colors.text.secondary,
+      fontWeight: '600',
+    },
     editSheetDivider: {
       height: theme.layout.borderHairline,
       backgroundColor: theme.colors.border.default,
@@ -1507,6 +1797,9 @@ const makeStyles = (
       paddingVertical: theme.spacing[2],
       paddingHorizontal: theme.spacing[4],
       borderRadius: theme.radius.md,
+    },
+    disabledSaveButton: {
+      opacity: 0.6,
     },
     saveButtonText: {
       fontSize: theme.typography.body.fontSize,

@@ -1,16 +1,19 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, Alert, ScrollView } from 'react-native';
+import { Text, TextInput, StyleSheet, Alert, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { useTheme } from '../theme';
 import { createCommunity } from '../services/communities';
+import { geocodeAddress } from '../services/geocoding';
+import { logger } from '../lib/logger';
 
 export default function CreateCommunityScreen() {
   const navigation = useNavigation();
   const theme = useTheme();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [locationLabel, setLocationLabel] = useState('');
   const [creating, setCreating] = useState(false);
 
   const handleCreate = async () => {
@@ -22,7 +25,46 @@ export default function CreateCommunityScreen() {
     setCreating(true);
 
     try {
-      const community = await createCommunity(name, description || null);
+      // Prepare location data if provided
+      let locationData: {
+        location_label?: string | null;
+        lat?: number | null;
+        lng?: number | null;
+        place_name?: string | null;
+        geocoded_at?: string | null;
+      } = {};
+
+      const trimmedLocation = locationLabel.trim();
+      if (trimmedLocation) {
+        locationData.location_label = trimmedLocation;
+
+        // Geocode the address
+        const addressQuery = trimmedLocation.toLowerCase().includes('danmark')
+          ? trimmedLocation
+          : `${trimmedLocation}, Danmark`;
+
+        logger.log('[CreateCommunity] Geocoding address:', addressQuery);
+        const geocodeResult = await geocodeAddress(addressQuery);
+
+        if (geocodeResult) {
+          locationData.lat = geocodeResult.lat;
+          locationData.lng = geocodeResult.lng;
+          locationData.place_name = geocodeResult.place_name;
+          locationData.geocoded_at = new Date().toISOString();
+          logger.log('[CreateCommunity] Geocode success:', geocodeResult);
+        } else {
+          logger.warn('[CreateCommunity] Geocoding failed, continuing without coords');
+          // Continue without coords - we still save location_label
+        }
+      }
+
+      const community = await createCommunity(
+        name,
+        description || null,
+        'community',
+        'public',
+        locationData,
+      );
 
       if (!community) {
         Alert.alert('Fejl', 'Kunne ikke oprette fællesskab');
@@ -30,7 +72,11 @@ export default function CreateCommunityScreen() {
         return;
       }
 
-      Alert.alert('Succes', 'Fællesskabet er oprettet!', [
+      const successMsg = locationData.lat
+        ? 'Fællesskabet er oprettet og vises på kortet!'
+        : 'Fællesskabet er oprettet! Du kan tilføje lokation senere.';
+
+      Alert.alert('Succes', successMsg, [
         {
           text: 'OK',
           onPress: () => {
@@ -42,7 +88,7 @@ export default function CreateCommunityScreen() {
         },
       ]);
     } catch (err: any) {
-      console.error('[CreateCommunity] Error:', err);
+      logger.error('[CreateCommunity] Error:', err);
       Alert.alert('Fejl', err.message || 'Kunne ikke oprette fællesskab');
       setCreating(false);
     }
@@ -74,6 +120,15 @@ export default function CreateCommunityScreen() {
           placeholderTextColor={theme.colors.text.secondary}
           multiline
           numberOfLines={4}
+        />
+
+        <Text style={styles.label}>Lokation (valgfri)</Text>
+        <TextInput
+          style={styles.input}
+          value={locationLabel}
+          onChangeText={setLocationLabel}
+          placeholder="F.eks. Ganløse, København, eller Fyn"
+          placeholderTextColor={theme.colors.text.secondary}
         />
 
         <PrimaryButton

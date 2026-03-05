@@ -274,6 +274,13 @@ export async function createCommunity(
   description: string | null,
   type: 'community' | 'fan_faction' = 'community',
   visibility: 'public' | 'private' = 'public',
+  locationData?: {
+    location_label?: string | null;
+    lat?: number | null;
+    lng?: number | null;
+    place_name?: string | null;
+    geocoded_at?: string | null;
+  },
 ): Promise<Community | null> {
   try {
     // Get current user
@@ -296,6 +303,11 @@ export async function createCommunity(
         owner_id: user.id,
         visibility,
         created_by: user.id,
+        location_label: locationData?.location_label || null,
+        lat: locationData?.lat || null,
+        lng: locationData?.lng || null,
+        place_name: locationData?.place_name || null,
+        geocoded_at: locationData?.geocoded_at || null,
       })
       .select()
       .single();
@@ -330,6 +342,9 @@ export async function createCommunity(
       id: community.id,
       name: community.name,
       owner_id: community.owner_id,
+      location_label: community.location_label,
+      lat: community.lat,
+      lng: community.lng,
     });
 
     return ensureAvatarUrl(community);
@@ -664,37 +679,59 @@ export async function updateCommunity(
     name?: string; 
     description?: string | null; 
     location_label?: string | null;
+    lat?: number | null;
+    lng?: number | null;
+    place_name?: string | null;
+    geocoded_at?: string | null;
     cover_path?: string | null;
     avatar_path?: string | null;
     avatar_url?: string | null;
   },
 ): Promise<boolean> {
   try {
+    const updateBody = {
+      ...(updates.name !== undefined && { name: updates.name.trim() }),
+      ...(updates.description !== undefined && {
+        description: updates.description?.trim() || null,
+      }),
+      ...(updates.location_label !== undefined && {
+        location_label: updates.location_label?.trim() || null,
+      }),
+      ...(updates.lat !== undefined && { lat: updates.lat }),
+      ...(updates.lng !== undefined && { lng: updates.lng }),
+      ...(updates.place_name !== undefined && { place_name: updates.place_name }),
+      ...(updates.geocoded_at !== undefined && { geocoded_at: updates.geocoded_at }),
+      ...(updates.cover_path !== undefined && { cover_path: updates.cover_path }),
+      ...(updates.avatar_path !== undefined && { avatar_path: updates.avatar_path }),
+      ...(updates.avatar_url !== undefined && { avatar_url: updates.avatar_url }),
+    };
+
+    logger.log('[communities] updateCommunity payload:', {
+      communityId,
+      updates: updateBody,
+    });
+
     const { error } = await supabase
       .from('communities')
-      .update({
-        ...(updates.name !== undefined && { name: updates.name.trim() }),
-        ...(updates.description !== undefined && {
-          description: updates.description?.trim() || null,
-        }),
-        ...(updates.location_label !== undefined && {
-          location_label: updates.location_label?.trim() || null,
-        }),
-        ...(updates.cover_path !== undefined && { cover_path: updates.cover_path }),
-        ...(updates.avatar_path !== undefined && { avatar_path: updates.avatar_path }),
-        ...(updates.avatar_url !== undefined && { avatar_url: updates.avatar_url }),
-      })
+      .update(updateBody)
       .eq('id', communityId);
 
     if (error) {
-      logger.error('[communities] Error updating community:', error);
+      logger.error('[communities] Error updating community:', {
+        code: error.code,
+        message: error.message,
+        details: error,
+      });
       return false;
     }
 
     logger.log('[communities] Successfully updated community:', communityId);
     return true;
   } catch (err) {
-    logger.error('[communities] Unexpected error:', err);
+    logger.error('[communities] Unexpected error updating community:', {
+      error: err,
+      communityId,
+    });
     return false;
   }
 }
@@ -709,4 +746,26 @@ export async function updateMemberRole(
   role: 'admin' | 'member',
 ): Promise<boolean> {
   return setMemberRole(communityId, userId, role);
+}
+/**
+ * Delete community as app admin (SECURITY DEFINER via RPC)
+ * Cascading deletes handle members, requests, posts, etc.
+ */
+export async function deleteCommunityAsAdmin(communityId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.rpc('delete_community_as_admin', {
+      p_community_id: communityId,
+    });
+
+    if (error) {
+      logger.error('[communities] Error deleting community:', error);
+      return false;
+    }
+
+    logger.log('[communities] Successfully deleted community:', communityId);
+    return true;
+  } catch (err) {
+    logger.error('[communities] Unexpected error deleting community:', err);
+    return false;
+  }
 }
