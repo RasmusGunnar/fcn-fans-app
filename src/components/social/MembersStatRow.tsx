@@ -41,14 +41,16 @@ export function MembersStatRow({
       ]}
     >
       <View style={styles.left}>
-        <Ionicons name={iconName} size={theme.components.icon.size.sm} color={theme.colors.text.secondary} />
-        <Text style={styles.label}>{label}</Text>
-      </View>
-
-      <View style={styles.right}>
+        <Ionicons 
+          name={iconName} 
+          size={theme.components.icon.size.sm} 
+          color={theme.colors.text.secondary} 
+          style={{ marginRight: theme.spacing[2] }}
+        />
+        
         {avatars.length > 0 && (
-          <View style={styles.avatars}>
-            {avatars.slice(0, 5).map((avatarUrl, index) => (
+          <View style={[styles.avatars, { marginRight: theme.spacing[2] }]}>
+            {avatars.slice(0, 4).map((avatarUrl, index) => (
               <View
                 key={`${avatarUrl}-${index}`}
                 style={[styles.avatarBubble, { marginLeft: index > 0 ? -theme.spacing[2] : 0 }]}
@@ -60,9 +62,11 @@ export function MembersStatRow({
         )}
 
         <Text style={styles.valueText}>{valueText}</Text>
-
-        {actionText ? <Text style={styles.actionText}>{actionText}</Text> : null}
       </View>
+
+      {actionText ? (
+        <Text style={styles.actionText}>{actionText}</Text>
+      ) : null}
     </View>
   );
 
@@ -91,17 +95,11 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     left: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: theme.spacing[2],
       flex: 1,
     },
     label: {
       fontSize: theme.typography.caption.fontSize,
       color: theme.colors.text.secondary,
-    },
-    right: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: theme.spacing[2],
     },
     avatars: {
       flexDirection: 'row',
