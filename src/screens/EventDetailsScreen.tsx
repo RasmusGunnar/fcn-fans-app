@@ -29,6 +29,7 @@ import { Card } from '../components/ui/Card';
 import { EventSubtypeBadge } from '../components/ui/EventSubtypeBadge';
 import { useAttendance } from '../hooks/useAttendance';
 import { useCommunityRole } from '../hooks/useCommunityRole';
+import { logger } from '../lib/logger';
 import { getPublicUrl } from '../lib/storageUrl';
 import { supabase } from '../lib/supabase';
 import { fetchEventById, type Event } from '../services/eventsApi';
@@ -73,6 +74,19 @@ function getCoverUrl(event: Event): string | null {
   return null;
 }
 
+function buildMapsDestination(event: Event): string | null {
+  const street = event.address_line1?.trim();
+  const postal = event.postal_code?.trim();
+  const city = event.city?.trim();
+  const clearAddress = [street, [postal, city].filter(Boolean).join(' ').trim()]
+    .filter(Boolean)
+    .join(', ')
+    .trim();
+
+  if (clearAddress) return clearAddress;
+  return event.location_address?.trim() || null;
+}
+
 // --- Component ---
 
 export default function EventDetailsScreen() {
@@ -114,7 +128,7 @@ export default function EventDetailsScreen() {
         title: event.title,
       });
     } catch (error) {
-      console.error('Error sharing:', error);
+      logger.error('[EventDetails] Error sharing:', error);
     }
   };
 
@@ -132,13 +146,8 @@ export default function EventDetailsScreen() {
       }
       // Fall back to address
       else {
-        const addressParts = [];
-        if (event.location_address) addressParts.push(event.location_address);
-        else {
-          if (event.address_line1) addressParts.push(event.address_line1);
-          if (event.postal_code) addressParts.push(event.postal_code);
-          if (event.city) addressParts.push(event.city);
-        }
+        const destination = buildMapsDestination(event);
+        const addressParts = destination ? [destination] : [];
 
         if (addressParts.length > 0) {
           const address = addressParts.join(' ');
@@ -154,7 +163,7 @@ export default function EventDetailsScreen() {
         await Linking.openURL(url);
       }
     } catch (error) {
-      console.error('Error opening maps:', error);
+      logger.error('[EventDetails] Error opening maps:', error);
     }
   };
 
@@ -403,12 +412,17 @@ export default function EventDetailsScreen() {
                     size={theme.spacing[5]}
                     textVariant="caption"
                   />
-                  <Ionicons
-                    name="chevron-forward"
-                    size={theme.components.icon.size.sm}
-                    color={theme.colors.text.secondary}
-                    style={{ marginLeft: theme.spacing[2] }}
-                  />
+                  <View style={styles.attendeesLinkRow}>
+                    <Text variant="caption" style={styles.attendeesLinkText}>
+                      Alle
+                    </Text>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={theme.components.icon.size.sm}
+                      color={theme.colors.text.secondary}
+                      style={styles.attendeesChevron}
+                    />
+                  </View>
                 </View>
               </View>
             </Pressable>
@@ -431,10 +445,10 @@ export default function EventDetailsScreen() {
             <Pressable style={styles.actionButton} onPress={handleShare}>
               <Ionicons
                 name="share-outline"
-                size={theme.components.icon.size.md}
-                color={theme.colors.primary}
+                size={theme.spacing[5]}
+                color={theme.colors.text.primary}
               />
-              <Text variant="caption" color="primary" style={styles.actionLabel}>
+              <Text variant="caption" style={styles.actionLabel}>
                 Del
               </Text>
             </Pressable>
@@ -456,10 +470,10 @@ export default function EventDetailsScreen() {
             >
               <Ionicons
                 name="location-outline"
-                size={theme.components.icon.size.md}
-                color={theme.colors.primary}
+                size={theme.spacing[5]}
+                color={theme.colors.text.primary}
               />
-              <Text variant="caption" color="primary" style={styles.actionLabel}>
+              <Text variant="caption" style={styles.actionLabel}>
                 Find vej
               </Text>
             </Pressable>
@@ -493,9 +507,6 @@ export default function EventDetailsScreen() {
 
           {/* Attendance/RSVP UI */}
           <Card style={styles.card}>
-            <Text variant="h3" color="primary" style={styles.sectionTitle}>
-              Deltagere
-            </Text>
             <View style={styles.attendanceActions}>
                 <Pressable
                   style={[
@@ -509,14 +520,6 @@ export default function EventDetailsScreen() {
                     },
                   ]}
                   onPress={() => {
-                    if (__DEV__) {
-                      console.log('[EventDetails] Deltag button pressed', {
-                        eventId,
-                        isGoing: attendance.isGoing,
-                        loading: attendance.loading,
-                        toggleGoingExists: !!attendance.toggleGoing,
-                      });
-                    }
                     attendance.toggleGoing();
                   }}
                   disabled={attendance.loading}
@@ -648,7 +651,20 @@ const styles = StyleSheet.create({
   attendeesRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: theme.spacing[2],
+  },
+  attendeesLinkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: theme.spacing[2],
+  },
+  attendeesLinkText: {
+    color: theme.colors.text.secondary,
+    fontWeight: '600',
+  },
+  attendeesChevron: {
+    marginLeft: theme.spacing[1],
   },
   metaValue: {
     fontWeight: '600',
@@ -659,14 +675,17 @@ const styles = StyleSheet.create({
   },
   actionsRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
+    flexWrap: 'wrap',
     paddingHorizontal: theme.spacing[4],
     marginBottom: theme.spacing[3],
-    gap: theme.spacing[4],
+    gap: theme.spacing[3],
   },
   actionButton: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: theme.spacing[16] * 2,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: theme.spacing[12],
     paddingVertical: theme.spacing[3],
     paddingHorizontal: theme.spacing[6],
     backgroundColor: theme.colors.bg.card,
@@ -677,6 +696,7 @@ const styles = StyleSheet.create({
   actionLabel: {
     marginTop: theme.spacing[1],
     fontWeight: '600',
+    color: theme.colors.text.primary,
   },
   organizerRow: {
     flexDirection: 'row',
