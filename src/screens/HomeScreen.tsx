@@ -54,6 +54,12 @@ export default function HomeScreen() {
 
   // Defensive: Ensure feedItems is always an array and filter out any falsy values
   const safeFeedItems = (Array.isArray(feedItems) ? feedItems : []).filter(Boolean);
+  const homeFeedItems = safeFeedItems.filter((item) => {
+    if (item.kind !== 'post') return true;
+    const post = item.data as any;
+    const feedTargets = Array.isArray(post.feedTargets) ? post.feedTargets : [];
+    return feedTargets.includes('home') || feedTargets.length === 0;
+  });
 
   // Ensure all maps have safe defaults
   const safeProfileMap = profileMap || {};
@@ -203,7 +209,7 @@ export default function HomeScreen() {
 
   return (
     <FlatList
-      data={safeFeedItems}
+      data={homeFeedItems}
       keyExtractor={(item) => getFeedItemKey(item)}
       renderItem={renderFeedItem}
       style={styles.container}

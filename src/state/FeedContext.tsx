@@ -91,7 +91,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
     try {
       const { data: postsData, error: fetchError } = await supabase
         .from('posts')
-        .select('id, created_at, author_id, text, media, community_id')
+        .select('id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets')
         .order('created_at', { ascending: false })
         .limit(50);
 
@@ -133,7 +133,10 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         id: dbPost.id,
         authorName: newProfileMap[dbPost.author_id]?.display_name || 'Fan',
         authorId: dbPost.author_id,
+        actorType: dbPost.actor_type ?? 'user',
+        actorId: dbPost.actor_id ?? dbPost.author_id,
         communityId: dbPost.community_id ?? null,
+        feedTargets: Array.isArray(dbPost.feed_targets) ? dbPost.feed_targets : ['home'],
         createdAt: dbPost.created_at,
         text: dbPost.text,
         likesCount: 0, // TODO: Add likes support
@@ -273,7 +276,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       // Individual like state will be fetched when user interacts
 
       // Group items by kind
-      const postIds = safePostsArray.map((p) => p.id);
+  const postIds = safePostsArray.map((p) => p.id);
       const newsIds = safeNewsArray.map((n) => n.id);
       const eventIds = safeEventsArray.map((e) => e.id);
       const busTripIds = safeBusTripsArray.map((b) => b.id);

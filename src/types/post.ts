@@ -2,10 +2,13 @@ export interface Post {
   id: string;
   authorName: string;
   authorId?: string;
+  actorType?: 'user' | 'community';
+  actorId?: string;
   authorAvatarColor?: string;
   communityName?: string;
   factionName?: string;
   communityId?: string | null;
+  feedTargets?: string[];
   createdAt: string;
   text: string;
   imageUri?: string;

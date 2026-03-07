@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import CreateSheet from '../screens/CreateSheet';
+import { CreateSheetProvider, useCreateSheet } from '../state/CreateSheetContext';
 import { colors } from '../theme';
 import { CommunitiesStack } from './CommunitiesStack';
 import { EventsStack } from './EventsStack';
@@ -42,16 +43,18 @@ const tabData = [
 
 function CustomTabBar({ state, descriptors, navigation, tabs, showCreate }: any) {
   const insets = useSafeAreaInsets();
-  const [sheetVisible, setSheetVisible] = useState(false);
+  const {
+    visible,
+    openCreateSheet,
+    closeCreateSheet,
+    initialContentType,
+    initialFeedTargets,
+    initialActor,
+  } = useCreateSheet();
 
   const onPlusPress = () => {
     console.log('[AppTabs] Plus button pressed - opening CreateSheet');
-    setSheetVisible(true);
-  };
-
-  const handleCloseSheet = () => {
-    console.log('[AppTabs] Closing CreateSheet (setSheetVisible false)');
-    setSheetVisible(false);
+    openCreateSheet();
   };
 
   const leftTabs = tabs.slice(0, Math.ceil(tabs.length / 2));
@@ -97,7 +100,15 @@ function CustomTabBar({ state, descriptors, navigation, tabs, showCreate }: any)
           </Pressable>
         ) : null}
       </View>
-      {showCreate ? <CreateSheet visible={sheetVisible} onClose={handleCloseSheet} /> : null}
+      {showCreate ? (
+        <CreateSheet
+          visible={visible}
+          onClose={closeCreateSheet}
+          initialContentType={initialContentType}
+          initialFeedTargets={initialFeedTargets}
+          initialActor={initialActor}
+        />
+      ) : null}
     </View>
   );
 }
@@ -105,19 +116,21 @@ function CustomTabBar({ state, descriptors, navigation, tabs, showCreate }: any)
 export function AppTabs() {
   const tabs = tabData;
   return (
-    <Tab.Navigator
-      tabBar={(props) => <CustomTabBar {...props} tabs={tabs} showCreate />}
-      screenOptions={{
-        headerShown: false,
-      }}
-      initialRouteName="Home"
-    >
-      <Tab.Screen name="Home" component={HomeStack} />
-      <Tab.Screen name="Communities" component={CommunitiesStack} />
-      <Tab.Screen name="Events" component={EventsStack} />
-      <Tab.Screen name="Songs" component={LibraryStack} />
-      <Tab.Screen name="Profile" component={ProfileStack} options={{ tabBarButton: () => null }} />
-    </Tab.Navigator>
+    <CreateSheetProvider>
+      <Tab.Navigator
+        tabBar={(props) => <CustomTabBar {...props} tabs={tabs} showCreate />}
+        screenOptions={{
+          headerShown: false,
+        }}
+        initialRouteName="Home"
+      >
+        <Tab.Screen name="Home" component={HomeStack} />
+        <Tab.Screen name="Communities" component={CommunitiesStack} />
+        <Tab.Screen name="Events" component={EventsStack} />
+        <Tab.Screen name="Songs" component={LibraryStack} />
+        <Tab.Screen name="Profile" component={ProfileStack} options={{ tabBarButton: () => null }} />
+      </Tab.Navigator>
+    </CreateSheetProvider>
   );
 }
 

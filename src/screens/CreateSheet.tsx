@@ -4,6 +4,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../auth/AuthProvider';
 import { ActorSelector } from '../components/ActorSelector';
+import { FeedTargetSelector } from '../components/FeedTargetSelector';
 import { NewsComposer } from '../components/NewsComposer';
 import { PostComposer } from '../components/PostComposer';
 import { useFeed } from '../state/FeedContext';
@@ -14,13 +15,22 @@ import { resolveProfileDisplayName } from '../utils/actor';
 interface CreateSheetProps {
   visible: boolean;
   onClose: () => void;
+  initialContentType?: ContentType;
+  initialFeedTargets?: string[];
+  initialActor?: Actor;
 }
 
 type ContentType = null | 'post' | 'news';
 
-export default function CreateSheet({ visible, onClose }: CreateSheetProps) {
+export default function CreateSheet({
+  visible,
+  onClose,
+  initialContentType,
+  initialFeedTargets,
+  initialActor,
+}: CreateSheetProps) {
   const insets = useSafeAreaInsets();
-  const { fetchPosts, profileMap } = useFeed();
+  const { fetchPosts, profileMap, communityMap } = useFeed();
   const { user } = useAuth();
   const theme = useTheme();
 
@@ -30,6 +40,9 @@ export default function CreateSheet({ visible, onClose }: CreateSheetProps) {
     id: user?.id || '',
     name: resolveProfileDisplayName(profileMap, user?.id, user?.email || undefined),
   });
+  const [feedTargets, setFeedTargets] = useState<string[]>(['home']);
+  const [showPostSettings, setShowPostSettings] = useState(false);
+  const [showNewsSettings, setShowNewsSettings] = useState(false);
 
   // Reset actor when user changes
   useEffect(() => {
@@ -42,12 +55,38 @@ export default function CreateSheet({ visible, onClose }: CreateSheetProps) {
     }
   }, [user, profileMap]);
 
+  useEffect(() => {
+    if (visible) {
+      if (initialContentType !== undefined) {
+        setContentType(initialContentType);
+      }
+      if (Array.isArray(initialFeedTargets) && initialFeedTargets.length > 0) {
+        setFeedTargets(initialFeedTargets);
+      }
+      if (initialActor) {
+        setActor(initialActor);
+      }
+      setShowPostSettings(false);
+      setShowNewsSettings(false);
+    }
+  }, [visible, initialContentType, initialFeedTargets, initialActor]);
+
   // Reset state when modal closes
   useEffect(() => {
     if (!visible) {
       setContentType(null);
+      setFeedTargets(['home']);
+      setShowPostSettings(false);
+      setShowNewsSettings(false);
+      if (user) {
+        setActor({
+          type: 'user',
+          id: user.id,
+          name: resolveProfileDisplayName(profileMap, user.id, user.email || undefined),
+        });
+      }
     }
-  }, [visible]);
+  }, [visible, user, profileMap]);
 
   const handleNewsSuccess = () => {
     fetchPosts();
@@ -62,6 +101,26 @@ export default function CreateSheet({ visible, onClose }: CreateSheetProps) {
     onClose();
   };
 
+  const includesHome = feedTargets.includes('home');
+  const communityTargetCount = feedTargets.filter((target) => target.startsWith('community:')).length;
+  const singleCommunityTarget =
+    !includesHome && communityTargetCount === 1
+      ? feedTargets.find((target) => target.startsWith('community:'))
+      : null;
+  const singleCommunityName = singleCommunityTarget
+    ? communityMap[singleCommunityTarget.replace('community:', '')]
+    : null;
+  const newsAccent = theme.colors.state.success;
+  const feedTargetsSummary = includesHome && communityTargetCount > 0
+    ? `Vises i Home + ${communityTargetCount} mere`
+    : includesHome
+      ? 'Vises i Home'
+      : communityTargetCount === 1
+        ? singleCommunityName
+          ? `Vises i ${singleCommunityName}`
+          : 'Vises i valgt fællesskab'
+        : `Vises i ${communityTargetCount} fællesskaber`;
+
   const styles = makeStyles(theme);
 
   if (!visible) return null;
@@ -73,8 +132,8 @@ export default function CreateSheet({ visible, onClose }: CreateSheetProps) {
       presentationStyle="pageSheet"
       onRequestClose={handleClose}
     >
-      <View style={[styles.container, { paddingTop: insets.top }]}>
-        <View style={styles.header}>
+      <View style={styles.container}>
+        <View style={[styles.header, { paddingTop: insets.top }]}>
           <Pressable onPress={handleClose} style={styles.closeButton}>
             <Ionicons name="close" size={28} color={theme.colors.text.primary} />
           </Pressable>
@@ -115,16 +174,91 @@ export default function CreateSheet({ visible, onClose }: CreateSheetProps) {
           ) : contentType === 'post' ? (
             // Step 2: Post composer (community posting coming later)
             <>
-              <View style={{ padding: theme.spacing[4] }}>
-                <ActorSelector selectedActor={actor} onSelectActor={setActor} />
+              <View style={styles.postSettingsBlock}>
+                <Pressable
+                  style={[
+                    styles.settingsSummaryCard,
+                    showPostSettings && styles.settingsSummaryCardExpanded,
+                  ]}
+                  onPress={() => setShowPostSettings((prev) => !prev)}
+                >
+                  <View style={styles.settingsSummaryBody}>
+                    <Text style={styles.settingsSummaryTitle}>Opslå som {actor.name}</Text>
+                    <Text style={styles.settingsSummarySubtitle}>{feedTargetsSummary}</Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.settingsSummaryActionWrap,
+                      showPostSettings && styles.settingsSummaryActionWrapExpanded,
+                    ]}
+                  >
+                    <Text style={styles.settingsSummaryAction}>
+                      {showPostSettings ? 'Skjul' : 'Rediger'}
+                    </Text>
+                    <Ionicons
+                      name={showPostSettings ? 'chevron-up' : 'chevron-down'}
+                      size={16}
+                      color={theme.colors.text.secondary}
+                    />
+                  </View>
+                </Pressable>
+
+                {showPostSettings && (
+                  <View style={styles.postSettingsExpanded}>
+                    <ActorSelector selectedActor={actor} onSelectActor={setActor} />
+                    <FeedTargetSelector selectedTargets={feedTargets} onChange={setFeedTargets} />
+                  </View>
+                )}
               </View>
-              <PostComposer actor={actor} onSuccess={handlePostSuccess} />
+              <View style={styles.postComposerSection}>
+                <PostComposer
+                  actor={actor}
+                  feedTargets={feedTargets}
+                  onSuccess={handlePostSuccess}
+                />
+              </View>
             </>
           ) : (
             // Step 2: News composer with actor selector
             <>
-              <View style={{ padding: theme.spacing[4] }}>
-                <ActorSelector selectedActor={actor} onSelectActor={setActor} />
+              <View style={styles.newsSettingsBlock}>
+                <Pressable
+                  style={[
+                    styles.newsSettingsSummaryCard,
+                    showNewsSettings && styles.newsSettingsSummaryCardExpanded,
+                  ]}
+                  onPress={() => setShowNewsSettings((prev) => !prev)}
+                >
+                  <View style={styles.settingsSummaryBody}>
+                    <Text style={styles.newsSettingsSummaryTitle}>Opslå som {actor.name}</Text>
+                    <Text style={styles.newsSettingsSummarySubtitle}>Deles som nyhed</Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.newsSettingsActionWrap,
+                      showNewsSettings && styles.newsSettingsActionWrapExpanded,
+                    ]}
+                  >
+                    <Text style={styles.newsSettingsAction}>
+                      {showNewsSettings ? 'Skjul' : 'Rediger'}
+                    </Text>
+                    <Ionicons
+                      name={showNewsSettings ? 'chevron-up' : 'chevron-down'}
+                      size={16}
+                      color={newsAccent}
+                    />
+                  </View>
+                </Pressable>
+
+                {showNewsSettings && (
+                  <View style={styles.newsSettingsExpanded}>
+                    <ActorSelector
+                      selectedActor={actor}
+                      onSelectActor={setActor}
+                      accentColor={newsAccent}
+                    />
+                  </View>
+                )}
               </View>
               <NewsComposer actor={actor} onSuccess={handleNewsSuccess} />
             </>
@@ -146,20 +280,144 @@ const makeStyles = (theme: ReturnType<typeof useTheme>) =>
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: theme.spacing[6],
-      paddingVertical: theme.spacing[4],
+      paddingBottom: theme.spacing[2],
       borderBottomWidth: 1,
-      borderBottomColor: theme.colors.border.default,
+      borderBottomColor: theme.colors.border.subtle,
+      backgroundColor: theme.colors.bg.card,
     },
     closeButton: {
       padding: theme.spacing[1],
     },
     title: {
-      fontSize: 20,
+      fontSize: 18,
       fontWeight: '700',
       color: theme.colors.text.primary,
     },
     content: {
       flex: 1,
+      backgroundColor: theme.colors.bg.default,
+    },
+    postSettingsBlock: {
+      paddingHorizontal: theme.spacing[3],
+      paddingTop: theme.spacing[2],
+      paddingBottom: theme.spacing[1],
+    },
+    postSettingsExpanded: {
+      marginTop: theme.spacing[2],
+      paddingTop: theme.spacing[1],
+      gap: theme.spacing[1],
+    },
+    settingsSummaryCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: theme.spacing[4],
+      paddingVertical: theme.spacing[2],
+      backgroundColor: theme.colors.pill.red.bg,
+      borderRadius: theme.radius.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border.default,
+      marginBottom: theme.spacing[2],
+    },
+    settingsSummaryCardExpanded: {
+      backgroundColor: theme.colors.bg.card,
+      borderColor: theme.colors.border.default,
+    },
+    settingsSummaryBody: {
+      flex: 1,
+      paddingRight: theme.spacing[3],
+    },
+    settingsSummaryTitle: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: theme.colors.text.primary,
+    },
+    settingsSummarySubtitle: {
+      marginTop: theme.spacing[0],
+      fontSize: 12,
+      color: theme.colors.text.secondary,
+    },
+    settingsSummaryActionWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing[1],
+      paddingVertical: theme.spacing[1],
+      paddingHorizontal: theme.spacing[2],
+      borderRadius: theme.radius.pill,
+      backgroundColor: theme.colors.bg.card,
+      borderWidth: 1,
+      borderColor: theme.colors.border.default,
+    },
+    settingsSummaryActionWrapExpanded: {
+      backgroundColor: theme.colors.bg.elevated,
+      borderColor: theme.colors.border.default,
+    },
+    settingsSummaryAction: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: theme.colors.primary,
+    },
+    postComposerSection: {
+      backgroundColor: theme.colors.bg.subtle,
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.border.subtle,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border.subtle,
+    },
+    newsSettingsBlock: {
+      paddingHorizontal: theme.spacing[3],
+      paddingTop: theme.spacing[2],
+      paddingBottom: theme.spacing[1],
+    },
+    newsSettingsExpanded: {
+      marginTop: theme.spacing[2],
+      paddingTop: theme.spacing[1],
+    },
+    newsSettingsSummaryCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: theme.spacing[4],
+      paddingVertical: theme.spacing[2],
+      backgroundColor: theme.colors.pill.green.bg,
+      borderRadius: theme.radius.md,
+      borderWidth: 1,
+      borderColor: theme.colors.pill.green.border,
+      marginBottom: theme.spacing[2],
+    },
+    newsSettingsSummaryCardExpanded: {
+      backgroundColor: theme.colors.bg.card,
+      borderColor: theme.colors.border.default,
+    },
+    newsSettingsSummaryTitle: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: theme.colors.text.primary,
+    },
+    newsSettingsSummarySubtitle: {
+      marginTop: theme.spacing[0],
+      fontSize: 12,
+      color: theme.colors.text.secondary,
+    },
+    newsSettingsActionWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing[1],
+      paddingVertical: theme.spacing[1],
+      paddingHorizontal: theme.spacing[2],
+      borderRadius: theme.radius.pill,
+      backgroundColor: theme.colors.bg.card,
+      borderWidth: 1,
+      borderColor: theme.colors.pill.green.border,
+    },
+    newsSettingsActionWrapExpanded: {
+      backgroundColor: theme.colors.bg.elevated,
+      borderColor: theme.colors.border.default,
+    },
+    newsSettingsAction: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: theme.colors.state.success,
     },
     choiceContainer: {
       padding: theme.spacing[6],

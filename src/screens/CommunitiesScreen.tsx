@@ -216,7 +216,6 @@ export default function CommunitiesScreen() {
                   title={community.name}
                   onPress={() => navigateToDetail(community.id, community.name)}
                   anchor={{ x: 0.5, y: 1 }}
-                  centerOffset={{ x: 0, y: -16 }}
                   flat={false}
                   tracksViewChanges={false}
                 >

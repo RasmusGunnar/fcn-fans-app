@@ -23,7 +23,6 @@ import { logger } from '../lib/logger';
 import { pickFromLibrary, pickCameraPhoto } from '../lib/mediaPicker';
 import { geocodeAddress } from '../services/geocoding';
 import { FeedItemRenderer } from '../components/feed/FeedItemRenderer';
-import { PostComposer } from '../components/PostComposer';
 import { MembersStatRow } from '../components/social/MembersStatRow';
 import { IconButton } from '../components/ui';
 import { pickAndUploadCommunityImage } from '../lib/communityMediaUpload';
@@ -52,11 +51,13 @@ import {
 } from '../services/communities';
 import { Event as CommunityEvent, fetchEventsUpcoming } from '../services/eventsApi';
 import { fetchUpcomingFixtures, Fixture, formatDateDa } from '../services/fixtures';
+import { useCreateSheet } from '../state/CreateSheetContext';
 import { useFeed } from '../state/FeedContext';
 import { useTheme } from '../theme';
 import { getFeedItemKey } from '../types/feed';
 import { Post } from '../types/post';
 import { resolveAvatarUrl } from '../utils/avatar';
+import { resolveProfileDisplayName } from '../utils/actor';
 
 type CommunityDetailRouteProp = RouteProp<
   { CommunityDetail: { id: string; title: string } },
@@ -85,6 +86,7 @@ export default function CommunityDetailScreen() {
     incrementCommentCount,
     addCommentPreview,
   } = useFeed();
+  const { openCreateSheet } = useCreateSheet();
 
   const [community, setCommunity] = useState<CommunityData | null>(null);
   const [membership, setMembership] = useState<any>(null);
@@ -128,7 +130,11 @@ export default function CommunityDetailScreen() {
   const safeCommentPreviewMap = commentPreviewMap || {};
 
   const communityFeedItems = safeFeedItems.filter((item) => {
-    if (item.kind === 'post') return (item.data as any).communityId === id;
+    if (item.kind === 'post') {
+      const post = item.data as any;
+      const feedTargets = Array.isArray(post.feedTargets) ? post.feedTargets : [];
+      return feedTargets.includes(`community:${id}`) || post.communityId === id;
+    }
     if (item.kind === 'news')
       return item.data.actorType === 'community' && item.data.actorId === id;
     if (item.kind === 'event' || item.kind === 'bus_trip') return item.data.organizerGroupId === id;
@@ -896,12 +902,31 @@ export default function CommunityDetailScreen() {
         {/* Composer - Only for members */}
         {isMember && (
           <View style={styles.composerSection}>
-            <PostComposer
-              onSuccess={() => {
-                logger.log('[CommunityDetail] Post created successfully');
-                loadData();
+            <Pressable
+              style={({ pressed }) => [styles.composerEntryCard, pressed && styles.composerEntryCardPressed]}
+              onPress={() => {
+                openCreateSheet({
+                  initialContentType: 'post',
+                  initialFeedTargets: [`community:${id}`],
+                  initialActor: user
+                    ? {
+                        type: 'user',
+                        id: user.id,
+                        name: resolveProfileDisplayName(profileMap, user.id, user.email || undefined),
+                      }
+                    : undefined,
+                });
               }}
-            />
+            >
+              <View style={styles.composerEntryLeading}>
+                <Ionicons name="create-outline" size={18} color={accentColor} />
+              </View>
+              <View style={styles.composerEntryBody}>
+                <Text style={styles.composerEntryTitle}>Hvad er på dit hjerte?</Text>
+                <Text style={styles.composerEntrySubtitle}>Opslå i {community.name}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={theme.colors.text.secondary} />
+            </Pressable>
           </View>
         )}
       </ScrollView>
@@ -1586,8 +1611,43 @@ const makeStyles = (
       fontWeight: '600',
     },
     composerSection: {
-      paddingHorizontal: layout.screenPaddingX,
       marginBottom: layout.sectionGap,
+      paddingHorizontal: layout.screenPaddingX,
+    },
+    composerEntryCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing[3],
+      paddingHorizontal: theme.spacing[4],
+      paddingVertical: theme.spacing[3],
+      backgroundColor: theme.colors.bg.card,
+      borderRadius: theme.radius.lg,
+      borderWidth: theme.layout.borderHairline,
+      borderColor: theme.colors.border.subtle,
+    },
+    composerEntryCardPressed: {
+      opacity: 0.88,
+    },
+    composerEntryLeading: {
+      width: theme.spacing[9],
+      height: theme.spacing[9],
+      borderRadius: theme.radius.pill,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.colors.bg.elevated,
+    },
+    composerEntryBody: {
+      flex: 1,
+    },
+    composerEntryTitle: {
+      fontSize: theme.typography.body.fontSize,
+      fontWeight: '600',
+      color: theme.colors.text.primary,
+    },
+    composerEntrySubtitle: {
+      marginTop: theme.spacing[0],
+      fontSize: theme.typography.caption.fontSize,
+      color: theme.colors.text.secondary,
     },
     adminHeader: {
       flexDirection: 'row',

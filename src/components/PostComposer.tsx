@@ -24,9 +24,10 @@ import type { Actor } from '../types/news';
 interface PostComposerProps {
   onSuccess?: () => void;
   actor?: Actor;
+  feedTargets?: string[];
 }
 
-export function PostComposer({ onSuccess, actor }: PostComposerProps) {
+export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProps) {
   logger.log('[PostComposer] Component mounted');
   const theme = useTheme();
   const styles = createStyles(theme);
@@ -132,16 +133,28 @@ export function PostComposer({ onSuccess, actor }: PostComposerProps) {
     let dbPost: Post | null = null;
     try {
       if (user?.id) {
+        const resolvedActorType = actor?.type ?? 'user';
+        const resolvedActorId = actor?.type === 'community' ? actor.id : user.id;
+        const resolvedFeedTargets =
+          Array.isArray(feedTargets) && feedTargets.length > 0
+            ? feedTargets
+            : actor?.type === 'community'
+              ? [`community:${actor.id}`]
+              : ['home'];
+
         const { data, error } = await supabase
           .from('posts')
           .insert({
             author_id: user.id,
+            actor_type: resolvedActorType,
+            actor_id: resolvedActorId,
             text: text.trim(),
             media: mediaArray,
+            feed_targets: resolvedFeedTargets,
             media_type: attachment?.type ?? null,
             ...(actor?.type === 'community' ? { community_id: actor.id } : {}),
           })
-          .select('id, created_at, author_id, text, media, community_id');
+          .select('id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets');
         if (error) throw error;
 
         if (data && data[0]) {
@@ -151,7 +164,10 @@ export function PostComposer({ onSuccess, actor }: PostComposerProps) {
             id: dbRecord.id,
             authorName: user?.email ?? 'Ukendt',
             authorId: dbRecord.author_id,
+            actorType: dbRecord.actor_type ?? 'user',
+            actorId: dbRecord.actor_id ?? dbRecord.author_id,
             communityId: dbRecord.community_id ?? null,
+            feedTargets: dbRecord.feed_targets ?? ['home'],
             createdAt: dbRecord.created_at || new Date().toISOString(),
             text: dbRecord.text,
             likesCount: 0,
@@ -174,12 +190,21 @@ export function PostComposer({ onSuccess, actor }: PostComposerProps) {
       id: Date.now().toString(),
       authorName: user?.email ?? 'Ukendt',
       authorId: user?.id,
+      actorType: actor?.type ?? 'user',
+      actorId: actor?.type === 'community' ? actor.id : user?.id,
+      communityId: actor?.type === 'community' ? actor.id : null,
       createdAt: new Date().toISOString(),
       text: text.trim(),
       likesCount: 0,
       commentsCount: 0,
       likedByMe: false,
       media: mediaArray,
+      feedTargets:
+        Array.isArray(feedTargets) && feedTargets.length > 0
+          ? feedTargets
+          : actor?.type === 'community'
+            ? [`community:${actor.id}`]
+            : ['home'],
     };
 
     addPost(newPost);
@@ -202,7 +227,7 @@ export function PostComposer({ onSuccess, actor }: PostComposerProps) {
 
   return (
     <View style={styles.container}>
-      <Card style={{ marginBottom: theme.spacing[4] }}>
+      <Card style={styles.sectionCard}>
         <Text style={styles.label}>Dit opslag</Text>
         <TextInput
           style={styles.textInput}
@@ -241,32 +266,36 @@ export function PostComposer({ onSuccess, actor }: PostComposerProps) {
       </Card>
 
       {!attachment && (
-        <Card style={{ marginBottom: theme.spacing[4] }}>
+        <Card style={styles.sectionCard}>
           <Text style={styles.label}>Tilføj medie (valgfrit)</Text>
           <View style={styles.imageButtonsContainer}>
             <Pressable style={styles.imageButton} onPress={handlePickCamera} disabled={loading}>
-              <Ionicons name="camera" size={20} color={theme.colors.primary} />
+              <Ionicons name="camera" size={20} color={theme.colors.text.secondary} />
               <Text style={styles.imageButtonText}>Tag billede</Text>
             </Pressable>
 
             <Pressable style={styles.imageButton} onPress={handleRecordVideo} disabled={loading}>
-              <Ionicons name="videocam" size={20} color={theme.colors.primary} />
+              <Ionicons name="videocam" size={20} color={theme.colors.text.secondary} />
               <Text style={styles.imageButtonText}>Optag video</Text>
             </Pressable>
 
             <Pressable style={styles.imageButton} onPress={handlePickLibrary} disabled={loading}>
-              <Ionicons name="images" size={20} color={theme.colors.primary} />
+              <Ionicons name="images" size={20} color={theme.colors.text.secondary} />
               <Text style={styles.imageButtonText}>Vælg fra bibliotek</Text>
             </Pressable>
           </View>
         </Card>
       )}
 
-      <PrimaryButton
-        title={loading ? 'Deler...' : 'Del opslag'}
-        onPress={handlePublish}
-        disabled={!text.trim() || loading}
-      />
+      <View style={[styles.submitButtonWrap, !text.trim() || loading ? styles.submitButtonWrapDisabled : null]}>
+        <View style={styles.submitButtonInner}>
+          <PrimaryButton
+            title={loading ? 'Deler...' : 'Del opslag'}
+            onPress={handlePublish}
+            disabled={!text.trim() || loading}
+          />
+        </View>
+      </View>
 
       {loading && (
         <View style={styles.loadingOverlay}>
@@ -280,23 +309,32 @@ export function PostComposer({ onSuccess, actor }: PostComposerProps) {
 function createStyles(theme: Theme) {
   return StyleSheet.create({
     container: {
-      padding: theme.layout.screenPadding,
+      paddingHorizontal: theme.spacing[2],
+      paddingTop: theme.spacing[3],
+      paddingBottom: theme.spacing[5],
+    },
+    sectionCard: {
+      marginBottom: theme.spacing[3],
+      borderWidth: 1,
+      borderColor: theme.colors.border.default,
+      backgroundColor: theme.colors.bg.card,
     },
     label: {
-      fontSize: 14,
-      fontWeight: '600',
+      fontSize: 15,
+      fontWeight: '700',
       color: theme.colors.text.primary,
       marginBottom: theme.spacing[2],
     },
     textInput: {
       borderWidth: 1,
       borderColor: theme.colors.border.default,
-      borderRadius: theme.radius.sm,
+      borderRadius: theme.radius.md,
       padding: theme.spacing[4],
-      minHeight: 120,
-      fontSize: 14,
+      minHeight: 148,
+      fontSize: 15,
       color: theme.colors.text.primary,
       textAlignVertical: 'top',
+      backgroundColor: theme.colors.bg.subtle,
     },
     previewContainer: {
       marginTop: theme.spacing[4],
@@ -320,23 +358,50 @@ function createStyles(theme: Theme) {
     imageButtonsContainer: {
       flexDirection: 'row',
       gap: theme.spacing[2],
+      alignItems: 'stretch',
     },
     imageButton: {
       flex: 1,
-      flexDirection: 'row',
+      flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: theme.spacing[4],
+      minHeight: 84,
+      paddingVertical: theme.spacing[3],
       paddingHorizontal: theme.spacing[2],
       borderWidth: 1,
-      borderColor: theme.colors.primary,
-      borderRadius: theme.radius.sm,
-      gap: theme.spacing[1],
+      borderColor: theme.colors.border.default,
+      backgroundColor: theme.colors.bg.elevated,
+      borderRadius: theme.radius.md,
+      gap: theme.spacing[2],
     },
     imageButtonText: {
-      fontSize: 14,
-      color: theme.colors.primary,
-      fontWeight: '500',
+      fontSize: 13,
+      color: theme.colors.text.primary,
+      fontWeight: '600',
+      textAlign: 'center',
+      flexShrink: 1,
+      lineHeight: 17,
+    },
+    submitButtonWrap: {
+      marginTop: theme.spacing[3],
+      padding: theme.spacing[2],
+      borderRadius: theme.radius.lg,
+      backgroundColor: theme.colors.bg.card,
+      borderWidth: 1,
+      borderColor: theme.colors.border.default,
+    },
+    submitButtonWrapDisabled: {
+      backgroundColor: theme.colors.bg.elevated,
+      borderColor: theme.colors.border.default,
+      opacity: 1,
+    },
+    submitButtonInner: {
+      borderRadius: theme.radius.md,
+      overflow: 'hidden',
+      backgroundColor: theme.colors.bg.subtle,
+      borderWidth: 1,
+      borderColor: theme.colors.border.subtle,
+      padding: theme.spacing[1],
     },
     loadingOverlay: {
       marginTop: theme.spacing[2],

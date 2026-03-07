@@ -46,6 +46,7 @@ function normalizeHttpUrl(value: string): string | null {
 export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
   const theme = useTheme();
   const styles = createStyles(theme);
+  const newsAccent = theme.colors.state.success;
   const scrollRef = useRef<ScrollView>(null);
   const bodyInputRef = useRef<TextInput>(null);
   const urlInputRef = useRef<TextInput>(null);
@@ -276,63 +277,67 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
         }}
       >
         <View style={styles.container}>
-          <View style={styles.bodySection}>
-            <Text style={styles.label}>Tekst (valgfrit)</Text>
+          <Card style={styles.sectionCard}>
+            <View style={styles.bodySection}>
+              <Text style={styles.label}>Tekst (valgfrit)</Text>
+              <TextInput
+                ref={bodyInputRef}
+                style={[styles.input, styles.bodyInput]}
+                placeholder="Tilføj brødtekst til nyheden..."
+                placeholderTextColor={theme.colors.text.secondary}
+                value={body}
+                onChangeText={setBody}
+                onEndEditing={handleBodyEndEditing}
+                multiline
+                numberOfLines={6}
+                textAlignVertical="top"
+              />
+            </View>
+          </Card>
+
+          <Card style={styles.sectionCard}>
+            <Text style={styles.label}>Link URL</Text>
             <TextInput
-              ref={bodyInputRef}
-              style={[styles.input, styles.bodyInput]}
-              placeholder="Tilføj brødtekst til nyheden..."
+              ref={urlInputRef}
+              style={styles.input}
+              placeholder="https://example.com/article"
               placeholderTextColor={theme.colors.text.secondary}
-              value={body}
-              onChangeText={setBody}
-              onEndEditing={handleBodyEndEditing}
-              multiline
-              numberOfLines={6}
-              textAlignVertical="top"
+              value={url}
+              onChangeText={setUrl}
+              onFocus={() => scrollToInput(urlInputRef)}
+              returnKeyType="done"
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              textContentType="URL"
+              clearButtonMode="while-editing"
+              editable={!publishing}
             />
-          </View>
 
-          <Text style={styles.label}>Link URL</Text>
-          <TextInput
-            ref={urlInputRef}
-            style={styles.input}
-            placeholder="https://example.com/article"
-            placeholderTextColor={theme.colors.text.secondary}
-            value={url}
-            onChangeText={setUrl}
-            onFocus={() => scrollToInput(urlInputRef)}
-            returnKeyType="done"
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="url"
-            textContentType="URL"
-            clearButtonMode="while-editing"
-            editable={!publishing}
-          />
+            {showPreviewSuccess ? (
+              <View style={styles.statusRow}>
+                <Text style={styles.successText}>Preview klar</Text>
+              </View>
+            ) : null}
 
-          {showPreviewSuccess ? (
-            <View style={styles.statusRow}>
-              <Text style={styles.successText}>Preview klar</Text>
-            </View>
-          ) : null}
+            {loadingPreview ? (
+              <View style={styles.statusRow}>
+                <ActivityIndicator size="small" color={newsAccent} />
+                <Text style={styles.statusText}>Henter preview...</Text>
+              </View>
+            ) : null}
 
-          {loadingPreview ? (
-            <View style={styles.statusRow}>
-              <ActivityIndicator size="small" color={theme.colors.primary} />
-              <Text style={styles.statusText}>Henter preview...</Text>
-            </View>
-          ) : null}
-
-          {!loadingPreview && previewError ? (
-            <View style={styles.statusRow}>
-              <Text style={styles.errorText}>Kunne ikke hente preview</Text>
-              {normalizedUrl ? (
-                <Pressable onPress={() => handleFetchPreview(normalizedUrl, true)}>
-                  <Text style={styles.retryText}>Prøv igen</Text>
-                </Pressable>
-              ) : null}
-            </View>
-          ) : null}
+            {!loadingPreview && previewError ? (
+              <View style={styles.statusRow}>
+                <Text style={styles.errorText}>Kunne ikke hente preview</Text>
+                {normalizedUrl ? (
+                  <Pressable onPress={() => handleFetchPreview(normalizedUrl, true)}>
+                    <Text style={styles.retryText}>Prøv igen</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
+          </Card>
 
           {preview && (
             <Card style={styles.previewCard}>
@@ -359,11 +364,22 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
             </Card>
           )}
 
-          <PrimaryButton
-            title={publishing ? 'Deler...' : 'Del nyhed'}
-            onPress={handlePublish}
-            disabled={!preview || publishing || (!preview?.title && !preview?.description)}
-          />
+          <View
+            style={[
+              styles.submitButtonWrap,
+              !preview || publishing || (!preview?.title && !preview?.description)
+                ? styles.submitButtonWrapDisabled
+                : null,
+            ]}
+          >
+            <View style={styles.submitButtonInner}>
+              <PrimaryButton
+                title={publishing ? 'Deler...' : 'Del nyhed'}
+                onPress={handlePublish}
+                disabled={!preview || publishing || (!preview?.title && !preview?.description)}
+              />
+            </View>
+          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -379,29 +395,35 @@ function createStyles(theme: Theme) {
       paddingBottom: theme.spacing[16],
     },
     container: {
-      gap: theme.spacing[4],
-      paddingBottom: theme.spacing[4],
+      gap: theme.spacing[3],
+      paddingHorizontal: theme.spacing[3],
+      paddingTop: theme.spacing[3],
+      paddingBottom: theme.spacing[5],
+    },
+    sectionCard: {
+      borderWidth: 1,
+      borderColor: theme.colors.border.default,
+      backgroundColor: theme.colors.bg.card,
     },
     label: {
-      fontSize: theme.typography.body.fontSize,
-      fontWeight: '600',
+      fontSize: 15,
+      fontWeight: '700',
       color: theme.colors.text.primary,
+      marginBottom: theme.spacing[2],
     },
     input: {
       padding: theme.spacing[4],
-      backgroundColor: theme.colors.bg.card,
-      borderRadius: theme.radius.sm,
+      backgroundColor: theme.colors.bg.subtle,
+      borderRadius: theme.radius.md,
       borderWidth: 1,
       borderColor: theme.colors.border.default,
-      fontSize: theme.typography.body.fontSize,
+      fontSize: 15,
       color: theme.colors.text.primary,
     },
     bodyInput: {
-      minHeight: theme.spacing[16],
-      marginTop: theme.spacing[2],
+      minHeight: 148,
     },
     bodySection: {
-      marginBottom: theme.spacing[1],
     },
     statusRow: {
       flexDirection: 'row',
@@ -415,7 +437,8 @@ function createStyles(theme: Theme) {
     },
     successText: {
       fontSize: theme.typography.body.fontSize,
-      color: theme.colors.text.secondary,
+      color: theme.colors.state.success,
+      fontWeight: '600',
     },
     errorText: {
       fontSize: theme.typography.body.fontSize,
@@ -423,12 +446,15 @@ function createStyles(theme: Theme) {
     },
     retryText: {
       fontSize: theme.typography.body.fontSize,
-      color: theme.colors.primary,
+      color: theme.colors.state.success,
       fontWeight: '600',
     },
     previewCard: {
       padding: theme.spacing[0],
       overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: theme.colors.border.default,
+      backgroundColor: theme.colors.bg.card,
     },
     previewImage: {
       width: '100%',
@@ -442,7 +468,7 @@ function createStyles(theme: Theme) {
     previewSiteName: {
       fontSize: theme.typography.small.fontSize,
       fontWeight: '600',
-      color: theme.colors.text.secondary,
+      color: theme.colors.state.success,
       textTransform: 'uppercase',
     },
     previewTitle: {
@@ -454,6 +480,27 @@ function createStyles(theme: Theme) {
       fontSize: theme.typography.body.fontSize,
       color: theme.colors.text.secondary,
       lineHeight: theme.typography.body.lineHeight,
+    },
+    submitButtonWrap: {
+      marginTop: theme.spacing[1],
+      padding: theme.spacing[2],
+      borderRadius: theme.radius.lg,
+      backgroundColor: theme.colors.bg.card,
+      borderWidth: 1,
+      borderColor: theme.colors.border.default,
+    },
+    submitButtonWrapDisabled: {
+      backgroundColor: theme.colors.bg.elevated,
+      borderColor: theme.colors.border.default,
+      opacity: 1,
+    },
+    submitButtonInner: {
+      borderRadius: theme.radius.md,
+      overflow: 'hidden',
+      backgroundColor: theme.colors.bg.subtle,
+      borderWidth: 1,
+      borderColor: theme.colors.pill.green.border,
+      padding: theme.spacing[1],
     },
   });
 }
