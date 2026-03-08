@@ -1,50 +1,109 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  Pressable,
-  Image,
   ActivityIndicator,
+  Image,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  findNodeHandle,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useTheme, Theme } from '../theme';
-import { Card } from './ui/Card';
-import { PrimaryButton } from './PrimaryButton';
-import { Actor, LinkPreview } from '../types/news';
-import { fetchLinkPreview, insertNewsItem } from '../services/newsApi';
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
+import { fetchLinkPreview, insertNewsItem } from '../services/newsApi';
+import { Theme, useTheme } from '../theme';
+import { Actor, LinkPreview } from '../types/news';
+import { PrimaryButton } from './PrimaryButton';
+import { Card } from './ui/Card';
 
 interface NewsComposerProps {
   actor: Actor;
   onSuccess: () => void;
 }
 
+function normalizeHttpUrl(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    const validatedUrl = new URL(trimmed);
+    if (validatedUrl.protocol !== 'http:' && validatedUrl.protocol !== 'https:') {
+      return null;
+    }
+    return validatedUrl.toString();
+  } catch {
+    return null;
+  }
+}
+
 export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
   const theme = useTheme();
   const styles = createStyles(theme);
+  const newsAccent = theme.colors.state.success;
+  const scrollRef = useRef<ScrollView>(null);
+  const bodyInputRef = useRef<TextInput>(null);
+  const urlInputRef = useRef<TextInput>(null);
   const [url, setUrl] = useState('');
   const [preview, setPreview] = useState<LinkPreview | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
+  const [body, setBody] = useState('');
+  const [lastFetchedUrl, setLastFetchedUrl] = useState<string | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const normalizedUrl = normalizeHttpUrl(url);
+  const showPreviewSuccess = !!preview && !loadingPreview && normalizedUrl === lastFetchedUrl;
 
-  const handleFetchPreview = async () => {
-    if (!url.trim()) {
-      alert('Indtast venligst en URL');
-      return;
-    }
-
-    // Basic URL validation
-    let validatedUrl: URL;
-    try {
-      validatedUrl = new URL(url.trim());
-      if (!validatedUrl.protocol.startsWith('http')) {
-        throw new Error('URL skal starte med http:// eller https://');
+  // Keyboard height tracking for stable scroll behavior
+  useEffect(() => {
+    const showListener = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
       }
-    } catch {
-      alert('Ugyldig URL. Sørg for at den starter med http:// eller https://');
+    );
+    const hideListener = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        setKeyboardHeight(0);
+      }
+    );
+
+    return () => {
+      showListener.remove();
+      hideListener.remove();
+    };
+  }, []);
+
+  const scrollToInput = (inputRef: React.RefObject<TextInput | null>, extraOffset: number = theme.spacing[6]) => {
+    requestAnimationFrame(() => {
+      const node = findNodeHandle(inputRef.current);
+      if (!node) {
+        return;
+      }
+      const responder = scrollRef.current?.getScrollResponder?.();
+      responder?.scrollResponderScrollNativeHandleToKeyboard(node, extraOffset, true);
+    });
+  };
+
+  const handleBodyEndEditing = () => {
+    if (url.trim().length === 0) {
+      requestAnimationFrame(() => {
+        urlInputRef.current?.focus();
+        scrollToInput(urlInputRef);
+      });
+    }
+  };
+
+  const handleFetchPreview = async (targetUrl: string, force = false) => {
+    if (!force && targetUrl === lastFetchedUrl) {
       return;
     }
 
@@ -52,29 +111,54 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
     setPreviewError(null);
     setPreview(null);
 
-    console.log('[NewsComposer] Fetching preview for URL:', url.trim());
+    logger.log('[NewsComposer] Fetching preview for URL:', targetUrl);
 
     try {
-      const previewData = await fetchLinkPreview(url.trim());
-      console.log('[NewsComposer] Preview fetched successfully:', {
+      const previewData = await fetchLinkPreview(targetUrl);
+      logger.log('[NewsComposer] Preview fetched successfully:', {
         title: previewData.title,
         siteName: previewData.siteName,
         hasImage: !!previewData.imageUrl,
         hasDescription: !!previewData.description,
       });
       setPreview(previewData);
-    } catch (error: any) {
-      const errorMsg = error?.message || 'Kunne ikke hente preview';
-      console.error('[NewsComposer] Preview fetch error:', {
-        message: errorMsg,
+      setLastFetchedUrl(targetUrl);
+    } catch (error) {
+      logger.error('[NewsComposer] Preview fetch error:', {
+        message: 'Kunne ikke hente preview',
         error,
       });
-      setPreviewError(errorMsg);
-      alert('Kunne ikke hente preview: ' + errorMsg);
+      setPreviewError('Kunne ikke hente preview');
     } finally {
       setLoadingPreview(false);
     }
   };
+
+  useEffect(() => {
+    if (!url.trim()) {
+      setPreview(null);
+      setPreviewError(null);
+      setLoadingPreview(false);
+      setLastFetchedUrl(null);
+      return;
+    }
+
+    if (!normalizedUrl) {
+      setPreview(null);
+      setPreviewError('Ugyldig URL. Brug http:// eller https://');
+      setLoadingPreview(false);
+      return;
+    }
+
+    setPreviewError(null);
+
+    const timer = setTimeout(() => {
+      handleFetchPreview(normalizedUrl);
+    }, 800);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url]);
 
   const handlePublish = async () => {
     if (!preview) {
@@ -127,6 +211,7 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
         url: preview.url,
         title: preview.title || undefined,
         description: preview.description || undefined,
+        note: body.trim() || undefined,
         imageUrl: preview.imageUrl || undefined,
         siteName: preview.siteName || undefined,
         createdBy: user.id, // Must be current user
@@ -138,212 +223,238 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
         communityId: actor.type === 'community' ? actor.id : undefined,
       };
 
-      // ============================================================
-      // REAL JSON logs for debugging (only runs on "Del nyhed" click)
-      // ============================================================
-      console.log('\n\n');
-      console.log('###NEWSDBG### ===== START NEWS INSERT =====');
-      console.log(
-        '###NEWSDBG### selectedActor',
-        JSON.stringify({
-          type: actor.type,
-          id: actor.id,
-          name: actor.name,
-        }),
-      );
-      console.log(
-        '###NEWSDBG### payload',
-        JSON.stringify({
-          created_by: newsData.createdBy,
-          actor_type: newsData.actorType,
-          actor_id: newsData.actorId,
-          community_id: newsData.communityId,
-          url: newsData.url,
-          title: newsData.title,
-          description: newsData.description,
-          image_url: newsData.imageUrl,
-          site_name: newsData.siteName,
-        }),
-      );
-      console.log('###NEWSDBG### ===========================');
-      console.log('\n');
+      logger.log('[NewsComposer] Publishing news with actor:', actor.type);
 
       await insertNewsItem(newsData);
 
-      console.log('\n');
-      console.log('###NEWSDBG### ===== SUCCESS =====');
-      console.log('###NEWSDBG### News published successfully');
-      console.log('###NEWSDBG### ===================');
-      console.log('\n\n');
+      logger.log('[NewsComposer] News published successfully');
 
       // Reset form
       setUrl('');
+      setBody('');
       setPreview(null);
       setPreviewError(null);
+      setLastFetchedUrl(null);
       onSuccess();
     } catch (error: any) {
-      console.log('\n\n');
-      console.log('###NEWSDBG### ===== ERROR =====');
-      console.log(
-        '###NEWSDBG### error',
-        JSON.stringify({
-          code: error?.code,
-          message: error?.message,
-          details: error?.details,
-          hint: error?.hint,
-        }),
-      );
-      console.log('###NEWSDBG### error raw', error);
-      console.log('###NEWSDBG### ===============');
-      console.log('\n\n');
-
-      const errorMsg = error?.message || 'Kunne ikke dele nyhed';
-      console.error('[NewsComposer] Publish error:', {
-        message: errorMsg,
-        error,
+      logger.error('[NewsComposer] Publish error:', {
         code: error?.code,
-        details: error?.details,
-        hint: error?.hint,
+        message: error?.message,
+        kind: error?.kind,
       });
-      alert('Kunne ikke dele nyhed: ' + errorMsg);
+
+      // Handle duplicate URL error
+      if (error?.kind === 'DUPLICATE_URL') {
+        logger.warn('[NewsComposer] Duplicate URL detected');
+        alert(
+          'Linket findes allerede\n\nDet link er allerede delt i appen. Et link kan kun oprettes én gang.\n\nTip: Find nyheden i feedet og kommentér i stedet på opslaget.',
+        );
+        // Focus URL input so user can easily replace it
+        requestAnimationFrame(() => {
+          urlInputRef.current?.focus();
+        });
+      } else {
+        const errorMsg = error?.message || 'Kunne ikke dele nyhed';
+        logger.error('[NewsComposer] General publish error:', errorMsg);
+        alert('Kunne ikke dele nyhed: ' + errorMsg);
+      }
     } finally {
       setPublishing(false);
     }
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.label}>Link URL</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="https://example.com/article"
-        placeholderTextColor={theme.colors.text.secondary}
-        value={url}
-        onChangeText={setUrl}
-        autoCapitalize="none"
-        autoCorrect={false}
-        keyboardType="url"
-        editable={!loadingPreview && !publishing}
-      />
-
-      <Pressable
-        style={[
-          styles.previewButton,
-          (loadingPreview || !url.trim()) && styles.previewButtonDisabled,
-        ]}
-        onPress={handleFetchPreview}
-        disabled={loadingPreview || !url.trim()}
+    <KeyboardAvoidingView
+      style={styles.keyboardContainer}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={theme.spacing[8]}
+    >
+      <ScrollView
+        ref={scrollRef}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{
+          paddingBottom: theme.spacing[16] + keyboardHeight,
+        }}
       >
-        {loadingPreview ? (
-          <>
-            <ActivityIndicator size="small" color={theme.colors.primary} />
-            <Text style={styles.previewButtonText}>Henter preview...</Text>
-          </>
-        ) : (
-          <>
-            <Ionicons name="link" size={20} color={theme.colors.primary} />
-            <Text style={styles.previewButtonText}>Hent preview</Text>
-          </>
-        )}
-      </Pressable>
+        <View style={styles.container}>
+          <Card style={styles.sectionCard}>
+            <View style={styles.bodySection}>
+              <Text style={styles.label}>Tekst (valgfrit)</Text>
+              <TextInput
+                ref={bodyInputRef}
+                style={[styles.input, styles.bodyInput]}
+                placeholder="Tilføj brødtekst til nyheden..."
+                placeholderTextColor={theme.colors.text.secondary}
+                value={body}
+                onChangeText={setBody}
+                onEndEditing={handleBodyEndEditing}
+                multiline
+                numberOfLines={6}
+                textAlignVertical="top"
+              />
+            </View>
+          </Card>
 
-      {previewError && (
-        <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={20} color={theme.colors.primary} />
-          <Text style={styles.errorText}>{previewError}</Text>
-        </View>
-      )}
-
-      {preview && (
-        <Card style={styles.previewCard}>
-          {preview.imageUrl && (
-            <Image
-              source={{ uri: preview.imageUrl }}
-              style={styles.previewImage}
-              resizeMode="cover"
+          <Card style={styles.sectionCard}>
+            <Text style={styles.label}>Link URL</Text>
+            <TextInput
+              ref={urlInputRef}
+              style={styles.input}
+              placeholder="https://example.com/article"
+              placeholderTextColor={theme.colors.text.secondary}
+              value={url}
+              onChangeText={setUrl}
+              onFocus={() => scrollToInput(urlInputRef)}
+              returnKeyType="done"
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              textContentType="URL"
+              clearButtonMode="while-editing"
+              editable={!publishing}
             />
-          )}
-          <View style={styles.previewContent}>
-            {preview.siteName && <Text style={styles.previewSiteName}>{preview.siteName}</Text>}
-            {preview.title && (
-              <Text style={styles.previewTitle} numberOfLines={2}>
-                {preview.title}
-              </Text>
-            )}
-            {preview.description && (
-              <Text style={styles.previewDescription} numberOfLines={3}>
-                {preview.description}
-              </Text>
-            )}
-          </View>
-        </Card>
-      )}
 
-      <PrimaryButton
-        title={publishing ? 'Deler...' : 'Del nyhed'}
-        onPress={handlePublish}
-        disabled={!preview || publishing || (!preview?.title && !preview?.description)}
-      />
-    </View>
+            {showPreviewSuccess ? (
+              <View style={styles.statusRow}>
+                <Text style={styles.successText}>Preview klar</Text>
+              </View>
+            ) : null}
+
+            {loadingPreview ? (
+              <View style={styles.statusRow}>
+                <ActivityIndicator size="small" color={newsAccent} />
+                <Text style={styles.statusText}>Henter preview...</Text>
+              </View>
+            ) : null}
+
+            {!loadingPreview && previewError ? (
+              <View style={styles.statusRow}>
+                <Text style={styles.errorText}>Kunne ikke hente preview</Text>
+                {normalizedUrl ? (
+                  <Pressable onPress={() => handleFetchPreview(normalizedUrl, true)}>
+                    <Text style={styles.retryText}>Prøv igen</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
+          </Card>
+
+          {preview && (
+            <Card style={styles.previewCard}>
+              {preview.imageUrl && (
+                <Image
+                  source={{ uri: preview.imageUrl }}
+                  style={styles.previewImage}
+                  resizeMode="cover"
+                />
+              )}
+              <View style={styles.previewContent}>
+                {preview.siteName && <Text style={styles.previewSiteName}>{preview.siteName}</Text>}
+                {preview.title && (
+                  <Text style={styles.previewTitle} numberOfLines={2}>
+                    {preview.title}
+                  </Text>
+                )}
+                {preview.description && (
+                  <Text style={styles.previewDescription} numberOfLines={3}>
+                    {preview.description}
+                  </Text>
+                )}
+              </View>
+            </Card>
+          )}
+
+          <View
+            style={[
+              styles.submitButtonWrap,
+              !preview || publishing || (!preview?.title && !preview?.description)
+                ? styles.submitButtonWrapDisabled
+                : null,
+            ]}
+          >
+            <View style={styles.submitButtonInner}>
+              <PrimaryButton
+                title={publishing ? 'Deler...' : 'Del nyhed'}
+                onPress={handlePublish}
+                disabled={!preview || publishing || (!preview?.title && !preview?.description)}
+              />
+            </View>
+          </View>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 function createStyles(theme: Theme) {
   return StyleSheet.create({
+    keyboardContainer: {
+      flex: 1,
+    },
+    scrollContent: {
+      paddingBottom: theme.spacing[16],
+    },
     container: {
-      gap: theme.spacing[4],
+      gap: theme.spacing[3],
+      paddingHorizontal: theme.spacing[3],
+      paddingTop: theme.spacing[3],
+      paddingBottom: theme.spacing[5],
+    },
+    sectionCard: {
+      borderWidth: 1,
+      borderColor: theme.colors.border.default,
+      backgroundColor: theme.colors.bg.card,
     },
     label: {
-      fontSize: theme.typography.body.fontSize,
-      fontWeight: '600',
+      fontSize: 15,
+      fontWeight: '700',
       color: theme.colors.text.primary,
+      marginBottom: theme.spacing[2],
     },
     input: {
       padding: theme.spacing[4],
-      backgroundColor: theme.colors.bg.card,
-      borderRadius: theme.radius.sm,
+      backgroundColor: theme.colors.bg.subtle,
+      borderRadius: theme.radius.md,
       borderWidth: 1,
       borderColor: theme.colors.border.default,
-      fontSize: theme.typography.body.fontSize,
+      fontSize: 15,
       color: theme.colors.text.primary,
     },
-    previewButton: {
+    bodyInput: {
+      minHeight: 148,
+    },
+    bodySection: {
+    },
+    statusRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'center',
       gap: theme.spacing[2],
-      padding: theme.spacing[4],
-      backgroundColor: theme.colors.bg.card,
-      borderRadius: theme.radius.sm,
-      borderWidth: 1,
-      borderColor: theme.colors.primary,
+      marginTop: theme.spacing[1],
     },
-    previewButtonDisabled: {
-      opacity: 0.5,
-    },
-    previewButtonText: {
+    statusText: {
       fontSize: theme.typography.body.fontSize,
-      fontWeight: '600',
-      color: theme.colors.primary,
+      color: theme.colors.text.secondary,
     },
-    errorContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: theme.spacing[2],
-      padding: theme.spacing[4],
-      backgroundColor: theme.colors.bg.card,
-      borderRadius: theme.radius.sm,
-      borderWidth: 1,
-      borderColor: theme.colors.primary,
+    successText: {
+      fontSize: theme.typography.body.fontSize,
+      color: theme.colors.state.success,
+      fontWeight: '600',
     },
     errorText: {
-      flex: 1,
       fontSize: theme.typography.body.fontSize,
-      color: theme.colors.primary,
+      color: theme.colors.text.secondary,
+    },
+    retryText: {
+      fontSize: theme.typography.body.fontSize,
+      color: theme.colors.state.success,
+      fontWeight: '600',
     },
     previewCard: {
       padding: theme.spacing[0],
       overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: theme.colors.border.default,
+      backgroundColor: theme.colors.bg.card,
     },
     previewImage: {
       width: '100%',
@@ -357,7 +468,7 @@ function createStyles(theme: Theme) {
     previewSiteName: {
       fontSize: theme.typography.small.fontSize,
       fontWeight: '600',
-      color: theme.colors.text.secondary,
+      color: theme.colors.state.success,
       textTransform: 'uppercase',
     },
     previewTitle: {
@@ -369,6 +480,27 @@ function createStyles(theme: Theme) {
       fontSize: theme.typography.body.fontSize,
       color: theme.colors.text.secondary,
       lineHeight: theme.typography.body.lineHeight,
+    },
+    submitButtonWrap: {
+      marginTop: theme.spacing[1],
+      padding: theme.spacing[2],
+      borderRadius: theme.radius.lg,
+      backgroundColor: theme.colors.bg.card,
+      borderWidth: 1,
+      borderColor: theme.colors.border.default,
+    },
+    submitButtonWrapDisabled: {
+      backgroundColor: theme.colors.bg.elevated,
+      borderColor: theme.colors.border.default,
+      opacity: 1,
+    },
+    submitButtonInner: {
+      borderRadius: theme.radius.md,
+      overflow: 'hidden',
+      backgroundColor: theme.colors.bg.subtle,
+      borderWidth: 1,
+      borderColor: theme.colors.pill.green.border,
+      padding: theme.spacing[1],
     },
   });
 }

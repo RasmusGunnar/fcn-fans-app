@@ -3,6 +3,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Platform, Alert } from 'react-native';
 import { supabase } from './supabase';
+import { logger } from './logger';
 
 /**
  * Convert base64 string to Uint8Array for reliable Supabase uploads in Expo
@@ -26,7 +27,7 @@ export async function uploadAvatar(userId: string): Promise<string | null> {
     // Request permissions
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      console.warn('[uploadAvatar] Permission denied');
+      logger.warn('[uploadAvatar] Permission denied');
       return null;
     }
 
@@ -49,7 +50,7 @@ export async function uploadAvatar(userId: string): Promise<string | null> {
     try {
       const fileInfo = await FileSystem.getInfoAsync(asset.uri);
       if (__DEV__) {
-        console.log('[AvatarUpload] Local file info:', fileInfo);
+        logger.log('[AvatarUpload] Local file info:', fileInfo);
       }
 
       if (!fileInfo.exists) {
@@ -62,7 +63,7 @@ export async function uploadAvatar(userId: string): Promise<string | null> {
         return null;
       }
     } catch (fsError) {
-      console.warn('[AvatarUpload] FileSystem error:', fsError);
+      logger.warn('[AvatarUpload] FileSystem error:', fsError);
       Alert.alert('Fejl', 'Kunne ikke læse billedfil');
       return null;
     }
@@ -74,7 +75,7 @@ export async function uploadAvatar(userId: string): Promise<string | null> {
       asset.uri.toLowerCase().includes('.heic') ||
       asset.uri.toLowerCase().includes('.heif');
 
-    console.log('[uploadAvatar] Converting image to JPEG', {
+    logger.log('[uploadAvatar] Converting image to JPEG', {
       originalUri: asset.uri,
       originalMimeType,
       isHeic,
@@ -88,7 +89,7 @@ export async function uploadAvatar(userId: string): Promise<string | null> {
       { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG, base64: true },
     );
 
-    console.log('[uploadAvatar] JPEG conversion complete', {
+    logger.log('[uploadAvatar] JPEG conversion complete', {
       convertedUri: manipResult.uri,
       width: manipResult.width,
       height: manipResult.height,
@@ -105,7 +106,7 @@ export async function uploadAvatar(userId: string): Promise<string | null> {
 
     if (__DEV__) {
       const fileInfo = await FileSystem.getInfoAsync(asset.uri);
-      console.log('[AvatarUpload]', {
+      logger.log('[AvatarUpload]', {
         localSize: fileInfo.exists && !fileInfo.isDirectory ? fileInfo.size : 'unknown',
         blobSize: bytes.length,
         path: `${userId}.jpg`,
@@ -131,12 +132,12 @@ export async function uploadAvatar(userId: string): Promise<string | null> {
       });
 
     if (uploadError) {
-      console.warn('[uploadAvatar] Upload error:', uploadError);
+      logger.warn('[uploadAvatar] Upload error:', uploadError);
       Alert.alert('Fejl', 'Upload fejlede: ' + (uploadError.message || 'Ukendt fejl'));
       return null;
     }
 
-    console.log('[uploadAvatar] Upload successful:', uploadData);
+    logger.log('[uploadAvatar] Upload successful:', uploadData);
 
     // Verify upload - check that stored size > 0
     try {
@@ -144,11 +145,11 @@ export async function uploadAvatar(userId: string): Promise<string | null> {
         .from('avatars')
         .list('', { search: filePath });
       if (listError) {
-        console.warn('[uploadAvatar] List verification error:', listError);
+        logger.warn('[uploadAvatar] List verification error:', listError);
       } else {
         const fileMetadata = listData?.[0];
         const storedSize = fileMetadata?.metadata?.size || 0;
-        console.log('[uploadAvatar] Uploaded file metadata:', {
+        logger.log('[uploadAvatar] Uploaded file metadata:', {
           name: fileMetadata?.name,
           size: storedSize,
           contentType: fileMetadata?.metadata?.mimetype,
@@ -161,14 +162,14 @@ export async function uploadAvatar(userId: string): Promise<string | null> {
         }
       }
     } catch (verifyError) {
-      console.error('[uploadAvatar] Verification failed:', verifyError);
+      logger.error('[uploadAvatar] Verification failed:', verifyError);
       throw verifyError; // Re-throw to fail the upload
     }
 
     // Save ONLY the path in profiles.avatar_url (not "avatars/"+path)
     // Path format: "userId/avatar.jpg"
     if (__DEV__) {
-      console.log('[AvatarUpload] Saving path to DB:', filePath);
+      logger.log('[AvatarUpload] Saving path to DB:', filePath);
     }
 
     // Update profile with avatar path (not URL, not with bucket prefix)
@@ -178,20 +179,20 @@ export async function uploadAvatar(userId: string): Promise<string | null> {
       .eq('id', userId);
 
     if (updateError) {
-      console.warn('[uploadAvatar] Profile update error:', updateError);
+      logger.warn('[uploadAvatar] Profile update error:', updateError);
       Alert.alert('Advarsel', 'Billede uploadet, men profil kunne ikke opdateres');
       return null;
     }
 
     // Success!
     if (__DEV__) {
-      console.log('[AvatarUpload] Success! Path:', filePath);
+      logger.log('[AvatarUpload] Success! Path:', filePath);
     }
 
     // Return path (cache buster added by component for display refresh)
     return filePath;
   } catch (error: any) {
-    console.warn('[uploadAvatar] Unexpected error:', error);
+    logger.warn('[uploadAvatar] Unexpected error:', error);
     Alert.alert('Fejl', error?.message || 'Kunne ikke uploade billede');
     return null;
   }

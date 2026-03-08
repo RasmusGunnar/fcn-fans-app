@@ -3,14 +3,13 @@
 // NO hardcoded numbers or color strings allowed.
 
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, Image } from 'react-native';
-import { CardRoot, CardHeader } from '../cards';
-import { Button, Text } from '../ui';
-import { EventSubtypeBadge } from '../ui/EventSubtypeBadge';
+import { Image, StyleSheet, View } from 'react-native';
 import { useAuth } from '../../auth/AuthProvider';
-import { defaultTheme } from '../../theme';
 import { matchProvider } from '../../services/matches';
 import type { Match } from '../../services/matches/MatchProvider';
+import { defaultTheme } from '../../theme';
+import { CardHeader, CardRoot } from '../cards';
+import { Button, Text } from '../ui';
 
 interface MatchCardProps {
   matchId: string; // Required for comments
@@ -204,8 +203,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  teamInitials: {
-  },
+  teamInitials: {},
   teamName: {
     marginTop: theme.spacing[1],
     textAlign: 'center',
@@ -228,6 +226,5 @@ const styles = StyleSheet.create({
   icon: {
     marginRight: theme.spacing[1],
   },
-  detailText: {
-  },
+  detailText: {},
 });

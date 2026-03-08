@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Pressable, Text, StyleSheet, ViewStyle, ScrollView } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { defaultTheme } from '../../theme';
 
 const theme = defaultTheme;
@@ -10,7 +10,7 @@ interface SegmentedControlItem<Key extends string> {
 }
 
 export interface SegmentedControlProps<Key extends string> {
-  items: ReadonlyArray<SegmentedControlItem<Key>>;
+  items: readonly SegmentedControlItem<Key>[];
   activeKey: Key;
   onChange: (key: Key) => void;
   style?: ViewStyle;

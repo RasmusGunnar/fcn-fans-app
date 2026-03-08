@@ -12,6 +12,7 @@ import { resolveProfileDisplayName } from '../utils/actor';
 interface ActorSelectorProps {
   selectedActor: Actor;
   onSelectActor: (actor: Actor) => void;
+  accentColor?: string;
 }
 
 interface EligibleCommunity {
@@ -20,12 +21,12 @@ interface EligibleCommunity {
   role: 'owner' | 'admin';
 }
 
-export function ActorSelector({ selectedActor, onSelectActor }: ActorSelectorProps) {
+export function ActorSelector({ selectedActor, onSelectActor, accentColor }: ActorSelectorProps) {
   const theme = useTheme();
-  const styles = createStyles(theme);
+  const resolvedAccentColor = accentColor ?? theme.colors.primary;
+  const styles = createStyles(theme, resolvedAccentColor);
   const { user } = useAuth();
   const { profileMap } = useFeed();
-  const [showDropdown, setShowDropdown] = useState(false);
   const [eligibleCommunities, setEligibleCommunities] = useState<EligibleCommunity[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -89,7 +90,6 @@ export function ActorSelector({ selectedActor, onSelectActor }: ActorSelectorPro
       id: user.id,
       name: displayName,
     });
-    setShowDropdown(false);
   };
 
   const handleSelectCommunity = (community: EligibleCommunity) => {
@@ -98,142 +98,140 @@ export function ActorSelector({ selectedActor, onSelectActor }: ActorSelectorPro
       id: community.id,
       name: community.name,
     });
-    setShowDropdown(false);
   };
 
   const hasEligibleCommunities = eligibleCommunities.length > 0;
+  const userDisplayName = resolveProfileDisplayName(profileMap, user?.id, user?.email || undefined);
+  const actorOptions: Actor[] = [
+    ...(user
+      ? [
+          {
+            type: 'user' as const,
+            id: user.id,
+            name: userDisplayName,
+          },
+        ]
+      : []),
+    ...eligibleCommunities.map((community) => ({
+      type: 'community' as const,
+      id: community.id,
+      name: community.name,
+    })),
+  ];
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>Opret som</Text>
-      <Pressable style={styles.selector} onPress={() => setShowDropdown(!showDropdown)}>
-        <View style={styles.selectedActor}>
-          <Ionicons
-            name={selectedActor.type === 'user' ? 'person' : 'people'}
-            size={20}
-            color={theme.colors.text.primary}
-          />
-          <Text style={styles.selectedText}>{selectedActor.name}</Text>
-        </View>
-        <Ionicons
-          name={showDropdown ? 'chevron-up' : 'chevron-down'}
-          size={20}
-          color={theme.colors.text.secondary}
-        />
-      </Pressable>
+      <Text style={styles.label}>Opslå som</Text>
+      <View style={styles.chipWrap}>
+        {actorOptions.map((actorOption) => {
+          const isSelected =
+            selectedActor.type === actorOption.type && selectedActor.id === actorOption.id;
 
-      {showDropdown && (
-        <View style={styles.dropdown}>
-          {loading ? (
-            <View style={styles.dropdownItem}>
-              <ActivityIndicator size="small" color={theme.colors.primary} />
-            </View>
-          ) : (
-            <>
-              <Pressable style={styles.dropdownItem} onPress={handleSelectUser}>
-                <Ionicons name="person" size={20} color={theme.colors.text.primary} />
-                <Text style={styles.dropdownText}>
-                  {resolveProfileDisplayName(profileMap, user?.id, user?.email || undefined)}
-                  <Text style={styles.dropdownLabel}> (Dig selv)</Text>
-                </Text>
-              </Pressable>
+          return (
+            <Pressable
+              key={`${actorOption.type}:${actorOption.id}`}
+              style={({ pressed }) => [
+                styles.chip,
+                isSelected && styles.chipSelected,
+                pressed && styles.chipPressed,
+              ]}
+              onPress={() =>
+                actorOption.type === 'user'
+                  ? handleSelectUser()
+                  : handleSelectCommunity(
+                      eligibleCommunities.find((community) => community.id === actorOption.id)!,
+                    )
+              }
+            >
+              <Ionicons
+                name={actorOption.type === 'user' ? 'person' : 'people'}
+                size={14}
+                color={isSelected ? accentColor : theme.colors.text.secondary}
+              />
+              <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
+                {actorOption.name}
+              </Text>
+            </Pressable>
+          );
+        })}
 
-              {hasEligibleCommunities && (
-                <>
-                  <View style={styles.dropdownDivider} />
-                  <Text style={styles.dropdownHeader}>Dine fællesskaber</Text>
-                  {eligibleCommunities.map((community) => (
-                    <Pressable
-                      key={community.id}
-                      style={styles.dropdownItem}
-                      onPress={() => handleSelectCommunity(community)}
-                    >
-                      <Ionicons name="people" size={20} color={theme.colors.text.primary} />
-                      <Text style={styles.dropdownText}>{community.name}</Text>
-                      <Text style={styles.roleLabel}>
-                        {community.role === 'owner' ? 'ejer' : 'admin'}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </>
-              )}
-            </>
-          )}
-        </View>
-      )}
+        {loading && (
+          <View style={styles.loadingChip}>
+            <ActivityIndicator size="small" color={accentColor} />
+          </View>
+        )}
+
+        {!loading && !user && !hasEligibleCommunities && (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>Ingen tilgængelige afsendere</Text>
+          </View>
+        )}
+      </View>
     </View>
   );
 }
 
-function createStyles(theme: Theme) {
+function createStyles(theme: Theme, accentColor: string) {
   return StyleSheet.create({
     container: {
-      marginBottom: theme.spacing[4],
+      marginBottom: theme.spacing[3],
     },
     label: {
       fontSize: 14,
       fontWeight: '600',
       color: theme.colors.text.primary,
-      marginBottom: theme.spacing[1],
+      marginBottom: theme.spacing[2],
     },
-    selector: {
+    chipWrap: {
       flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      padding: theme.spacing[4],
-      backgroundColor: theme.colors.bg.card,
-      borderRadius: theme.radius.sm,
-      borderWidth: 1,
-      borderColor: theme.colors.border.default,
+      flexWrap: 'wrap',
+      gap: theme.spacing[2],
     },
-    selectedActor: {
+    chip: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: theme.spacing[2],
-    },
-    selectedText: {
-      fontSize: 16,
-      color: theme.colors.text.primary,
-    },
-    dropdown: {
-      marginTop: theme.spacing[1],
-      backgroundColor: theme.colors.bg.card,
-      borderRadius: theme.radius.sm,
-      borderWidth: 1,
-      borderColor: theme.colors.border.default,
-      padding: theme.spacing[1],
-    },
-    dropdownItem: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: theme.spacing[2],
-      padding: theme.spacing[4],
-      borderRadius: theme.radius.sm,
-    },
-    dropdownText: {
-      fontSize: 16,
-      color: theme.colors.text.primary,
-    },
-    dropdownLabel: {
-      color: theme.colors.text.secondary,
-    },
-    dropdownDivider: {
-      height: 1,
-      backgroundColor: theme.colors.border.default,
-      marginVertical: theme.spacing[1],
-    },
-    dropdownHeader: {
-      fontSize: 12,
-      fontWeight: '600',
-      color: theme.colors.text.secondary,
-      paddingHorizontal: theme.spacing[4],
+      minHeight: 34,
       paddingVertical: theme.spacing[1],
-      textTransform: 'uppercase',
+      paddingHorizontal: theme.spacing[3],
+      backgroundColor: theme.colors.bg.card,
+      borderRadius: theme.radius.pill,
+      borderWidth: 1,
+      borderColor: theme.colors.border.default,
     },
-    roleLabel: {
+    chipSelected: {
+      borderColor: accentColor,
+      backgroundColor: theme.colors.bg.subtle,
+    },
+    chipPressed: {
+      opacity: 0.88,
+    },
+    chipText: {
+      fontSize: 13,
+      fontWeight: '500',
+      color: theme.colors.text.primary,
+    },
+    chipTextSelected: {
+      color: accentColor,
+      fontWeight: '600',
+    },
+    loadingChip: {
+      minHeight: 34,
+      paddingVertical: theme.spacing[1],
+      paddingHorizontal: theme.spacing[3],
+      borderRadius: theme.radius.pill,
+      borderWidth: 1,
+      borderColor: theme.colors.border.default,
+      backgroundColor: theme.colors.bg.card,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    emptyState: {
+      paddingVertical: theme.spacing[2],
+    },
+    emptyStateText: {
       fontSize: 12,
       color: theme.colors.text.secondary,
-      marginLeft: 'auto',
     },
   });
 }

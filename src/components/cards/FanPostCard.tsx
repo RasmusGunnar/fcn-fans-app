@@ -7,6 +7,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Image, Pressable, Share, StyleSheet, TextInput, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../auth/AuthProvider';
+import { logger } from '../../lib/logger';
 import { getPublicUrl } from '../../lib/storageUrl';
 import { supabase } from '../../lib/supabase';
 import type { CommentPreview } from '../../services/likesApi';
@@ -186,6 +187,7 @@ interface FanPostCardProps {
   authorProfile?: { display_name: string | null; avatar_url: string | null };
   communityMap?: Record<string, string>;
   profileMap?: ProfileMap;
+  bodyContent?: React.ReactNode;
   categoryKey?: CategoryKey;
   liked?: boolean;
   likes?: number;
@@ -206,6 +208,7 @@ export function FanPostCard({
   authorProfile,
   communityMap,
   profileMap,
+  bodyContent,
   categoryKey,
   liked = post.likedByMe,
   likes = post.likesCount,
@@ -261,6 +264,8 @@ export function FanPostCard({
     Share.share({ message: `${post.text}\n${deepLink}` }).catch(() => {});
   };
 
+  const shouldRenderDefaultBody = !bodyContent;
+
   // Permission checks - use isAppAdmin from context
   // TODO: Add community role when posts have community_id
   const showEditOption = canEditPost(user?.id, isAppAdmin, { author_id: post.authorId });
@@ -277,7 +282,7 @@ export function FanPostCard({
       .eq('id', post.id);
     if (error) {
       Alert.alert('Fejl', 'Kunne ikke opdatere opslaget');
-      console.warn('Update post error', error);
+      logger.warn('Update post error', error);
     } else {
       post.text = editText.trim();
       setIsEditing(false);
@@ -293,7 +298,7 @@ export function FanPostCard({
     const { error } = await supabase.from('posts').delete().eq('id', post.id);
     if (error) {
       Alert.alert('Fejl', 'Kunne ikke slette opslaget');
-      console.warn('Delete post error', error);
+      logger.warn('Delete post error', error);
     } else {
       onDeleted(post.id);
     }
@@ -419,12 +424,21 @@ export function FanPostCard({
           </View>
         </View>
       ) : (
-        <Text variant="body" color="primary" style={styles.text}>
-          {post.text}
-        </Text>
+        bodyContent ? (
+          <View>
+            <Text style={{ fontSize: 22, fontWeight: '900', color: 'red', marginBottom: 12 }}>
+              FANPOSTCARD BODYCONTENT AKTIV
+            </Text>
+            {bodyContent}
+          </View>
+        ) : (
+          <Text variant="body" color="primary" style={styles.text}>
+            {post.text}
+          </Text>
+        )
       )}
       {/* BASELINE: Deterministic media rendering - no silent failures */}
-      {!m0 ? null : (
+      {!shouldRenderDefaultBody || !m0 ? null : (
         <View style={styles.mediaOuter}>
           {!mediaKind ? (
             <View style={styles.mediaFallback}>
@@ -453,13 +467,6 @@ export function FanPostCard({
             </View>
           ) : mediaKind === 'video' ? (
             <View style={styles.mediaContainer}>
-              {__DEV__ &&
-                (console.log('[FanPostCard:Video]', {
-                  postId: post.id,
-                  source: { uri: mediaUri },
-                  typeof: typeof mediaUri,
-                }),
-                null)}
               <FeedVideo
                 uri={mediaUri}
                 isActive={isActiveVideo}
@@ -467,7 +474,7 @@ export function FanPostCard({
                 naturalWidth={m0?.width}
                 naturalHeight={m0?.height}
                 onError={(e) => {
-                  console.error('[VideoError]', { postId: post.id, error: e });
+                  logger.error('[VideoError]', { postId: post.id, error: e });
                 }}
               />
             </View>
@@ -485,25 +492,11 @@ export function FanPostCard({
               </View>
             ) : (
               <View style={[styles.mediaContainer, { aspectRatio: imageAspectRatio }]}>
-                {__DEV__ &&
-                  (console.log('[FanPostCard:Image]', {
-                    postId: post.id,
-                    source: { uri: mediaUri },
-                    typeof: typeof mediaUri,
-                  }),
-                  null)}
                 <Image
                   source={{ uri: mediaUri }}
                   style={styles.image}
                   resizeMode="cover"
                   onError={(e) => {
-                    if (__DEV__) {
-                      console.log('[ImageError]', {
-                        postId: post.id,
-                        uri: mediaUri,
-                        native: e?.nativeEvent,
-                      });
-                    }
                     setImageLoadError(true);
                   }}
                 />

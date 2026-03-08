@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,7 +16,7 @@ import { useAuth } from '../auth/AuthProvider';
 import { Card } from '../components/ui/Card';
 import { Pill } from '../components/ui/Pill';
 import { OutlineButton } from '../components/ui/OutlineButton';
-import { colors, spacing } from '../theme';
+import { spacing } from '../theme';
 import { useTheme } from '../theme';
 import { uploadAvatar } from '../lib/uploadAvatar';
 import { getPublicUrl } from '../lib/storageUrl';
@@ -112,7 +112,7 @@ function ProfileRow({
 export default function ProfileScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const { user, signOut } = useAuth();
+  const { user, signOut, isAppAdmin } = useAuth();
   const theme = useTheme();
   const styles = createStyles(theme);
 
@@ -127,7 +127,7 @@ export default function ProfileScreen() {
   const [avatarUrlInput, setAvatarUrlInput] = useState<string | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!user?.id) {
       setLoading(false);
       return;
@@ -144,16 +144,17 @@ export default function ProfileScreen() {
 
     // Extract profile
     if (results[0].status === 'fulfilled') {
-      setProfile(results[0].value);
-      if (displayNameInput.trim().length === 0) {
-        setDisplayNameInput(results[0].value?.display_name || user?.email || '');
-      }
-      if (avatarUrlInput === null && results[0].value?.avatar_url) {
-        const existingAvatar = results[0].value.avatar_url;
+      const profileResult = results[0].value;
+      setProfile(profileResult);
+      setDisplayNameInput((prev) =>
+        prev.trim().length === 0 ? profileResult?.display_name || user?.email || '' : prev,
+      );
+      if (profileResult?.avatar_url) {
+        const existingAvatar = profileResult.avatar_url;
         const resolvedAvatar = existingAvatar.startsWith('http')
           ? existingAvatar
           : getPublicUrl('avatars', existingAvatar);
-        setAvatarUrlInput(resolvedAvatar);
+        setAvatarUrlInput((prev) => (prev === null ? resolvedAvatar : prev));
       }
     }
 
@@ -174,16 +175,16 @@ export default function ProfileScreen() {
     }
 
     setLoading(false);
-  };
+  }, [user?.id, user?.email]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   useFocusEffect(
     React.useCallback(() => {
       loadData();
-    }, []),
+    }, [loadData]),
   );
 
   const handleLogout = async () => {
@@ -201,10 +202,6 @@ export default function ProfileScreen() {
     } catch (e) {
       console.warn('[ProfileScreen] Dev reset login failed:', e);
     }
-  };
-
-  const handleEditProfile = () => {
-    Alert.alert('Rediger profil', 'Denne funktion kommer snart!');
   };
 
   const handleSaveProfile = async () => {
@@ -568,6 +565,15 @@ export default function ProfileScreen() {
           onPress={() => Alert.alert('Indstillinger', 'Kommer snart!')}
           styles={styles}
         />
+        {isAppAdmin && (
+          <ProfileRow
+            icon="shield-checkmark"
+            title="Fanfraktion-anmodninger"
+            subtitle="Administrér afventende anmodninger"
+            onPress={() => (navigation as any).navigate('AdminFanFactionRequests')}
+            styles={styles}
+          />
+        )}
         <ProfileRow
           icon="help-circle"
           title="Hjælp & support"

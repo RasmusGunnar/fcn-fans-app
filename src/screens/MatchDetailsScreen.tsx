@@ -24,6 +24,8 @@ import type { RootStackParamList } from '../navigation/types';
 import { formatDateDa, type Fixture } from '../services/fixtures';
 import { fetchFixtureById } from '../services/eventsApi';
 import { getMatchHeroUrl, getTeamHeroImage } from '../services/sportsdb';
+import { useAttendance } from '../hooks/useAttendance';
+import { AttendanceBubbles } from '../components/social/AttendanceBubbles';
 
 type MatchDetailsRouteProp = RouteProp<RootStackParamList, 'MatchDetails'>;
 
@@ -38,6 +40,7 @@ export default function MatchDetailsScreen() {
   const [fixture, setFixture] = useState<Fixture | null>(null);
   const [loading, setLoading] = useState(true);
   const [heroUrl, setHeroUrl] = useState<string | null>(null);
+  const attendance = useAttendance({ entityType: 'match', entityId: fixtureId });
 
   // Fetch fixture by ID
   useEffect(() => {
@@ -196,16 +199,28 @@ export default function MatchDetailsScreen() {
           </View>
         </View>
 
-        {/* Join CTA */}
-        <Pressable
-          style={[
-            styles.joinCta,
-            { backgroundColor: theme.colors.bg.card, borderColor: theme.colors.primary },
-          ]}
-        >
-          <Ionicons name="person-add" size={24} color={theme.colors.primary} />
-          <Text style={[styles.joinText, { color: theme.colors.primary }]}>Deltag (247)</Text>
-        </Pressable>
+        {/* Attendance/RSVP UI */}
+        <View style={{ alignItems: 'center', marginVertical: spacing.md }}>
+          <AttendanceBubbles
+            avatars={attendance.avatars}
+            count={attendance.countGoing}
+            max={5}
+            size={20}
+            textVariant="caption"
+          />
+          <Pressable
+            style={[
+              styles.joinCta,
+              { backgroundColor: theme.colors.bg.card, borderColor: theme.colors.primary },
+              attendance.isGoing ? { opacity: 1 } : { opacity: 0.8 },
+            ]}
+            onPress={attendance.toggleGoing}
+            disabled={attendance.loading}
+          >
+            <Ionicons name={attendance.isGoing ? 'person' : 'person-add'} size={24} color={theme.colors.primary} />
+            <Text style={[styles.joinText, { color: theme.colors.primary }]}> {attendance.isGoing ? 'Deltager' : 'Deltag'} ({attendance.countGoing})</Text>
+          </Pressable>
+        </View>
 
         {/* Fan Activities */}
         <View style={styles.section}>

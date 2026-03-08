@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
 import {
   fetchBusTripsUpcoming,
   fetchEventsUpcoming,
@@ -47,6 +48,7 @@ interface FeedContextType {
   likeMap: Record<string, { liked: boolean; likes: number }>; // Like states by "${kind}:${id}"
   commentCountMap: Record<string, number>; // Comment counts by "${kind}:${id}"
   commentPreviewMap: Record<string, CommentPreview[]>; // Comment previews by "${kind}:${id}"
+  attendanceMap: Record<string, { count: number; avatars: string[]; isGoing: boolean }>; // Attendance by event/bus_trip ID
   addPost: (post: Post) => void;
   removePost: (postId: string) => void;
   removeNews: (newsId: string) => void;
@@ -70,6 +72,9 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
   const [likeMap, setLikeMap] = useState<Record<string, { liked: boolean; likes: number }>>({});
   const [commentCountMap, setCommentCountMap] = useState<Record<string, number>>({});
   const [commentPreviewMap, setCommentPreviewMap] = useState<Record<string, CommentPreview[]>>({});
+  const [attendanceMap, setAttendanceMap] = useState<
+    Record<string, { count: number; avatars: string[]; isGoing: boolean }>
+  >({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -86,7 +91,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
     try {
       const { data: postsData, error: fetchError } = await supabase
         .from('posts')
-        .select('id, created_at, author_id, text, media, community_id')
+        .select('id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets, poll_data')
         .order('created_at', { ascending: false })
         .limit(50);
 
@@ -117,31 +122,43 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
             });
           }
         } catch (e) {
-          console.warn('[FeedProvider] Failed to fetch profiles:', e);
+          logger.warn('[FeedProvider] Failed to fetch profiles:', e);
         }
       }
 
       setProfileMap(newProfileMap);
 
       // Transform DB posts to Post type with normalized media
-      transformedPosts = (postsData || []).map((dbPost) => ({
-        id: dbPost.id,
-        authorName: newProfileMap[dbPost.author_id]?.display_name || 'Fan',
-        authorId: dbPost.author_id,
-        communityId: dbPost.community_id ?? null,
-        createdAt: dbPost.created_at,
-        text: dbPost.text,
-        likesCount: 0, // TODO: Add likes support
-        commentsCount: 0, // TODO: Count comments
-        likedByMe: false,
-        media: normalizeMedia(dbPost.media), // Normalize media from DB
-      }));
+      transformedPosts = (postsData || []).map((dbPost) => {
+        console.log('[FeedContext] mapped post', {
+          id: dbPost.id,
+          hasPollData: !!dbPost.poll_data,
+          pollData: dbPost.poll_data,
+        });
+
+        return {
+          id: dbPost.id,
+          authorName: newProfileMap[dbPost.author_id]?.display_name || 'Fan',
+          authorId: dbPost.author_id,
+          actorType: dbPost.actor_type ?? 'user',
+          actorId: dbPost.actor_id ?? dbPost.author_id,
+          communityId: dbPost.community_id ?? null,
+          feedTargets: Array.isArray(dbPost.feed_targets) ? dbPost.feed_targets : ['home'],
+          createdAt: dbPost.created_at,
+          text: dbPost.text,
+          poll_data: dbPost.poll_data ?? null,
+          likesCount: 0, // TODO: Add likes support
+          commentsCount: 0, // TODO: Count comments
+          likedByMe: false,
+          media: normalizeMedia(dbPost.media), // Normalize media from DB
+        };
+      });
 
       setPosts(transformedPosts);
     } catch (e: any) {
       const errorMsg = e?.message || String(e);
       setError(errorMsg);
-      console.error('[FeedProvider] fetchPosts (posts) error:', errorMsg);
+      logger.error('[FeedProvider] fetchPosts (posts) error:', errorMsg);
       // Don't return - continue to try fetching news
     }
 
@@ -174,12 +191,12 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
             setCommunityMap(newCommunityMap);
           }
         } catch (e) {
-          console.warn('[FeedProvider] Failed to fetch community names:', e);
+          logger.warn('[FeedProvider] Failed to fetch community names:', e);
         }
       }
     } catch (e: any) {
       // News fetch failed, but don't block posts
-      console.warn(
+      logger.warn(
         '[FeedProvider] fetchNewsItems failed (will continue with posts only):',
         e?.message || e,
       );
@@ -195,7 +212,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       upcomingEvents = results[0].status === 'fulfilled' ? results[0].value : [];
       upcomingBusTrips = results[1].status === 'fulfilled' ? results[1].value : [];
     } catch (e: any) {
-      console.warn('[FeedProvider] fetchEventsUpcoming/busTrips failed:', e?.message || e);
+      logger.warn('[FeedProvider] fetchEventsUpcoming/busTrips failed:', e?.message || e);
       upcomingEvents = [];
       upcomingBusTrips = [];
     }
@@ -268,7 +285,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       // Individual like state will be fetched when user interacts
 
       // Group items by kind
-      const postIds = safePostsArray.map((p) => p.id);
+  const postIds = safePostsArray.map((p) => p.id);
       const newsIds = safeNewsArray.map((n) => n.id);
       const eventIds = safeEventsArray.map((e) => e.id);
       const busTripIds = safeBusTripsArray.map((b) => b.id);
@@ -290,51 +307,51 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         busTripPreviews,
       ] = await Promise.all([
         fetchLikeStates('post', postIds).catch((err) => {
-          console.warn('[FeedProvider] postLikes failed:', err);
+          logger.warn('[FeedProvider] postLikes failed:', err);
           return new Map();
         }),
         fetchCommentCounts('post', postIds).catch((err) => {
-          console.warn('[FeedProvider] postComments failed:', err);
+          logger.warn('[FeedProvider] postComments failed:', err);
           return new Map();
         }),
         fetchCommentPreviews('post', postIds).catch((err) => {
-          console.warn('[FeedProvider] postPreviews failed:', err);
+          logger.warn('[FeedProvider] postPreviews failed:', err);
           return new Map();
         }),
         fetchLikeStates('news', newsIds).catch((err) => {
-          console.warn('[FeedProvider] newsLikes failed:', err);
+          logger.warn('[FeedProvider] newsLikes failed:', err);
           return new Map();
         }),
         fetchCommentCounts('news', newsIds).catch((err) => {
-          console.warn('[FeedProvider] newsComments failed:', err);
+          logger.warn('[FeedProvider] newsComments failed:', err);
           return new Map();
         }),
         fetchCommentPreviews('news', newsIds).catch((err) => {
-          console.warn('[FeedProvider] newsPreviews failed:', err);
+          logger.warn('[FeedProvider] newsPreviews failed:', err);
           return new Map();
         }),
         fetchLikeStates('event', eventIds).catch((err) => {
-          console.warn('[FeedProvider] eventLikes failed:', err);
+          logger.warn('[FeedProvider] eventLikes failed:', err);
           return new Map();
         }),
         fetchCommentCounts('event', eventIds).catch((err) => {
-          console.warn('[FeedProvider] eventComments failed:', err);
+          logger.warn('[FeedProvider] eventComments failed:', err);
           return new Map();
         }),
         fetchCommentPreviews('event', eventIds).catch((err) => {
-          console.warn('[FeedProvider] eventPreviews failed:', err);
+          logger.warn('[FeedProvider] eventPreviews failed:', err);
           return new Map();
         }),
         fetchLikeStates('bus_trip', busTripIds).catch((err) => {
-          console.warn('[FeedProvider] busTripLikes failed:', err);
+          logger.warn('[FeedProvider] busTripLikes failed:', err);
           return new Map();
         }),
         fetchCommentCounts('bus_trip', busTripIds).catch((err) => {
-          console.warn('[FeedProvider] busTripComments failed:', err);
+          logger.warn('[FeedProvider] busTripComments failed:', err);
           return new Map();
         }),
         fetchCommentPreviews('bus_trip', busTripIds).catch((err) => {
-          console.warn('[FeedProvider] busTripPreviews failed:', err);
+          logger.warn('[FeedProvider] busTripPreviews failed:', err);
           return new Map();
         }),
       ]);
@@ -419,13 +436,63 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
           setLikeMap(patchedLikeMap);
         }
       } catch (e) {
-        console.warn('[FeedProvider] likedByMe rehydration failed:', e);
+        logger.warn('[FeedProvider] likedByMe rehydration failed:', e);
+      }
+
+      // ── Batch fetch attendance for events and bus trips ──
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        const currentUserId = session?.user?.id;
+
+        const allAttendableIds = [...eventIds, ...busTripIds];
+        if (allAttendableIds.length > 0) {
+          // Fetch all RSVPs for events & bus trips
+          const { data: rsvps, error: rsvpError } = await supabase
+            .from('rsvps')
+            .select('entity_type, entity_id, user_id, profiles:user_id(avatar_url)')
+            .in('entity_id', allAttendableIds)
+            .in('entity_type', ['event', 'bus_trip'])
+            .eq('status', 'going');
+
+          if (!rsvpError && rsvps) {
+            // Aggregate by entity_id
+            const attendanceByEntity: Record<
+              string,
+              { count: number; avatars: string[]; isGoing: boolean }
+            > = {};
+
+            rsvps.forEach((rsvp: any) => {
+              const entityId = rsvp.entity_id;
+              if (!attendanceByEntity[entityId]) {
+                attendanceByEntity[entityId] = { count: 0, avatars: [], isGoing: false };
+              }
+              attendanceByEntity[entityId].count += 1;
+              // Extract avatar_url from joined profiles
+              const avatarUrl = rsvp.profiles?.avatar_url;
+              if (avatarUrl && attendanceByEntity[entityId].avatars.length < 5) {
+                attendanceByEntity[entityId].avatars.push(avatarUrl);
+              }
+              // Check if current user is going
+              if (currentUserId && rsvp.user_id === currentUserId) {
+                attendanceByEntity[entityId].isGoing = true;
+              }
+            });
+
+            setAttendanceMap(attendanceByEntity);
+          } else {
+            logger.warn('[FeedProvider] Attendance fetch failed:', rsvpError);
+          }
+        }
+      } catch (e) {
+        logger.warn('[FeedProvider] Attendance fetch error:', e);
       }
 
       setCommentCountMap(newCommentCountMap);
       setCommentPreviewMap(newCommentPreviewMap);
     } catch (e: any) {
-      console.error('[FeedProvider] Error merging feed:', e?.message || e);
+      logger.error('[FeedProvider] Error merging feed:', e?.message || e);
     }
 
     setLoading(false);
@@ -493,7 +560,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       try {
         const success = await toggleLikeApi(kind, id, userId, currentState.liked);
         if (!success) {
-          console.warn('[toggleLike failed]', { targetType: kind, targetId: id, error: 'unknown' });
+          logger.warn('[toggleLike failed]', { targetType: kind, targetId: id, error: 'unknown' });
           // Revert on failure
           setLikeMap((prev) => ({
             ...prev,
@@ -501,9 +568,9 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
           }));
           return;
         }
-        console.log('[toggleLike ok]', { targetType: kind, targetId: id });
+        logger.log('[toggleLike ok]', { targetType: kind, targetId: id });
       } catch (error) {
-        console.warn('[toggleLike failed]', { targetType: kind, targetId: id, error });
+        logger.warn('[toggleLike failed]', { targetType: kind, targetId: id, error });
         // Revert on failure
         setLikeMap((prev) => ({
           ...prev,
@@ -548,6 +615,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         likeMap,
         commentCountMap,
         commentPreviewMap,
+        attendanceMap,
         addPost,
         removePost,
         removeNews,

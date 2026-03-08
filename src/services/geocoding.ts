@@ -1,3 +1,4 @@
+import { logger } from '../lib/logger';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ===== TYPES =====
@@ -49,7 +50,7 @@ async function loadCache(): Promise<void> {
       }, {} as CacheStore);
     }
   } catch (err) {
-    console.warn('[geocoding] Failed to load cache:', err);
+    logger.warn('[geocoding] Failed to load cache:', err);
   }
 }
 
@@ -60,7 +61,7 @@ async function saveCache(): Promise<void> {
   try {
     await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(inMemoryCache));
   } catch (err) {
-    console.warn('[geocoding] Failed to save cache:', err);
+    logger.warn('[geocoding] Failed to save cache:', err);
   }
 }
 
@@ -129,14 +130,14 @@ export function buildAddressText(input: AddressInput): string {
  */
 export async function geocodeAddress(addressText: string): Promise<GeocodingResult | null> {
   if (!addressText || !addressText.trim()) {
-    console.warn('[geocoding] Empty address text');
+    logger.warn('[geocoding] Empty address text');
     return null;
   }
 
   // Check cache first
   const cached = getCached(addressText);
   if (cached) {
-    console.log('[geocoding] Cache hit for:', addressText);
+    logger.log('[geocoding] Cache hit for:', addressText);
     return cached;
   }
 
@@ -145,7 +146,7 @@ export async function geocodeAddress(addressText: string): Promise<GeocodingResu
     await waitForRateLimit();
 
     const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addressText)}&limit=1`;
-    console.log('[geocoding] Requesting:', url);
+    logger.log('[geocoding] Requesting:', url);
 
     const response = await fetch(url, {
       headers: {
@@ -154,13 +155,13 @@ export async function geocodeAddress(addressText: string): Promise<GeocodingResu
     });
 
     if (!response.ok) {
-      console.warn('[geocoding] HTTP error:', response.status);
+      logger.warn('[geocoding] HTTP error:', response.status);
       return null;
     }
 
     const data = await response.json();
     if (!Array.isArray(data) || data.length === 0) {
-      console.warn('[geocoding] No results for:', addressText);
+      logger.warn('[geocoding] No results for:', addressText);
       return null;
     }
 
@@ -174,10 +175,10 @@ export async function geocodeAddress(addressText: string): Promise<GeocodingResu
     // Cache the result
     setCached(addressText, result);
 
-    console.log('[geocoding] Success:', result);
+    logger.log('[geocoding] Success:', result);
     return result;
   } catch (err) {
-    console.error('[geocoding] Error geocoding address:', err);
+    logger.error('[geocoding] Error geocoding address:', err);
     return null;
   }
 }
@@ -195,7 +196,7 @@ export async function geocodeVenue(
   parts.push('Danmark'); // Assume Denmark
 
   if (parts.length < 2) {
-    console.warn('[geocoding] Insufficient venue data');
+    logger.warn('[geocoding] Insufficient venue data');
     return null;
   }
 

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { logger } from '../lib/logger';
 import {
   View,
   Text,
@@ -23,10 +24,11 @@ import type { Actor } from '../types/news';
 interface PostComposerProps {
   onSuccess?: () => void;
   actor?: Actor;
+  feedTargets?: string[];
 }
 
-export function PostComposer({ onSuccess, actor }: PostComposerProps) {
-  console.log('[PostComposer] Component mounted');
+export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProps) {
+  logger.log('[PostComposer] Component mounted');
   const theme = useTheme();
   const styles = createStyles(theme);
   const { user } = useAuth();
@@ -36,49 +38,49 @@ export function PostComposer({ onSuccess, actor }: PostComposerProps) {
   const [loading, setLoading] = useState(false);
 
   const handlePickLibrary = async () => {
-    console.log('[PostComposer] Pick from library clicked');
+    logger.log('[PostComposer] Pick from library clicked');
     try {
       const asset = await pickFromLibrary();
       if (asset) {
-        console.log('[PostComposer] Media selected from library');
+        logger.log('[PostComposer] Media selected from library');
         setAttachment(asset);
       } else {
-        console.log('[PostComposer] Library picker cancelled (no asset returned)');
+        logger.log('[PostComposer] Library picker cancelled (no asset returned)');
       }
     } catch (e: any) {
-      console.error('[PostComposer] Pick library error:', e);
+      logger.error('[PostComposer] Pick library error:', e);
       alert('Kunne ikke vælge medie: ' + (e?.message || e));
     }
   };
 
   const handlePickCamera = async () => {
-    console.log('[PostComposer] Take photo clicked');
+    logger.log('[PostComposer] Take photo clicked');
     try {
       const asset = await pickCameraPhoto();
       if (asset) {
-        console.log('[PostComposer] Photo taken');
+        logger.log('[PostComposer] Photo taken');
         setAttachment(asset);
       } else {
-        console.log('[PostComposer] Camera cancelled (no asset returned)');
+        logger.log('[PostComposer] Camera cancelled (no asset returned)');
       }
     } catch (e: any) {
-      console.error('[PostComposer] Camera error:', e);
+      logger.error('[PostComposer] Camera error:', e);
       alert('Kunne ikke tage billede: ' + (e?.message || e));
     }
   };
 
   const handleRecordVideo = async () => {
-    console.log('[PostComposer] Record video clicked');
+    logger.log('[PostComposer] Record video clicked');
     try {
       const asset = await recordVideo();
       if (asset) {
-        console.log('[PostComposer] Video recorded');
+        logger.log('[PostComposer] Video recorded');
         setAttachment(asset);
       } else {
-        console.log('[PostComposer] Video recording cancelled (no asset returned)');
+        logger.log('[PostComposer] Video recording cancelled (no asset returned)');
       }
     } catch (e: any) {
-      console.error('[PostComposer] Record video error:', e);
+      logger.error('[PostComposer] Record video error:', e);
       alert('Kunne ikke optage video: ' + (e?.message || e));
     }
   };
@@ -95,7 +97,7 @@ export function PostComposer({ onSuccess, actor }: PostComposerProps) {
     try {
       // Upload attachment if present (reuse existing upload flow)
       if (attachment && user?.id) {
-        console.log('[PostComposer] Uploading attachment for user', { userId: user.id });
+        logger.log('[PostComposer] Uploading attachment for user', { userId: user.id });
         const uploaded = await uploadMediaToSupabase(user.id, attachment);
 
         // Sanity check: path must exist after upload
@@ -113,7 +115,7 @@ export function PostComposer({ onSuccess, actor }: PostComposerProps) {
             height: uploaded.height,
           },
         ];
-        console.log('[PostComposer] Attachment uploaded', {
+        logger.log('[PostComposer] Attachment uploaded', {
           bucket: 'post-media',
           path: uploaded.path,
         });
@@ -121,7 +123,7 @@ export function PostComposer({ onSuccess, actor }: PostComposerProps) {
         throw new Error('Vedhæftning valgt men bruger ikke logget ind');
       }
     } catch (e: any) {
-      console.error('[PostComposer] Upload error', e);
+      logger.error('[PostComposer] Upload error', e);
       alert('Upload fejlede: ' + (e?.message ?? String(e)));
       setLoading(false);
       return;
@@ -131,16 +133,28 @@ export function PostComposer({ onSuccess, actor }: PostComposerProps) {
     let dbPost: Post | null = null;
     try {
       if (user?.id) {
+        const resolvedActorType = actor?.type ?? 'user';
+        const resolvedActorId = actor?.type === 'community' ? actor.id : user.id;
+        const resolvedFeedTargets =
+          Array.isArray(feedTargets) && feedTargets.length > 0
+            ? feedTargets
+            : actor?.type === 'community'
+              ? [`community:${actor.id}`]
+              : ['home'];
+
         const { data, error } = await supabase
           .from('posts')
           .insert({
             author_id: user.id,
+            actor_type: resolvedActorType,
+            actor_id: resolvedActorId,
             text: text.trim(),
             media: mediaArray,
+            feed_targets: resolvedFeedTargets,
             media_type: attachment?.type ?? null,
             ...(actor?.type === 'community' ? { community_id: actor.id } : {}),
           })
-          .select('id, created_at, author_id, text, media, community_id');
+          .select('id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets');
         if (error) throw error;
 
         if (data && data[0]) {
@@ -150,7 +164,10 @@ export function PostComposer({ onSuccess, actor }: PostComposerProps) {
             id: dbRecord.id,
             authorName: user?.email ?? 'Ukendt',
             authorId: dbRecord.author_id,
+            actorType: dbRecord.actor_type ?? 'user',
+            actorId: dbRecord.actor_id ?? dbRecord.author_id,
             communityId: dbRecord.community_id ?? null,
+            feedTargets: dbRecord.feed_targets ?? ['home'],
             createdAt: dbRecord.created_at || new Date().toISOString(),
             text: dbRecord.text,
             likesCount: 0,
@@ -158,14 +175,14 @@ export function PostComposer({ onSuccess, actor }: PostComposerProps) {
             likedByMe: false,
             media: dbRecord.media, // Use DB media (may be parsed as array or string)
           };
-          console.log('[PostComposer] Post inserted and fetched from DB:', {
+          logger.log('[PostComposer] Post inserted and fetched from DB:', {
             postId: dbPost.id,
             media: dbPost.media,
           });
         }
       }
     } catch (e) {
-      console.warn('[PostComposer] Insert post error', e);
+      logger.warn('[PostComposer] Insert post error', e);
     }
 
     // Use DB-fetched post if available, otherwise fallback to locally constructed
@@ -173,12 +190,21 @@ export function PostComposer({ onSuccess, actor }: PostComposerProps) {
       id: Date.now().toString(),
       authorName: user?.email ?? 'Ukendt',
       authorId: user?.id,
+      actorType: actor?.type ?? 'user',
+      actorId: actor?.type === 'community' ? actor.id : user?.id,
+      communityId: actor?.type === 'community' ? actor.id : null,
       createdAt: new Date().toISOString(),
       text: text.trim(),
       likesCount: 0,
       commentsCount: 0,
       likedByMe: false,
       media: mediaArray,
+      feedTargets:
+        Array.isArray(feedTargets) && feedTargets.length > 0
+          ? feedTargets
+          : actor?.type === 'community'
+            ? [`community:${actor.id}`]
+            : ['home'],
     };
 
     addPost(newPost);
@@ -188,20 +214,20 @@ export function PostComposer({ onSuccess, actor }: PostComposerProps) {
       await fetchPosts();
     } catch (e) {
       if (__DEV__) {
-        console.log('[PostComposer] Post-creation refresh skipped:', e);
+        logger.log('[PostComposer] Post-creation refresh skipped:', e);
       }
     }
 
     setLoading(false);
     setText('');
     setAttachment(null);
-    console.log('[PostComposer] Post published successfully, calling onSuccess');
+    logger.log('[PostComposer] Post published successfully, calling onSuccess');
     onSuccess?.();
   };
 
   return (
     <View style={styles.container}>
-      <Card style={{ marginBottom: theme.spacing[4] }}>
+      <Card style={styles.sectionCard}>
         <Text style={styles.label}>Dit opslag</Text>
         <TextInput
           style={styles.textInput}
@@ -240,32 +266,36 @@ export function PostComposer({ onSuccess, actor }: PostComposerProps) {
       </Card>
 
       {!attachment && (
-        <Card style={{ marginBottom: theme.spacing[4] }}>
+        <Card style={styles.sectionCard}>
           <Text style={styles.label}>Tilføj medie (valgfrit)</Text>
           <View style={styles.imageButtonsContainer}>
             <Pressable style={styles.imageButton} onPress={handlePickCamera} disabled={loading}>
-              <Ionicons name="camera" size={20} color={theme.colors.primary} />
+              <Ionicons name="camera" size={20} color={theme.colors.text.secondary} />
               <Text style={styles.imageButtonText}>Tag billede</Text>
             </Pressable>
 
             <Pressable style={styles.imageButton} onPress={handleRecordVideo} disabled={loading}>
-              <Ionicons name="videocam" size={20} color={theme.colors.primary} />
+              <Ionicons name="videocam" size={20} color={theme.colors.text.secondary} />
               <Text style={styles.imageButtonText}>Optag video</Text>
             </Pressable>
 
             <Pressable style={styles.imageButton} onPress={handlePickLibrary} disabled={loading}>
-              <Ionicons name="images" size={20} color={theme.colors.primary} />
+              <Ionicons name="images" size={20} color={theme.colors.text.secondary} />
               <Text style={styles.imageButtonText}>Vælg fra bibliotek</Text>
             </Pressable>
           </View>
         </Card>
       )}
 
-      <PrimaryButton
-        title={loading ? 'Deler...' : 'Del opslag'}
-        onPress={handlePublish}
-        disabled={!text.trim() || loading}
-      />
+      <View style={[styles.submitButtonWrap, !text.trim() || loading ? styles.submitButtonWrapDisabled : null]}>
+        <View style={styles.submitButtonInner}>
+          <PrimaryButton
+            title={loading ? 'Deler...' : 'Del opslag'}
+            onPress={handlePublish}
+            disabled={!text.trim() || loading}
+          />
+        </View>
+      </View>
 
       {loading && (
         <View style={styles.loadingOverlay}>
@@ -279,23 +309,32 @@ export function PostComposer({ onSuccess, actor }: PostComposerProps) {
 function createStyles(theme: Theme) {
   return StyleSheet.create({
     container: {
-      padding: theme.layout.screenPadding,
+      paddingHorizontal: theme.spacing[2],
+      paddingTop: theme.spacing[3],
+      paddingBottom: theme.spacing[5],
+    },
+    sectionCard: {
+      marginBottom: theme.spacing[3],
+      borderWidth: 1,
+      borderColor: theme.colors.border.default,
+      backgroundColor: theme.colors.bg.card,
     },
     label: {
-      fontSize: 14,
-      fontWeight: '600',
+      fontSize: 15,
+      fontWeight: '700',
       color: theme.colors.text.primary,
       marginBottom: theme.spacing[2],
     },
     textInput: {
       borderWidth: 1,
       borderColor: theme.colors.border.default,
-      borderRadius: theme.radius.sm,
+      borderRadius: theme.radius.md,
       padding: theme.spacing[4],
-      minHeight: 120,
-      fontSize: 14,
+      minHeight: 148,
+      fontSize: 15,
       color: theme.colors.text.primary,
       textAlignVertical: 'top',
+      backgroundColor: theme.colors.bg.subtle,
     },
     previewContainer: {
       marginTop: theme.spacing[4],
@@ -319,23 +358,50 @@ function createStyles(theme: Theme) {
     imageButtonsContainer: {
       flexDirection: 'row',
       gap: theme.spacing[2],
+      alignItems: 'stretch',
     },
     imageButton: {
       flex: 1,
-      flexDirection: 'row',
+      flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: theme.spacing[4],
+      minHeight: 84,
+      paddingVertical: theme.spacing[3],
       paddingHorizontal: theme.spacing[2],
       borderWidth: 1,
-      borderColor: theme.colors.primary,
-      borderRadius: theme.radius.sm,
-      gap: theme.spacing[1],
+      borderColor: theme.colors.border.default,
+      backgroundColor: theme.colors.bg.elevated,
+      borderRadius: theme.radius.md,
+      gap: theme.spacing[2],
     },
     imageButtonText: {
-      fontSize: 14,
-      color: theme.colors.primary,
-      fontWeight: '500',
+      fontSize: 13,
+      color: theme.colors.text.primary,
+      fontWeight: '600',
+      textAlign: 'center',
+      flexShrink: 1,
+      lineHeight: 17,
+    },
+    submitButtonWrap: {
+      marginTop: theme.spacing[3],
+      padding: theme.spacing[2],
+      borderRadius: theme.radius.lg,
+      backgroundColor: theme.colors.bg.card,
+      borderWidth: 1,
+      borderColor: theme.colors.border.default,
+    },
+    submitButtonWrapDisabled: {
+      backgroundColor: theme.colors.bg.elevated,
+      borderColor: theme.colors.border.default,
+      opacity: 1,
+    },
+    submitButtonInner: {
+      borderRadius: theme.radius.md,
+      overflow: 'hidden',
+      backgroundColor: theme.colors.bg.subtle,
+      borderWidth: 1,
+      borderColor: theme.colors.border.subtle,
+      padding: theme.spacing[1],
     },
     loadingOverlay: {
       marginTop: theme.spacing[2],

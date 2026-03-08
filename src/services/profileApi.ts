@@ -1,3 +1,4 @@
+import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { getProfileSafe } from '../lib/profile';
 
@@ -82,7 +83,7 @@ export async function fetchMyProfile(userId: string): Promise<UserProfile | null
       'id, display_name, avatar_url, member_since, onboarding_complete',
     );
   } catch (err) {
-    console.error('[profileApi] Unexpected error fetching profile:', err);
+    logger.error('[profileApi] Unexpected error fetching profile:', err);
     return null;
   }
 }
@@ -97,8 +98,7 @@ export async function fetchMyCommunities(
   userId: string,
 ): Promise<{ ownerCommunities: MyCommunity[]; memberCommunities: MyCommunity[] }> {
   try {
-    console.log('\n========== DIAGNOSE: fetchMyCommunities ==========');
-    console.log('[DIAGNOSE] Current user ID:', userId);
+    logger.log('[profileApi] Fetching communities for user:', userId);
 
     // Step 1: Fetch community memberships from community_members as authenticated user
     // This matches RLS: select community_id, role from public.community_members where user_id = auth.uid()
@@ -107,28 +107,20 @@ export async function fetchMyCommunities(
       .select('community_id, role')
       .eq('user_id', userId);
 
-    console.log('[DIAGNOSE] Raw rows from public.community_members:');
     if (memberships && memberships.length > 0) {
-      memberships.forEach((m, idx) => {
-        console.log(`  Row ${idx + 1}:`, {
-          community_id: m.community_id,
-          role: m.role,
-        });
-      });
+      logger.log('[profileApi] Memberships found:', memberships.length);
     } else {
-      console.log('  (0 rows returned)');
+      logger.log('[profileApi] No community memberships found');
     }
 
     if (memberError) {
-      console.log('[DIAGNOSE] Query error:', memberError);
-      console.warn('[profileApi] Error fetching communities', memberError);
+      logger.log('[profileApi] Query error:', memberError);
+      logger.warn('[profileApi] Error fetching communities', memberError);
       return { ownerCommunities: [], memberCommunities: [] };
     }
 
     if (!memberships || memberships.length === 0) {
-      console.log(
-        '[DIAGNOSE] No community memberships found - ActorSelector will show 0 communities',
-      );
+      logger.log('[profileApi] No community memberships found - ActorSelector will show 0 communities');
       return { ownerCommunities: [], memberCommunities: [] };
     }
 
@@ -137,7 +129,7 @@ export async function fetchMyCommunities(
       (m) => m.role?.toLowerCase() === 'owner' || m.role?.toLowerCase() === 'admin',
     );
 
-    console.log('[profileApi] Eligible memberships (owner/admin):', eligibleMemberships.length);
+    logger.log('[profileApi] Eligible memberships (owner/admin):', eligibleMemberships.length);
 
     if (eligibleMemberships.length === 0) {
       return { ownerCommunities: [], memberCommunities: [] };
@@ -151,11 +143,11 @@ export async function fetchMyCommunities(
       .in('id', communityIds);
 
     if (communitiesError) {
-      console.warn('[profileApi] Error fetching community names:', communitiesError);
+      logger.warn('[profileApi] Error fetching community names:', communitiesError);
       // Fallback: use community_id as name
     }
 
-    console.log('[profileApi] Fetched community names:', communities?.length || 0);
+    logger.log('[profileApi] Fetched community names:', communities?.length || 0);
 
     // Step 3: Get member counts for each community
     const countsMap: Record<string, number> = {};
@@ -194,28 +186,27 @@ export async function fetchMyCommunities(
       }
     });
 
-    console.log('[profileApi] Final result:', {
+    logger.log('[profileApi] Final result:', {
       ownerCommunities: ownerCommunities.length,
       memberCommunities: memberCommunities.length,
     });
 
-    console.log('[DIAGNOSE] Final owner/admin communities for dropdown:');
+    logger.log('[profileApi] Final owner/admin communities for dropdown:');
     if (ownerCommunities.length > 0) {
       ownerCommunities.forEach((c, idx) => {
-        console.log(`  Community ${idx + 1}:`, {
+        logger.log(`  Community ${idx + 1}:`, {
           id: c.id,
           name: c.name,
           role: c.role,
         });
       });
     } else {
-      console.log('  (0 communities - dropdown will only show "Dig")');
+      logger.log('  (0 communities - dropdown will only show "Dig")');
     }
-    console.log('==================================================\n');
 
     return { ownerCommunities, memberCommunities };
   } catch (err) {
-    console.error('[profileApi] Unexpected error fetching communities:', err);
+    logger.error('[profileApi] Unexpected error fetching communities:', err);
     return { ownerCommunities: [], memberCommunities: [] };
   }
 }
@@ -226,7 +217,7 @@ export async function fetchMyCommunities(
  */
 export async function fetchMyUpcomingItems(userId: string): Promise<UpcomingItem[]> {
   try {
-    console.log('[profileApi] Fetching upcoming items for user:', userId);
+    logger.log('[profileApi] Fetching upcoming items for user:', userId);
     // Fetch user_upcoming_items
     const { data: items, error: itemsError } = await supabase
       .from('user_upcoming_items')
@@ -237,11 +228,11 @@ export async function fetchMyUpcomingItems(userId: string): Promise<UpcomingItem
       .limit(3);
 
     if (itemsError) {
-      console.warn('[profileApi] Error fetching upcoming items', itemsError);
+      logger.warn('[profileApi] Error fetching upcoming items', itemsError);
       return [];
     }
 
-    console.log('[profileApi] Found items:', items?.length || 0);
+    logger.log('[profileApi] Found items:', items?.length || 0);
 
     if (!items || items.length === 0) {
       return [];
@@ -302,7 +293,7 @@ export async function fetchMyUpcomingItems(userId: string): Promise<UpcomingItem
     // Filter out items that couldn't be resolved
     return resolved.filter((item) => item.title && item.date);
   } catch (err) {
-    console.error('[profileApi] Unexpected error fetching upcoming items:', err);
+    logger.error('[profileApi] Unexpected error fetching upcoming items:', err);
     return [];
   }
 }
@@ -319,13 +310,13 @@ export async function countOwnedCommunities(userId: string): Promise<number> {
       .eq('role', 'owner');
 
     if (error) {
-      console.warn('[profileApi] Error counting owned communities', error);
+      logger.warn('[profileApi] Error counting owned communities', error);
       return 0;
     }
 
     return count || 0;
   } catch (err) {
-    console.error('[profileApi] Unexpected error counting communities:', err);
+    logger.error('[profileApi] Unexpected error counting communities:', err);
     return 0;
   }
 }

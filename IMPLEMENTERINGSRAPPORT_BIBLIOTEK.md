@@ -2,7 +2,7 @@
 
 **Status:** Read-only analyse + token-cleanup færdig  
 **Dato:** 23. februar 2026  
-**Rapport ID:** LIB-001-MVP  
+**Rapport ID:** LIB-001-MVP
 
 ---
 
@@ -23,23 +23,23 @@
 
 ### 1) Ændrede filer
 
-| Fil | Ændring |
-|---|---|
-| `src/navigation/AppTabs.tsx` | Import `LibraryStack` i stedet for `SongsScreen`; ændrer tab-label "Sange" → "Bibliotek"; binder route "Songs" til `LibraryStack` |
-| `src/navigation/types.ts` | **Helt restruktureret:** `AppTabsParamList` nu komplet (Home, Communities, Events, Songs, Profile); ny `LibraryStackParamList` (LibraryMain + futures); simplificeret `RootStackParamList` (Main, CreateNewEvent, Create) |
-| `src/screens/SongsScreen.tsx` | Refaktoreret til **thin wrapper:** fjernet alle 5 songs + logik, nu bare `AppHeader` + `SongsView` import; token-migrering (spacing tokens) |
-| `src/components/songs/SongAccordionCard.tsx` | **Token cleanup:** fontsize 18/14 → `theme.typography.h3/small`; dimensions 40×40 → `theme.spacing[10]`; icon size 20 → `theme.spacing[5]` |
-| `src/components/songs/SongSuggestCard.tsx` | **Token cleanup:** borderWidth 2 → `theme.border.hairline`; icon size 24 → `theme.components.icon.size.md`; dimensions 48×48 → `theme.spacing[12]`; typography via tokens |
+| Fil                                          | Ændring                                                                                                                                                                                                                   |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/navigation/AppTabs.tsx`                 | Import `LibraryStack` i stedet for `SongsScreen`; ændrer tab-label "Sange" → "Bibliotek"; binder route "Songs" til `LibraryStack`                                                                                         |
+| `src/navigation/types.ts`                    | **Helt restruktureret:** `AppTabsParamList` nu komplet (Home, Communities, Events, Songs, Profile); ny `LibraryStackParamList` (LibraryMain + futures); simplificeret `RootStackParamList` (Main, CreateNewEvent, Create) |
+| `src/screens/SongsScreen.tsx`                | Refaktoreret til **thin wrapper:** fjernet alle 5 songs + logik, nu bare `AppHeader` + `SongsView` import; token-migrering (spacing tokens)                                                                               |
+| `src/components/songs/SongAccordionCard.tsx` | **Token cleanup:** fontsize 18/14 → `theme.typography.h3/small`; dimensions 40×40 → `theme.spacing[10]`; icon size 20 → `theme.spacing[5]`                                                                                |
+| `src/components/songs/SongSuggestCard.tsx`   | **Token cleanup:** borderWidth 2 → `theme.border.hairline`; icon size 24 → `theme.components.icon.size.md`; dimensions 48×48 → `theme.spacing[12]`; typography via tokens                                                 |
 
 ### 2) Nye filer (5)
 
-| Fil | Formål | Linjetal |
-|---|---|---|
-| `src/navigation/LibraryStack.tsx` | Native stack wrapper for Library feature; wires LibraryScreen som root | 13 |
-| `src/screens/LibraryScreen.tsx` | **Container screen:** AppHeader + 4-tab segment row (Sange/Stillingen/Fan Links/Videoer) + conditional rendering af views | 137 |
-| `src/components/views/SongsView.tsx` | **Reusable component:** 5 songs array + accordion state + suggest card; kan bruges i Bibliotek eller standalone | 106 |
-| `src/components/views/LinksView.tsx` | **Reusable component:** 6 statiske fan-links (FCN official, FB, IG, Superligaen, DBU, Wikipedia) + `Linking.openURL()` taps; card-layout | 184 |
-| `src/components/views/VideosView.tsx` | **Reusable component:** 5 video entries (highlights, matches, interview, academy, supporters) + thumbnail placeholders + tag badges + `Linking.openURL()`; card-layout | 254 |
+| Fil                                   | Formål                                                                                                                                                                 | Linjetal |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| `src/navigation/LibraryStack.tsx`     | Native stack wrapper for Library feature; wires LibraryScreen som root                                                                                                 | 13       |
+| `src/screens/LibraryScreen.tsx`       | **Container screen:** AppHeader + 4-tab segment row (Sange/Stillingen/Fan Links/Videoer) + conditional rendering af views                                              | 137      |
+| `src/components/views/SongsView.tsx`  | **Reusable component:** 5 songs array + accordion state + suggest card; kan bruges i Bibliotek eller standalone                                                        | 106      |
+| `src/components/views/LinksView.tsx`  | **Reusable component:** 6 statiske fan-links (FCN official, FB, IG, Superligaen, DBU, Wikipedia) + `Linking.openURL()` taps; card-layout                               | 184      |
+| `src/components/views/VideosView.tsx` | **Reusable component:** 5 video entries (highlights, matches, interview, academy, supporters) + thumbnail placeholders + tag badges + `Linking.openURL()`; card-layout | 254      |
 
 **Total nye linjer:** ~694 linjer (high-quality, documented code)
 
@@ -145,21 +145,21 @@ const [activeSegment, setActiveSegment] = useState<LibrarySegmentKey>('songs');
 
 **Active/inactive buttons:**
 
-| State | Padding | Border | Background | Text |
-|---|---|---|---|---|
-| Inactive | `8px v / 16px h` | 1px hairline | `bg.default` | `text.primary` |
-| Active | `8px v / 16px h` | 1px hairline | `brand.accent` | `text.inverse` |
+| State    | Padding          | Border       | Background     | Text           |
+| -------- | ---------------- | ------------ | -------------- | -------------- |
+| Inactive | `8px v / 16px h` | 1px hairline | `bg.default`   | `text.primary` |
+| Active   | `8px v / 16px h` | 1px hairline | `brand.accent` | `text.inverse` |
 
 **Icons + labels:** Text-only labels (ingen ikoner i segment row), `caption` tipografi (13px)
 
 ### 3) Segment rendering
 
-| Segment | Component | Status | Data Source |
-|---|---|---|---|
-| **Sange** | `SongsView` | ✅ FULDT FUNKTIONELT | 5 hardcoded songs array |
-| **Stillingen** | `StandingsView` | 🟡 PLACEHOLDER ONLY | PlaceholderCard component |
-| **Fan Links** | `LinksView` | ✅ FULDT FUNKTIONELT | 6 statiske links arr, `Linking.openURL()` |
-| **Videoer** | `VideosView` | ✅ FULDT FUNKTIONELT | 5 statiske videos arr, `Linking.openURL()` |
+| Segment        | Component       | Status               | Data Source                                |
+| -------------- | --------------- | -------------------- | ------------------------------------------ |
+| **Sange**      | `SongsView`     | ✅ FULDT FUNKTIONELT | 5 hardcoded songs array                    |
+| **Stillingen** | `StandingsView` | 🟡 PLACEHOLDER ONLY  | PlaceholderCard component                  |
+| **Fan Links**  | `LinksView`     | ✅ FULDT FUNKTIONELT | 6 statiske links arr, `Linking.openURL()`  |
+| **Videoer**    | `VideosView`    | ✅ FULDT FUNKTIONELT | 5 statiske videos arr, `Linking.openURL()` |
 
 ### 4) Card-layout konsistens
 
@@ -247,45 +247,45 @@ const [activeSegment, setActiveSegment] = useState<LibrarySegmentKey>('songs');
 
 #### SongAccordionCard.tsx
 
-| Hardcoded værdi | Token replacement | Type |
-|---|---|---|
-| `fontSize: 18` | `theme.typography.h3` | Typography |
-| `fontWeight: '600'` | (included in h3) | Typography |
-| `fontSize: 14` | `theme.typography.small` | Typography |
-| `lineHeight: 20` | (included in small) | Typography |
-| `width: 40` | `theme.spacing[10]` | Dimension |
-| `height: 40` | `theme.spacing[10]` | Dimension |
-| `size={20}` (icon) | `theme.spacing[5]` | Icon size |
-| `size={20}` (chevron) | `theme.spacing[5]` | Icon size |
+| Hardcoded værdi       | Token replacement        | Type       |
+| --------------------- | ------------------------ | ---------- |
+| `fontSize: 18`        | `theme.typography.h3`    | Typography |
+| `fontWeight: '600'`   | (included in h3)         | Typography |
+| `fontSize: 14`        | `theme.typography.small` | Typography |
+| `lineHeight: 20`      | (included in small)      | Typography |
+| `width: 40`           | `theme.spacing[10]`      | Dimension  |
+| `height: 40`          | `theme.spacing[10]`      | Dimension  |
+| `size={20}` (icon)    | `theme.spacing[5]`       | Icon size  |
+| `size={20}` (chevron) | `theme.spacing[5]`       | Icon size  |
 
 #### SongSuggestCard.tsx
 
-| Hardcoded værdi | Token replacement | Type |
-|---|---|---|
-| `borderWidth: 2` | `theme.border.hairline` | Border |
-| `fontSize: 18` | `theme.typography.h3` | Typography |
-| `fontWeight: '600'` | (included in h3) | Typography |
-| `fontSize: 14` | `theme.typography.small` | Typography |
-| `width: 48` | `theme.spacing[12]` | Dimension |
-| `height: 48` | `theme.spacing[12]` | Dimension |
-| `size={24}` (icon) | `theme.components.icon.size.md` | Icon size |
+| Hardcoded værdi     | Token replacement               | Type       |
+| ------------------- | ------------------------------- | ---------- |
+| `borderWidth: 2`    | `theme.border.hairline`         | Border     |
+| `fontSize: 18`      | `theme.typography.h3`           | Typography |
+| `fontWeight: '600'` | (included in h3)                | Typography |
+| `fontSize: 14`      | `theme.typography.small`        | Typography |
+| `width: 48`         | `theme.spacing[12]`             | Dimension  |
+| `height: 48`        | `theme.spacing[12]`             | Dimension  |
+| `size={24}` (icon)  | `theme.components.icon.size.md` | Icon size  |
 
 #### LinksView.tsx
 
-| Hardcoded værdi | Token replacement | Type |
-|---|---|---|
-| `size={24}` (link icon) | `theme.components.icon.size.md` | Icon size |
-| `size={20}` (arrow) | `theme.spacing[5]` | Icon size |
+| Hardcoded værdi           | Token replacement               | Type      |
+| ------------------------- | ------------------------------- | --------- |
+| `size={24}` (link icon)   | `theme.components.icon.size.md` | Icon size |
+| `size={20}` (arrow)       | `theme.spacing[5]`              | Icon size |
 | `size={48}` (empty state) | `theme.components.icon.size.lg` | Icon size |
 
 #### VideosView.tsx
 
-| Hardcoded værdi | Token replacement | Type |
-|---|---|---|
-| `size={48}` (play icon) | `theme.spacing[12]` | Icon size |
-| `size={20}` (arrow) | `theme.spacing[5]` | Icon size |
-| `size={48}` (empty state) | `theme.spacing[12]` | Icon size |
-| `height: 180` | `theme.spacing[12] + theme.spacing[12] + theme.spacing[10] + theme.spacing[11]` | Dimension |
+| Hardcoded værdi           | Token replacement                                                               | Type      |
+| ------------------------- | ------------------------------------------------------------------------------- | --------- |
+| `size={48}` (play icon)   | `theme.spacing[12]`                                                             | Icon size |
+| `size={20}` (arrow)       | `theme.spacing[5]`                                                              | Icon size |
+| `size={48}` (empty state) | `theme.spacing[12]`                                                             | Icon size |
+| `height: 180`             | `theme.spacing[12] + theme.spacing[12] + theme.spacing[10] + theme.spacing[11]` | Dimension |
 
 ### Token usage breakdown
 
@@ -335,6 +335,7 @@ RootStackParamList {
 ### ✅ TypeScript compilation
 
 **No errors found in:**
+
 - `SongsView.tsx` ✅
 - `LinksView.tsx` ✅
 - `VideosView.tsx` ✅
@@ -350,7 +351,7 @@ RootStackParamList {
 ```tsx
 // SongsView
 export interface SongsViewProps {
-  paddingBottom?: number;  // Optional tab bar spacing
+  paddingBottom?: number; // Optional tab bar spacing
 }
 
 // LinksView
@@ -370,20 +371,21 @@ export interface VideosViewProps {
 
 ### ✅ P0 DoD opfyldt?
 
-| Krav | Opfyldt | Note |
-|---|---|---|
-| Tab label "Bibliotek" | ✅ JA | Line 37 i AppTabs.tsx |
-| LibraryStack wrapper | ✅ JA | Pattern matches Home/Events/Communities |
-| Sange sektion | ✅ JA | 5 songs, accordion, suggest card |
-| Links sektion | ✅ JA | 6 links, card-based, external links |
-| Videoer sektion | ✅ JA | 5 videos, card-based, thumbnails + tags |
-| Stillingen sektion | ❌ NEJ | Placeholder only — NO backend |
-| Design tokens | ✅ JA | 16 hardcoded værdier removed |
-| Navigation routing | ✅ JA | Create modal works, backward compat intact |
-| Types definition | ✅ JA | AppTabsParamList + LibraryStackParamList complete |
-| TypeScript compilation | ✅ JA | 0 errors in new code |
+| Krav                   | Opfyldt | Note                                              |
+| ---------------------- | ------- | ------------------------------------------------- |
+| Tab label "Bibliotek"  | ✅ JA   | Line 37 i AppTabs.tsx                             |
+| LibraryStack wrapper   | ✅ JA   | Pattern matches Home/Events/Communities           |
+| Sange sektion          | ✅ JA   | 5 songs, accordion, suggest card                  |
+| Links sektion          | ✅ JA   | 6 links, card-based, external links               |
+| Videoer sektion        | ✅ JA   | 5 videos, card-based, thumbnails + tags           |
+| Stillingen sektion     | ❌ NEJ  | Placeholder only — NO backend                     |
+| Design tokens          | ✅ JA   | 16 hardcoded værdier removed                      |
+| Navigation routing     | ✅ JA   | Create modal works, backward compat intact        |
+| Types definition       | ✅ JA   | AppTabsParamList + LibraryStackParamList complete |
+| TypeScript compilation | ✅ JA   | 0 errors in new code                              |
 
 **P0 Assessment:** **⚠️ 87% — CONDITIONAL GO**
+
 - **Blockers:** Stillingen (standings) er placeholder, ikke implementeret
 - **Go-rate:** 3 of 4 segments fuldt funktionelle + navigation stabil
 
@@ -420,15 +422,15 @@ export interface VideosViewProps {
 
 ### Kendte risici
 
-| Risk | Severity | Probability | Mitigation |
-|---|---|---|---|
-| **Stillingen empty** | 🔴 HIGH | 100% | Implement or hide tab for MVP |
-| **External links only → poor UX** | 🟡 MEDIUM | HIGH | Consider in-app link preview cards |
-| **Video URLs to YouTube → may break** | 🟡 MEDIUM | MEDIUM | Cache video IDs; fallback to search |
-| **Static data redundancy** | 🟡 MEDIUM | MEDIUM | Plan Supabase migration architecture |
-| **No RLS on future Link table** | 🔴 HIGH | HIGH (if needed soon) | Define RLS polícy BEFORE MVP dev |
-| **API rate limit (TheSportsDB)** | 🟡 MEDIUM | MEDIUM | Free tier = 15 req/day; need cache |
-| **No thumbnail images** | 🟡 MEDIUM | MEDIUM | Either upload or skip for MVP |
+| Risk                                  | Severity  | Probability           | Mitigation                           |
+| ------------------------------------- | --------- | --------------------- | ------------------------------------ |
+| **Stillingen empty**                  | 🔴 HIGH   | 100%                  | Implement or hide tab for MVP        |
+| **External links only → poor UX**     | 🟡 MEDIUM | HIGH                  | Consider in-app link preview cards   |
+| **Video URLs to YouTube → may break** | 🟡 MEDIUM | MEDIUM                | Cache video IDs; fallback to search  |
+| **Static data redundancy**            | 🟡 MEDIUM | MEDIUM                | Plan Supabase migration architecture |
+| **No RLS on future Link table**       | 🔴 HIGH   | HIGH (if needed soon) | Define RLS polícy BEFORE MVP dev     |
+| **API rate limit (TheSportsDB)**      | 🟡 MEDIUM | MEDIUM                | Free tier = 15 req/day; need cache   |
+| **No thumbnail images**               | 🟡 MEDIUM | MEDIUM                | Either upload or skip for MVP        |
 
 ---
 
@@ -460,6 +462,7 @@ export interface VideosViewProps {
 #### Decision tree
 
 **OPTION A (Recommended):** Launch MVP **WITH** Bibliotek tab active
+
 ```
 ✅ Ship Sange + Links + Videoer as P0
 ✅ Hide or replace Stillingen tab with "Coming soon" note
@@ -468,6 +471,7 @@ export interface VideosViewProps {
 ```
 
 **OPTION B (Alternative):** Hold Bibliotek for next sprint
+
 ```
 ⏱️ Wait until all 4 segments ready
 ⚠️ Risk: delays overall MVP release by ~1-2 weeks
@@ -485,16 +489,16 @@ export interface VideosViewProps {
 
 ## SUMMARY TABLE
 
-| Aspekt | Status | Score |
-|---|---|---|
-| **Navigation** | ✅ Ready | 10/10 |
-| **UI Components** | ✅ Ready | 9/10 |
-| **Tokens** | ✅ Clean | 10/10 |
-| **Types** | ✅ Safe | 10/10 |
-| **Data flow** | 🟡 Partial | 6/10 |
-| **Backend integration** | ❌ Missing | 0/10 |
-| **Documentation** | ✅ Complete | 10/10 |
-| **Overall P0 readiness** | ⚠️ Conditional | 7/10 |
+| Aspekt                   | Status         | Score |
+| ------------------------ | -------------- | ----- |
+| **Navigation**           | ✅ Ready       | 10/10 |
+| **UI Components**        | ✅ Ready       | 9/10  |
+| **Tokens**               | ✅ Clean       | 10/10 |
+| **Types**                | ✅ Safe        | 10/10 |
+| **Data flow**            | 🟡 Partial     | 6/10  |
+| **Backend integration**  | ❌ Missing     | 0/10  |
+| **Documentation**        | ✅ Complete    | 10/10 |
+| **Overall P0 readiness** | ⚠️ Conditional | 7/10  |
 
 ---
 
@@ -524,8 +528,8 @@ For MVP kan du:
 
 **Report generated:** 2026-02-23  
 **Component versions:** React Navigation v6, React Native, Expo  
-**Compatibility:** iOS 13+, Android 8+  
+**Compatibility:** iOS 13+, Android 8+
 
 ---
 
-*For questions eller opdateringer, se tilhørende PR/commit refs.*
+_For questions eller opdateringer, se tilhørende PR/commit refs._

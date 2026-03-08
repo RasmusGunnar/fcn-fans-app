@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { logger } from '../lib/logger';
 import {
   View,
   Text,
@@ -38,10 +39,10 @@ export default function BusTripDetailsScreen() {
   }, [busTripId]);
 
   const loadBusTrip = async () => {
-    console.log('[BusTripDetailsScreen] Loading bus trip:', busTripId);
+    logger.log('[BusTripDetailsScreen] Loading bus trip:', busTripId);
     setLoading(true);
     const data = await fetchBusTripById(busTripId);
-    console.log('[BusTripDetailsScreen] Bus trip data received:', data);
+    logger.log('[BusTripDetailsScreen] Bus trip data received:', data);
     setBusTrip(data);
     setLoading(false);
   };
@@ -258,7 +259,7 @@ export default function BusTripDetailsScreen() {
               title={`Book plads nu${busTrip.price_dkk ? ` (${busTrip.price_dkk} kr.)` : ''}`}
               onPress={() => {
                 // TODO: Implement booking flow
-                console.log('Book bus trip:', busTripId);
+                logger.log('Book bus trip:', busTripId);
               }}
             />
           )}

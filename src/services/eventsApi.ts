@@ -1,3 +1,4 @@
+import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { getMatchHeroUrl, getTeamHeroImage } from './sportsdb';
 
@@ -52,6 +53,7 @@ export interface Event {
   organizer_id?: string | null;
   created_at: string;
   organizer?: FanGroup | null;
+  capacity?: number | null;
   // Cover image
   cover_bucket?: string | null;
   cover_path?: string | null;
@@ -190,20 +192,20 @@ export async function fetchMatchesUpcoming(limit = 20): Promise<Fixture[]> {
         limit,
       });
       if (fallback.error) {
-        console.error('[eventsApi] Error fetching matches (fallback):', fallback.error);
+        logger.error('[eventsApi] Error fetching matches (fallback):', fallback.error);
         return [];
       }
       return fallback.data || [];
     }
 
     if (error) {
-      console.error('[eventsApi] Error fetching matches:', error);
+      logger.error('[eventsApi] Error fetching matches:', error);
       return [];
     }
 
     return data || [];
   } catch (err) {
-    console.error('[eventsApi] Unexpected error fetching matches:', err);
+    logger.error('[eventsApi] Unexpected error fetching matches:', err);
     return [];
   }
 }
@@ -226,20 +228,20 @@ export async function fetchMatchesRecent(limit = 10): Promise<Fixture[]> {
         limit,
       });
       if (fallback.error) {
-        console.error('[eventsApi] Error fetching recent matches (fallback):', fallback.error);
+        logger.error('[eventsApi] Error fetching recent matches (fallback):', fallback.error);
         return [];
       }
       return fallback.data || [];
     }
 
     if (error) {
-      console.error('[eventsApi] Error fetching recent matches:', error);
+      logger.error('[eventsApi] Error fetching recent matches:', error);
       return [];
     }
 
     return data || [];
   } catch (err) {
-    console.error('[eventsApi] Unexpected error fetching recent matches:', err);
+    logger.error('[eventsApi] Unexpected error fetching recent matches:', err);
     return [];
   }
 }
@@ -259,13 +261,13 @@ export async function fetchBusTripsUpcoming(limit = 20): Promise<BusTrip[]> {
       .limit(limit);
 
     if (error) {
-      console.warn('[eventsApi] Error fetching bus trips', error);
+      logger.warn('[eventsApi] Error fetching bus trips', error);
       return [];
     }
 
     return (data || []) as unknown as BusTrip[];
   } catch (err) {
-    console.error('[eventsApi] Unexpected error fetching bus trips:', err);
+    logger.error('[eventsApi] Unexpected error fetching bus trips:', err);
     return [];
   }
 }
@@ -293,13 +295,13 @@ export async function fetchEventsUpcoming(limit = 20, communityId?: string): Pro
     const { data, error } = await query;
 
     if (error) {
-      console.warn('[eventsApi] fetchEventsUpcoming error:', error.code, error.message);
+      logger.warn('[eventsApi] fetchEventsUpcoming error:', error.code, error.message);
       return [];
     }
 
     return (data || []) as unknown as Event[];
   } catch (err) {
-    console.error('[eventsApi] Unexpected error fetching events:', err);
+    logger.error('[eventsApi] Unexpected error fetching events:', err);
     return [];
   }
 }
@@ -322,7 +324,7 @@ export async function fetchFeedUpcoming(): Promise<FeedItem[]> {
     const busTrips = results[1].status === 'fulfilled' ? results[1].value : [];
     const events = results[2].status === 'fulfilled' ? results[2].value : [];
 
-    console.log(
+    logger.log(
       `[eventsApi] fetchFeedUpcoming — matches: ${matches.length}, busTrips: ${busTrips.length}, events: ${events.length}`,
     );
 
@@ -359,7 +361,13 @@ export async function fetchFeedUpcoming(): Promise<FeedItem[]> {
     );
 
     const busTripItems: FeedItem[] = busTrips.map((bt) => {
-      const fix = (bt as any).fixtures as { lat?: number | null; lng?: number | null; venue?: string | null; venue_city?: string | null; place_name?: string | null } | null;
+      const fix = (bt as any).fixtures as {
+        lat?: number | null;
+        lng?: number | null;
+        venue?: string | null;
+        venue_city?: string | null;
+        place_name?: string | null;
+      } | null;
       return {
         kind: 'bus_trip' as const,
         id: bt.id,
@@ -407,7 +415,7 @@ export async function fetchFeedUpcoming(): Promise<FeedItem[]> {
 
     return allItems;
   } catch (err) {
-    console.error('[eventsApi] Unexpected error in fetchFeedUpcoming:', err);
+    logger.error('[eventsApi] Unexpected error in fetchFeedUpcoming:', err);
     return [];
   }
 }
@@ -417,18 +425,18 @@ export async function fetchFeedUpcoming(): Promise<FeedItem[]> {
  */
 export async function fetchBusTripById(id: string): Promise<BusTrip | null> {
   try {
-    console.log('[eventsApi] Fetching bus trip by id:', id);
+    logger.log('[eventsApi] Fetching bus trip by id:', id);
     const { data, error } = await supabase.from('bus_trips').select('*').eq('id', id).single();
 
     if (error) {
-      console.warn('[eventsApi] Error fetching bus trip by id', error);
+      logger.warn('[eventsApi] Error fetching bus trip by id', error);
       return null;
     }
 
-    console.log('[eventsApi] Bus trip fetched successfully:', data);
+    logger.log('[eventsApi] Bus trip fetched successfully:', data);
     return data as unknown as BusTrip;
   } catch (err) {
-    console.warn('[eventsApi] Error fetching bus trip by id', err);
+    logger.warn('[eventsApi] Error fetching bus trip by id', err);
     return null;
   }
 }
@@ -438,17 +446,17 @@ export async function fetchBusTripById(id: string): Promise<BusTrip | null> {
  */
 export async function fetchEventById(id: string): Promise<Event | null> {
   try {
-    console.log('[eventsApi] Fetching event by id:', id);
+    logger.log('[eventsApi] Fetching event by id:', id);
     const { data, error } = await supabase.from('events').select('*').eq('id', id).single();
 
     if (error) {
-      console.warn('[eventsApi] fetchEventById error:', error.code, error.message);
+      logger.warn('[eventsApi] fetchEventById error:', error.code, error.message);
       return null;
     }
 
     return data as unknown as Event;
   } catch (err) {
-    console.warn('[eventsApi] Error fetching event by id', err);
+    logger.warn('[eventsApi] Error fetching event by id', err);
     return null;
   }
 }
@@ -467,20 +475,20 @@ export async function fetchFixtureById(id: string): Promise<Fixture | null> {
     if (error && shouldFallbackView(error)) {
       const fallback = await supabase.from('fixtures').select('*').eq('id', id).maybeSingle();
       if (fallback.error) {
-        console.error('[eventsApi] Error fetching fixture (fallback):', fallback.error);
+        logger.error('[eventsApi] Error fetching fixture (fallback):', fallback.error);
         return null;
       }
       return fallback.data || null;
     }
 
     if (error) {
-      console.error('[eventsApi] Error fetching fixture:', error);
+      logger.error('[eventsApi] Error fetching fixture:', error);
       return null;
     }
 
     return data;
   } catch (err) {
-    console.error('[eventsApi] Unexpected error fetching fixture:', err);
+    logger.error('[eventsApi] Unexpected error fetching fixture:', err);
     return null;
   }
 }

@@ -70,17 +70,15 @@ serve(async (req) => {
   const table = Array.isArray(json?.table) ? json.table : [];
   const rows = table.map(normalizeRow).filter(Boolean);
 
-  const { error } = await supabase
-    .from('standings_cache')
-    .upsert(
-      {
-        league_id: SPORTSDB_LEAGUE_ID,
-        season: SPORTSDB_SEASON,
-        rows,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'league_id,season' },
-    );
+  const { error } = await supabase.from('standings_cache').upsert(
+    {
+      league_id: SPORTSDB_LEAGUE_ID,
+      season: SPORTSDB_SEASON,
+      rows,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'league_id,season' },
+  );
 
   if (error) {
     console.error('[sync_superliga_standings] Upsert error', error);

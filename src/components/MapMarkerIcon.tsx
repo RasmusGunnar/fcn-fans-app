@@ -4,7 +4,7 @@ import { useTheme, Theme } from '../theme';
 
 interface MapMarkerIconProps {
   logoUrl?: string | null;
-  type: 'match' | 'event';
+  type: 'match' | 'event' | 'community' | 'fan_faction';
 }
 
 export function MapMarkerIcon({ logoUrl, type }: MapMarkerIconProps) {
@@ -37,7 +37,6 @@ function createStyles(theme: Theme) {
     container: {
       alignItems: 'center',
       width: 54,
-      height: 60,
     },
     pin: {
       width: 44,
@@ -85,7 +84,6 @@ function createStyles(theme: Theme) {
       borderLeftColor: 'transparent',
       borderRightColor: 'transparent',
       borderTopColor: theme.colors.primary,
-      marginTop: -3,
     },
   });
 }

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Alert } from 'react-native';
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
 
 type User = any;
 type Session = any;
@@ -42,11 +43,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (mounted) {
           setIsAppAdmin(!!isAdmin);
           if (__DEV__) {
-            console.log('[AuthProvider] Admin check result:', { userId, isAdmin: !!isAdmin });
+            logger.log('[AuthProvider] Admin check result:', { userId, isAdmin: !!isAdmin });
           }
         }
       } catch (e) {
-        console.warn('[AuthProvider] Error checking admin status:', e);
+        logger.warn('[AuthProvider] Error checking admin status:', e);
         if (mounted) setIsAppAdmin(false);
       }
     };
@@ -72,7 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(data.session ?? null);
         setUser(data.session?.user ?? null);
       } catch (e) {
-        console.warn('Error getting session', e);
+        logger.warn('Error getting session', e);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -164,7 +165,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await supabase.auth.signOut();
     } catch (e: any) {
-      console.warn('Sign out error', e);
+      logger.warn('Sign out error', e);
     } finally {
       setLoading(false);
     }

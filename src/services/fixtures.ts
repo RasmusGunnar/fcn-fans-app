@@ -1,3 +1,4 @@
+import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 
 // Type matching Supabase fixtures table
@@ -56,7 +57,7 @@ export async function fetchUpcomingFcntFixtures(limit = 30): Promise<Fixture[]> 
         .limit(limit);
 
       if (fallback.error) {
-        console.error('[fixtures] Error fetching FCN upcoming fixtures (fallback):', fallback.error);
+        logger.error('[fixtures] Error fetching FCN upcoming fixtures (fallback):', fallback.error);
         return [];
       }
 
@@ -64,13 +65,13 @@ export async function fetchUpcomingFcntFixtures(limit = 30): Promise<Fixture[]> 
     }
 
     if (error) {
-      console.error('[fixtures] Error fetching FCN upcoming fixtures:', error);
+      logger.error('[fixtures] Error fetching FCN upcoming fixtures:', error);
       return [];
     }
 
     return data || [];
   } catch (err) {
-    console.error('[fixtures] Unexpected error fetching FCN upcoming fixtures:', err);
+    logger.error('[fixtures] Unexpected error fetching FCN upcoming fixtures:', err);
     return [];
   }
 }
@@ -94,7 +95,7 @@ export async function fetchUpcomingFixtures(limitCount = 50): Promise<Fixture[]>
         .limit(limitCount);
 
       if (fallback.error) {
-        console.error('[fixtures] Error fetching upcoming fixtures (fallback):', fallback.error);
+        logger.error('[fixtures] Error fetching upcoming fixtures (fallback):', fallback.error);
         return [];
       }
 
@@ -102,13 +103,13 @@ export async function fetchUpcomingFixtures(limitCount = 50): Promise<Fixture[]>
     }
 
     if (error) {
-      console.error('[fixtures] Error fetching upcoming fixtures:', error);
+      logger.error('[fixtures] Error fetching upcoming fixtures:', error);
       return [];
     }
 
     return data || [];
   } catch (err) {
-    console.error('[fixtures] Unexpected error:', err);
+    logger.error('[fixtures] Unexpected error:', err);
     return [];
   }
 }
@@ -134,7 +135,7 @@ export async function fetchNextFixture(): Promise<Fixture | null> {
         .maybeSingle();
 
       if (fallback.error) {
-        console.error('[fixtures] Error fetching next fixture (fallback):', fallback.error);
+        logger.error('[fixtures] Error fetching next fixture (fallback):', fallback.error);
         return null;
       }
 
@@ -142,13 +143,13 @@ export async function fetchNextFixture(): Promise<Fixture | null> {
     }
 
     if (error) {
-      console.error('[fixtures] Error fetching next fixture:', error);
+      logger.error('[fixtures] Error fetching next fixture:', error);
       return null;
     }
 
     return data;
   } catch (err) {
-    console.error('[fixtures] Unexpected error:', err);
+    logger.error('[fixtures] Unexpected error:', err);
     return null;
   }
 }
@@ -171,7 +172,7 @@ export function formatDateDa(isoString: string): string {
 
     return `${weekdayCapitalized} ${day}. ${month} ${year}, kl. ${time}`;
   } catch (err) {
-    console.error('[fixtures] Error formatting date:', err);
+    logger.error('[fixtures] Error formatting date:', err);
     return isoString;
   }
 }

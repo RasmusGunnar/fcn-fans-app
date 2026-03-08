@@ -4,7 +4,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AppState,
   FlatList,
-  Image,
   RefreshControl,
   StyleSheet,
   Text,
@@ -13,21 +12,15 @@ import {
 } from 'react-native';
 import { useAuth } from '../auth/AuthProvider';
 import { AppHeader } from '../components/AppHeader';
-import { PrimaryButton } from '../components/PrimaryButton';
 import { FanFactionCard } from '../components/cards/FanFactionCard';
 import { FeedItemRenderer } from '../components/feed/FeedItemRenderer';
+import NextMatchBadge from '../components/home/NextMatchBadge';
 import { Card } from '../components/ui/Card';
-import { Pill } from '../components/ui/Pill';
-import {
-  fetchNextFixture,
-  formatShortDateDa,
-  formatTime,
-  type Fixture,
-} from '../services/fixtures';
-import { useFeed } from '../state/FeedContext';
-import { colors, spacing, defaultTheme as theme } from '../theme';
-import { getFeedItemKey } from '../types/feed';
+import { fetchNextFixture, formatShortDateDa, type Fixture } from '../services/fixtures';
 import { getMatchHeroUrl, getTeamHeroImage } from '../services/sportsdb';
+import { useFeed } from '../state/FeedContext';
+import { colors, spacing } from '../theme';
+import { getFeedItemKey } from '../types/feed';
 
 export default function HomeScreen() {
   const navigation = useNavigation();
@@ -41,6 +34,7 @@ export default function HomeScreen() {
     likeMap,
     commentCountMap,
     commentPreviewMap,
+    attendanceMap,
     fetchPosts,
     removePost,
     removeNews,
@@ -60,6 +54,12 @@ export default function HomeScreen() {
 
   // Defensive: Ensure feedItems is always an array and filter out any falsy values
   const safeFeedItems = (Array.isArray(feedItems) ? feedItems : []).filter(Boolean);
+  const homeFeedItems = safeFeedItems.filter((item) => {
+    if (item.kind !== 'post') return true;
+    const post = item.data as any;
+    const feedTargets = Array.isArray(post.feedTargets) ? post.feedTargets : [];
+    return feedTargets.includes('home') || feedTargets.length === 0;
+  });
 
   // Ensure all maps have safe defaults
   const safeProfileMap = profileMap || {};
@@ -168,6 +168,8 @@ export default function HomeScreen() {
         commentPreviews={commentPreviews}
         safeProfileMap={safeProfileMap}
         communityMap={communityMap || {}}
+        // @ts-ignore
+        attendanceMap={attendanceMap}
         toggleLike={toggleLike}
         removePost={removePost}
         removeNews={removeNews}
@@ -187,9 +189,27 @@ export default function HomeScreen() {
     );
   };
 
+  // Map nextFixture to matchForBadge for NextMatchBadge
+  const matchForBadge =
+    nextFixture && nextFixtureHeroUrl
+      ? {
+          id: nextFixture.id,
+          coverUrl: nextFixtureHeroUrl,
+          homeTeam: nextFixture.home_team,
+          awayTeam: nextFixture.away_team,
+          homeLogo: nextFixture.home_logo_url ?? null,
+          awayLogo: nextFixture.away_logo_url ?? null,
+          kickoff: nextFixture.kickoff_at ?? '',
+          venue: nextFixture.venue ?? null,
+          venueCity: nextFixture.venue_city ?? null,
+          title: `${nextFixture.home_team} vs ${nextFixture.away_team}`,
+          subtitle: nextFixture.kickoff_at ? formatShortDateDa(nextFixture.kickoff_at) : '',
+        }
+      : null;
+
   return (
     <FlatList
-      data={safeFeedItems}
+      data={homeFeedItems}
       keyExtractor={(item) => getFeedItemKey(item)}
       renderItem={renderFeedItem}
       style={styles.container}
@@ -213,103 +233,33 @@ export default function HomeScreen() {
             subtitle="Fan Fællesskab"
             onPressProfile={() => (navigation as any).navigate('Profile')}
           />
-          <View style={styles.content}>
-            <Card style={styles.card}>
-              <Pill label="Næste Kamp" />
-              {loadingFixture ? (
+          {matchForBadge && (
+            <NextMatchBadge
+              match={matchForBadge}
+              onPress={() =>
+                (navigation as any).navigate('MatchDetails', { fixtureId: matchForBadge.id })
+              }
+            />
+          )}
+          {loadingFixture && (
+            <View style={[styles.content, { paddingTop: spacing.lg }]}>
+              <Card style={styles.card}>
                 <View style={styles.loadingContainer}>
                   <Text style={styles.loadingText}>Henter kampdata...</Text>
                 </View>
-              ) : nextFixture ? (
-                <>
-                  {/* Hero + H2H overlay */}
-                  {(() => {
-                    return (
-                      <View style={styles.heroContainer}>
-                        {nextFixtureHeroUrl ? (
-                          <Image
-                            source={{ uri: nextFixtureHeroUrl }}
-                            style={styles.heroImg}
-                            resizeMode="cover"
-                          />
-                        ) : (
-                          <View style={styles.heroFallback} />
-                        )}
-                        <View style={styles.heroDark} />
-                        <View style={styles.h2hOverlay}>
-                          <View style={styles.h2hBadge}>
-                            {nextFixture.home_logo_url ? (
-                              <Image
-                                source={{ uri: nextFixture.home_logo_url }}
-                                style={styles.h2hLogoImg}
-                                resizeMode="cover"
-                              />
-                            ) : (
-                              <Text style={styles.teamText}>
-                                {nextFixture.home_team.substring(0, 3).toUpperCase()}
-                              </Text>
-                            )}
-                          </View>
-                          <Text style={styles.h2hVsText}>VS</Text>
-                          <View style={styles.h2hBadge}>
-                            {nextFixture.away_logo_url ? (
-                              <Image
-                                source={{ uri: nextFixture.away_logo_url }}
-                                style={styles.h2hLogoImg}
-                                resizeMode="cover"
-                              />
-                            ) : (
-                              <Text style={styles.teamText}>
-                                {nextFixture.away_team.substring(0, 3).toUpperCase()}
-                              </Text>
-                            )}
-                          </View>
-                        </View>
-                      </View>
-                    );
-                  })()}
-                  <View style={styles.matchDetails}>
-                    <View style={styles.detailRow}>
-                      <Text style={styles.icon}></Text>
-                      <Text style={styles.detailText}>
-                        {formatShortDateDa(nextFixture.kickoff_at)}, kl.{' '}
-                        {formatTime(nextFixture.kickoff_at)}
-                      </Text>
-                    </View>
-                    {nextFixture.venue && (
-                      <View style={styles.detailRow}>
-                        <Text style={styles.icon}></Text>
-                        <Text style={styles.detailText}>
-                          {nextFixture.venue}
-                          {nextFixture.venue_city ? `, ${nextFixture.venue_city}` : ''}
-                        </Text>
-                      </View>
-                    )}
-                    {nextFixture.competition && (
-                      <View style={styles.detailRow}>
-                        <Text style={styles.icon}></Text>
-                        <Text style={styles.detailText}>
-                          {nextFixture.competition}
-                          {nextFixture.round ? ` - ${nextFixture.round}` : ''}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                  <PrimaryButton
-                    title="Se detaljer"
-                    onPress={() =>
-                      (navigation as any).navigate('MatchDetails', { fixtureId: nextFixture.id })
-                    }
-                  />
-                </>
-              ) : (
+              </Card>
+            </View>
+          )}
+          {!loadingFixture && !nextFixture && (
+            <View style={[styles.content, { paddingTop: spacing.lg }]}>
+              <Card style={styles.card}>
                 <View style={styles.emptyContainer}>
                   <Text style={styles.emptyText}>Ingen kommende kampe endnu</Text>
                   <Text style={styles.emptySubtext}>Tjek tilbage senere</Text>
                 </View>
-              )}
-            </Card>
-          </View>
+              </Card>
+            </View>
+          )}
         </>
       }
       ListFooterComponent={
@@ -323,9 +273,9 @@ export default function HomeScreen() {
             likes={factionLikes}
             comments={1}
             onToggleLike={toggleFactionLike}
-            onPressComment={() => console.log('Faction comment')}
-            onPressShare={() => console.log('Faction share')}
-            onPressJoin={() => console.log('Navigate to Faction')}
+            onPressComment={() => {}}
+            onPressShare={() => {}}
+            onPressJoin={() => {}}
           />
         </View>
       }
@@ -338,88 +288,9 @@ const createStyles = () =>
     container: { flex: 1, backgroundColor: colors.bg },
     content: { paddingHorizontal: spacing[0], paddingVertical: spacing.md },
     card: { marginBottom: spacing.md },
-    heroContainer: {
-      width: '100%',
-      height: 160,
-      borderRadius: theme.radius.md,
-      overflow: 'hidden' as const,
-      position: 'relative' as const,
-      marginBottom: spacing.md,
-    },
-    heroImg: {
-      ...StyleSheet.absoluteFillObject,
-      width: '100%',
-      height: '100%',
-    },
-    heroFallback: {
-      ...StyleSheet.absoluteFillObject,
-      backgroundColor: colors.fcnRed,
-      opacity: 0.85,
-    },
-    heroDark: {
-      ...StyleSheet.absoluteFillObject,
-      backgroundColor: theme.colors.overlay.heroScrim,
-    },
-    h2hOverlay: {
-      ...StyleSheet.absoluteFillObject,
-      flexDirection: 'row' as const,
-      alignItems: 'center' as const,
-      justifyContent: 'center' as const,
-      gap: spacing.lg,
-    },
-    h2hBadge: {
-      width: 56,
-      height: 56,
-      borderRadius: theme.radius.pill,
-      backgroundColor: 'transparent',
-      overflow: 'hidden' as const,
-      alignItems: 'center' as const,
-      justifyContent: 'center' as const,
-    },
-    h2hLogoImg: {
-      width: 56,
-      height: 56,
-    },
-    h2hVsText: {
-      fontSize: 22,
-      fontWeight: '800' as const,
-      color: theme.colors.text.inverse,
-      textShadowColor: theme.colors.overlay.textShadow,
-      textShadowOffset: { width: 0, height: 1 },
-      textShadowRadius: 3,
-    },
-    matchRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginVertical: spacing.lg,
-    },
-    team: { alignItems: 'center', flex: 1 },
-    teamCircle: {
-      width: 60,
-      height: 60,
-      borderRadius: theme.radius.pill,
-      backgroundColor: colors.fcnRed,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    teamLogo: { width: 60, height: 60, borderRadius: theme.radius.pill },
-    teamName: {
-      fontSize: 12,
-      fontWeight: '600',
-      color: colors.text,
-      marginTop: spacing.xs,
-      textAlign: 'center',
-    },
-    teamText: { color: colors.card, fontSize: 16, fontWeight: '700' },
     loadingContainer: { paddingVertical: spacing.xl, alignItems: 'center' },
     loadingText: { fontSize: 14, color: colors.subtext },
     emptyContainer: { paddingVertical: spacing.xl, alignItems: 'center' },
     emptyText: { fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: spacing.xs },
     emptySubtext: { fontSize: 14, color: colors.subtext },
-    vs: { fontSize: 18, fontWeight: '700', color: colors.text, marginHorizontal: spacing.md },
-    matchDetails: { marginBottom: spacing.lg },
-    detailRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm },
-    icon: { fontSize: 16, marginRight: spacing.sm },
-    detailText: { fontSize: 14, color: colors.subtext },
   });

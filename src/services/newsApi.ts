@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
 import { NewsItem, LinkPreview } from '../types/news';
 
 /**
@@ -6,14 +7,14 @@ import { NewsItem, LinkPreview } from '../types/news';
  */
 export async function fetchLinkPreview(url: string): Promise<LinkPreview> {
   try {
-    console.log('[newsApi] fetchLinkPreview called with URL:', url);
+    logger.log('[newsApi] fetchLinkPreview called with URL:', url);
 
     const { data, error } = await supabase.functions.invoke('parse-link', {
       body: { url },
     });
 
     if (error) {
-      console.error('[newsApi] Edge function error:', error);
+      logger.error('[newsApi] Edge function error:', error);
       throw new Error(error.message || 'Kunne ikke hente link preview');
     }
 
@@ -21,7 +22,7 @@ export async function fetchLinkPreview(url: string): Promise<LinkPreview> {
       throw new Error('Ingen data returneret fra parse-link');
     }
 
-    console.log('[newsApi] Link preview fetched:', data);
+    logger.log('[newsApi] Link preview fetched:', data);
 
     // Transform edge function response to LinkPreview
     return {
@@ -32,7 +33,7 @@ export async function fetchLinkPreview(url: string): Promise<LinkPreview> {
       siteName: data.siteName || new URL(url).hostname,
     };
   } catch (error: any) {
-    console.error('[newsApi] fetchLinkPreview error:', error);
+    logger.error('[newsApi] fetchLinkPreview error:', error);
     throw new Error(error?.message || 'Kunne ikke hente link preview');
   }
 }
@@ -44,6 +45,7 @@ export async function insertNewsItem(params: {
   url: string;
   title?: string;
   description?: string;
+  note?: string;
   imageUrl?: string;
   siteName?: string;
   createdBy: string; // Add created_by to params
@@ -52,7 +54,7 @@ export async function insertNewsItem(params: {
   communityId?: string;
 }): Promise<NewsItem> {
   try {
-    console.log('[newsApi] insertNewsItem called:', params);
+    logger.log('[newsApi] insertNewsItem called:', params);
 
     // Log payload right before insert for RLS debugging
     const insertPayload = {
@@ -65,14 +67,11 @@ export async function insertNewsItem(params: {
       actor_type: params.actorType,
       actor_id: params.actorId,
       community_id: params.communityId,
+      note: params.note,
     };
 
     // REAL JSON log of complete payload
-    console.log('\n');
-    console.log('###NEWSDBG### ----- newsApi insertPayload -----');
-    console.log('###NEWSDBG### insertPayload', JSON.stringify(insertPayload));
-    console.log('###NEWSDBG### ------------------------------');
-    console.log('\n');
+    logger.log('[newsApi] insertPayload', insertPayload);
 
     const { data, error } = await supabase
       .from('news_items')
@@ -81,26 +80,30 @@ export async function insertNewsItem(params: {
       .single();
 
     if (error) {
-      console.log('\n\n');
-      console.log('###NEWSDBG### ===== SUPABASE ERROR =====');
-      console.log(
-        '###NEWSDBG### supabaseError',
-        JSON.stringify({
-          code: error.code,
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-        }),
-      );
-      console.log('###NEWSDBG### supabaseError raw', error);
-      console.log('###NEWSDBG### =======================');
-      console.log('\n\n');
-      console.error('[newsApi] insertNewsItem Supabase error:', {
+      logger.error('[newsApi] insertNewsItem Supabase error:', {
         code: error.code,
         message: error.message,
         details: error.details,
         hint: error.hint,
       });
+
+      // Detect duplicate URL constraint violation
+      const isDuplicateUrl =
+        error.code === '23505' || // Postgres unique violation
+        error.message?.toLowerCase().includes('duplicate key') ||
+        error.message?.toLowerCase().includes('unique constraint') ||
+        error.details?.toLowerCase().includes('news_items_url_key') ||
+        error.hint?.toLowerCase().includes('duplicate');
+
+      if (isDuplicateUrl) {
+        const duplicateError = new Error(
+          'Det link er allerede delt i appen. Et link kan kun oprettes én gang.',
+        ) as any;
+        duplicateError.kind = 'DUPLICATE_URL';
+        duplicateError.originalCode = error.code;
+        throw duplicateError;
+      }
+
       throw error;
     }
 
@@ -108,7 +111,7 @@ export async function insertNewsItem(params: {
       throw new Error('Ingen data returneret efter insert');
     }
 
-    console.log('[newsApi] News item inserted successfully:', data.id);
+    logger.log('[newsApi] News item inserted successfully:', data.id);
 
     // Transform DB response to NewsItem
     return {
@@ -116,6 +119,7 @@ export async function insertNewsItem(params: {
       url: data.url,
       title: data.title,
       description: data.description,
+      note: data.note,
       imageUrl: data.image_url,
       siteName: data.site_name,
       createdBy: data.created_by,
@@ -129,7 +133,7 @@ export async function insertNewsItem(params: {
       likedByMe: false,
     };
   } catch (error: any) {
-    console.error('[newsApi] insertNewsItem failed:', error?.message || error);
+    logger.error('[newsApi] insertNewsItem failed:', error?.message || error);
     throw error;
   }
 }
@@ -153,12 +157,12 @@ export async function fetchNewsItems(limit: number = 50): Promise<NewsItem[]> {
         error.message.includes('does not exist') ||
         error.message.includes('not found')
       ) {
-        console.warn(
+        logger.warn(
           '[newsApi] news_items table not found (migration not run yet). Returning empty array.',
         );
         return [];
       }
-      console.error('[newsApi] fetchNewsItems error:', error);
+      logger.error('[newsApi] fetchNewsItems error:', error);
       throw error;
     }
 
@@ -168,6 +172,7 @@ export async function fetchNewsItems(limit: number = 50): Promise<NewsItem[]> {
       url: item.url,
       title: item.title,
       description: item.description,
+      note: item.note,
       imageUrl: item.image_url,
       siteName: item.site_name,
       createdBy: item.created_by,
@@ -182,7 +187,7 @@ export async function fetchNewsItems(limit: number = 50): Promise<NewsItem[]> {
     }));
   } catch (error: any) {
     // Catch any unexpected errors and log as warning, return empty array
-    console.warn(
+    logger.warn(
       '[newsApi] fetchNewsItems failed (returning empty array):',
       error?.message || error,
     );

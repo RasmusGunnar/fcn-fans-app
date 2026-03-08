@@ -1,7 +1,7 @@
-import React from 'react';
-import { ScrollView, StyleSheet } from 'react-native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useNavigation } from '@react-navigation/native';
+import React from 'react';
+import { ScrollView, StyleSheet } from 'react-native';
 import { AppHeader } from '../components/AppHeader';
 import { SongsView } from '../components/views/SongsView';
 import { defaultTheme } from '../theme';

@@ -4,8 +4,9 @@ import type { CommentPreview } from '../../services/likesApi';
 import type { CategoryKey } from '../../theme/categories';
 import type { FeedItem } from '../../types/feed';
 import { toEventCardVM } from '../../utils/eventCardVM';
-import { EventCard } from '../cards/EventCard';
+import { PollCard } from '../PollCard';
 import { FanPostCard, NewsCard } from '../cards';
+import { EventCard } from '../cards/EventCard';
 
 export type FeedItemRendererProps = {
   item: FeedItem;
@@ -17,6 +18,7 @@ export type FeedItemRendererProps = {
   commentPreviews: CommentPreview[];
   safeProfileMap: Record<string, { display_name: string | null; avatar_url: string | null }>;
   communityMap: Record<string, string>;
+  attendanceMap?: Record<string, { count: number; avatars: string[]; isGoing: boolean }>;
   toggleLike: (kind: any, id: string, userId: string) => void;
   removePost: (postId: string) => void;
   removeNews: (newsId: string) => void;
@@ -30,32 +32,41 @@ export type FeedItemRendererProps = {
   onPressMatch?: (matchId: string) => void;
 };
 
-export function FeedItemRenderer({
-  item,
-  itemKey,
-  user,
-  isAppAdmin,
-  likeState,
-  commentCount,
-  commentPreviews,
-  safeProfileMap,
-  communityMap,
-  toggleLike,
-  removePost,
-  removeNews,
-  incrementCommentCount,
-  addCommentPreview,
-  isActiveVideo,
-  isAppActive,
-  onActivateVideo,
-  onPressEvent,
-  onPressBusTrip,
-  onPressMatch,
-}: FeedItemRendererProps) {
+export function FeedItemRenderer(props: FeedItemRendererProps): React.ReactElement | null {
+  const {
+    item,
+    itemKey,
+    user,
+    likeState,
+    commentCount,
+    commentPreviews,
+    safeProfileMap,
+    communityMap,
+    attendanceMap,
+    toggleLike,
+    removePost,
+    removeNews,
+    incrementCommentCount,
+    addCommentPreview,
+    isActiveVideo,
+    isAppActive,
+    onActivateVideo,
+    onPressEvent,
+    onPressBusTrip,
+    onPressMatch,
+  } = props;
+
   switch (item.kind) {
     case 'post': {
+      const post = item.data as typeof item.data & { poll_data?: unknown };
+
+      if (post.poll_data) {
+        return <PollCard key={itemKey} post={post} />;
+      }
+
       const authorProfile = item.data.authorId ? safeProfileMap[item.data.authorId] : undefined;
       const categoryKey: CategoryKey = 'fan';
+
       return (
         <FanPostCard
           key={itemKey}
@@ -87,6 +98,7 @@ export function FeedItemRenderer({
 
     case 'news': {
       const newsCommentPreviews = commentPreviews || [];
+
       return (
         <NewsCard
           key={itemKey}
@@ -118,7 +130,12 @@ export function FeedItemRenderer({
     case 'event':
     case 'bus_trip':
     case 'match': {
-      const vm = toEventCardVM(item, { communityMap, profileMap: safeProfileMap });
+      const vm = toEventCardVM(item, {
+        communityMap,
+        profileMap: safeProfileMap,
+        attendanceMap,
+      });
+
       if (!vm) return null;
 
       const handleDetail = () => {

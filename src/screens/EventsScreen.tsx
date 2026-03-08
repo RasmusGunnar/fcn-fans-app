@@ -15,10 +15,10 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import MapView, { Marker, Region } from 'react-native-maps';
 import { useAuth } from '../auth/AuthProvider';
 import { AppHeader } from '../components/AppHeader';
-import { IconButton } from '../components/ui/IconButton';
-import { SegmentedControl } from '../components/ui/SegmentedControl';
 import { FeedItemRenderer } from '../components/feed/FeedItemRenderer';
 import { MapMarkerIcon } from '../components/MapMarkerIcon';
+import { IconButton } from '../components/ui/IconButton';
+import { SegmentedControl } from '../components/ui/SegmentedControl';
 import { getPublicUrl } from '../lib/storageUrl';
 import { supabase } from '../lib/supabase';
 import { fetchFeedUpcoming, type FeedItem } from '../services/eventsApi';
@@ -63,6 +63,7 @@ export default function EventsScreen() {
     likeMap,
     commentCountMap,
     commentPreviewMap,
+    attendanceMap,
     toggleLike,
     incrementCommentCount,
     addCommentPreview,
@@ -130,7 +131,10 @@ export default function EventsScreen() {
 
   // ── Map items (only entries with lat/lng) ──────────────────────────────────
 
-  function resolveImageUrl(raw: string | null | undefined, kind: 'profile' | 'community'): string | null {
+  function resolveImageUrl(
+    raw: string | null | undefined,
+    kind: 'profile' | 'community',
+  ): string | null {
     if (!raw || !raw.trim()) return null;
     if (raw.startsWith('http')) return raw;
     // Storage path → full public URL
@@ -302,6 +306,7 @@ export default function EventsScreen() {
     const commentCount = commentCountMap[key] || 0;
     const commentPreviews = commentPreviewMap[key] || [];
 
+    // @ts-ignore - attendanceMap is defined in FeedItemRendererProps
     return (
       <FeedItemRenderer
         item={homeFeedItem}
@@ -313,6 +318,8 @@ export default function EventsScreen() {
         commentPreviews={commentPreviews}
         safeProfileMap={profileMap || {}}
         communityMap={communityMap || {}}
+        // @ts-ignore
+        attendanceMap={attendanceMap}
         toggleLike={toggleLike}
         removePost={() => {}}
         removeNews={() => {}}
@@ -440,7 +447,9 @@ export default function EventsScreen() {
               <Text style={styles.emptySubtext}>Tjek tilbage senere</Text>
             </View>
           ) : (
-            filteredFeed.map((item) => <View key={`${item.kind}-${item.id}`}>{renderFeedItem(item)}</View>)
+            filteredFeed.map((item) => (
+              <View key={`${item.kind}-${item.id}`}>{renderFeedItem(item)}</View>
+            ))
           )}
         </ScrollView>
       ) : (
@@ -465,15 +474,27 @@ export default function EventsScreen() {
             </View>
           ) : (
             <>
-              <MapView ref={mapRef} style={styles.map} initialRegion={FARUM_REGION}>
+              <MapView 
+                ref={mapRef} 
+                style={styles.map} 
+                initialRegion={FARUM_REGION}
+                rotateEnabled={false}
+                pitchEnabled={false}
+              >
                 {mapItems.map((item) => (
                   <Marker
                     key={`${item.kind}-${item.id}`}
                     coordinate={{ latitude: item.lat, longitude: item.lng }}
                     onPress={() => handleMarkerPress(item)}
+                    anchor={{ x: 0.5, y: 1 }}
+                    centerOffset={{ x: 0, y: -16 }}
+                    flat={false}
                     tracksViewChanges={false}
                   >
-                    <MapMarkerIcon logoUrl={item.logoUrl} type={item.kind === 'bus_trip' ? 'event' : item.kind} />
+                    <MapMarkerIcon
+                      logoUrl={item.logoUrl}
+                      type={item.kind === 'bus_trip' ? 'event' : item.kind}
+                    />
                   </Marker>
                 ))}
               </MapView>
@@ -509,7 +530,11 @@ export default function EventsScreen() {
                       onPress={handleBottomSheetCTA}
                     >
                       <Text style={styles.bottomSheetButtonText}>
-                        {selectedItem.kind === 'match' ? 'Se kampdetaljer' : selectedItem.kind === 'bus_trip' ? 'Se bustur' : 'Se event'}
+                        {selectedItem.kind === 'match'
+                          ? 'Se kampdetaljer'
+                          : selectedItem.kind === 'bus_trip'
+                            ? 'Se bustur'
+                            : 'Se event'}
                       </Text>
                     </TouchableOpacity>
                   </BottomSheetView>

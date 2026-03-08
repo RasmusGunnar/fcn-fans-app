@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { logger } from './logger';
 
 export async function ensureProfile(userId: string): Promise<boolean> {
   try {

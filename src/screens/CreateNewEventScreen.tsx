@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../auth/AuthProvider';
+import { logger } from '../lib/logger';
 import { ActorSelector } from '../components/ActorSelector';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { Card } from '../components/ui/Card';
@@ -73,6 +74,10 @@ export default function CreateNewEventScreen() {
   const [city, setCity] = useState('');
   const [country, setCountry] = useState('Danmark');
 
+  // Capacity fields
+  const [hasCapacityLimit, setHasCapacityLimit] = useState(false);
+  const [capacity, setCapacity] = useState('');
+
   // Cover image
   const [coverBucket, setCoverBucket] = useState<string | null>(null);
   const [coverPath, setCoverPath] = useState<string | null>(null);
@@ -102,7 +107,7 @@ export default function CreateNewEventScreen() {
       const ownedCount = await countOwnedCommunities(user.id);
       setCanCreateBusTrip(ownedCount > 0);
     } catch (error) {
-      console.error('Error checking permissions:', error);
+      logger.error('Error checking permissions:', error);
     } finally {
       setCheckingPermissions(false);
     }
@@ -179,6 +184,12 @@ export default function CreateNewEventScreen() {
         Alert.alert('Fejl', 'Sted er påkrævet');
         return false;
       }
+      if (hasCapacityLimit) {
+        if (!capacity.trim() || isNaN(Number(capacity)) || Number(capacity) <= 0) {
+          Alert.alert('Fejl', 'Angiv et gyldigt antal pladser (større end 0)');
+          return false;
+        }
+      }
     } else {
       // Bus trip validation
       if (!departurePlace.trim()) {
@@ -227,9 +238,9 @@ export default function CreateNewEventScreen() {
           [addressLine1.trim(), locationName.trim()].filter(Boolean).join(', ').trim();
         let geo: { lat: number; lng: number; place_name: string } | null = null;
         if (geocodeInput) {
-          console.log('[event geocode] query=', geocodeInput);
-          geo = await geocodeNominatim(geocodeInput);
-          console.log('[event geocode] geo=', geo);
+          logger.log('[event geocode] query=', geocodeInput);
+        geo = await geocodeNominatim(geocodeInput) as { lat: number; lng: number; place_name: string } | null;
+          logger.log('[event geocode] geo=', geo);
           if (!geo) {
             Alert.alert(
               'Adresse ikke fundet',
@@ -256,6 +267,7 @@ export default function CreateNewEventScreen() {
           organizer_type: organizerType,
           organizer_id: organizerId,
           organizer_group_id: organizerType === 'community' ? organizerId : null,
+          capacity: hasCapacityLimit ? Number(capacity) : null,
         };
 
         if (geo) {
@@ -281,7 +293,7 @@ export default function CreateNewEventScreen() {
 
         if (error) throw error;
 
-        console.log('[CreateNewEventScreen] Event created:', data);
+        logger.log('[CreateNewEventScreen] Event created:', data);
 
         // Auto-add to user's upcoming items
         const { error: upcomingError } = await supabase.from('user_upcoming_items').insert({
@@ -323,7 +335,7 @@ export default function CreateNewEventScreen() {
 
         if (error) throw error;
 
-        console.log('[CreateNewEventScreen] Bus trip created:', data);
+        logger.log('[CreateNewEventScreen] Bus trip created:', data);
 
         // Auto-add to user's upcoming items
         const { error: upcomingError } = await supabase.from('user_upcoming_items').insert({
@@ -349,7 +361,7 @@ export default function CreateNewEventScreen() {
         ]);
       }
     } catch (error: any) {
-      console.error('Error creating:', error);
+      logger.error('Error creating:', error);
       Alert.alert('Fejl', error.message || 'Kunne ikke oprette');
     } finally {
       setSubmitting(false);
@@ -652,6 +664,43 @@ export default function CreateNewEventScreen() {
                 placeholderTextColor={colors.subtext}
               />
             </Card>
+
+            {/* Capacity */}
+            <Card style={styles.card}>
+              <Text style={styles.sectionTitle}>Kapacitet</Text>
+
+              <Pressable
+                style={styles.checkboxRow}
+                onPress={() => {
+                  setHasCapacityLimit(!hasCapacityLimit);
+                  if (hasCapacityLimit) {
+                    setCapacity('');
+                  }
+                }}
+              >
+                <View style={[styles.checkbox, !hasCapacityLimit && styles.checkboxChecked]}>
+                  {!hasCapacityLimit && <Ionicons name="checkmark" size={16} color={colors.text} />}
+                </View>
+                <Text style={styles.checkboxLabel}>Ingen loft (ubegrænset antal deltagere)</Text>
+              </Pressable>
+
+              {hasCapacityLimit && (
+                <>
+                  <Text style={styles.label}>Antal pladser *</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={capacity}
+                    onChangeText={setCapacity}
+                    placeholder="F.eks. 50"
+                    placeholderTextColor={colors.subtext}
+                    keyboardType="numeric"
+                  />
+                  <Text style={styles.helperText}>
+                    Hvor mange deltagere må tilmelde sig dette event
+                  </Text>
+                </>
+              )}
+            </Card>
           </>
         )}
 
@@ -885,5 +934,36 @@ const createStyles = () =>
       fontSize: 13,
       color: colors.subtext,
       marginTop: spacing.xs,
+    },
+    checkboxRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: spacing.sm,
+    },
+    checkbox: {
+      width: 24,
+      height: 24,
+      borderWidth: 2,
+      borderColor: colors.border,
+      borderRadius: spacing.xs,
+      marginRight: spacing.sm,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.bg,
+    },
+    checkboxChecked: {
+      backgroundColor: colors.fcnRed,
+      borderColor: colors.fcnRed,
+    },
+    checkboxLabel: {
+      flex: 1,
+      fontSize: 14,
+      color: colors.text,
+    },
+    helperText: {
+      fontSize: 12,
+      color: colors.subtext,
+      marginTop: spacing.xs,
+      fontStyle: 'italic',
     },
   });

@@ -3,6 +3,7 @@ export interface NewsItem {
   url: string;
   title?: string;
   description?: string;
+  note?: string; // Optional multiline text (stored in news_items.note column)
   imageUrl?: string;
   siteName?: string;
   createdBy: string;

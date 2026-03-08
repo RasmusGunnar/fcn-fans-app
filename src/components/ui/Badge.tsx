@@ -1,8 +1,16 @@
 import React from 'react';
-import { View, Text, StyleSheet, ViewStyle, TextStyle } from 'react-native';
-import { useTheme, Theme } from '../../theme';
+import { StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
+import { Theme, useTheme } from '../../theme';
 
-export type BadgeVariant = 'brand' | 'success' | 'warning' | 'neutral' | 'error';
+export type BadgeVariant =
+  | 'brand'
+  | 'success'
+  | 'warning'
+  | 'neutral'
+  | 'error'
+  | 'info'
+  | 'brandSoft'
+  | 'infoSoft';
 
 export interface BadgeProps {
   label: string;
@@ -20,6 +28,29 @@ export function Badge({ label, variant = 'neutral', size = 'md' }: BadgeProps) {
         return {
           container: { backgroundColor: theme.colors.pill.red.bg },
           text: { color: theme.colors.pill.red.text },
+        };
+      case 'brandSoft':
+        return {
+          container: {
+            backgroundColor: theme.colors.pill.red.bg,
+            borderColor: theme.colors.pill.red.text,
+            borderWidth: theme.layout.borderWidth,
+          },
+          text: { color: theme.colors.pill.red.text },
+        };
+      case 'info':
+        return {
+          container: { backgroundColor: theme.colors.state.info },
+          text: { color: theme.colors.text.inverse },
+        };
+      case 'infoSoft':
+        return {
+          container: {
+            backgroundColor: theme.colors.bg.subtle,
+            borderColor: theme.colors.state.info,
+            borderWidth: theme.layout.borderWidth,
+          },
+          text: { color: theme.colors.state.info },
         };
       case 'success':
         return {

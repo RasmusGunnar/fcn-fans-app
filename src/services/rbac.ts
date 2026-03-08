@@ -8,6 +8,7 @@
  * - User: Can manage own content only
  */
 
+import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 
 /**
@@ -37,7 +38,7 @@ export async function isSystemAdmin(): Promise<boolean> {
 
     return !!data;
   } catch (err) {
-    console.error('Error checking system admin status:', err);
+    logger.error('Error checking system admin status:', err);
     return false;
   }
 }
@@ -62,7 +63,7 @@ export async function getMyCommunityRoles(): Promise<Record<string, 'owner' | 'a
       .eq('user_id', user.id);
 
     if (error) {
-      console.error('Error fetching community roles:', error);
+      logger.error('Error fetching community roles:', error);
       return {};
     }
 
@@ -73,7 +74,7 @@ export async function getMyCommunityRoles(): Promise<Record<string, 'owner' | 'a
 
     return roleMap;
   } catch (err) {
-    console.error('Error in getMyCommunityRoles:', err);
+    logger.error('Error in getMyCommunityRoles:', err);
     return {};
   }
 }

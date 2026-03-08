@@ -2,11 +2,12 @@
 // All spacing, colors, and radius values must use theme.spacing[N], theme.colors.*, theme.radius.*
 // NO hardcoded numbers or color strings allowed.
 
+import { useNavigation } from '@react-navigation/native';
 import React from 'react';
 import { Alert, Image, Linking, Pressable, StyleSheet, View } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../auth/AuthProvider';
 import { supabase } from '../../lib/supabase';
+import { logger } from '../../lib/logger';
 import type { CommentPreview } from '../../services/likesApi';
 import { defaultTheme } from '../../theme';
 import type { CategoryKey } from '../../theme/categories';
@@ -95,7 +96,7 @@ export function NewsCard({
 
   const handleOpenLink = () => {
     Linking.openURL(newsItem.url).catch((err) => {
-      console.warn('[NewsCard] Failed to open URL:', err);
+      logger.warn('[NewsCard] Failed to open URL:', err);
     });
   };
 
@@ -111,7 +112,7 @@ export function NewsCard({
     const { error } = await supabase.from('news_items').delete().eq('id', newsItem.id);
     if (error) {
       Alert.alert('Fejl', 'Kunne ikke slette nyheden');
-      console.warn('Delete news error', error);
+      logger.warn('Delete news error', error);
     } else {
       onDeleted(newsItem.id);
     }
@@ -177,15 +178,22 @@ export function NewsCard({
         }
       />
 
+      {/* Render note FIRST if it exists */}
+      {newsItem.note && newsItem.note.trim() ? (
+        <View style={styles.noteBlock}>
+          <Text
+            variant="body"
+            color="primary"
+            numberOfLines={4}
+            ellipsizeMode="tail"
+          >
+            {newsItem.note}
+          </Text>
+        </View>
+      ) : null}
+
       {newsItem.imageUrl ? (
         <CardMedia aspectRatio={16 / 9} fullBleed style={{ marginTop: theme.spacing[3] }}>
-          {__DEV__ &&
-            (console.log('[NewsCard:Image]', {
-              id: newsItem.id,
-              source: { uri: newsItem.imageUrl },
-              typeof: typeof newsItem.imageUrl,
-            }),
-            null)}
           <Image source={{ uri: newsItem.imageUrl }} style={styles.mediaImage} resizeMode="cover" />
         </CardMedia>
       ) : null}
@@ -226,6 +234,11 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: theme.colors.border.default,
   },
+  noteBlock: {
+    marginTop: theme.spacing[3],
+    marginBottom: theme.spacing[3],
+    paddingHorizontal: theme.spacing[3],
+  },
   linkContent: {
     gap: theme.spacing[1],
     marginTop: theme.spacing[3],
@@ -235,7 +248,6 @@ const styles = StyleSheet.create({
   },
   title: {},
   description: {},
-
   ctaButton: {
     marginTop: theme.spacing[2],
     marginBottom: theme.spacing[3],

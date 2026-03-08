@@ -26,7 +26,7 @@ export { CategoryBadge } from './CategoryBadge';
 export type { CategoryBadgeProps } from './CategoryBadge';
 
 export { EventSubtypeBadge } from './EventSubtypeBadge';
-export type { EventSubtypeBadgeProps, EventSubtype } from './EventSubtypeBadge';
+export type { EventSubtype, EventSubtypeBadgeProps } from './EventSubtypeBadge';
 
 export { ListRow } from './ListRow';
 export type { ListRowProps } from './ListRow';

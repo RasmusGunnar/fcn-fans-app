@@ -1,3 +1,4 @@
+import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
@@ -16,6 +17,13 @@ export interface Community {
   avatar_path: string | null;
   avatar_url: string | null;
   avatar_kind: 'logo' | 'image' | null;
+  cover_path: string | null;
+  location_label: string | null;
+  location_geohash: string | null;
+  lat: number | null;
+  lng: number | null;
+  place_name: string | null;
+  geocoded_at: string | null;
   visibility: 'public' | 'private';
   created_at: string;
   created_by: string | null;
@@ -72,6 +80,9 @@ async function cryptoRandom(): Promise<string> {
   return Crypto.randomUUID();
 }
 
+export const COMMUNITY_MEDIA_BUCKET = 'community-media';
+const COMMUNITY_COVER_MAX_WIDTH = 1600;
+
 // ===== API FUNCTIONS =====
 
 /**
@@ -85,13 +96,13 @@ export async function getMemberCount(communityId: string): Promise<number> {
       .eq('community_id', communityId);
 
     if (error) {
-      console.warn('[communities] Error fetching member count:', error);
+      logger.warn('[communities] Error fetching member count:', error);
       return 0;
     }
 
     return count || 0;
   } catch (err) {
-    console.error('[communities] Unexpected error:', err);
+    logger.error('[communities] Unexpected error:', err);
     return 0;
   }
 }
@@ -110,7 +121,7 @@ export async function getMemberCounts(communityIds: string[]): Promise<Record<st
       .in('community_id', communityIds);
 
     if (error) {
-      console.warn('[communities] Error fetching member counts:', error);
+      logger.warn('[communities] Error fetching member counts:', error);
       return {};
     }
 
@@ -122,7 +133,7 @@ export async function getMemberCounts(communityIds: string[]): Promise<Record<st
 
     return counts;
   } catch (err) {
-    console.error('[communities] Unexpected error:', err);
+    logger.error('[communities] Unexpected error:', err);
     return {};
   }
 }
@@ -139,7 +150,7 @@ export async function getCommunities(): Promise<Community[]> {
       .order('name', { ascending: true });
 
     if (error) {
-      console.warn('[communities] Error fetching communities:', error);
+      logger.warn('[communities] Error fetching communities:', error);
       return [];
     }
 
@@ -156,7 +167,7 @@ export async function getCommunities(): Promise<Community[]> {
       member_count: memberCounts[community.id] || 0,
     }));
   } catch (err) {
-    console.error('[communities] Unexpected error:', err);
+    logger.error('[communities] Unexpected error:', err);
     return [];
   }
 }
@@ -173,14 +184,14 @@ export async function getCommunity(id: string): Promise<Community | null> {
       .maybeSingle();
 
     if (error) {
-      console.warn('[communities] Error fetching community:', error);
+      logger.warn('[communities] Error fetching community:', error);
       return null;
     }
 
     // Ensure avatar_url is populated
     return data ? ensureAvatarUrl(data) : null;
   } catch (err) {
-    console.error('[communities] Unexpected error:', err);
+    logger.error('[communities] Unexpected error:', err);
     return null;
   }
 }
@@ -195,7 +206,7 @@ export async function getMembership(communityId: string): Promise<CommunityMembe
     } = await supabase.auth.getUser();
 
     if (!user) {
-      console.warn('[communities] User not authenticated');
+      logger.warn('[communities] User not authenticated');
       return null;
     }
 
@@ -207,13 +218,13 @@ export async function getMembership(communityId: string): Promise<CommunityMembe
       .maybeSingle();
 
     if (error) {
-      console.warn('[communities] Error fetching membership:', error);
+      logger.warn('[communities] Error fetching membership:', error);
       return null;
     }
 
     return data;
   } catch (err) {
-    console.error('[communities] Unexpected error:', err);
+    logger.error('[communities] Unexpected error:', err);
     return null;
   }
 }
@@ -228,7 +239,7 @@ export async function joinCommunity(communityId: string): Promise<boolean> {
     } = await supabase.auth.getUser();
 
     if (!user) {
-      console.warn('[communities] User not authenticated');
+      logger.warn('[communities] User not authenticated');
       return false;
     }
 
@@ -239,13 +250,13 @@ export async function joinCommunity(communityId: string): Promise<boolean> {
     });
 
     if (error) {
-      console.error('[communities] Error joining community:', error);
+      logger.error('[communities] Error joining community:', error);
       return false;
     }
 
     return true;
   } catch (err) {
-    console.error('[communities] Unexpected error:', err);
+    logger.error('[communities] Unexpected error:', err);
     return false;
   }
 }
@@ -263,6 +274,13 @@ export async function createCommunity(
   description: string | null,
   type: 'community' | 'fan_faction' = 'community',
   visibility: 'public' | 'private' = 'public',
+  locationData?: {
+    location_label?: string | null;
+    lat?: number | null;
+    lng?: number | null;
+    place_name?: string | null;
+    geocoded_at?: string | null;
+  },
 ): Promise<Community | null> {
   try {
     // Get current user
@@ -271,7 +289,7 @@ export async function createCommunity(
     } = await supabase.auth.getUser();
 
     if (!user) {
-      console.warn('[communities] User not authenticated');
+      logger.warn('[communities] User not authenticated');
       return null;
     }
 
@@ -285,12 +303,17 @@ export async function createCommunity(
         owner_id: user.id,
         visibility,
         created_by: user.id,
+        location_label: locationData?.location_label || null,
+        lat: locationData?.lat || null,
+        lng: locationData?.lng || null,
+        place_name: locationData?.place_name || null,
+        geocoded_at: locationData?.geocoded_at || null,
       })
       .select()
       .single();
 
     if (communityError) {
-      console.error('[communities] Error creating community:', communityError);
+      logger.error('[communities] Error creating community:', communityError);
       return null;
     }
 
@@ -308,22 +331,25 @@ export async function createCommunity(
     if (membershipError) {
       // Check if it's a duplicate error (constraint violation)
       if (membershipError.code === '23505') {
-        console.log('[communities] Owner membership already exists');
+        logger.log('[communities] Owner membership already exists');
       } else {
-        console.error('[communities] Error creating owner membership:', membershipError);
+        logger.error('[communities] Error creating owner membership:', membershipError);
         // Continue anyway - community is created, membership can be fixed later
       }
     }
 
-    console.log('[communities] Successfully created community:', {
+    logger.log('[communities] Successfully created community:', {
       id: community.id,
       name: community.name,
       owner_id: community.owner_id,
+      location_label: community.location_label,
+      lat: community.lat,
+      lng: community.lng,
     });
 
     return ensureAvatarUrl(community);
   } catch (err) {
-    console.error('[communities] Unexpected error:', err);
+    logger.error('[communities] Unexpected error:', err);
     return null;
   }
 }
@@ -338,7 +364,7 @@ export async function leaveCommunity(communityId: string): Promise<boolean> {
     } = await supabase.auth.getUser();
 
     if (!user) {
-      console.warn('[communities] User not authenticated');
+      logger.warn('[communities] User not authenticated');
       return false;
     }
 
@@ -349,14 +375,14 @@ export async function leaveCommunity(communityId: string): Promise<boolean> {
       .eq('user_id', user.id);
 
     if (error) {
-      console.warn('[communities] Error leaving community:', error);
+      logger.warn('[communities] Error leaving community:', error);
       return false;
     }
 
-    console.log('[communities] Successfully left community:', communityId);
+    logger.log('[communities] Successfully left community:', communityId);
     return true;
   } catch (err) {
-    console.error('[communities] Unexpected error:', err);
+    logger.error('[communities] Unexpected error:', err);
     return false;
   }
 }
@@ -374,8 +400,8 @@ export async function listMembers(communityId: string): Promise<CommunityMember[
       .order('joined_at', { ascending: false });
 
     if (memberError) {
-      console.warn('[communities] Error fetching members:', memberError);
-      return [];
+      logger.warn('[communities] Error fetching members:', memberError);
+      throw memberError;
     }
 
     if (!memberships || memberships.length === 0) {
@@ -390,7 +416,7 @@ export async function listMembers(communityId: string): Promise<CommunityMember[
       .in('id', userIds);
 
     if (profileError) {
-      console.warn('[communities] Error fetching profiles:', profileError);
+      logger.warn('[communities] Error fetching profiles:', profileError);
       // Return without profile info
       return memberships;
     }
@@ -407,8 +433,8 @@ export async function listMembers(communityId: string): Promise<CommunityMember[
       };
     });
   } catch (err) {
-    console.error('[communities] Unexpected error:', err);
-    return [];
+    logger.error('[communities] Unexpected error:', err);
+    throw err;
   }
 }
 
@@ -431,14 +457,14 @@ export async function setMemberRole(
       .eq('user_id', userId);
 
     if (error) {
-      console.warn('[communities] Error updating member role:', error);
+      logger.warn('[communities] Error updating member role:', error);
       return false;
     }
 
-    console.log('[communities] Successfully updated role:', { userId, role });
+    logger.log('[communities] Successfully updated role:', { userId, role });
     return true;
   } catch (err) {
-    console.error('[communities] Unexpected error:', err);
+    logger.error('[communities] Unexpected error:', err);
     return false;
   }
 }
@@ -460,7 +486,7 @@ export async function uploadCommunityAvatar(
     } = await supabase.auth.getUser();
 
     if (!user) {
-      console.warn('[communities] User not authenticated');
+      logger.warn('[communities] User not authenticated');
       return false;
     }
 
@@ -470,7 +496,7 @@ export async function uploadCommunityAvatar(
     if (!pickedUri) {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        console.warn('[communities] Permission denied');
+        logger.warn('[communities] Permission denied');
         return false;
       }
 
@@ -496,7 +522,7 @@ export async function uploadCommunityAvatar(
       return false;
     }
 
-    console.log('[communities] Converting image to JPEG');
+    logger.log('[communities] Converting image to JPEG');
 
     // Convert to JPEG
     const manipResult = await ImageManipulator.manipulateAsync(
@@ -515,7 +541,7 @@ export async function uploadCommunityAvatar(
     const fileName = `${await cryptoRandom()}.jpg`;
     const path = `${communityId}/${fileName}`;
 
-    console.log('[communities] Uploading to avatars bucket:', path);
+    logger.log('[communities] Uploading to avatars bucket:', path);
 
     // Upload to avatars bucket (reuse existing bucket)
     const arrayBuffer = base64ToUint8Array(base64);
@@ -527,7 +553,7 @@ export async function uploadCommunityAvatar(
       });
 
     if (uploadError) {
-      console.error('[communities] Upload error:', uploadError);
+      logger.error('[communities] Upload error:', uploadError);
       Alert.alert('Fejl', 'Upload fejlede. Prøv igen.');
       return false;
     }
@@ -548,47 +574,198 @@ export async function uploadCommunityAvatar(
       .eq('id', communityId);
 
     if (updateError) {
-      console.error('[communities] Update error:', updateError);
+      logger.error('[communities] Update error:', updateError);
       Alert.alert('Fejl', 'Kunne ikke opdatere community. Prøv igen.');
       return false;
     }
 
-    console.log('[communities] Successfully uploaded avatar:', { communityId, path, kind });
+    logger.log('[communities] Successfully uploaded avatar:', { communityId, path, kind });
     return true;
   } catch (err) {
-    console.error('[communities] Unexpected error:', err);
+    logger.error('[communities] Unexpected error:', err);
     Alert.alert('Fejl', 'Noget gik galt. Prøv igen.');
     return false;
   }
 }
 
 /**
- * Update community name and/or description
+ * Upload community cover (hero) image.
+ * Stores path in communities.cover_path.
+ */
+export async function uploadCommunityCover(
+  communityId: string,
+  fileUri: string,
+): Promise<string | null> {
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      logger.warn('[communities] User not authenticated');
+      return null;
+    }
+
+    const fileInfo = await FileSystem.getInfoAsync(fileUri);
+    if (!fileInfo.exists || fileInfo.size === 0) {
+      Alert.alert('Fejl', 'Filen kunne ikke findes eller er tom');
+      return null;
+    }
+
+    const manipResult = await ImageManipulator.manipulateAsync(
+      fileUri,
+      [{ resize: { width: COMMUNITY_COVER_MAX_WIDTH } }],
+      { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG, base64: true },
+    );
+
+    const base64 = manipResult.base64;
+    if (!base64) {
+      Alert.alert('Fejl', 'Kunne ikke konvertere billedet');
+      return null;
+    }
+
+    const bytes = base64ToUint8Array(base64);
+    if (bytes.length === 0) {
+      Alert.alert('Fejl', 'Konverteret billede er tomt (0 bytes)');
+      return null;
+    }
+
+    const fileName = `${Date.now()}-${await cryptoRandom()}.jpg`;
+    const path = `communities/${communityId}/cover/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(COMMUNITY_MEDIA_BUCKET)
+      .upload(path, bytes, {
+        contentType: 'image/jpeg',
+        upsert: false,
+        cacheControl: '3600',
+      });
+
+    if (uploadError) {
+      logger.error('[communities] Cover upload error:', uploadError);
+      Alert.alert(
+        'Upload fejlede',
+        "Upload fejlede. Tjek at bucket 'community-media' findes og at storage policies tillader authenticated uploads.",
+      );
+      return null;
+    }
+
+    const { error: updateError } = await supabase
+      .from('communities')
+      .update({ cover_path: path })
+      .eq('id', communityId);
+
+    if (updateError) {
+      logger.error('[communities] Cover update error:', updateError);
+      Alert.alert('Fejl', 'Kunne ikke opdatere community. Prøv igen.');
+      return null;
+    }
+
+    logger.log('[communities] Successfully uploaded cover:', { communityId, path });
+    return path;
+  } catch (err) {
+    logger.error('[communities] Unexpected cover upload error:', err);
+    Alert.alert('Fejl', 'Noget gik galt. Prøv igen.');
+    return null;
+  }
+}
+
+/**
+ * Update community name, description, and/or location
  */
 export async function updateCommunity(
   communityId: string,
-  updates: { name?: string; description?: string | null },
+  updates: { 
+    name?: string; 
+    description?: string | null; 
+    location_label?: string | null;
+    lat?: number | null;
+    lng?: number | null;
+    place_name?: string | null;
+    geocoded_at?: string | null;
+    cover_path?: string | null;
+    avatar_path?: string | null;
+    avatar_url?: string | null;
+  },
 ): Promise<boolean> {
   try {
+    const updateBody = {
+      ...(updates.name !== undefined && { name: updates.name.trim() }),
+      ...(updates.description !== undefined && {
+        description: updates.description?.trim() || null,
+      }),
+      ...(updates.location_label !== undefined && {
+        location_label: updates.location_label?.trim() || null,
+      }),
+      ...(updates.lat !== undefined && { lat: updates.lat }),
+      ...(updates.lng !== undefined && { lng: updates.lng }),
+      ...(updates.place_name !== undefined && { place_name: updates.place_name }),
+      ...(updates.geocoded_at !== undefined && { geocoded_at: updates.geocoded_at }),
+      ...(updates.cover_path !== undefined && { cover_path: updates.cover_path }),
+      ...(updates.avatar_path !== undefined && { avatar_path: updates.avatar_path }),
+      ...(updates.avatar_url !== undefined && { avatar_url: updates.avatar_url }),
+    };
+
+    logger.log('[communities] updateCommunity payload:', {
+      communityId,
+      updates: updateBody,
+    });
+
     const { error } = await supabase
       .from('communities')
-      .update({
-        ...(updates.name !== undefined && { name: updates.name.trim() }),
-        ...(updates.description !== undefined && {
-          description: updates.description?.trim() || null,
-        }),
-      })
+      .update(updateBody)
       .eq('id', communityId);
 
     if (error) {
-      console.error('[communities] Error updating community:', error);
+      logger.error('[communities] Error updating community:', {
+        code: error.code,
+        message: error.message,
+        details: error,
+      });
       return false;
     }
 
-    console.log('[communities] Successfully updated community:', communityId);
+    logger.log('[communities] Successfully updated community:', communityId);
     return true;
   } catch (err) {
-    console.error('[communities] Unexpected error:', err);
+    logger.error('[communities] Unexpected error updating community:', {
+      error: err,
+      communityId,
+    });
+    return false;
+  }
+}
+
+/**
+ * Update member role (owner-only)
+ * Alias for setMemberRole with the same signature
+ */
+export async function updateMemberRole(
+  communityId: string,
+  userId: string,
+  role: 'admin' | 'member',
+): Promise<boolean> {
+  return setMemberRole(communityId, userId, role);
+}
+/**
+ * Delete community as app admin (SECURITY DEFINER via RPC)
+ * Cascading deletes handle members, requests, posts, etc.
+ */
+export async function deleteCommunityAsAdmin(communityId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.rpc('delete_community_as_admin', {
+      p_community_id: communityId,
+    });
+
+    if (error) {
+      logger.error('[communities] Error deleting community:', error);
+      return false;
+    }
+
+    logger.log('[communities] Successfully deleted community:', communityId);
+    return true;
+  } catch (err) {
+    logger.error('[communities] Unexpected error deleting community:', err);
     return false;
   }
 }

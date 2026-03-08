@@ -7,6 +7,10 @@
  * Returns the first value that is a non-empty http(s) URL, or null.
  */
 
+// ─── Team hero image via Edge Function (uses premium SPORTSDB_API_KEY) ──────
+
+import { supabaseAnonKey, supabaseUrl } from '../lib/supabase';
+
 const HERO_FIELDS = [
   'strThumb',
   'strPoster',
@@ -20,7 +24,9 @@ function isHttpUrl(v: unknown): v is string {
   return typeof v === 'string' && v.startsWith('http');
 }
 
-export function getMatchHeroUrl(fixture: { raw?: Record<string, unknown> | null } | null | undefined): string | null {
+export function getMatchHeroUrl(
+  fixture: { raw?: Record<string, unknown> | null } | null | undefined,
+): string | null {
   const raw = fixture?.raw;
   if (!raw || typeof raw !== 'object') return null;
 
@@ -30,10 +36,6 @@ export function getMatchHeroUrl(fixture: { raw?: Record<string, unknown> | null 
   }
   return null;
 }
-
-// ─── Team hero image via Edge Function (uses premium SPORTSDB_API_KEY) ──────
-
-import { supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 
 /** In-memory cache so we never re-fetch the same team in one session. */
 const teamHeroCache = new Map<string, string | null>();
@@ -53,7 +55,7 @@ export async function getTeamHeroImage(teamId: string): Promise<string | null> {
     const fnUrl = `${supabaseUrl}/functions/v1/sportsdb_team_hero?id=${encodeURIComponent(teamId)}`;
 
     const res = await fetch(fnUrl, {
-      headers: { 'apikey': supabaseAnonKey },
+      headers: { apikey: supabaseAnonKey },
     });
 
     if (!res.ok) {
