@@ -91,7 +91,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
     try {
       const { data: postsData, error: fetchError } = await supabase
         .from('posts')
-        .select('id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets')
+        .select('id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets, poll_data')
         .order('created_at', { ascending: false })
         .limit(50);
 
@@ -129,21 +129,30 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       setProfileMap(newProfileMap);
 
       // Transform DB posts to Post type with normalized media
-      transformedPosts = (postsData || []).map((dbPost) => ({
-        id: dbPost.id,
-        authorName: newProfileMap[dbPost.author_id]?.display_name || 'Fan',
-        authorId: dbPost.author_id,
-        actorType: dbPost.actor_type ?? 'user',
-        actorId: dbPost.actor_id ?? dbPost.author_id,
-        communityId: dbPost.community_id ?? null,
-        feedTargets: Array.isArray(dbPost.feed_targets) ? dbPost.feed_targets : ['home'],
-        createdAt: dbPost.created_at,
-        text: dbPost.text,
-        likesCount: 0, // TODO: Add likes support
-        commentsCount: 0, // TODO: Count comments
-        likedByMe: false,
-        media: normalizeMedia(dbPost.media), // Normalize media from DB
-      }));
+      transformedPosts = (postsData || []).map((dbPost) => {
+        console.log('[FeedContext] mapped post', {
+          id: dbPost.id,
+          hasPollData: !!dbPost.poll_data,
+          pollData: dbPost.poll_data,
+        });
+
+        return {
+          id: dbPost.id,
+          authorName: newProfileMap[dbPost.author_id]?.display_name || 'Fan',
+          authorId: dbPost.author_id,
+          actorType: dbPost.actor_type ?? 'user',
+          actorId: dbPost.actor_id ?? dbPost.author_id,
+          communityId: dbPost.community_id ?? null,
+          feedTargets: Array.isArray(dbPost.feed_targets) ? dbPost.feed_targets : ['home'],
+          createdAt: dbPost.created_at,
+          text: dbPost.text,
+          poll_data: dbPost.poll_data ?? null,
+          likesCount: 0, // TODO: Add likes support
+          commentsCount: 0, // TODO: Count comments
+          likedByMe: false,
+          media: normalizeMedia(dbPost.media), // Normalize media from DB
+        };
+      });
 
       setPosts(transformedPosts);
     } catch (e: any) {

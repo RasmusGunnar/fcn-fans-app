@@ -1,3 +1,15 @@
+export interface PollOption {
+  id: string;
+  text: string;
+}
+
+export interface PollData {
+  question: string;
+  options: PollOption[];
+  duration: number;
+  expires_at: string;
+}
+
 export interface Post {
   id: string;
   authorName: string;
@@ -11,6 +23,7 @@ export interface Post {
   feedTargets?: string[];
   createdAt: string;
   text: string;
+  poll_data?: PollData | null;
   imageUri?: string;
   media?: {
     bucket?: string;

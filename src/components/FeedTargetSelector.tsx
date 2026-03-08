@@ -9,6 +9,7 @@ type FeedTargetSelectorProps = {
   selectedTargets: string[];
   onChange: (targets: string[]) => void;
   defaultCommunityId?: string | null;
+  accentColor?: string;
 };
 
 type FeedTargetOption = {
@@ -21,9 +22,11 @@ export function FeedTargetSelector({
   selectedTargets,
   onChange,
   defaultCommunityId: _defaultCommunityId,
+  accentColor,
 }: FeedTargetSelectorProps) {
   const theme = useTheme();
-  const styles = createStyles(theme);
+  const resolvedAccentColor = accentColor ?? theme.colors.primary;
+  const styles = createStyles(theme, resolvedAccentColor);
   const [communityOptions, setCommunityOptions] = useState<FeedTargetOption[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -103,7 +106,7 @@ export function FeedTargetSelector({
               <Ionicons
                 name={option.icon}
                 size={14}
-                color={isSelected ? theme.colors.primary : theme.colors.text.secondary}
+                color={isSelected ? resolvedAccentColor : theme.colors.text.secondary}
               />
               <Text style={[styles.optionText, isSelected && styles.optionTextSelected]}>
                 {option.label}
@@ -112,7 +115,7 @@ export function FeedTargetSelector({
                 <Ionicons
                   name="checkmark-circle"
                   size={14}
-                  color={theme.colors.primary}
+                  color={resolvedAccentColor}
                   style={styles.checkIcon}
                 />
               )}
@@ -123,14 +126,14 @@ export function FeedTargetSelector({
 
       {loading && (
         <View style={styles.loadingRow}>
-          <ActivityIndicator size="small" color={theme.colors.primary} />
+          <ActivityIndicator size="small" color={resolvedAccentColor} />
         </View>
       )}
     </View>
   );
 }
 
-function createStyles(theme: Theme) {
+function createStyles(theme: Theme, accentColor: string) {
   return StyleSheet.create({
     container: {
       marginBottom: theme.spacing[4],
@@ -159,7 +162,7 @@ function createStyles(theme: Theme) {
       gap: theme.spacing[2],
     },
     optionSelected: {
-      borderColor: theme.colors.primary,
+      borderColor: accentColor,
       backgroundColor: theme.colors.bg.subtle,
     },
     optionPressed: {
@@ -171,7 +174,7 @@ function createStyles(theme: Theme) {
       fontWeight: '500',
     },
     optionTextSelected: {
-      color: theme.colors.primary,
+      color: accentColor,
       fontWeight: '600',
     },
     checkIcon: {

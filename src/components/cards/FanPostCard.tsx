@@ -187,6 +187,7 @@ interface FanPostCardProps {
   authorProfile?: { display_name: string | null; avatar_url: string | null };
   communityMap?: Record<string, string>;
   profileMap?: ProfileMap;
+  bodyContent?: React.ReactNode;
   categoryKey?: CategoryKey;
   liked?: boolean;
   likes?: number;
@@ -207,6 +208,7 @@ export function FanPostCard({
   authorProfile,
   communityMap,
   profileMap,
+  bodyContent,
   categoryKey,
   liked = post.likedByMe,
   likes = post.likesCount,
@@ -261,6 +263,8 @@ export function FanPostCard({
   const handleShare = () => {
     Share.share({ message: `${post.text}\n${deepLink}` }).catch(() => {});
   };
+
+  const shouldRenderDefaultBody = !bodyContent;
 
   // Permission checks - use isAppAdmin from context
   // TODO: Add community role when posts have community_id
@@ -420,12 +424,21 @@ export function FanPostCard({
           </View>
         </View>
       ) : (
-        <Text variant="body" color="primary" style={styles.text}>
-          {post.text}
-        </Text>
+        bodyContent ? (
+          <View>
+            <Text style={{ fontSize: 22, fontWeight: '900', color: 'red', marginBottom: 12 }}>
+              FANPOSTCARD BODYCONTENT AKTIV
+            </Text>
+            {bodyContent}
+          </View>
+        ) : (
+          <Text variant="body" color="primary" style={styles.text}>
+            {post.text}
+          </Text>
+        )
       )}
       {/* BASELINE: Deterministic media rendering - no silent failures */}
-      {!m0 ? null : (
+      {!shouldRenderDefaultBody || !m0 ? null : (
         <View style={styles.mediaOuter}>
           {!mediaKind ? (
             <View style={styles.mediaFallback}>
