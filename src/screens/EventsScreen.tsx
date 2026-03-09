@@ -279,18 +279,23 @@ export default function EventsScreen() {
       id: item.id,
       data: {
         id: item.id,
-        title: item.title,
-        startAt: item.startAt,
-        location: item.location,
-        description: item.description,
-        organizerName: item.organizerName,
+        title: item.title ?? null,
+        description: item.description ?? null,
+
+        // vigtig: brug samme navn som eventCardVM forventer
+        startAt: item.startAt ?? null,
+
+        location: item.location ?? null,
+
+        organizerName: item.organizerName ?? null,
         organizerGroupId: item.organizer_group_id ?? null,
         organizerType: item.organizer_type ?? null,
         organizerId: item.organizer_id ?? null,
         creatorUserId: item.creator_user_id ?? null,
         createdBy: item.created_by ?? null,
-        createdAt: null,
+
         eventType: 'event',
+
         coverBucket: item.cover_bucket ?? null,
         coverPath: item.cover_path ?? null,
       },

@@ -233,6 +233,7 @@ export default function HomeScreen() {
             subtitle="Fan Fællesskab"
             onPressProfile={() => (navigation as any).navigate('Profile')}
           />
+          {/* Next Match Hero Badge - Edge to edge */}
           {matchForBadge && (
             <NextMatchBadge
               match={matchForBadge}

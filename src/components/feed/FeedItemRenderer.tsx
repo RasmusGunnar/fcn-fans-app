@@ -5,8 +5,8 @@ import type { CategoryKey } from '../../theme/categories';
 import type { FeedItem } from '../../types/feed';
 import { toEventCardVM } from '../../utils/eventCardVM';
 import { PollCard } from '../PollCard';
-import { FanPostCard, NewsCard } from '../cards';
 import { EventCard } from '../cards/EventCard';
+import { FanPostCard, NewsCard } from '../cards';
 
 export type FeedItemRendererProps = {
   item: FeedItem;
@@ -58,14 +58,9 @@ export function FeedItemRenderer(props: FeedItemRendererProps): React.ReactEleme
 
   switch (item.kind) {
     case 'post': {
-      const post = item.data as typeof item.data & { poll_data?: unknown };
-
-      if (post.poll_data) {
-        return <PollCard key={itemKey} post={post} />;
-      }
-
       const authorProfile = item.data.authorId ? safeProfileMap[item.data.authorId] : undefined;
       const categoryKey: CategoryKey = 'fan';
+      const pollData = item.data.poll_data;
 
       return (
         <FanPostCard
@@ -92,13 +87,17 @@ export function FeedItemRenderer(props: FeedItemRendererProps): React.ReactEleme
             incrementCommentCount('post', item.id);
             addCommentPreview('post', item.id, comment);
           }}
+          bodyContent={
+            pollData ? (
+              <PollCard pollData={pollData} postId={item.id} profileMap={safeProfileMap} />
+            ) : undefined
+          }
         />
       );
     }
 
     case 'news': {
       const newsCommentPreviews = commentPreviews || [];
-
       return (
         <NewsCard
           key={itemKey}
@@ -156,7 +155,7 @@ export function FeedItemRenderer(props: FeedItemRendererProps): React.ReactEleme
               toggleLike(item.kind, item.id, user.id);
             }
           }}
-          onPressShare={() => {}}
+          onPressShare={() => Alert.alert('Info', 'Del-funktionen kommer snart')}
           onPressDetail={handleDetail}
           commentPreviews={commentPreviews}
           onNewComment={(comment) => {

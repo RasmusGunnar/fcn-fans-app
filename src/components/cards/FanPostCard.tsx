@@ -187,7 +187,6 @@ interface FanPostCardProps {
   authorProfile?: { display_name: string | null; avatar_url: string | null };
   communityMap?: Record<string, string>;
   profileMap?: ProfileMap;
-  bodyContent?: React.ReactNode;
   categoryKey?: CategoryKey;
   liked?: boolean;
   likes?: number;
@@ -201,6 +200,7 @@ interface FanPostCardProps {
   isActiveVideo?: boolean;
   isAppActive?: boolean;
   onActivateVideo?: () => void;
+  bodyContent?: React.ReactNode;
 }
 
 export function FanPostCard({
@@ -208,7 +208,6 @@ export function FanPostCard({
   authorProfile,
   communityMap,
   profileMap,
-  bodyContent,
   categoryKey,
   liked = post.likedByMe,
   likes = post.likesCount,
@@ -222,6 +221,7 @@ export function FanPostCard({
   isActiveVideo = false,
   isAppActive = true,
   onActivateVideo,
+  bodyContent,
 }: FanPostCardProps) {
   const navigation = useNavigation<any>();
   const timeAgo = getTimeAgo(post.createdAt);
@@ -263,8 +263,6 @@ export function FanPostCard({
   const handleShare = () => {
     Share.share({ message: `${post.text}\n${deepLink}` }).catch(() => {});
   };
-
-  const shouldRenderDefaultBody = !bodyContent;
 
   // Permission checks - use isAppAdmin from context
   // TODO: Add community role when posts have community_id
@@ -423,22 +421,15 @@ export function FanPostCard({
             </Pressable>
           </View>
         </View>
+      ) : bodyContent ? (
+        bodyContent
       ) : (
-        bodyContent ? (
-          <View>
-            <Text style={{ fontSize: 22, fontWeight: '900', color: 'red', marginBottom: 12 }}>
-              FANPOSTCARD BODYCONTENT AKTIV
-            </Text>
-            {bodyContent}
-          </View>
-        ) : (
-          <Text variant="body" color="primary" style={styles.text}>
-            {post.text}
-          </Text>
-        )
+        <Text variant="body" color="primary" style={styles.text}>
+          {post.text}
+        </Text>
       )}
       {/* BASELINE: Deterministic media rendering - no silent failures */}
-      {!shouldRenderDefaultBody || !m0 ? null : (
+      {!m0 ? null : (
         <View style={styles.mediaOuter}>
           {!mediaKind ? (
             <View style={styles.mediaFallback}>

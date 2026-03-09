@@ -3,7 +3,6 @@ import { Animated, Pressable, StyleSheet, View } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { fetchPollVotes, type PollVotesMap, votePoll } from '../services/pollService';
 import { useTheme } from '../theme';
-import type { Post } from '../types/post';
 import type { ProfileMap } from '../utils/actor';
 import { Avatar } from './Avatar';
 import { PollVotersModal } from './PollVotersModal';
@@ -22,26 +21,23 @@ type PollData = {
   expires_at?: string;
 };
 
-type PollPost = Post & {
-  poll_data?: PollData | null;
-};
-
 interface PollCardProps {
-  post: PollPost;
+  pollData?: PollData | null;
+  postId: string;
   profileMap?: ProfileMap;
 }
 
 export function PollCard({
-  post,
+  pollData,
+  postId,
   profileMap,
 }: PollCardProps) {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const accentColor = theme.colors.state.info;
-  const subtleAccent = 'rgba(59, 130, 246, 0.05)';
-  const subtleAccentStrong = 'rgba(59, 130, 246, 0.12)';
-  const pollData = post.poll_data;
-  const question = pollData?.question?.trim() || post.text || 'Afstemning';
+  const subtleAccent = theme.colors.bg.subtle;
+  const subtleAccentStrong = theme.colors.border.subtle;
+  const question = pollData?.question?.trim() || 'Afstemning';
   const isExpired = Boolean(pollData?.expires_at && new Date(pollData.expires_at) < new Date());
   const options = useMemo(
     () => (Array.isArray(pollData?.options) ? pollData.options.filter(Boolean) : []),
@@ -83,8 +79,8 @@ export function PollCard({
   }, []);
 
   const loadVotes = useCallback(async () => {
-    const data = await fetchPollVotes([post.id]);
-    const nextVotes = data[post.id] || { optionVotes: {}, voters: {} };
+    const data = await fetchPollVotes([postId]);
+    const nextVotes = data[postId] || { optionVotes: {}, voters: {} };
 
     setPollVotes(nextVotes);
 
@@ -101,7 +97,7 @@ export function PollCard({
     } else {
       setSelectedOption(null);
     }
-  }, [post.id]);
+  }, [postId]);
 
   useEffect(() => {
     options.forEach((option) => {
@@ -163,14 +159,14 @@ export function PollCard({
 
   useEffect(() => {
     const channel = supabase
-      .channel(`poll_votes:${post.id}`)
+      .channel(`poll_votes:${postId}`)
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
           table: 'poll_votes',
-          filter: `post_id=eq.${post.id}`,
+          filter: `post_id=eq.${postId}`,
         },
         () => {
           loadVotes();
@@ -182,7 +178,7 @@ export function PollCard({
       channel.unsubscribe();
       supabase.removeChannel(channel);
     };
-  }, [loadVotes, post.id]);
+  }, [loadVotes, postId]);
 
   const totalVotes = useMemo(
     () => Object.values(pollVotes.optionVotes).reduce((sum, votes) => sum + Math.max(0, votes || 0), 0),
@@ -217,7 +213,7 @@ export function PollCard({
       setSubmitting(true);
 
       try {
-        const success = await votePoll(post.id, optionId);
+        const success = await votePoll(postId, optionId);
         if (!success) {
           return;
         }
@@ -249,14 +245,16 @@ export function PollCard({
         setSubmitting(false);
       }
     },
-    [hasVoted, isExpired, post.id, submitting],
+    [hasVoted, isExpired, postId, submitting],
   );
 
   return (
     <View style={styles.body}>
       <View style={styles.metadataRow}>
-        <View style={[styles.badge, { backgroundColor: subtleAccent, borderColor: 'transparent' }]}>
-          <Text variant="caption" style={[styles.badgeText, { color: accentColor }]}>Poll</Text>
+        <View style={[styles.badge, { backgroundColor: subtleAccentStrong, borderColor: subtleAccentStrong }]}>
+          <Text variant="caption" style={[styles.badgeText, { color: accentColor }]}>
+            {isExpired ? 'Afsluttet' : 'Afstemning'}
+          </Text>
         </View>
         <Text variant="caption" color="secondary" style={styles.totalVotesText}>
           {totalVotes} stemme{totalVotes === 1 ? '' : 'r'}
@@ -279,6 +277,8 @@ export function PollCard({
               outputRange: ['0%', '100%'],
             });
             const isSelected = selectedOption === option.id;
+            const maxVotes = Math.max(0, ...Object.values(pollVotes.optionVotes || {}));
+            const isWinner = votes > 0 && votes === maxVotes;
 
             return (
               <Pressable
@@ -286,12 +286,21 @@ export function PollCard({
                 style={({ pressed }) => [
                   styles.optionCard,
                   {
-                    backgroundColor: isSelected
+                    backgroundColor: isWinner
+                      ? subtleAccentStrong
+                      : isSelected
                       ? subtleAccent
-                      : pressed
-                        ? theme.colors.bg.subtle
-                        : theme.colors.bg.card,
-                    borderColor: isSelected ? subtleAccentStrong : theme.colors.border.subtle,
+                      : isExpired
+                        ? theme.colors.bg.card
+                        : pressed
+                          ? theme.colors.bg.subtle
+                          : theme.colors.bg.card,
+                    borderColor: isWinner
+                      ? accentColor
+                      : isSelected
+                        ? accentColor
+                        : theme.colors.border.subtle,
+                    borderWidth: isSelected ? 1.5 : 1,
                   },
                 ]}
                 onPress={() => handleVote(option.id)}
@@ -337,84 +346,63 @@ export function PollCard({
                         <Text variant="body" style={styles.optionText}>
                           {option.text}
                         </Text>
-                        <Text
-                          variant="caption"
-                          style={[
-                            styles.percentageText,
-                            { color: isSelected ? accentColor : theme.colors.text.secondary },
-                          ]}
-                        >
-                          {percentage}%
-                        </Text>
-                      </View>
 
-                      <View style={styles.barTrack}>
-                        <Animated.View
-                          style={[
-                            styles.barFill,
-                            {
-                              backgroundColor: accentColor,
-                              width: animatedWidth,
-                              opacity: totalVotes > 0 ? 0.86 : 0.16,
-                            },
-                          ]}
-                        />
-                      </View>
-                      {voterIds.length > 0 ? (
-                        <View style={styles.optionFooter}>
-                          <Pressable
-                            style={styles.avatarRow}
-                            onPress={() => {
-                              setActiveOptionVoters(voterIds);
-                              setVoterListVisible(true);
-                            }}
-                          >
-                            {visibleVoters.map((voterId, index) => (
-                              <View
-                                key={`${option.id}:${voterId}`}
-                                style={[
-                                  styles.avatarBubble,
-                                  index > 0 && styles.avatarBubbleOverlap,
-                                  {
-                                    borderColor: theme.colors.bg.card,
-                                    backgroundColor: theme.colors.bg.card,
-                                  },
-                                ]}
-                              >
-                                <Avatar
-                                  userId={voterId}
-                                  avatarUrl={resolvedVoterProfiles[voterId]?.avatar_url}
-                                  size={20}
-                                  label={resolvedVoterProfiles[voterId]?.display_name || 'Fan'}
-                                />
-                              </View>
-                            ))}
+                        <View style={styles.optionRightMeta}>
+                          {isExpired && isWinner ? (
+                            <Text variant="caption" style={[styles.metaBadgeText, { color: accentColor }]}>Vinder</Text>
+                          ) : !isExpired && isSelected ? (
+                            <Text variant="caption" style={[styles.metaBadgeText, { color: accentColor }]}>Dit valg</Text>
+                          ) : null}
 
-                            {extraVoterCount > 0 ? (
-                              <View
-                                style={[
-                                  styles.avatarBubble,
-                                  visibleVoters.length > 0 && styles.avatarBubbleOverlap,
-                                  {
-                                    borderColor: theme.colors.bg.card,
-                                    backgroundColor: subtleAccentStrong,
-                                  },
-                                ]}
-                              >
-                                <Text variant="caption" style={[styles.avatarInitials, { color: accentColor }]}>
-                                  +{extraVoterCount}
-                                </Text>
-                              </View>
-                            ) : null}
-                          </Pressable>
+                          {voterIds.length > 0 ? (
+                            <Pressable
+                              style={styles.avatarRow}
+                              onPress={() => {
+                                setActiveOptionVoters(voterIds);
+                                setVoterListVisible(true);
+                              }}
+                            >
+                              {visibleVoters.map((voterId, index) => (
+                                <View
+                                  key={`${option.id}:${voterId}`}
+                                  style={[
+                                    styles.avatarBubble,
+                                    index > 0 && styles.avatarBubbleOverlap,
+                                    {
+                                      borderColor: theme.colors.bg.card,
+                                      backgroundColor: theme.colors.bg.card,
+                                    },
+                                  ]}
+                                >
+                                  <Avatar
+                                    userId={voterId}
+                                    avatarUrl={resolvedVoterProfiles[voterId]?.avatar_url}
+                                    size={24}
+                                    label={resolvedVoterProfiles[voterId]?.display_name || 'Fan'}
+                                  />
+                                </View>
+                              ))}
 
-                          {voterIds.length > 10 ? (
-                            <Text variant="caption" color="secondary" style={styles.moreFansText}>
-                              + flere fans
-                            </Text>
+                              {extraVoterCount > 0 ? (
+                                <View
+                                  style={[
+                                    styles.avatarBubble,
+                                    visibleVoters.length > 0 && styles.avatarBubbleOverlap,
+                                    {
+                                      borderColor: theme.colors.bg.card,
+                                      backgroundColor: subtleAccentStrong,
+                                    },
+                                  ]}
+                                >
+                                  <Text variant="caption" style={[styles.avatarInitials, { color: accentColor }]}>
+                                    +{extraVoterCount}
+                                  </Text>
+                                </View>
+                              ) : null}
+                            </Pressable>
                           ) : null}
                         </View>
-                      ) : null}
+                      </View>
                     </View>
                   </View>
                 </View>
@@ -425,7 +413,7 @@ export function PollCard({
 
       {isExpired ? (
         <Text variant="caption" color="secondary">
-          Afstemning lukket
+          Afstemning afsluttet
         </Text>
       ) : null}
 
@@ -443,23 +431,25 @@ function createStyles(theme: ReturnType<typeof useTheme>) {
   return StyleSheet.create({
     body: {
       gap: theme.spacing[2],
+      paddingBottom: theme.spacing[2],
     },
     metadataRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
+      marginTop: theme.spacing[1],
     },
     badge: {
       alignSelf: 'flex-start',
-      paddingHorizontal: theme.spacing[1] + 1,
-      paddingVertical: 1,
+      paddingHorizontal: theme.spacing[2],
+      paddingVertical: theme.spacing[1] / 2,
       borderRadius: theme.radius.pill,
       borderWidth: 1,
     },
     badgeText: {
       fontWeight: '700',
-      fontSize: 8,
-      letterSpacing: 0.12,
+      fontSize: 10,
+      letterSpacing: 0.1,
     },
     totalVotesText: {
       fontWeight: '400',
@@ -473,14 +463,14 @@ function createStyles(theme: ReturnType<typeof useTheme>) {
       lineHeight: 24,
     },
     optionsList: {
-      gap: theme.spacing[1] + 2,
+      gap: theme.spacing[1],
     },
     optionCard: {
       borderWidth: 1,
       borderRadius: theme.radius.md,
       overflow: 'hidden',
       position: 'relative',
-      minHeight: 58,
+      minHeight: 44,
     },
     optionFillTrack: {
       ...StyleSheet.absoluteFillObject,
@@ -491,23 +481,24 @@ function createStyles(theme: ReturnType<typeof useTheme>) {
       borderRadius: theme.radius.md,
     },
     optionContent: {
-      gap: 5,
       paddingHorizontal: theme.spacing[2],
-      paddingVertical: theme.spacing[2] - 1,
+      paddingVertical: theme.spacing[1] + 1,
+      justifyContent: 'center',
     },
     optionTopRow: {
       flexDirection: 'row',
-      alignItems: 'flex-start',
+      alignItems: 'center',
+      minHeight: 28,
       gap: theme.spacing[1] + 2,
-      minHeight: 24,
     },
     optionMain: {
       flex: 1,
-      gap: 2,
+      gap: theme.spacing[1],
     },
     optionLabelRow: {
       flexDirection: 'row',
       alignItems: 'center',
+      justifyContent: 'space-between',
       gap: theme.spacing[2],
     },
     radioOuter: {
@@ -529,38 +520,24 @@ function createStyles(theme: ReturnType<typeof useTheme>) {
       lineHeight: 20,
       flex: 1,
     },
-    percentageText: {
-      minWidth: 32,
-      textAlign: 'right',
-      fontWeight: '600',
-      fontSize: 9,
+    metaBadgeText: {
+      fontWeight: '700',
+      fontSize: 10,
     },
-    barTrack: {
-      height: 3,
-      borderRadius: theme.radius.pill,
-      backgroundColor: theme.colors.bg.subtle,
-      overflow: 'hidden',
-    },
-    barFill: {
-      height: '100%',
-      borderRadius: theme.radius.pill,
-    },
-    optionFooter: {
-      minHeight: 22,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'flex-start',
-      gap: theme.spacing[2],
-      marginTop: theme.spacing[1] - 1,
+    optionRightMeta: {
+      alignItems: 'flex-end',
+      justifyContent: 'center',
+      alignSelf: 'center',
+      minWidth: 44,
     },
     avatarRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      minHeight: 20,
+      justifyContent: 'center',
     },
     avatarBubble: {
-      width: 20,
-      height: 20,
+      width: 24,
+      height: 24,
       borderRadius: theme.radius.pill,
       borderWidth: 1,
       alignItems: 'center',
@@ -568,15 +545,11 @@ function createStyles(theme: ReturnType<typeof useTheme>) {
       overflow: 'hidden',
     },
     avatarBubbleOverlap: {
-      marginLeft: -theme.spacing[1],
+      marginLeft: -(theme.spacing[1] + 1),
     },
     avatarInitials: {
       fontWeight: '700',
-      fontSize: 9,
-    },
-    moreFansText: {
-      fontSize: 10,
-      opacity: 0.56,
+      fontSize: 8,
     },
   });
 }
