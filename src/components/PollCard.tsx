@@ -27,11 +27,7 @@ interface PollCardProps {
   profileMap?: ProfileMap;
 }
 
-export function PollCard({
-  pollData,
-  postId,
-  profileMap,
-}: PollCardProps) {
+export function PollCard({ pollData, postId, profileMap }: PollCardProps) {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const accentColor = theme.colors.state.info;
@@ -65,7 +61,8 @@ export function PollCard({
   const resolvedVoterProfiles = useMemo(() => {
     const nextMap: ProfileMap = {};
     allVoterIds.forEach((id) => {
-      nextMap[id] = profileMap?.[id] ?? fetchedVoterProfiles[id] ?? { display_name: null, avatar_url: null };
+      nextMap[id] = profileMap?.[id] ??
+        fetchedVoterProfiles[id] ?? { display_name: null, avatar_url: null };
     });
     return nextMap;
   }, [allVoterIds, fetchedVoterProfiles, profileMap]);
@@ -181,7 +178,8 @@ export function PollCard({
   }, [loadVotes, postId]);
 
   const totalVotes = useMemo(
-    () => Object.values(pollVotes.optionVotes).reduce((sum, votes) => sum + Math.max(0, votes || 0), 0),
+    () =>
+      Object.values(pollVotes.optionVotes).reduce((sum, votes) => sum + Math.max(0, votes || 0), 0),
     [pollVotes.optionVotes],
   );
 
@@ -251,7 +249,12 @@ export function PollCard({
   return (
     <View style={styles.body}>
       <View style={styles.metadataRow}>
-        <View style={[styles.badge, { backgroundColor: subtleAccentStrong, borderColor: subtleAccentStrong }]}>
+        <View
+          style={[
+            styles.badge,
+            { backgroundColor: subtleAccentStrong, borderColor: subtleAccentStrong },
+          ]}
+        >
           <Text variant="caption" style={[styles.badgeText, { color: accentColor }]}>
             {isExpired ? 'Afsluttet' : 'Afstemning'}
           </Text>
@@ -266,149 +269,162 @@ export function PollCard({
       </Text>
 
       <View style={styles.optionsList}>
-          {options.map((option) => {
-            const votes = Math.max(0, pollVotes.optionVotes[option.id] ?? 0);
-            const voterIds = pollVotes.voters[option.id] || [];
-            const visibleVoters = voterIds.slice(0, 3);
-            const extraVoterCount = Math.max(0, voterIds.length - visibleVoters.length);
-            const percentage = totalVotes > 0 ? Math.round((votes / totalVotes) * 100) : 0;
-            const animatedWidth = getAnimatedBar(option.id).interpolate({
-              inputRange: [0, 100],
-              outputRange: ['0%', '100%'],
-            });
-            const isSelected = selectedOption === option.id;
-            const maxVotes = Math.max(0, ...Object.values(pollVotes.optionVotes || {}));
-            const isWinner = votes > 0 && votes === maxVotes;
+        {options.map((option) => {
+          const votes = Math.max(0, pollVotes.optionVotes[option.id] ?? 0);
+          const voterIds = pollVotes.voters[option.id] || [];
+          const visibleVoters = voterIds.slice(0, 3);
+          const extraVoterCount = Math.max(0, voterIds.length - visibleVoters.length);
+          const percentage = totalVotes > 0 ? Math.round((votes / totalVotes) * 100) : 0;
+          const animatedWidth = getAnimatedBar(option.id).interpolate({
+            inputRange: [0, 100],
+            outputRange: ['0%', '100%'],
+          });
+          const isSelected = selectedOption === option.id;
+          const maxVotes = Math.max(0, ...Object.values(pollVotes.optionVotes || {}));
+          const isWinner = votes > 0 && votes === maxVotes;
 
-            return (
-              <Pressable
-                key={option.id || option.text}
-                style={({ pressed }) => [
-                  styles.optionCard,
-                  {
-                    backgroundColor: isWinner
-                      ? subtleAccentStrong
-                      : isSelected
+          return (
+            <Pressable
+              key={option.id || option.text}
+              style={({ pressed }) => [
+                styles.optionCard,
+                {
+                  backgroundColor: isWinner
+                    ? subtleAccentStrong
+                    : isSelected
                       ? subtleAccent
                       : isExpired
                         ? theme.colors.bg.card
                         : pressed
                           ? theme.colors.bg.subtle
                           : theme.colors.bg.card,
-                    borderColor: isWinner
+                  borderColor: isWinner
+                    ? accentColor
+                    : isSelected
                       ? accentColor
-                      : isSelected
-                        ? accentColor
-                        : theme.colors.border.subtle,
-                    borderWidth: isSelected ? 1.5 : 1,
-                  },
-                ]}
-                onPress={() => handleVote(option.id)}
-                disabled={hasVoted || submitting || isExpired}
-              >
-                <View style={styles.optionFillTrack} pointerEvents="none">
-                  <Animated.View
+                      : theme.colors.border.subtle,
+                  borderWidth: isSelected ? 1.5 : 1,
+                },
+              ]}
+              onPress={() => handleVote(option.id)}
+              disabled={hasVoted || submitting || isExpired}
+            >
+              <View style={styles.optionFillTrack} pointerEvents="none">
+                <Animated.View
+                  style={[
+                    styles.optionFill,
+                    {
+                      backgroundColor: accentColor,
+                      width: animatedWidth,
+                      opacity: totalVotes > 0 ? (isSelected ? 0.08 : 0.03) : 0,
+                    },
+                  ]}
+                />
+              </View>
+
+              <View style={styles.optionContent}>
+                <View style={styles.optionTopRow}>
+                  <View
                     style={[
-                      styles.optionFill,
+                      styles.radioOuter,
                       {
-                        backgroundColor: accentColor,
-                        width: animatedWidth,
-                        opacity: totalVotes > 0 ? (isSelected ? 0.08 : 0.03) : 0,
+                        borderColor: isSelected ? accentColor : theme.colors.border.subtle,
+                        backgroundColor: isSelected ? subtleAccent : theme.colors.bg.subtle,
                       },
                     ]}
-                  />
-                </View>
-
-                <View style={styles.optionContent}>
-                  <View style={styles.optionTopRow}>
+                  >
                     <View
                       style={[
-                        styles.radioOuter,
+                        styles.radioInner,
                         {
-                          borderColor: isSelected ? accentColor : theme.colors.border.subtle,
-                          backgroundColor: isSelected ? subtleAccent : theme.colors.bg.subtle,
+                          backgroundColor: accentColor,
+                          opacity: isSelected ? 1 : 0,
+                          transform: [{ scale: isSelected ? 1 : 0.6 }],
                         },
                       ]}
-                    >
-                      <View
-                        style={[
-                          styles.radioInner,
-                          {
-                            backgroundColor: accentColor,
-                            opacity: isSelected ? 1 : 0,
-                            transform: [{ scale: isSelected ? 1 : 0.6 }],
-                          },
-                        ]}
-                      />
-                    </View>
-                    <View style={styles.optionMain}>
-                      <View style={styles.optionLabelRow}>
-                        <Text variant="body" style={styles.optionText}>
-                          {option.text}
-                        </Text>
+                    />
+                  </View>
+                  <View style={styles.optionMain}>
+                    <View style={styles.optionLabelRow}>
+                      <Text variant="body" style={styles.optionText}>
+                        {option.text}
+                      </Text>
 
-                        <View style={styles.optionRightMeta}>
-                          {isExpired && isWinner ? (
-                            <Text variant="caption" style={[styles.metaBadgeText, { color: accentColor }]}>Vinder</Text>
-                          ) : !isExpired && isSelected ? (
-                            <Text variant="caption" style={[styles.metaBadgeText, { color: accentColor }]}>Dit valg</Text>
-                          ) : null}
+                      <View style={styles.optionRightMeta}>
+                        {isExpired && isWinner ? (
+                          <Text
+                            variant="caption"
+                            style={[styles.metaBadgeText, { color: accentColor }]}
+                          >
+                            Vinder
+                          </Text>
+                        ) : !isExpired && isSelected ? (
+                          <Text
+                            variant="caption"
+                            style={[styles.metaBadgeText, { color: accentColor }]}
+                          >
+                            Dit valg
+                          </Text>
+                        ) : null}
 
-                          {voterIds.length > 0 ? (
-                            <Pressable
-                              style={styles.avatarRow}
-                              onPress={() => {
-                                setActiveOptionVoters(voterIds);
-                                setVoterListVisible(true);
-                              }}
-                            >
-                              {visibleVoters.map((voterId, index) => (
-                                <View
-                                  key={`${option.id}:${voterId}`}
-                                  style={[
-                                    styles.avatarBubble,
-                                    index > 0 && styles.avatarBubbleOverlap,
-                                    {
-                                      borderColor: theme.colors.bg.card,
-                                      backgroundColor: theme.colors.bg.card,
-                                    },
-                                  ]}
+                        {voterIds.length > 0 ? (
+                          <Pressable
+                            style={styles.avatarRow}
+                            onPress={() => {
+                              setActiveOptionVoters(voterIds);
+                              setVoterListVisible(true);
+                            }}
+                          >
+                            {visibleVoters.map((voterId, index) => (
+                              <View
+                                key={`${option.id}:${voterId}`}
+                                style={[
+                                  styles.avatarBubble,
+                                  index > 0 && styles.avatarBubbleOverlap,
+                                  {
+                                    borderColor: theme.colors.bg.card,
+                                    backgroundColor: theme.colors.bg.card,
+                                  },
+                                ]}
+                              >
+                                <Avatar
+                                  userId={voterId}
+                                  avatarUrl={resolvedVoterProfiles[voterId]?.avatar_url}
+                                  size={24}
+                                  label={resolvedVoterProfiles[voterId]?.display_name || 'Fan'}
+                                />
+                              </View>
+                            ))}
+
+                            {extraVoterCount > 0 ? (
+                              <View
+                                style={[
+                                  styles.avatarBubble,
+                                  visibleVoters.length > 0 && styles.avatarBubbleOverlap,
+                                  {
+                                    borderColor: theme.colors.bg.card,
+                                    backgroundColor: subtleAccentStrong,
+                                  },
+                                ]}
+                              >
+                                <Text
+                                  variant="caption"
+                                  style={[styles.avatarInitials, { color: accentColor }]}
                                 >
-                                  <Avatar
-                                    userId={voterId}
-                                    avatarUrl={resolvedVoterProfiles[voterId]?.avatar_url}
-                                    size={24}
-                                    label={resolvedVoterProfiles[voterId]?.display_name || 'Fan'}
-                                  />
-                                </View>
-                              ))}
-
-                              {extraVoterCount > 0 ? (
-                                <View
-                                  style={[
-                                    styles.avatarBubble,
-                                    visibleVoters.length > 0 && styles.avatarBubbleOverlap,
-                                    {
-                                      borderColor: theme.colors.bg.card,
-                                      backgroundColor: subtleAccentStrong,
-                                    },
-                                  ]}
-                                >
-                                  <Text variant="caption" style={[styles.avatarInitials, { color: accentColor }]}>
-                                    +{extraVoterCount}
-                                  </Text>
-                                </View>
-                              ) : null}
-                            </Pressable>
-                          ) : null}
-                        </View>
+                                  +{extraVoterCount}
+                                </Text>
+                              </View>
+                            ) : null}
+                          </Pressable>
+                        ) : null}
                       </View>
                     </View>
                   </View>
                 </View>
-              </Pressable>
-            );
-          })}
+              </View>
+            </Pressable>
+          );
+        })}
       </View>
 
       {isExpired ? (

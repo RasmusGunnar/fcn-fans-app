@@ -5,8 +5,8 @@ import type { CategoryKey } from '../../theme/categories';
 import type { FeedItem } from '../../types/feed';
 import { toEventCardVM } from '../../utils/eventCardVM';
 import { PollCard } from '../PollCard';
-import { EventCard } from '../cards/EventCard';
 import { FanPostCard, NewsCard } from '../cards';
+import { EventCard } from '../cards/EventCard';
 
 export type FeedItemRendererProps = {
   item: FeedItem;

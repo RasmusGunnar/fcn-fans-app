@@ -86,7 +86,7 @@ export default function EventsScreen() {
     { key: 'matches', label: 'Kampe' },
     { key: 'bus_trips', label: 'Busture' },
     { key: 'events', label: 'Events' },
-  ] as const satisfies ReadonlyArray<{ key: EventFilterKey; label: string }>;
+  ] as const satisfies readonly { key: EventFilterKey; label: string }[];
 
   const snapPoints = useMemo(() => ['20%', '45%', '85%'], []);
 
@@ -479,9 +479,9 @@ export default function EventsScreen() {
             </View>
           ) : (
             <>
-              <MapView 
-                ref={mapRef} 
-                style={styles.map} 
+              <MapView
+                ref={mapRef}
+                style={styles.map}
                 initialRegion={FARUM_REGION}
                 rotateEnabled={false}
                 pitchEnabled={false}

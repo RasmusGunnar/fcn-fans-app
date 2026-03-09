@@ -8,6 +8,7 @@ import { AppTabs } from './AppTabs';
 import { useAuth } from '../auth/AuthProvider';
 import CreateScreen from '../screens/CreateScreen';
 import CreateNewEventScreen from '../screens/CreateNewEventScreen';
+import LoadingScreen from '../screens/LoadingScreen';
 import { fetchMyProfile, type UserProfile } from '../services/profileApi';
 
 const Stack = createNativeStackNavigator();
@@ -15,8 +16,7 @@ const Stack = createNativeStackNavigator();
 const isProfileComplete = (profile: UserProfile | null): boolean => {
   if (!profile) return false;
   const hasName = typeof profile.display_name === 'string' && profile.display_name.trim().length > 0;
-  const hasAvatar = typeof profile.avatar_url === 'string' && profile.avatar_url.trim().length > 0;
-  return profile.onboarding_complete === true && hasName && hasAvatar;
+  return profile.onboarding_complete === true && hasName;
 };
 
 function Inner() {
@@ -50,7 +50,7 @@ function Inner() {
     };
   }, [user?.id]);
 
-  if (loading || (user && profileLoading)) return null;
+  if (loading || (user && profileLoading)) return <LoadingScreen />;
 
   if (!user) return <AuthStack />;
   if (!profile || !isProfileComplete(profile)) return <OnboardingStack />;
