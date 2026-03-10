@@ -11,6 +11,7 @@ import CreateNewEventScreen from '../screens/CreateNewEventScreen';
 import LoadingScreen from '../screens/LoadingScreen';
 import { fetchMyProfile, type UserProfile } from '../services/profileApi';
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
 
 const Stack = createNativeStackNavigator();
 
@@ -75,18 +76,22 @@ function Inner() {
     };
   }, [loadProfile, user?.id]);
 
+
   if (loading || profileLoading) {
     return <LoadingScreen />;
   }
 
   if (!user) {
+    logger.log('[RootNavigator] Rendering AuthStack');
     return <AuthStack />;
   }
 
   if (!isProfileComplete(profile)) {
+    logger.log('[RootNavigator] Rendering OnboardingStack', { display_name: profile?.display_name, onboarding_complete: profile?.onboarding_complete });
     return <OnboardingStack />;
   }
 
+  logger.log('[RootNavigator] Rendering AppTabs', { display_name: profile?.display_name, onboarding_complete: profile?.onboarding_complete });
   return <AppTabs />;
 }
 
