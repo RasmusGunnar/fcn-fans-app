@@ -24,7 +24,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Text } from '../../components/ui';
 import { useTheme } from '../../theme';
 import { useAuth } from '../../auth/AuthProvider';
-import { getCommunities, type Community } from '../../services/communities';
+import { getCommunities, type Community, joinCommunity } from '../../services/communities';
 import { supabase } from '../../lib/supabase';
 import { ensureProfile } from '../../lib/profile';
 import { logger } from '../../lib/logger';
@@ -130,21 +130,33 @@ export default function OnboardingCommunitiesSetupScreen({ navigation, route }: 
         }
 
         if (!skipSelection && selectedIds.size > 0) {
-          logger.log('[Onboarding] finishOnboarding before membership-upsert', { count: selectedIds.size });
-          const membershipRows = Array.from(selectedIds).map((communityId) => ({
-            community_id: communityId,
-            user_id: user.id,
-          }));
-
-          const { error: membershipError } = await withTimeout(
-            supabase
-              .from('community_memberships')
-              .upsert(membershipRows, { onConflict: 'community_id,user_id' }),
-            'membership-upsert'
+          logger.log('[Onboarding] finishOnboarding before joinCommunity loop', { count: selectedIds.size });
+          const joinResults = await Promise.allSettled(
+            Array.from(selectedIds).map(async (communityId) => {
+              try {
+                const result = await joinCommunity(communityId);
+                if (!result) {
+                  // joinCommunity logger already logs error, but we want to know which community failed
+                  throw new Error('joinCommunity returned false');
+                }
+                return { communityId, success: true };
+              } catch (err: any) {
+                // Check for duplicate/already-member error string
+                const msg = err?.message?.toLowerCase?.() || '';
+                if (msg.includes('duplicate') || msg.includes('already') || msg.includes('conflict')) {
+                  logger.warn('[Onboarding] joinCommunity duplicate/already-member', { communityId, error: err });
+                  return { communityId, success: true, duplicate: true };
+                } else {
+                  logger.error('[Onboarding] joinCommunity failed', { communityId, error: err });
+                  throw err;
+                }
+              }
+            })
           );
-          logger.log('[Onboarding] finishOnboarding after membership-upsert', { membershipError });
-          if (membershipError) {
-            throw membershipError;
+          // If any join failed (not duplicate), throw error
+          const failed = joinResults.find(r => r.status === 'rejected');
+          if (failed) {
+            throw new Error('Kunne ikke tilføje til alle fællesskaber');
           }
         }
 
