@@ -365,57 +365,65 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
 
     headerSection: {
       paddingHorizontal: theme.spacing[6],
-      paddingTop: theme.spacing[4],
-      paddingBottom: theme.spacing[4],
+      paddingTop: theme.spacing[7],
+      paddingBottom: theme.spacing[2],
+      alignItems: 'flex-start',
     },
 
     stepLabel: {
-      fontSize: 14,
-      fontWeight: '700',
-      color: theme.colors.text,
-      marginBottom: theme.spacing[2],
+      fontSize: 13,
+      fontWeight: '600',
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing[1],
       textTransform: 'uppercase',
+      letterSpacing: 1,
     },
 
     headline: {
-      fontSize: 32,
-      lineHeight: 38,
+      fontSize: 30,
+      lineHeight: 36,
       fontWeight: '700',
       color: theme.colors.text,
-      marginBottom: theme.spacing[3],
+      marginBottom: theme.spacing[2],
+      letterSpacing: -0.5,
     },
 
     subtitle: {
-      fontSize: 17,
-      lineHeight: 26,
+      fontSize: 16,
+      lineHeight: 24,
       color: theme.colors.textSecondary,
+      fontWeight: '400',
+      marginBottom: theme.spacing[2],
     },
 
     selectedSummaryRow: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       paddingHorizontal: theme.spacing[6],
-      marginBottom: theme.spacing[4],
+      marginBottom: theme.spacing[2],
+      minHeight: theme.spacing[6],
     },
 
     summaryChip: {
       alignSelf: 'flex-start',
       borderRadius: theme.radius.lg,
-      paddingHorizontal: theme.spacing[3],
-      paddingVertical: theme.spacing[2],
+      paddingHorizontal: theme.spacing[2],
+      paddingVertical: theme.spacing[1],
       backgroundColor: theme.colors.surfaceSecondary,
       marginRight: theme.spacing[2],
-      marginBottom: theme.spacing[2],
+      marginBottom: theme.spacing[1],
+      minHeight: theme.spacing[5],
     },
 
     summaryChipText: {
-      fontSize: 14,
-      fontWeight: '600',
-      color: theme.colors.text,
+      fontSize: 13,
+      fontWeight: '500',
+      color: theme.colors.textSecondary,
     },
 
     listContainer: {
       flex: 1,
+      minHeight: 0,
     },
 
     list: {
@@ -424,7 +432,8 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
 
     listContent: {
       paddingHorizontal: theme.spacing[6],
-      paddingBottom: theme.spacing[20],
+      paddingTop: theme.spacing[2],
+      paddingBottom: theme.spacing[2],
     },
 
     sectionLabel: {
@@ -465,31 +474,32 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     communityCard: {
       flexDirection: 'row',
       alignItems: 'center',
-      minHeight: 84,
       paddingHorizontal: theme.spacing[4],
-      paddingVertical: theme.spacing[4],
+      paddingVertical: theme.spacing[3],
       borderRadius: theme.radius.xl,
       backgroundColor: theme.colors.surface,
       borderWidth: 1,
       borderColor: theme.colors.border,
-      marginBottom: theme.spacing[3],
+      marginBottom: theme.spacing[2],
+      minHeight: 72,
+      shadowColor: undefined,
     },
 
     selectedCommunityCard: {
       borderColor: theme.colors.primary,
       backgroundColor: theme.colors.surfaceSecondary,
+      shadowColor: undefined,
     },
 
     communityAvatar: {
-      width: 44,
-      height: 44,
+      width: 56,
+      height: 56,
       borderRadius: theme.radius.pill,
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: theme.colors.surfaceSecondary,
       overflow: 'hidden',
       marginRight: theme.spacing[4],
-      flexShrink: 0,
     },
 
     communityAvatarImage: {
@@ -498,7 +508,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
 
     communityAvatarInitials: {
-      fontSize: 15,
+      fontSize: 18,
       fontWeight: '700',
       color: theme.colors.text,
     },
@@ -506,33 +516,35 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     communityContent: {
       flex: 1,
       justifyContent: 'center',
-      marginRight: theme.spacing[3],
+      marginRight: theme.spacing[2],
     },
 
     communityTitle: {
-      fontSize: 17,
+      fontSize: 16,
       fontWeight: '700',
       color: theme.colors.text,
       marginBottom: theme.spacing[1],
+      letterSpacing: -0.2,
     },
 
     communityDescription: {
-      fontSize: 14,
-      lineHeight: 20,
+      fontSize: 13,
+      lineHeight: 18,
       color: theme.colors.textSecondary,
+      fontWeight: '400',
+      opacity: 0.9,
     },
 
     followButton: {
-      minWidth: 78,
-      height: 36,
-      borderRadius: theme.radius.xl,
+      minWidth: 64,
+      height: 32,
+      borderRadius: theme.radius.pill,
       paddingHorizontal: theme.spacing[3],
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: theme.colors.surfaceSecondary,
       borderWidth: 1,
       borderColor: theme.colors.border,
-      flexShrink: 0,
     },
 
     followButtonText: {
@@ -551,38 +563,39 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
 
     bottomActions: {
-      position: 'absolute',
-      left: 0,
-      right: 0,
-      bottom: 0,
       backgroundColor: theme.colors.background,
       paddingHorizontal: theme.spacing[6],
-      paddingTop: theme.spacing[3],
-      paddingBottom: theme.spacing[6],
+      paddingTop: theme.spacing[5],
+      paddingBottom: theme.spacing[8],
       borderTopWidth: 1,
       borderTopColor: theme.colors.border,
+      alignItems: 'center',
     },
 
     skipButton: {
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: theme.spacing[2],
-      marginBottom: theme.spacing[2],
+      marginBottom: theme.spacing[3],
+      width: '100%',
     },
 
     skipButtonText: {
-      fontSize: 16,
-      fontWeight: '600',
+      fontSize: 15,
+      fontWeight: '500',
       color: theme.colors.primary,
+      textAlign: 'center',
+      opacity: 0.9,
     },
 
     primaryButton: {
       width: '100%',
-      borderRadius: theme.radius.xl,
+      borderRadius: theme.radius.pill,
       paddingVertical: theme.spacing[4],
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: theme.colors.primary,
+      marginTop: theme.spacing[1],
     },
 
     primaryButtonDisabled: {
