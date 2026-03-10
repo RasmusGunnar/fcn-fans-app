@@ -1,18 +1,18 @@
-import React, { useMemo, useState } from 'react';
-import { isCompactDevice } from '../../utils/isCompactDevice';
-import { Alert, Image, Pressable, StyleSheet, TextInput, View, ScrollView } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import React, { useMemo, useState } from 'react';
+import { Alert, Image, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text } from '../../components/ui';
-import { useTheme } from '../../theme';
 import { useAuth } from '../../auth/AuthProvider';
-import { uploadAvatar } from '../../lib/uploadAvatar';
-import { getPublicUrl } from '../../lib/storageUrl';
-import { supabase } from '../../lib/supabase';
+import { Avatar } from '../../components/Avatar';
+import { Text } from '../../components/ui';
 import { logger } from '../../lib/logger';
 import { ensureProfile } from '../../lib/profile';
-import { Avatar } from '../../components/Avatar';
+import { getPublicUrl } from '../../lib/storageUrl';
+import { supabase } from '../../lib/supabase';
+import { uploadAvatar } from '../../lib/uploadAvatar';
 import type { OnboardingStackParamList } from '../../navigation/OnboardingStack';
+import { useTheme } from '../../theme';
+import { isCompactDevice } from '../../utils/isCompactDevice';
 
 type Props = NativeStackScreenProps<OnboardingStackParamList, 'OnboardingProfile'>;
 
@@ -114,27 +114,10 @@ export default function OnboardingProfileSetupScreen({ navigation, route }: Prop
     }
   };
 
-  const handleBack = () => {
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-      return;
-    }
-    if (navigation.getState()?.routeNames?.includes('Welcome')) {
-      navigation.navigate('Welcome' as never);
-      return;
-    }
-    // If no previous screen exists, do nothing rather than throwing warning
-  };
-
   const compact = isCompactDevice();
   const Content = (
     <>
-      <View style={styles.topNav}>
-        <Pressable style={styles.backButton} onPress={handleBack}>
-          <Text style={styles.backArrow}>←</Text>
-        </Pressable>
-      </View>
-
+      {/* Removed manual back button from onboarding profile setup */}
       <View style={styles.heroSection}>
         <View style={styles.brandMark}>
           <View style={styles.logoSurface}>
@@ -194,9 +177,7 @@ export default function OnboardingProfileSetupScreen({ navigation, route }: Prop
           disabled={!canContinue}
           accessibilityRole="button"
         >
-          <Text style={styles.primaryButtonText}>
-            {saving ? 'Gemmer...' : 'Fortsæt'}
-          </Text>
+          <Text style={styles.primaryButtonText}>{saving ? 'Gemmer...' : 'Fortsæt'}</Text>
         </Pressable>
       </View>
     </>
@@ -229,23 +210,6 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       flex: 1,
       paddingHorizontal: theme.spacing[6],
       paddingBottom: theme.spacing[4],
-    },
-    topNav: {
-      minHeight: theme.spacing[11],
-      justifyContent: 'center',
-      marginBottom: theme.spacing[4],
-    },
-    backButton: {
-      width: theme.spacing[10],
-      height: theme.spacing[10],
-      borderRadius: theme.radius.pill,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: theme.colors.bg.subtle,
-    },
-    backArrow: {
-      fontSize: theme.typography.h1.fontSize,
-      color: theme.colors.text.primary,
     },
     heroSection: {
       alignItems: 'center',
@@ -309,12 +273,12 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       borderWidth: theme.layout.borderWidth,
       borderColor: theme.colors.border.subtle,
     },
-      avatarHint: {
-        marginTop: theme.spacing[3],
-        fontSize: 14,
-        color: theme.colors.text.secondary,
-        textAlign: 'center',
-      },
+    avatarHint: {
+      marginTop: theme.spacing[3],
+      fontSize: 14,
+      color: theme.colors.text.secondary,
+      textAlign: 'center',
+    },
     inputSection: {
       width: '100%',
       marginTop: theme.spacing[7],

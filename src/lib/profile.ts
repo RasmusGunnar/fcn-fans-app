@@ -3,9 +3,16 @@ import { logger } from './logger';
 
 export async function ensureProfile(userId: string): Promise<boolean> {
   try {
+    const payload = {
+      id: userId,
+      display_name: null,
+      avatar_url: null,
+      onboarding_complete: false,
+    };
+
     const { error } = await supabase
       .from('profiles')
-      .upsert({ id: userId }, { onConflict: 'id', ignoreDuplicates: true } as any);
+      .upsert(payload, { onConflict: 'id', ignoreDuplicates: true } as any);
 
     if (!error) {
       console.log('[profile] Profile ensured for user:', userId);
@@ -13,7 +20,8 @@ export async function ensureProfile(userId: string): Promise<boolean> {
     }
 
     console.warn('[profile] Upsert failed, falling back to insert:', error);
-    const { error: insertError } = await supabase.from('profiles').insert({ id: userId });
+
+    const { error: insertError } = await supabase.from('profiles').insert(payload);
 
     if (!insertError) {
       console.log('[profile] Profile inserted for user:', userId);

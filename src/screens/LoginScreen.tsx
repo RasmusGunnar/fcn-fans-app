@@ -46,20 +46,35 @@ export default function LoginScreen({ route, navigation }: Props) {
 
   const onSubmit = async () => {
     const e = email.trim().toLowerCase();
+
     if (!e || !e.includes('@')) {
       return Alert.alert('Ugyldig email', 'Indtast en gyldig emailadresse');
     }
+
     if (!password || password.length < 6) {
       return Alert.alert('Ugyldigt kodeord', 'Kodeord skal være mindst 6 tegn.');
     }
+
     try {
       if (mode === 'signup') {
-        await signUp(e, password);
-        Alert.alert('Oprettet', 'Din konto er oprettet. Du kan nu logge ind.');
-        setMode('login');
-      } else {
-        await signInWithPassword(e, password);
+        const result = await signUp(e, password);
+
+        if (result?.session && result?.user) {
+          return;
+        }
+
+        if (result?.user && !result?.session) {
+          Alert.alert(
+            'Bekræft din email',
+            'Vi har sendt dig en email. Bekræft din konto for at fortsætte.'
+          );
+          return;
+        }
+
+        return;
       }
+
+      await signInWithPassword(e, password);
     } catch (err: any) {
       const msg = err?.message || String(err) || 'Ukendt fejl';
       Alert.alert('Fejl', msg);
@@ -420,7 +435,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     primaryButtonText: {
       fontSize: 18,
       fontWeight: '600',
-      color: theme.colors.onPrimary,
+      color: '#FFFFFF',
     },
     primaryButtonTextDisabled: {
       fontSize: 18,
@@ -446,4 +461,3 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       paddingHorizontal: theme.spacing[4],
     },
   });
-}

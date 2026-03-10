@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   Pressable,
@@ -9,7 +10,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Ionicons } from '@expo/vector-icons';
 
 import { Text } from '../../components/ui';
 import { useTheme } from '../../theme';
@@ -21,30 +21,38 @@ import type { OnboardingStackParamList } from '../../navigation/OnboardingStack'
 
 type Props = NativeStackScreenProps<OnboardingStackParamList, 'OnboardingCommunities'>;
 
-export default function OnboardingCommunitiesSetupScreen({ navigation }: Props) {
+type CommunityWithAvatar = Community & {
+  avatarUrl?: string | null;
+  imageUrl?: string | null;
+};
+
+export default function OnboardingCommunitiesSetupScreen({ route }: Props) {
   const theme = useTheme();
   const styles = createStyles(theme);
   const { user } = useAuth();
 
-  const [communities, setCommunities] = useState<Community[]>([]);
+  const step = route.params?.step ?? 2;
+  const totalSteps = route.params?.totalSteps ?? 2;
+
+  const [communities, setCommunities] = useState<CommunityWithAvatar[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const selectedCount = selectedIds.size;
   const canContinue = !saving;
 
   useEffect(() => {
     let isMounted = true;
 
-    async function load() {
+    async function loadCommunities() {
       try {
         setLoading(true);
         const result = await getCommunities();
+
         if (!isMounted) return;
-        setCommunities(Array.isArray(result) ? result : []);
+
+        setCommunities(Array.isArray(result) ? (result as CommunityWithAvatar[]) : []);
       } catch (error) {
-        console.error('Failed to load communities', error);
         if (!isMounted) return;
         setCommunities([]);
       } finally {
@@ -54,7 +62,7 @@ export default function OnboardingCommunitiesSetupScreen({ navigation }: Props) 
       }
     }
 
-    load();
+    void loadCommunities();
 
     return () => {
       isMounted = false;
@@ -64,17 +72,20 @@ export default function OnboardingCommunitiesSetupScreen({ navigation }: Props) 
   const toggleSelect = useCallback((communityId: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
+
       if (next.has(communityId)) {
         next.delete(communityId);
       } else {
         next.add(communityId);
       }
+
       return next;
     });
   }, []);
 
   const getCommunityInitials = useCallback((name?: string | null) => {
     if (!name) return '?';
+
     return name
       .split(' ')
       .filter(Boolean)
@@ -83,7 +94,12 @@ export default function OnboardingCommunitiesSetupScreen({ navigation }: Props) 
       .join('');
   }, []);
 
-  const handleFinish = useCallback(
+  const selectedCommunities = useMemo(() => {
+    if (selectedIds.size === 0) return [];
+    return communities.filter((community) => selectedIds.has(community.id));
+  }, [communities, selectedIds]);
+
+  const finishOnboarding = useCallback(
     async (skipSelection: boolean) => {
       try {
         setSaving(true);
@@ -92,53 +108,57 @@ export default function OnboardingCommunitiesSetupScreen({ navigation }: Props) 
           throw new Error('Bruger mangler');
         }
 
-        await ensureProfile(user.id);
+        const ensured = await ensureProfile(user.id);
+        if (!ensured) {
+          throw new Error('Kunne ikke sikre profil');
+        }
 
         if (!skipSelection && selectedIds.size > 0) {
-          const rows = Array.from(selectedIds).map((communityId) => ({
+          const membershipRows = Array.from(selectedIds).map((communityId) => ({
             community_id: communityId,
             user_id: user.id,
           }));
 
-          const { error } = await supabase
+          const { error: membershipError } = await supabase
             .from('community_members')
-            .upsert(rows, { onConflict: 'community_id,user_id' });
+            .upsert(membershipRows, { onConflict: 'community_id,user_id' });
 
-          if (error) {
-            throw error;
+          if (membershipError) {
+            throw membershipError;
           }
         }
 
-        navigation.replace('OnboardingProfile');
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({ onboarding_complete: true })
+          .eq('id', user.id);
+
+        if (profileError) {
+          throw profileError;
+        }
+
+        // RootNavigator / auth-flow should now let the user into the app.
       } catch (error) {
-        console.error('Failed to finish community onboarding', error);
+        Alert.alert('Fejl', 'Kunne ikke færdiggøre onboarding. Prøv igen.');
       } finally {
         setSaving(false);
       }
     },
-    [navigation, selectedIds, user?.id]
+    [selectedIds, user?.id]
   );
 
   const handleSkip = useCallback(() => {
-    void handleFinish(true);
-  }, [handleFinish]);
+    void finishOnboarding(true);
+  }, [finishOnboarding]);
 
   const handleContinue = useCallback(() => {
-    void handleFinish(false);
-  }, [handleFinish]);
+    void finishOnboarding(false);
+  }, [finishOnboarding]);
 
-  const selectedCommunities = useMemo(() => {
-    if (selectedIds.size === 0) return [];
-    return communities.filter((community) => selectedIds.has(community.id));
-  }, [communities, selectedIds]);
-
-  const renderCommunityItem = useCallback(
-    ({ item }: { item: Community }) => {
+  const renderItem = useCallback(
+    ({ item }: { item: CommunityWithAvatar }) => {
       const selected = selectedIds.has(item.id);
-      const avatarUri =
-        (item as Community & { avatarUrl?: string; imageUrl?: string }).avatarUrl ||
-        (item as Community & { avatarUrl?: string; imageUrl?: string }).imageUrl ||
-        null;
+      const avatarUri = item.avatarUrl || item.imageUrl || null;
 
       return (
         <View style={[styles.communityCard, selected && styles.selectedCommunityCard]}>
@@ -164,6 +184,7 @@ export default function OnboardingCommunitiesSetupScreen({ navigation }: Props) 
           <Pressable
             onPress={() => toggleSelect(item.id)}
             style={[styles.followButton, selected && styles.selectedFollowButton]}
+            accessibilityRole="button"
           >
             <Text
               style={[
@@ -183,7 +204,9 @@ export default function OnboardingCommunitiesSetupScreen({ navigation }: Props) 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
       <View style={styles.headerSection}>
-        <Text style={styles.stepLabel}>Trin 2 af 2</Text>
+        <Text style={styles.stepLabel}>
+          Trin {step} af {totalSteps}
+        </Text>
         <Text style={styles.headline}>Find dine fællesskaber</Text>
         <Text style={styles.subtitle}>
           Vælg nogle fællesskaber at følge. Du kan altid ændre det senere.
@@ -213,7 +236,7 @@ export default function OnboardingCommunitiesSetupScreen({ navigation }: Props) 
           <FlatList
             data={communities}
             keyExtractor={(item) => item.id}
-            renderItem={renderCommunityItem}
+            renderItem={renderItem}
             style={styles.list}
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
@@ -235,17 +258,15 @@ export default function OnboardingCommunitiesSetupScreen({ navigation }: Props) 
       </View>
 
       <View style={styles.bottomActions}>
-        <Pressable onPress={handleSkip} style={styles.skipButton}>
+        <Pressable onPress={handleSkip} style={styles.skipButton} disabled={saving}>
           <Text style={styles.skipButtonText}>Spring over</Text>
         </Pressable>
 
         <Pressable
           onPress={handleContinue}
-          style={[
-            styles.primaryButton,
-            !canContinue && styles.primaryButtonDisabled,
-          ]}
+          style={[styles.primaryButton, !canContinue && styles.primaryButtonDisabled]}
           disabled={!canContinue}
+          accessibilityRole="button"
         >
           <Text
             style={[
@@ -253,7 +274,11 @@ export default function OnboardingCommunitiesSetupScreen({ navigation }: Props) 
               !canContinue && styles.primaryButtonTextDisabled,
             ]}
           >
-            {selectedIds.size > 0 ? 'Fortsæt' : 'Fortsæt uden valg'}
+            {saving
+              ? 'Gemmer...'
+              : selectedIds.size > 0
+              ? 'Fortsæt'
+              : 'Fortsæt uden valg'}
           </Text>
         </Pressable>
       </View>
@@ -276,10 +301,9 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
 
     stepLabel: {
       fontSize: 14,
-      fontWeight: '600',
-      color: theme.colors.textSecondary,
+      fontWeight: '700',
+      color: theme.colors.text,
       marginBottom: theme.spacing[2],
-      letterSpacing: 0.2,
       textTransform: 'uppercase',
     },
 
@@ -289,14 +313,12 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       fontWeight: '700',
       color: theme.colors.text,
       marginBottom: theme.spacing[3],
-      letterSpacing: -0.5,
     },
 
     subtitle: {
       fontSize: 17,
       lineHeight: 26,
       color: theme.colors.textSecondary,
-      marginTop: theme.spacing[1],
     },
 
     selectedSummaryRow: {
@@ -304,29 +326,29 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       flexWrap: 'wrap',
       paddingHorizontal: theme.spacing[6],
       marginBottom: theme.spacing[4],
-      minHeight: 36,
-      alignItems: 'center',
     },
 
     summaryChip: {
-      borderRadius: theme.radius.lg,
+      alignSelf: 'flex-start',
+      borderRadius: 16,
       paddingHorizontal: theme.spacing[3],
       paddingVertical: theme.spacing[2],
       backgroundColor: theme.colors.surfaceSecondary,
       marginRight: theme.spacing[2],
       marginBottom: theme.spacing[2],
-      minHeight: 32,
-      justifyContent: 'center',
     },
 
     summaryChipText: {
       fontSize: 14,
       fontWeight: '600',
       color: theme.colors.text,
-      letterSpacing: 0.1,
     },
 
     listContainer: {
+      flex: 1,
+    },
+
+    list: {
       flex: 1,
     },
 
@@ -337,8 +359,8 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
 
     sectionLabel: {
       fontSize: 14,
-      fontWeight: '600',
-      color: theme.colors.textSecondary,
+      fontWeight: '700',
+      color: theme.colors.text,
       marginBottom: theme.spacing[3],
     },
 
@@ -373,10 +395,10 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     communityCard: {
       flexDirection: 'row',
       alignItems: 'center',
-      minHeight: 88,
+      minHeight: 84,
       paddingHorizontal: theme.spacing[4],
       paddingVertical: theme.spacing[4],
-      borderRadius: theme.radius.xl,
+      borderRadius: 18,
       backgroundColor: theme.colors.surface,
       borderWidth: 1,
       borderColor: theme.colors.border,
@@ -389,9 +411,9 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
 
     communityAvatar: {
-      width: 48,
-      height: 48,
-      borderRadius: theme.radius.pill,
+      width: 44,
+      height: 44,
+      borderRadius: 22,
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: theme.colors.surfaceSecondary,
@@ -406,7 +428,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
 
     communityAvatarInitials: {
-      fontSize: 16,
+      fontSize: 15,
       fontWeight: '700',
       color: theme.colors.text,
     },
@@ -418,22 +440,22 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
 
     communityTitle: {
-      fontSize: 18,
+      fontSize: 17,
       fontWeight: '700',
       color: theme.colors.text,
       marginBottom: theme.spacing[1],
     },
 
     communityDescription: {
-      fontSize: 15,
-      lineHeight: 21,
+      fontSize: 14,
+      lineHeight: 20,
       color: theme.colors.textSecondary,
     },
 
     followButton: {
-      minWidth: 84,
-      height: 38,
-      borderRadius: theme.radius.pill,
+      minWidth: 78,
+      height: 36,
+      borderRadius: 18,
       paddingHorizontal: theme.spacing[3],
       alignItems: 'center',
       justifyContent: 'center',
@@ -444,7 +466,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
 
     followButtonText: {
-      fontSize: 15,
+      fontSize: 14,
       fontWeight: '600',
       color: theme.colors.text,
     },
@@ -455,7 +477,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
 
     selectedFollowButtonText: {
-      color: theme.colors.onPrimary,
+      color: theme.colors.white,
     },
 
     bottomActions: {
@@ -486,8 +508,8 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
 
     primaryButton: {
       width: '100%',
-      borderRadius: theme.radius.pill,
-      paddingVertical: theme.spacing[4],
+      borderRadius: 24,
+      paddingVertical: 14,
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: theme.colors.primary,
@@ -500,13 +522,10 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     primaryButtonText: {
       fontSize: 18,
       fontWeight: '600',
-      color: theme.colors.onPrimary,
+      color: theme.colors.white,
     },
 
     primaryButtonTextDisabled: {
       color: theme.colors.textSecondary,
     },
-      list: {
-        flex: 1,
-      },
   });
