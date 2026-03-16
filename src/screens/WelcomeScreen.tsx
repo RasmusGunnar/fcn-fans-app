@@ -30,7 +30,11 @@ export default function WelcomeScreen({ navigation }: Props) {
   return (
     <ImageBackground source={heroImage} style={styles.background} resizeMode="cover">
       <LinearGradient
-        colors={['rgba(0,0,0,0.06)', 'rgba(0,0,0,0.34)', 'rgba(0,0,0,0.72)']}
+        colors={[
+          theme.colors.overlay.light,
+          theme.colors.overlay.medium,
+          theme.colors.overlay.heroScrim,
+        ]}
         locations={[0, 0.58, 1]}
         style={styles.overlay}
         pointerEvents="none"
@@ -52,8 +56,11 @@ export default function WelcomeScreen({ navigation }: Props) {
           </View>
 
           <View style={styles.bottomActions}>
-            <Pressable
-              style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
+             <Pressable
+              style={({ pressed }) => [
+                styles.primaryButton,
+                pressed && styles.primaryButtonPressed,
+              ]}
               onPress={() => navigation.navigate('Login', { mode: 'signup' })}
             >
               <RNText style={styles.primaryButtonText}>Kom i gang</RNText>
@@ -88,18 +95,18 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       paddingHorizontal: theme.spacing[6],
     },
     spacerTop: {
-      flex: 2,
+      flex: 1.6,
     },
     heroContent: {
-      flex: 3,
+      flex: 3.4,
       alignItems: 'center',
       justifyContent: 'flex-end',
-      paddingBottom: theme.spacing[8],
+      paddingBottom: theme.spacing[6],
     },
     logo: {
-      width: 260,
-      height: 260,
-      marginBottom: 40,
+      width: 168,
+      height: 168,
+      marginBottom: theme.spacing[5],
     },
     textBlock: {
       width: '100%',
@@ -107,33 +114,34 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       alignItems: 'center',
     },
     headline: {
-      color: '#FFFFFF',
+      color: theme.colors.text.inverse,
       fontSize: 34,
       lineHeight: 40,
       fontWeight: '800',
       textAlign: 'center',
-      marginBottom: theme.spacing[3],
+      marginBottom: theme.spacing[1],
     },
     subtitle: {
-      color: 'rgba(255,255,255,0.92)',
-      fontSize: 18,
-      lineHeight: 28,
+      color: theme.colors.text.inverse,
+      fontSize: 17,
+      lineHeight: 26,
       textAlign: 'center',
+      opacity: 0.92,
     },
     bottomActions: {
-      paddingBottom: theme.spacing[6],
-      gap: theme.spacing[4],
+      paddingBottom: theme.spacing[5],
+      gap: theme.spacing[2],
     },
     primaryButton: {
       width: '100%',
+      height: theme.spacing[12] + theme.spacing[1],
       borderRadius: theme.radius.pill,
       backgroundColor: theme.colors.primary,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: theme.spacing[4],
     },
     primaryButtonText: {
-      color: '#FFFFFF',
+      color: theme.colors.text.inverse,
       fontSize: 19,
       lineHeight: 24,
       fontWeight: '700',
@@ -144,13 +152,18 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       paddingVertical: theme.spacing[2],
     },
     secondaryButtonText: {
-      color: 'rgba(255,255,255,0.96)',
+      color: theme.colors.text.inverse,
       fontSize: 17,
       lineHeight: 22,
       fontWeight: '600',
       textDecorationLine: 'underline',
+      opacity: 0.96,
     },
     pressed: {
       opacity: 0.85,
+    },
+    primaryButtonPressed: {
+      opacity: 0.92,
+      transform: [{ scale: 0.985 }],
     },
   });

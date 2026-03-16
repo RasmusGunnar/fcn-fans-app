@@ -116,7 +116,9 @@ export default function LoginScreen({ route, navigation }: Props) {
       </View>
 
       <View style={styles.heroSection}>
-        <Image source={appLogo} style={styles.logo} resizeMode="contain" />
+        <View style={styles.logoSurface}>
+          <Image source={appLogo} style={styles.logo} resizeMode="contain" />
+        </View>
         <Text variant="h1" style={styles.heroTitle}>
           {isSignup ? 'Bliv en del af fællesskabet' : 'Velkommen tilbage'}
         </Text>
@@ -213,7 +215,7 @@ export default function LoginScreen({ route, navigation }: Props) {
             style={({ pressed }) => [
               isFormValid ? styles.primaryButton : styles.primaryButtonDisabled,
               loading && styles.buttonDisabled,
-              pressed && !primaryDisabled && styles.buttonPressed,
+              pressed && !primaryDisabled && styles.primaryButtonPressed,
             ]}
             onPress={onSubmit}
             disabled={primaryDisabled}
@@ -283,7 +285,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     content: {
       flex: 1,
       paddingHorizontal: theme.spacing[6],
-      paddingTop: theme.spacing[3],
+      paddingTop: theme.spacing[1],
       paddingBottom: theme.spacing[3],
       justifyContent: 'flex-start',
     },
@@ -293,7 +295,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     topNav: {
       minHeight: 40,
       justifyContent: 'center',
-      marginBottom: theme.spacing[1],
+      marginBottom: theme.spacing[0],
     },
     backButton: {
       width: 40,
@@ -307,15 +309,25 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       fontSize: 24,
       color: theme.colors.text.primary,
     },
-    logo: {
-      width: 84,
-      height: 84,
-      alignSelf: 'center',
-      marginBottom: theme.spacing[4],
-    },
     heroSection: {
       alignItems: 'center',
-      marginBottom: theme.spacing[4],
+      marginBottom: theme.spacing[2],
+    },
+    logoSurface: {
+      width: theme.spacing[14],
+      height: theme.spacing[14],
+      borderRadius: theme.radius.pill,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.colors.bg.surface,
+      borderWidth: theme.layout.borderWidth,
+      borderColor: theme.colors.border.subtle,
+      marginBottom: theme.spacing[2],
+    },
+    logo: {
+      width: 72,
+      height: 72,
+      alignSelf: 'center',
     },
     heroTitle: {
       fontSize: 28,
@@ -329,13 +341,13 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       lineHeight: 22,
       textAlign: 'center',
       color: theme.colors.text.secondary,
-      marginTop: theme.spacing[2],
+      marginTop: theme.spacing[1],
     },
     modeTabs: {
       flexDirection: 'row',
       justifyContent: 'center',
       gap: theme.spacing[6],
-      marginTop: theme.spacing[4],
+      marginTop: theme.spacing[3],
     },
     activeTab: {
       fontSize: 16,
@@ -354,7 +366,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       flexShrink: 1,
     },
     socialAuthSection: {
-      marginTop: theme.spacing[5],
+      marginTop: theme.spacing[3],
     },
     appleButton: {
       width: '100%',
@@ -381,7 +393,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     dividerContainer: {
       flexDirection: 'row',
       alignItems: 'center',
-      marginTop: theme.spacing[3],
+      marginTop: theme.spacing[2],
       marginBottom: theme.spacing[3],
       gap: theme.spacing[2],
     },
@@ -414,12 +426,12 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       color: theme.colors.text.primary,
     },
     primaryActionSection: {
-      marginTop: theme.spacing[4],
+      marginTop: theme.spacing[2],
     },
     primaryButton: {
       width: '100%',
       borderRadius: theme.radius.pill,
-      paddingVertical: theme.spacing[4],
+      paddingVertical: theme.spacing[3],
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: theme.colors.primary,
@@ -427,7 +439,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     primaryButtonDisabled: {
       width: '100%',
       borderRadius: theme.radius.pill,
-      paddingVertical: theme.spacing[4],
+      paddingVertical: theme.spacing[3],
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: theme.colors.bg.subtle,
@@ -448,9 +460,13 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     buttonPressed: {
       opacity: 0.85,
     },
+    primaryButtonPressed: {
+      opacity: 0.94,
+      transform: [{ scale: 0.985 }],
+    },
     legalTextContainer: {
       alignItems: 'center',
-      marginTop: theme.spacing[3],
+      marginTop: theme.spacing[2],
       paddingHorizontal: theme.spacing[4],
     },
     legalText: {

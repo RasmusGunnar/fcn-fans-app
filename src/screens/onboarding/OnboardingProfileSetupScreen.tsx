@@ -1,6 +1,15 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import React, { useMemo, useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Alert,
+  Animated,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../auth/AuthProvider';
 import { Avatar } from '../../components/Avatar';
@@ -27,8 +36,25 @@ export default function OnboardingProfileSetupScreen({ navigation, route }: Prop
   const [avatarUrlInput, setAvatarUrlInput] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [saving, setSaving] = useState(false);
+  const entranceOpacity = useRef(new Animated.Value(0)).current;
+  const entranceTranslateY = useRef(new Animated.Value(10)).current;
   const hasAvatar = !!avatarUrlInput;
   const appLogo = require('../../../assets/NewLogo.png');
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(entranceOpacity, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+      Animated.timing(entranceTranslateY, {
+        toValue: 0,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [entranceOpacity, entranceTranslateY]);
 
   const canContinue = useMemo(() => {
     return displayNameInput.trim().length > 0 && !!avatarUrlInput && !saving;
@@ -118,6 +144,12 @@ export default function OnboardingProfileSetupScreen({ navigation, route }: Prop
   const Content = (
     <>
       {/* Removed manual back button from onboarding profile setup */}
+      <Animated.View
+        style={{
+          opacity: entranceOpacity,
+          transform: [{ translateY: entranceTranslateY }],
+        }}
+      >
       <View style={styles.heroSection}>
         <View style={styles.brandMark}>
           <View style={styles.logoSurface}>
@@ -141,7 +173,7 @@ export default function OnboardingProfileSetupScreen({ navigation, route }: Prop
             <Avatar
               userId={user?.id}
               avatarUrl={avatarUrlInput}
-              size={theme.spacing[12] + theme.spacing[12]}
+              size={theme.spacing[11] + theme.spacing[11]}
               label={displayNameInput || user?.email || 'Fan'}
             />
           </View>
@@ -170,9 +202,13 @@ export default function OnboardingProfileSetupScreen({ navigation, route }: Prop
         </View>
       </View>
 
-      <View style={styles.bottomActions}>
-        <Pressable
-          style={[styles.primaryButton, !canContinue && styles.primaryButtonDisabled]}
+        <View style={styles.bottomActions}>
+          <Pressable
+          style={({ pressed }) => [
+            styles.primaryButton,
+            !canContinue && styles.primaryButtonDisabled,
+            pressed && canContinue && styles.primaryButtonPressed,
+          ]}
           onPress={handleContinue}
           disabled={!canContinue}
           accessibilityRole="button"
@@ -180,6 +216,7 @@ export default function OnboardingProfileSetupScreen({ navigation, route }: Prop
           <Text style={styles.primaryButtonText}>{saving ? 'Gemmer...' : 'Fortsæt'}</Text>
         </Pressable>
       </View>
+      </Animated.View>
     </>
   );
 
@@ -213,7 +250,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
     heroSection: {
       alignItems: 'center',
-      marginBottom: theme.spacing[6],
+      marginBottom: theme.spacing[4],
       gap: theme.spacing[2],
     },
     brandMark: {
@@ -252,20 +289,20 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     avatarTouchTarget: {
       alignItems: 'center',
       justifyContent: 'center',
-      width: 136,
-      height: 136,
+      width: 112,
+      height: 112,
       borderRadius: theme.radius.pill,
       backgroundColor: theme.colors.bg.surface,
       shadowColor: theme.colors.text.primary,
-      shadowOpacity: 0.08,
-      shadowRadius: 16,
-      shadowOffset: { width: 0, height: 2 },
-      elevation: 0,
+      shadowOpacity: 0.12,
+      shadowRadius: 14,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 2,
       marginBottom: theme.spacing[1],
     },
     avatarSurface: {
-      width: 112,
-      height: 112,
+      width: 96,
+      height: 96,
       borderRadius: theme.radius.pill,
       alignItems: 'center',
       justifyContent: 'center',
@@ -274,15 +311,15 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       borderColor: theme.colors.border.subtle,
     },
     avatarHint: {
-      marginTop: theme.spacing[3],
+      marginTop: theme.spacing[2],
       fontSize: 14,
       color: theme.colors.text.secondary,
       textAlign: 'center',
     },
     inputSection: {
       width: '100%',
-      marginTop: theme.spacing[7],
-      marginBottom: theme.spacing[2],
+      marginTop: theme.spacing[5],
+      marginBottom: theme.spacing[1],
     },
     inputLabel: {
       fontSize: 14,
@@ -303,12 +340,13 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
     bottomActions: {
       paddingHorizontal: theme.spacing[6],
-      paddingBottom: theme.spacing[6],
+      paddingTop: theme.spacing[1],
+      paddingBottom: theme.spacing[4],
     },
     primaryButton: {
       width: '100%',
       borderRadius: theme.radius.pill,
-      paddingVertical: theme.spacing[4],
+      paddingVertical: theme.spacing[3],
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: theme.colors.brand.accent,
@@ -317,8 +355,12 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       opacity: 0.4,
     },
     primaryButtonText: {
-      fontSize: 18,
+      fontSize: 17,
       fontWeight: '600',
       color: theme.colors.bg.surface,
+    },
+    primaryButtonPressed: {
+      opacity: 0.94,
+      transform: [{ scale: 0.985 }],
     },
   });

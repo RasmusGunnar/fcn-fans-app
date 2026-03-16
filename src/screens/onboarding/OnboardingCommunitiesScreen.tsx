@@ -1,10 +1,11 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { StackActions } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Image,
   Pressable,
   ScrollView,
@@ -53,6 +54,8 @@ export default function OnboardingCommunitiesScreen({ navigation, route }: Props
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const entranceOpacity = useRef(new Animated.Value(0)).current;
+  const entranceTranslateY = useRef(new Animated.Value(12)).current;
 
   useEffect(() => {
     let isMounted = true;
@@ -90,6 +93,21 @@ export default function OnboardingCommunitiesScreen({ navigation, route }: Props
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(entranceOpacity, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+      Animated.timing(entranceTranslateY, {
+        toValue: 0,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [entranceOpacity, entranceTranslateY]);
 
   const selectedCommunities = useMemo(() => {
     if (selectedIds.size === 0) return [];
@@ -177,7 +195,15 @@ export default function OnboardingCommunitiesScreen({ navigation, route }: Props
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
-      <View style={styles.content}>
+      <Animated.View
+        style={[
+          styles.content,
+          {
+            opacity: entranceOpacity,
+            transform: [{ translateY: entranceTranslateY }],
+          },
+        ]}
+      >
         <View style={styles.header}>
           <Text variant="small" color="secondary">
             Trin {step} af {totalSteps}
@@ -259,10 +285,11 @@ export default function OnboardingCommunitiesScreen({ navigation, route }: Props
                         onPress={() => toggleSelected(community.id)}
                         disabled={saving}
                         accessibilityRole="button"
-                        style={[
+                        style={({ pressed }) => [
                           styles.followButton,
                           isSelected && styles.followButtonSelected,
                           saving && styles.followButtonDisabled,
+                          pressed && styles.followButtonPressed,
                         ]}
                       >
                         <Text
@@ -298,12 +325,16 @@ export default function OnboardingCommunitiesScreen({ navigation, route }: Props
             onPress={handleContinue}
             disabled={saving || loading}
             accessibilityRole="button"
-            style={[styles.primaryButton, (saving || loading) && styles.primaryButtonDisabled]}
+            style={({ pressed }) => [
+              styles.primaryButton,
+              (saving || loading) && styles.primaryButtonDisabled,
+              pressed && !saving && !loading && styles.primaryButtonPressed,
+            ]}
           >
             <Text style={styles.primaryButtonText}>{saving ? 'Gemmer...' : 'Fortsæt'}</Text>
           </Pressable>
         </View>
-      </View>
+      </Animated.View>
     </SafeAreaView>
   );
 }
@@ -317,12 +348,11 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     content: {
       flex: 1,
       paddingHorizontal: theme.spacing[6],
-      paddingTop: theme.spacing[8],
-      paddingBottom: theme.spacing[6],
+      paddingTop: theme.spacing[7],
     },
     header: {
       gap: theme.spacing[3],
-      marginBottom: theme.spacing[4],
+      marginBottom: theme.spacing[3],
     },
     title: {
       maxWidth: 340,
@@ -334,31 +364,31 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: theme.spacing[2],
-      marginBottom: theme.spacing[4],
-      minHeight: theme.spacing[8],
+      marginBottom: theme.spacing[3],
+      minHeight: theme.spacing[7],
     },
     summaryChip: {
       borderRadius: theme.radius.lg,
-      paddingHorizontal: theme.spacing[3],
-      paddingVertical: theme.spacing[2],
-      backgroundColor: theme.colors.bg.surface,
+      paddingHorizontal: theme.spacing[2],
+      paddingVertical: theme.spacing[1],
+      backgroundColor: theme.colors.bg.subtle,
       borderWidth: theme.layout.borderWidth,
-      borderColor: theme.colors.border.subtle,
+      borderColor: theme.colors.border.default,
     },
     sectionTitle: {
-      marginBottom: theme.spacing[3],
+      marginBottom: theme.spacing[2],
     },
     listWrap: {
       flex: 1,
       minHeight: 0,
-      marginBottom: theme.spacing[4],
+      marginBottom: 0,
     },
     list: {
       flex: 1,
     },
     listContent: {
-      gap: theme.spacing[3],
-      paddingBottom: theme.spacing[2],
+      gap: theme.spacing[2],
+      paddingBottom: theme.spacing[5],
     },
     loadingState: {
       flex: 1,
@@ -367,7 +397,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
     emptyState: {
       borderRadius: theme.radius.xl,
-      padding: theme.spacing[5],
+      padding: theme.spacing[4],
       backgroundColor: theme.colors.bg.surface,
       borderWidth: theme.layout.borderWidth,
       borderColor: theme.colors.border.subtle,
@@ -383,12 +413,14 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       borderRadius: theme.radius.xl,
       borderWidth: theme.layout.borderWidth,
       borderColor: theme.colors.border.subtle,
-      padding: theme.spacing[4],
-      gap: theme.spacing[3],
+      paddingHorizontal: theme.spacing[4],
+      paddingVertical: theme.spacing[2],
+      gap: theme.spacing[2],
     },
     cardSelected: {
       borderColor: theme.colors.primary,
       backgroundColor: theme.colors.bg.card,
+      transform: [{ scale: 0.985 }],
     },
     cardMedia: {
       width: theme.spacing[12],
@@ -414,12 +446,12 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
     followButton: {
       minWidth: 84,
-      height: theme.spacing[9],
-      paddingHorizontal: theme.spacing[3],
+      height: theme.spacing[8],
+      paddingHorizontal: theme.spacing[2],
       borderRadius: theme.radius.pill,
-      backgroundColor: theme.colors.bg.subtle,
+      backgroundColor: theme.colors.bg.surface,
       borderWidth: theme.layout.borderWidth,
-      borderColor: theme.colors.border.default,
+      borderColor: theme.colors.primary,
       alignItems: 'center',
       justifyContent: 'center',
       flexShrink: 0,
@@ -431,6 +463,10 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     followButtonDisabled: {
       opacity: 0.6,
     },
+    followButtonPressed: {
+      opacity: 0.92,
+      transform: [{ scale: 0.98 }],
+    },
     followButtonText: {
       fontSize: 14,
       fontWeight: '600',
@@ -441,7 +477,11 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
     footer: {
       paddingTop: theme.spacing[2],
-      gap: theme.spacing[3],
+      paddingBottom: theme.spacing[4],
+      gap: theme.spacing[2],
+      backgroundColor: theme.colors.bg.canvas,
+      borderTopWidth: theme.layout.borderWidth,
+      borderTopColor: theme.colors.border.subtle,
     },
     skipButton: {
       alignItems: 'center',
@@ -463,5 +503,9 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       fontSize: 18,
       fontWeight: '600',
       color: theme.colors.text.inverse,
+    },
+    primaryButtonPressed: {
+      opacity: 0.94,
+      transform: [{ scale: 0.985 }],
     },
   });
