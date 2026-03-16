@@ -260,7 +260,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       shadowOpacity: 0.08,
       shadowRadius: 16,
       shadowOffset: { width: 0, height: 2 },
-      elevation: theme.elevation?.none ?? undefined,
+      elevation: 0,
       marginBottom: theme.spacing[1],
     },
     avatarSurface: {

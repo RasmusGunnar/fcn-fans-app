@@ -435,7 +435,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     primaryButtonText: {
       fontSize: 18,
       fontWeight: '600',
-      color: theme.colors.white,
+      color: theme.colors.text.inverse,
     },
     primaryButtonTextDisabled: {
       fontSize: 18,
