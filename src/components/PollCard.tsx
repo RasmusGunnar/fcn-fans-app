@@ -259,13 +259,13 @@ export function PollCard({ pollData, postId, profileMap }: PollCardProps) {
             {isExpired ? 'Afsluttet' : 'Afstemning'}
           </Text>
         </View>
-        <Text variant="caption" color="secondary" style={styles.totalVotesText}>
-          {totalVotes} stemme{totalVotes === 1 ? '' : 'r'}
-        </Text>
       </View>
 
       <Text variant="bodyBold" style={styles.questionText}>
         {question}
+      </Text>
+      <Text variant="caption" color="muted" style={styles.totalVotesInlineText}>
+        {totalVotes} stemme{totalVotes === 1 ? '' : 'r'} i alt
       </Text>
 
       <View style={styles.optionsList}>
@@ -309,116 +309,126 @@ export function PollCard({ pollData, postId, profileMap }: PollCardProps) {
               onPress={() => handleVote(option.id)}
               disabled={hasVoted || submitting || isExpired}
             >
-              <View style={styles.optionFillTrack} pointerEvents="none">
-                <Animated.View
-                  style={[
-                    styles.optionFill,
-                    {
-                      backgroundColor: accentColor,
-                      width: animatedWidth,
-                      opacity: totalVotes > 0 ? (isSelected ? 0.08 : 0.03) : 0,
-                    },
-                  ]}
-                />
-              </View>
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.optionFillLayer,
+                  {
+                    backgroundColor: accentColor,
+                    width: animatedWidth,
+                    opacity: totalVotes > 0 ? (isSelected ? 0.22 : 0.14) : 0,
+                  },
+                ]}
+              />
 
               <View style={styles.optionContent}>
-                <View style={styles.optionTopRow}>
-                  <View
-                    style={[
-                      styles.radioOuter,
-                      {
-                        borderColor: isSelected ? accentColor : theme.colors.border.subtle,
-                        backgroundColor: isSelected ? subtleAccent : theme.colors.bg.subtle,
-                      },
-                    ]}
-                  >
+                <View style={styles.optionHeaderRow}>
+                  <View style={styles.optionTitleWrap}>
                     <View
                       style={[
-                        styles.radioInner,
+                        styles.radioOuter,
                         {
-                          backgroundColor: accentColor,
-                          opacity: isSelected ? 1 : 0,
-                          transform: [{ scale: isSelected ? 1 : 0.6 }],
+                          borderColor: isSelected ? accentColor : theme.colors.border.subtle,
+                          backgroundColor: isSelected ? subtleAccent : theme.colors.bg.subtle,
                         },
                       ]}
-                    />
-                  </View>
-                  <View style={styles.optionMain}>
-                    <View style={styles.optionLabelRow}>
+                    >
+                      <View
+                        style={[
+                          styles.radioInner,
+                          {
+                            backgroundColor: accentColor,
+                            opacity: isSelected ? 1 : 0,
+                            transform: [{ scale: isSelected ? 1 : 0.6 }],
+                          },
+                        ]}
+                      />
+                    </View>
                       <Text variant="body" style={styles.optionText}>
                         {option.text}
                       </Text>
-
-                      <View style={styles.optionRightMeta}>
-                        {isExpired && isWinner ? (
-                          <Text
-                            variant="caption"
-                            style={[styles.metaBadgeText, { color: accentColor }]}
-                          >
-                            Vinder
-                          </Text>
-                        ) : !isExpired && isSelected ? (
-                          <Text
-                            variant="caption"
-                            style={[styles.metaBadgeText, { color: accentColor }]}
-                          >
-                            Dit valg
-                          </Text>
-                        ) : null}
-
-                        {voterIds.length > 0 ? (
-                          <Pressable
-                            style={styles.avatarRow}
-                            onPress={() => {
-                              setActiveOptionVoters(voterIds);
-                              setVoterListVisible(true);
-                            }}
-                          >
-                            {visibleVoters.map((voterId, index) => (
-                              <View
-                                key={`${option.id}:${voterId}`}
-                                style={[
-                                  styles.avatarBubble,
-                                  index > 0 && styles.avatarBubbleOverlap,
-                                  {
-                                    borderColor: theme.colors.bg.card,
-                                    backgroundColor: theme.colors.bg.card,
-                                  },
-                                ]}
-                              >
-                                <Avatar
-                                  userId={voterId}
-                                  avatarUrl={resolvedVoterProfiles[voterId]?.avatar_url}
-                                  size={24}
-                                  label={resolvedVoterProfiles[voterId]?.display_name || 'Fan'}
-                                />
-                              </View>
-                            ))}
-
-                            {extraVoterCount > 0 ? (
-                              <View
-                                style={[
-                                  styles.avatarBubble,
-                                  visibleVoters.length > 0 && styles.avatarBubbleOverlap,
-                                  {
-                                    borderColor: theme.colors.bg.card,
-                                    backgroundColor: subtleAccentStrong,
-                                  },
-                                ]}
-                              >
-                                <Text
-                                  variant="caption"
-                                  style={[styles.avatarInitials, { color: accentColor }]}
-                                >
-                                  +{extraVoterCount}
-                                </Text>
-                              </View>
-                            ) : null}
-                          </Pressable>
-                        ) : null}
-                      </View>
+                    <View style={styles.optionStatusSlot}>
+                      {isExpired && isWinner ? (
+                        <Text
+                          variant="caption"
+                          style={[styles.metaBadgeText, { color: accentColor }]}
+                        >
+                          Vinder
+                        </Text>
+                      ) : !isExpired && isSelected ? (
+                        <Text
+                          variant="caption"
+                          style={[styles.metaBadgeText, { color: accentColor }]}
+                        >
+                          Dit valg
+                        </Text>
+                      ) : null}
                     </View>
+                  </View>
+
+                  <Text variant="caption" style={styles.percentageText}>
+                    {percentage}%
+                  </Text>
+                </View>
+
+                <View style={styles.optionFooterRow}>
+                  <Text variant="caption" color="muted" style={styles.voteCountText}>
+                    {votes} stemme{votes === 1 ? '' : 'r'}
+                  </Text>
+
+                  <View style={styles.avatarSlot}>
+                    {voterIds.length > 0 ? (
+                      <Pressable
+                        style={styles.avatarRow}
+                        onPress={() => {
+                          setActiveOptionVoters(voterIds);
+                          setVoterListVisible(true);
+                        }}
+                      >
+                        {visibleVoters.map((voterId, index) => (
+                          <View
+                            key={`${option.id}:${voterId}`}
+                            style={[
+                              styles.avatarBubble,
+                              index > 0 && styles.avatarBubbleOverlap,
+                              {
+                                borderColor: theme.colors.bg.card,
+                                backgroundColor: theme.colors.bg.card,
+                              },
+                            ]}
+                          >
+                            <Avatar
+                              userId={voterId}
+                              avatarUrl={resolvedVoterProfiles[voterId]?.avatar_url}
+                              size={24}
+                              label={resolvedVoterProfiles[voterId]?.display_name || 'Fan'}
+                            />
+                          </View>
+                        ))}
+
+                        {extraVoterCount > 0 ? (
+                          <View
+                            style={[
+                              styles.avatarBubble,
+                              visibleVoters.length > 0 && styles.avatarBubbleOverlap,
+                              {
+                                borderColor: theme.colors.bg.card,
+                                backgroundColor: subtleAccentStrong,
+                              },
+                            ]}
+                          >
+                            <Text
+                              variant="caption"
+                              style={[styles.avatarInitials, { color: accentColor }]}
+                            >
+                              +{extraVoterCount}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </Pressable>
+                    ) : (
+                      <View style={styles.avatarRowPlaceholder} />
+                    )}
                   </View>
                 </View>
               </View>
@@ -452,7 +462,7 @@ function createStyles(theme: ReturnType<typeof useTheme>) {
     metadataRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
+      justifyContent: 'flex-start',
       marginTop: theme.spacing[1],
     },
     badge: {
@@ -467,16 +477,16 @@ function createStyles(theme: ReturnType<typeof useTheme>) {
       fontSize: 10,
       letterSpacing: 0.1,
     },
-    totalVotesText: {
-      fontWeight: '400',
-      fontSize: 10,
-      opacity: 0.44,
-    },
     questionText: {
       color: theme.colors.text.primary,
       fontWeight: '800',
       fontSize: 18,
       lineHeight: 24,
+    },
+    totalVotesInlineText: {
+      fontSize: 10,
+      lineHeight: 14,
+      marginTop: -theme.spacing[1] / 2,
     },
     optionsList: {
       gap: theme.spacing[1],
@@ -484,76 +494,109 @@ function createStyles(theme: ReturnType<typeof useTheme>) {
     optionCard: {
       borderWidth: 1,
       borderRadius: theme.radius.md,
-      overflow: 'hidden',
       position: 'relative',
-      minHeight: 44,
+      overflow: 'hidden',
+      minHeight: 60,
     },
-    optionFillTrack: {
-      ...StyleSheet.absoluteFillObject,
-      justifyContent: 'flex-end',
-    },
-    optionFill: {
-      height: '100%',
+    optionFillLayer: {
+      position: 'absolute',
+      left: 0,
+      top: 0,
+      bottom: 0,
       borderRadius: theme.radius.md,
     },
     optionContent: {
       paddingHorizontal: theme.spacing[2],
-      paddingVertical: theme.spacing[1] + 1,
-      justifyContent: 'center',
+      paddingVertical: theme.spacing[0] + 6,
+      gap: theme.spacing[0] + 1,
+      position: 'relative',
+      zIndex: 1,
     },
-    optionTopRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      minHeight: 28,
-      gap: theme.spacing[1] + 2,
-    },
-    optionMain: {
-      flex: 1,
-      gap: theme.spacing[1],
-    },
-    optionLabelRow: {
+    optionHeaderRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      gap: theme.spacing[2],
+      minHeight: 18,
+      gap: theme.spacing[1],
+    },
+    optionTitleWrap: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing[0] + 6,
     },
     radioOuter: {
-      width: 20,
-      height: 20,
+      width: 18,
+      height: 18,
       borderRadius: theme.radius.pill,
-      borderWidth: 2,
+      borderWidth: 1.5,
       alignItems: 'center',
       justifyContent: 'center',
+      alignSelf: 'center',
     },
     radioInner: {
-      width: 9,
-      height: 9,
+      width: 8,
+      height: 8,
       borderRadius: theme.radius.pill,
     },
     optionText: {
       color: theme.colors.text.primary,
       fontWeight: '600',
-      lineHeight: 20,
+      fontSize: 13,
+      lineHeight: 16,
       flex: 1,
+    },
+    optionStatusSlot: {
+      minWidth: 46,
+      alignItems: 'flex-start',
+      justifyContent: 'center',
+      minHeight: 12,
+    },
+    optionFooterRow: {
+      minHeight: 16,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: theme.spacing[1],
+    },
+    voteCountText: {
+      fontSize: 9,
+      lineHeight: 11,
+    },
+    percentageText: {
+      color: theme.colors.text.primary,
+      fontWeight: '700',
+      fontSize: 10,
+      lineHeight: 12,
+      textAlign: 'right',
     },
     metaBadgeText: {
       fontWeight: '700',
-      fontSize: 10,
+      fontSize: 8,
+      lineHeight: 10,
+      paddingHorizontal: theme.spacing[1],
+      paddingVertical: theme.layout.borderWidth,
+      borderRadius: theme.radius.pill,
+      backgroundColor: theme.colors.bg.card,
     },
-    optionRightMeta: {
+    avatarSlot: {
+      minWidth: 52,
+      minHeight: 16,
       alignItems: 'flex-end',
       justifyContent: 'center',
-      alignSelf: 'center',
-      minWidth: 44,
     },
     avatarRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
     },
+    avatarRowPlaceholder: {
+      width: 52,
+      height: 16,
+    },
     avatarBubble: {
-      width: 24,
-      height: 24,
+      width: 18,
+      height: 18,
       borderRadius: theme.radius.pill,
       borderWidth: 1,
       alignItems: 'center',
@@ -561,11 +604,11 @@ function createStyles(theme: ReturnType<typeof useTheme>) {
       overflow: 'hidden',
     },
     avatarBubbleOverlap: {
-      marginLeft: -(theme.spacing[1] + 1),
+      marginLeft: -(theme.spacing[1]),
     },
     avatarInitials: {
       fontWeight: '700',
-      fontSize: 8,
+      fontSize: 7,
     },
   });
 }

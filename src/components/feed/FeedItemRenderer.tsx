@@ -37,6 +37,7 @@ export function FeedItemRenderer(props: FeedItemRendererProps): React.ReactEleme
     item,
     itemKey,
     user,
+    isAppAdmin,
     likeState,
     commentCount,
     commentPreviews,
@@ -70,6 +71,8 @@ export function FeedItemRenderer(props: FeedItemRendererProps): React.ReactEleme
           communityMap={communityMap}
           profileMap={safeProfileMap}
           categoryKey={categoryKey}
+          currentUserId={user?.id}
+          currentIsAppAdmin={isAppAdmin}
           liked={likeState.liked}
           likes={likeState.likes}
           commentsCount={commentCount}
@@ -103,6 +106,7 @@ export function FeedItemRenderer(props: FeedItemRendererProps): React.ReactEleme
           key={itemKey}
           newsItem={item.data}
           currentUserId={user?.id}
+          currentIsAppAdmin={isAppAdmin}
           userAvatarUrl={user?.user_metadata?.avatar_url}
           communityMap={communityMap || {}}
           profileMap={safeProfileMap}

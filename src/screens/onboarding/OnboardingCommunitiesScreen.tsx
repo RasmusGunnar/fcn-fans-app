@@ -381,7 +381,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     listWrap: {
       flex: 1,
       minHeight: 0,
-      marginBottom: 0,
+      marginBottom: theme.spacing[0],
     },
     list: {
       flex: 1,

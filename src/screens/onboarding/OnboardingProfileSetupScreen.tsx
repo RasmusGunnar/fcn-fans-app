@@ -297,7 +297,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       shadowOpacity: 0.12,
       shadowRadius: 14,
       shadowOffset: { width: 0, height: 4 },
-      elevation: 2,
+      elevation: theme.elevation.sm.android,
       marginBottom: theme.spacing[1],
     },
     avatarSurface: {

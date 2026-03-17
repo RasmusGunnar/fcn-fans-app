@@ -4,6 +4,7 @@ import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Crypto from 'expo-crypto';
 import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
+import { isSystemAdmin } from '../services/rbac';
 
 type User = any;
 type Session = any;
@@ -35,17 +36,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const checkAdminStatus = async (userId: string) => {
       try {
-        // Use RPC function to check admin status (bypasses RLS)
-        const { data: isAdmin, error } = await supabase.rpc('is_app_admin');
-
+        // Primary path: RPC function (bypasses RLS)
+        const { data: rpcIsAdmin, error } = await supabase.rpc('is_app_admin');
         if (error) {
-          throw error;
+          logger.warn('[AuthProvider] RPC admin check failed, falling back to direct lookup:', error);
+        }
+
+        let resolvedIsAdmin = !error && !!rpcIsAdmin;
+
+        // Fallback: direct self-row lookup in app_admins via existing RLS policy.
+        // This keeps the underlying source of truth the same while avoiding silent false negatives.
+        if (!resolvedIsAdmin) {
+          const directIsAdmin = await isSystemAdmin();
+          if (directIsAdmin && !rpcIsAdmin) {
+            logger.warn('[AuthProvider] Admin fallback activated: RPC returned false but app_admins lookup returned true', {
+              userId,
+            });
+          }
+          resolvedIsAdmin = directIsAdmin;
         }
 
         if (mounted) {
-          setIsAppAdmin(!!isAdmin);
+          setIsAppAdmin(resolvedIsAdmin);
           if (__DEV__) {
-            logger.log('[AuthProvider] Admin check result:', { userId, isAdmin: !!isAdmin });
+            logger.log('[AuthProvider] Admin check result:', {
+              userId,
+              rpcIsAdmin: !error && !!rpcIsAdmin,
+              resolvedIsAdmin,
+            });
           }
         }
       } catch (e) {

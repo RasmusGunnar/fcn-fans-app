@@ -15,6 +15,7 @@ import { defaultTheme } from '../../theme';
 import type { CategoryKey } from '../../theme/categories';
 import { Post } from '../../types/post';
 import { resolveActorLine, type ProfileMap } from '../../utils/actor';
+import { useCommunityRole } from '../../hooks/useCommunityRole';
 import { canDeleteFeedItem, canEditPost } from '../../utils/permissions';
 import { Avatar } from '../Avatar';
 import { FeedVideo } from '../feed/FeedVideo';
@@ -188,6 +189,8 @@ interface FanPostCardProps {
   communityMap?: Record<string, string>;
   profileMap?: ProfileMap;
   categoryKey?: CategoryKey;
+  currentUserId?: string;
+  currentIsAppAdmin?: boolean;
   liked?: boolean;
   likes?: number;
   commentsCount?: number;
@@ -209,6 +212,8 @@ export function FanPostCard({
   communityMap,
   profileMap,
   categoryKey,
+  currentUserId,
+  currentIsAppAdmin,
   liked = post.likedByMe,
   likes = post.likesCount,
   commentsCount = 0,
@@ -231,6 +236,15 @@ export function FanPostCard({
   const [imageLoadError, setImageLoadError] = useState(false);
 
   const { user, isAppAdmin } = useAuth();
+  const viewerUserId = currentUserId ?? user?.id;
+  const viewerIsAppAdmin = currentIsAppAdmin ?? isAppAdmin;
+  const postAuthorId = post.authorId ?? (post as any).author_id ?? null;
+  const postActorType = post.actorType ?? (post as any).actor_type ?? 'user';
+  const postActorId = post.actorId ?? (post as any).actor_id ?? postAuthorId;
+  const postCommunityId = post.communityId ?? (post as any).community_id ?? null;
+  const authoredCommunityId =
+    postActorType === 'community' ? postActorId || postCommunityId || null : null;
+  const { role: authoredCommunityRole } = useCommunityRole(authoredCommunityId);
 
   // BASELINE: Deterministic media parsing with DEV logging
   const mediaArray = useMemo(() => normalizeMedia(post.media), [post.media]);
@@ -266,7 +280,12 @@ export function FanPostCard({
 
   // Permission checks - use isAppAdmin from context
   // TODO: Add community role when posts have community_id
-  const showEditOption = canEditPost(user?.id, isAppAdmin, { author_id: post.authorId });
+  const showEditOption = canEditPost(
+    viewerUserId,
+    viewerIsAppAdmin,
+    { author_id: postAuthorId ?? undefined },
+    authoredCommunityRole,
+  );
 
   const handleEditPost = () => {
     setIsEditing(true);
@@ -303,14 +322,14 @@ export function FanPostCard({
   };
 
   // Build card behavior model to determine category, name line, and press behavior
-  const communityId = (post as any).communityId ?? (post as any).community_id ?? null;
-  const isCommunityPost = !!communityId;
+  const communityId = postCommunityId;
+  const isCommunityPost = postActorType === 'community' || !!authoredCommunityId;
   const showDeleteOption = canDeleteFeedItem({
-    isAppAdmin,
-    viewerUserId: user?.id,
-    itemAuthorId: post.authorId,
+    isAppAdmin: viewerIsAppAdmin,
+    viewerUserId,
+    itemAuthorId: postAuthorId ?? undefined,
     itemActorType: isCommunityPost ? 'community' : 'user',
-    itemCommunityRole: null,
+    itemCommunityRole: authoredCommunityRole,
   });
   const postMenuOptions: OptionsMenuOption[] = [];
   if (showEditOption) {
@@ -347,7 +366,7 @@ export function FanPostCard({
   const resolvedCategoryKey = categoryKey ?? 'fan'; // eslint-disable-line @typescript-eslint/no-unused-vars
   const resolvedAuthor = resolveActorLine({
     actorType: isCommunityPost ? 'community' : 'user',
-    authorId: post.authorId,
+    authorId: postAuthorId ?? undefined,
     authorEmail: authorProfile?.display_name || (post as any).authorName || undefined,
     profileMap,
     communityName: isCommunityPost ? (communityName ?? undefined) : undefined,
@@ -359,12 +378,14 @@ export function FanPostCard({
       ? `${groupDisplay} · ${timeAgo}`
       : timeAgo;
 
+  const hasRightSlot = postMenuOptions.length > 0;
+
   return (
     <CardRoot
       targetType="post"
       targetId={post.id}
-      currentUserId={user?.id}
-      isAppAdmin={isAppAdmin}
+      currentUserId={viewerUserId}
+      isAppAdmin={viewerIsAppAdmin}
       onOpenDetail={computedOnOpenDetail}
       commentPreviews={commentPreviews}
       onNewComment={onNewComment}
@@ -379,7 +400,7 @@ export function FanPostCard({
       <CardHeader
         avatarSlot={
           <Avatar
-            userId={post.authorId}
+            userId={postAuthorId ?? undefined}
             avatarUrl={authorProfile?.avatar_url}
             size={40}
             label={authorProfile?.display_name || post.authorName || 'Fan'}
@@ -389,15 +410,11 @@ export function FanPostCard({
         fallbackTitle={headerTitle}
         subtitle={headerSubtitle}
         onPressAuthor={
-          post.authorId
-            ? () => navigation.navigate('PublicProfile', { userId: post.authorId })
+          postAuthorId
+            ? () => navigation.navigate('PublicProfile', { userId: postAuthorId })
             : undefined
         }
-        rightSlot={
-          (showEditOption || showDeleteOption) && postMenuOptions.length > 0 ? (
-            <OptionsMenu options={postMenuOptions} />
-          ) : undefined
-        }
+        rightSlot={hasRightSlot ? <OptionsMenu options={postMenuOptions} /> : undefined}
       />
       {isEditing ? (
         <View style={styles.editContainer}>

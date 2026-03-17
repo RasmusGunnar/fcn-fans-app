@@ -48,13 +48,15 @@ export function FeedCardHeader({
     <View style={styles.container}>
       {showHeaderRow && (
         <View style={styles.header}>
-          {onPressAuthor ? (
-            <Pressable onPress={onPressAuthor} style={styles.authorArea}>
-              {authorContent}
-            </Pressable>
-          ) : (
-            authorContent
-          )}
+          <View style={styles.authorArea}>
+            {onPressAuthor ? (
+              <Pressable onPress={onPressAuthor} style={styles.authorContent}>
+                {authorContent}
+              </Pressable>
+            ) : (
+              <View style={styles.authorContent}>{authorContent}</View>
+            )}
+          </View>
           {rightSlot ? <View style={styles.rightSlot}>{rightSlot}</View> : null}
         </View>
       )}
@@ -68,25 +70,46 @@ function createStyles(theme: Theme) {
       marginTop: theme.spacing[0],
       marginBottom: theme.spacing[1],
       gap: theme.spacing[1],
+      position: 'relative',
+      zIndex: 2,
+      elevation: theme.elevation.sm.android,
     },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
+      justifyContent: 'space-between',
+      position: 'relative',
+      zIndex: 2,
+      elevation: theme.elevation.sm.android,
     },
     headerInfo: {
       flex: 1,
+      minWidth: 0,
+      flexShrink: 1,
       marginLeft: theme.spacing[3],
     },
     headerInfoNoAvatar: {
       marginLeft: theme.spacing[0],
     },
     authorArea: {
+      flex: 1,
+      minWidth: 0,
+      flexShrink: 1,
+    },
+    authorContent: {
       flexDirection: 'row' as const,
       alignItems: 'center' as const,
       flex: 1,
+      minWidth: 0,
+      flexShrink: 1,
     },
     rightSlot: {
       marginLeft: theme.spacing[1],
+      position: 'relative',
+      zIndex: 3,
+      elevation: theme.elevation.md.android,
+      flexShrink: 0,
+      alignSelf: 'center',
     },
     title: {
       fontSize: 14,
