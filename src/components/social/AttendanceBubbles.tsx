@@ -9,6 +9,7 @@ interface AttendanceBubblesProps {
   max?: number;
   size?: number;
   textVariant?: 'small' | 'body' | 'caption' | 'h1' | 'h2' | 'h3' | 'bodyBold';
+  showCountText?: boolean;
 }
 
 export function AttendanceBubbles({
@@ -17,6 +18,7 @@ export function AttendanceBubbles({
   max = 5,
   size = 20,
   textVariant = 'caption',
+  showCountText = true,
 }: AttendanceBubblesProps) {
   const theme = useTheme();
   const displayAvatars = avatars.slice(0, max);
@@ -41,9 +43,18 @@ export function AttendanceBubbles({
         </View>
       )}
       {/* Count text */}
-      <Text variant={textVariant} style={{ marginLeft: theme.spacing[2], color: theme.colors.text.primary, fontWeight: '600' }}>
-        {count} deltager{count === 1 ? '' : 'e'}
-      </Text>
+      {showCountText ? (
+        <Text
+          variant={textVariant}
+          style={{
+            marginLeft: theme.spacing[2],
+            color: theme.colors.text.primary,
+            fontWeight: '600',
+          }}
+        >
+          {count} deltager{count === 1 ? '' : 'e'}
+        </Text>
+      ) : null}
     </View>
   );
 }

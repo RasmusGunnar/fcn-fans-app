@@ -9,12 +9,19 @@ import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar } from '../components/Avatar';
 import { Text } from '../components/ui';
-import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
+import { fetchAttendees } from '../services/attendance';
 import { defaultTheme as theme } from '../theme';
 import { resolveAvatarUrl } from '../utils/avatar';
 
-type EventAttendeesRouteProp = RouteProp<{ EventAttendees: { eventId: string } }, 'EventAttendees'>;
+type EventAttendeesRouteProp = RouteProp<
+  {
+    EventAttendees:
+      | { eventId: string; entityType?: 'event'; title?: string }
+      | { entityId: string; entityType: 'event' | 'match'; title?: string };
+  },
+  'EventAttendees'
+>;
 
 interface Attendee {
   user_id: string;
@@ -25,49 +32,22 @@ interface Attendee {
 export default function EventAttendeesScreen() {
   const navigation = useNavigation();
   const route = useRoute<EventAttendeesRouteProp>();
-  const { eventId } = route.params;
+  const entityId = 'entityId' in route.params ? route.params.entityId : route.params.eventId;
+  const entityType = route.params.entityType ?? 'event';
+  const screenTitle = route.params.title ?? 'Deltagere';
   const [attendees, setAttendees] = useState<Attendee[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const loadAttendees = async () => {
     setLoading(true);
+    setError(null);
     try {
-      // Get all RSVPs with status 'going' for this event
-      const { data: rsvps, error: rsvpsError } = await supabase
-        .from('rsvps')
-        .select('user_id')
-        .eq('entity_type', 'event')
-        .eq('entity_id', eventId)
-        .eq('status', 'going')
-        .order('created_at', { ascending: false });
-
-      if (rsvpsError) throw rsvpsError;
-
-      if (!rsvps || rsvps.length === 0) {
-        setAttendees([]);
-        setLoading(false);
-        return;
-      }
-
-      // Get profile info for all attendees
-      const userIds = rsvps.map((r) => r.user_id);
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select('id, display_name, avatar_url')
-        .in('id', userIds);
-
-      if (profilesError) throw profilesError;
-
-      // Map to attendees list
-      const attendeesList: Attendee[] = (profiles || []).map((p) => ({
-        user_id: p.id,
-        display_name: p.display_name,
-        avatar_url: p.avatar_url,
-      }));
-
+      const attendeesList = await fetchAttendees({ entityType, entityId });
       setAttendees(attendeesList);
-    } catch (error) {
-      logger.error('Error loading attendees:', error);
+    } catch (loadError: any) {
+      logger.error('Error loading attendees:', loadError);
+      setError(loadError?.message || 'Kunne ikke hente deltagere');
     } finally {
       setLoading(false);
     }
@@ -76,7 +56,7 @@ export default function EventAttendeesScreen() {
   useEffect(() => {
     loadAttendees();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventId]);
+  }, [entityId, entityType]);
 
   const renderAttendee = ({ item }: { item: Attendee }) => (
     <View style={styles.attendeeItem}>
@@ -102,7 +82,7 @@ export default function EventAttendeesScreen() {
           />
         </Pressable>
         <Text variant="h3" color="inverse" style={styles.headerTitle}>
-          Deltagere
+          {screenTitle}
         </Text>
         <View style={{ flex: 1 }} />
       </View>
@@ -112,6 +92,17 @@ export default function EventAttendeesScreen() {
           <ActivityIndicator size="large" color={theme.colors.primary} />
           <Text variant="body" color="secondary" style={styles.loadingText}>
             Henter deltagere...
+          </Text>
+        </View>
+      ) : error ? (
+        <View style={styles.centered}>
+          <Ionicons
+            name="alert-circle-outline"
+            size={theme.spacing[16]}
+            color={theme.colors.error}
+          />
+          <Text variant="body" color="secondary" style={styles.emptyText}>
+            {error}
           </Text>
         </View>
       ) : attendees.length === 0 ? (

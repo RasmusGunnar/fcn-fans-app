@@ -441,6 +441,43 @@ export async function fetchBusTripById(id: string): Promise<BusTrip | null> {
   }
 }
 
+async function fetchEventOrganizer(event: Event): Promise<FanGroup | null> {
+  const organizerId = event.organizer_group_id ?? event.organizer_id ?? null;
+  if (!organizerId) return null;
+
+  // Current app flow creates community-backed events, but older data may still point at fan_groups.
+  if (event.organizer_type === 'community') {
+    const { data: community, error: communityError } = await supabase
+      .from('communities')
+      .select('id, name, description, avatar_url')
+      .eq('id', organizerId)
+      .maybeSingle();
+
+    if (!communityError && community) {
+      return {
+        id: community.id,
+        name: community.name,
+        description: community.description ?? null,
+        logo_url: community.avatar_url ?? null,
+        created_at: '',
+      };
+    }
+  }
+
+  const { data: fanGroup, error: fanGroupError } = await supabase
+    .from('fan_groups')
+    .select('id, name, description, logo_url, created_at')
+    .eq('id', organizerId)
+    .maybeSingle();
+
+  if (fanGroupError) {
+    logger.warn('[eventsApi] Error fetching event organizer:', fanGroupError);
+    return null;
+  }
+
+  return (fanGroup as FanGroup | null) ?? null;
+}
+
 /**
  * Fetch single event by ID (with organizer)
  */
@@ -454,7 +491,9 @@ export async function fetchEventById(id: string): Promise<Event | null> {
       return null;
     }
 
-    return data as unknown as Event;
+    const event = data as unknown as Event;
+    event.organizer = await fetchEventOrganizer(event);
+    return event;
   } catch (err) {
     logger.warn('[eventsApi] Error fetching event by id', err);
     return null;

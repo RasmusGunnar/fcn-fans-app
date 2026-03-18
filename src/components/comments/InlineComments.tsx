@@ -48,6 +48,13 @@ interface InlineCommentsProps {
   variant?: 'inline' | 'screen'; // Default 'inline'
   maxInlineComments?: number; // Default 2 for inline mode
   keyboardVerticalOffsetOverride?: number; // For screen mode keyboard handling
+  titleOverride?: string;
+  composerPlaceholder?: string;
+  quickActionChips?: string[];
+  quickActionMode?: 'prefill' | 'submit';
+  quickActionSuccessText?: string;
+  quickActionFeedbackForValue?: (value: string) => string;
+  replyModeLabel?: string;
 }
 
 export function InlineComments({
@@ -61,18 +68,27 @@ export function InlineComments({
   variant = 'inline',
   maxInlineComments = 2,
   keyboardVerticalOffsetOverride,
+  titleOverride,
+  composerPlaceholder,
+  quickActionChips = [],
+  quickActionMode = 'prefill',
+  quickActionSuccessText,
+  quickActionFeedbackForValue,
+  replyModeLabel,
 }: InlineCommentsProps) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [commentText, setCommentText] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [quickActionFeedback, setQuickActionFeedback] = useState<string | null>(null);
   const [activeReplyToCommentId, setActiveReplyToCommentId] = useState<string | null>(null);
   const [activeReplyToDisplayName, setActiveReplyToDisplayName] = useState<string | null>(null);
   const [expandedReplyIds, setExpandedReplyIds] = useState<Set<string>>(new Set());
   const inputRef = useRef<TextInput | null>(null);
   const listRef = useRef<FlatList<Comment> | null>(null);
   const commentPositions = useRef<Record<string, number>>({});
+  const quickActionFeedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const keyboardVerticalOffset =
@@ -193,6 +209,14 @@ export function InlineComments({
     fetchComments();
   }, [fetchComments]);
 
+  useEffect(() => {
+    return () => {
+      if (quickActionFeedbackTimeoutRef.current) {
+        clearTimeout(quickActionFeedbackTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const totalCommentCount = comments.reduce(
     (total, comment) => total + 1 + comment.replies.length,
     0,
@@ -205,15 +229,17 @@ export function InlineComments({
     }
   }, [onCommentCountChange, totalCommentCount]);
 
-  const handleSubmitComment = async () => {
-    if (!commentText.trim()) {
+  const handleSubmitComment = async (overrideText?: string) => {
+    const resolvedText = (overrideText ?? commentText).trim();
+
+    if (!resolvedText) {
       Alert.alert('Fejl', 'Kommentar kan ikke være tom');
-      return;
+      return false;
     }
 
     if (!currentUserId) {
       Alert.alert('Fejl', 'Du skal være logget ind for at kommentere');
-      return;
+      return false;
     }
 
     setSubmitting(true);
@@ -225,7 +251,7 @@ export function InlineComments({
           author_id: currentUserId,
           target_type: targetType,
           target_id: targetId,
-          text: commentText.trim(),
+          text: resolvedText,
         })
         .select('id, created_at, author_id, text, parent_id')
         .single();
@@ -249,15 +275,19 @@ export function InlineComments({
       };
 
       setComments([...comments, newComment]); // Add to bottom (Instagram-style)
-      setCommentText('');
+      if (!overrideText) {
+        setCommentText('');
+      }
 
       // Notify parent of new comment for preview update
       if (onNewComment) {
         onNewComment(newComment);
       }
+      return true;
     } catch (err: any) {
       console.error('[InlineComments] Submit error:', err);
       Alert.alert('Fejl', 'Kunne ikke sende kommentar');
+      return false;
     } finally {
       setSubmitting(false);
     }
@@ -442,6 +472,28 @@ export function InlineComments({
       return;
     }
     handleSubmitComment();
+  };
+
+  const handleQuickAction = async (value: string) => {
+    if (quickActionMode === 'submit') {
+      const ok = await handleSubmitComment(value);
+      if (!ok) return;
+      if (quickActionFeedbackTimeoutRef.current) {
+        clearTimeout(quickActionFeedbackTimeoutRef.current);
+      }
+      setQuickActionFeedback(
+        quickActionFeedbackForValue?.(value) ?? quickActionSuccessText ?? 'Besked sendt',
+      );
+      quickActionFeedbackTimeoutRef.current = setTimeout(() => {
+        setQuickActionFeedback(null);
+      }, 1800);
+      return;
+    }
+
+    setCommentText(value);
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
   };
 
   const getTimeAgo = (isoDate: string): string => {
@@ -701,16 +753,40 @@ export function InlineComments({
     <>
       <View style={styles.header}>
         <Text variant="caption" color="primary" style={styles.headerText}>
-          Kommentarer ({totalCommentCount})
+          {titleOverride ?? 'Kommentarer'} ({totalCommentCount})
         </Text>
       </View>
+
+      {quickActionChips.length > 0 ? (
+        <View style={styles.quickActionsRow}>
+          {quickActionChips.map((chip) => (
+            <Pressable
+              key={chip}
+              style={styles.quickActionChip}
+              onPress={() => handleQuickAction(chip)}
+            >
+              <Text variant="caption" color="primary" style={styles.quickActionChipText}>
+                {chip}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+
+      {quickActionFeedback ? (
+        <View style={styles.quickActionFeedback}>
+          <Text variant="caption" color="primary" style={styles.quickActionFeedbackText}>
+            {quickActionFeedback}
+          </Text>
+        </View>
+      ) : null}
 
       {renderContent()}
 
       {activeReplyToCommentId ? (
         <View style={styles.slimReplyBar}>
           <Text variant="caption" color="secondary" style={styles.slimReplyText}>
-            Svarer til {activeReplyToDisplayName ?? 'Ukendt'}
+            {replyModeLabel ?? `Svarer til ${activeReplyToDisplayName ?? 'Ukendt'}`}
           </Text>
           <Pressable onPress={handleCancelReply} hitSlop={theme.spacing[2]}>
             <Ionicons name="close" size={theme.spacing[5]} color={theme.colors.text.secondary} />
@@ -723,7 +799,11 @@ export function InlineComments({
           <TextInput
             ref={inputRef}
             style={styles.input}
-            placeholder={activeReplyToCommentId ? 'Skriv et svar...' : 'Skriv en kommentar...'}
+            placeholder={
+              activeReplyToCommentId
+                ? 'Skriv et svar...'
+                : (composerPlaceholder ?? 'Skriv en kommentar...')
+            }
             placeholderTextColor={defaultTheme.colors.text.secondary}
             value={commentText}
             onChangeText={setCommentText}
@@ -933,6 +1013,19 @@ const styles = StyleSheet.create({
   replyToggleText: {
     fontWeight: theme.typography.caption.fontWeight as any,
   },
+  quickActionFeedback: {
+    marginHorizontal: theme.spacing[4],
+    marginBottom: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[2],
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.bg.subtle,
+    borderWidth: theme.layout.borderHairline,
+    borderColor: theme.colors.border.subtle,
+  },
+  quickActionFeedbackText: {
+    fontWeight: theme.typography.caption.fontWeight as any,
+  },
   repliesList: {
     marginTop: theme.spacing[2],
     paddingLeft: theme.spacing[10],
@@ -967,6 +1060,24 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.bg.card,
     borderTopWidth: theme.layout.borderHairline,
     borderTopColor: theme.colors.border.subtle,
+  },
+  quickActionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing[2],
+    paddingHorizontal: commentsInset,
+    paddingBottom: theme.spacing[2],
+  },
+  quickActionChip: {
+    borderWidth: theme.layout.borderHairline,
+    borderColor: theme.colors.border.default,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.bg.subtle,
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[2],
+  },
+  quickActionChipText: {
+    fontWeight: theme.typography.caption.fontWeight as any,
   },
   inputContainer: {
     flexDirection: 'row',
