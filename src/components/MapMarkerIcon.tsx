@@ -5,9 +5,10 @@ import { useTheme, Theme } from '../theme';
 interface MapMarkerIconProps {
   logoUrl?: string | null;
   type: 'match' | 'event' | 'community' | 'fan_faction';
+  memberCount?: number;
 }
 
-export function MapMarkerIcon({ logoUrl, type }: MapMarkerIconProps) {
+export function MapMarkerIcon({ logoUrl, type, memberCount }: MapMarkerIconProps) {
   const theme = useTheme();
   const styles = createStyles(theme);
 

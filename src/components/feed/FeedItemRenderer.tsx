@@ -37,6 +37,7 @@ export function FeedItemRenderer(props: FeedItemRendererProps): React.ReactEleme
     item,
     itemKey,
     user,
+    isAppAdmin,
     likeState,
     commentCount,
     commentPreviews,
@@ -58,14 +59,9 @@ export function FeedItemRenderer(props: FeedItemRendererProps): React.ReactEleme
 
   switch (item.kind) {
     case 'post': {
-      const post = item.data as typeof item.data & { poll_data?: unknown };
-
-      if (post.poll_data) {
-        return <PollCard key={itemKey} post={post} />;
-      }
-
       const authorProfile = item.data.authorId ? safeProfileMap[item.data.authorId] : undefined;
       const categoryKey: CategoryKey = 'fan';
+      const pollData = item.data.poll_data;
 
       return (
         <FanPostCard
@@ -75,6 +71,8 @@ export function FeedItemRenderer(props: FeedItemRendererProps): React.ReactEleme
           communityMap={communityMap}
           profileMap={safeProfileMap}
           categoryKey={categoryKey}
+          currentUserId={user?.id}
+          currentIsAppAdmin={isAppAdmin}
           liked={likeState.liked}
           likes={likeState.likes}
           commentsCount={commentCount}
@@ -92,18 +90,23 @@ export function FeedItemRenderer(props: FeedItemRendererProps): React.ReactEleme
             incrementCommentCount('post', item.id);
             addCommentPreview('post', item.id, comment);
           }}
+          bodyContent={
+            pollData ? (
+              <PollCard pollData={pollData} postId={item.id} profileMap={safeProfileMap} />
+            ) : undefined
+          }
         />
       );
     }
 
     case 'news': {
       const newsCommentPreviews = commentPreviews || [];
-
       return (
         <NewsCard
           key={itemKey}
           newsItem={item.data}
           currentUserId={user?.id}
+          currentIsAppAdmin={isAppAdmin}
           userAvatarUrl={user?.user_metadata?.avatar_url}
           communityMap={communityMap || {}}
           profileMap={safeProfileMap}
@@ -156,7 +159,7 @@ export function FeedItemRenderer(props: FeedItemRendererProps): React.ReactEleme
               toggleLike(item.kind, item.id, user.id);
             }
           }}
-          onPressShare={() => {}}
+          onPressShare={() => Alert.alert('Info', 'Del-funktionen kommer snart')}
           onPressDetail={handleDetail}
           commentPreviews={commentPreviews}
           onNewComment={(comment) => {

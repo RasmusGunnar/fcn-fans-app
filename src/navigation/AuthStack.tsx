@@ -12,9 +12,9 @@ const Stack = createNativeStackNavigator<AuthStackParamList>();
 
 export function AuthStack() {
   return (
-    <Stack.Navigator initialRouteName="Welcome">
-      <Stack.Screen name="Welcome" component={WelcomeScreen} options={{ title: 'Velkommen' }} />
-      <Stack.Screen name="Login" component={LoginScreen} options={{ title: 'Login' }} />
+    <Stack.Navigator initialRouteName="Welcome" screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="Welcome" component={WelcomeScreen} />
+      <Stack.Screen name="Login" component={LoginScreen} />
     </Stack.Navigator>
   );
 }

@@ -86,7 +86,7 @@ export default function EventsScreen() {
     { key: 'matches', label: 'Kampe' },
     { key: 'bus_trips', label: 'Busture' },
     { key: 'events', label: 'Events' },
-  ] as const satisfies ReadonlyArray<{ key: EventFilterKey; label: string }>;
+  ] as const satisfies readonly { key: EventFilterKey; label: string }[];
 
   const snapPoints = useMemo(() => ['20%', '45%', '85%'], []);
 
@@ -142,6 +142,15 @@ export default function EventsScreen() {
     return getPublicUrl(bucket, raw);
   }
 
+  function toCoordinateNumber(value: number | string | null | undefined): number | null {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string') {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+  }
+
   function getEventOrganizerLogo(item: Extract<FeedItem, { kind: 'event' }>): string | null {
     const pm = profileMap || {};
     const groupId = item.organizer_group_id ?? null;
@@ -156,14 +165,27 @@ export default function EventsScreen() {
     return null;
   }
 
+  const filteredFeedForMap =
+    selectedEventType === 'all'
+      ? feed
+      : feed.filter((item) => {
+          const kindMap: Record<EventFilterKey, FeedItem['kind']> = {
+            all: 'match',
+            matches: 'match',
+            bus_trips: 'bus_trip',
+            events: 'event',
+          };
+          return item.kind === kindMap[selectedEventType];
+        });
+
   const mapItems: MapItem[] = useMemo(
     () =>
-      feed
+      filteredFeedForMap
         .map((item): MapItem | null => {
           if (item.kind === 'match') {
-            const lat = item.lat;
-            const lng = item.lng;
-            if (typeof lat !== 'number' || typeof lng !== 'number') return null;
+            const lat = toCoordinateNumber(item.lat);
+            const lng = toCoordinateNumber(item.lng);
+            if (lat == null || lng == null) return null;
             return {
               id: item.id,
               kind: 'match',
@@ -178,9 +200,9 @@ export default function EventsScreen() {
             };
           }
           if (item.kind === 'event') {
-            const lat = item.lat;
-            const lng = item.lng;
-            if (typeof lat !== 'number' || typeof lng !== 'number') return null;
+            const lat = toCoordinateNumber(item.lat);
+            const lng = toCoordinateNumber(item.lng);
+            if (lat == null || lng == null) return null;
             return {
               id: item.id,
               kind: 'event',
@@ -194,9 +216,9 @@ export default function EventsScreen() {
             };
           }
           if (item.kind === 'bus_trip') {
-            const lat = item.lat;
-            const lng = item.lng;
-            if (typeof lat !== 'number' || typeof lng !== 'number') return null;
+            const lat = toCoordinateNumber(item.lat);
+            const lng = toCoordinateNumber(item.lng);
+            if (lat == null || lng == null) return null;
             return {
               id: item.id,
               kind: 'bus_trip' as const,
@@ -212,7 +234,7 @@ export default function EventsScreen() {
           return null;
         })
         .filter((item): item is MapItem => item !== null),
-    [feed, profileMap, communityMap],
+    [filteredFeedForMap, profileMap, communityMap],
   );
 
   // ── Filter feed by event type ──────────────────────────────────────────────
@@ -279,18 +301,23 @@ export default function EventsScreen() {
       id: item.id,
       data: {
         id: item.id,
-        title: item.title,
-        startAt: item.startAt,
-        location: item.location,
-        description: item.description,
-        organizerName: item.organizerName,
+        title: item.title ?? null,
+        description: item.description ?? null,
+
+        // vigtig: brug samme navn som eventCardVM forventer
+        startAt: item.startAt ?? null,
+
+        location: item.location ?? null,
+
+        organizerName: item.organizerName ?? null,
         organizerGroupId: item.organizer_group_id ?? null,
         organizerType: item.organizer_type ?? null,
         organizerId: item.organizer_id ?? null,
         creatorUserId: item.creator_user_id ?? null,
         createdBy: item.created_by ?? null,
-        createdAt: null,
+
         eventType: 'event',
+
         coverBucket: item.cover_bucket ?? null,
         coverPath: item.cover_path ?? null,
       },
@@ -457,11 +484,11 @@ export default function EventsScreen() {
           {mapItems.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyIcon}>📍</Text>
-              {feed.length > 0 ? (
+              {filteredFeed.length > 0 ? (
                 <>
                   <Text style={styles.emptyText}>Mangler lokationer</Text>
                   <Text style={styles.emptySubtext}>
-                    {mapItems.length} af {feed.length} events har koordinater
+                    {mapItems.length} af {filteredFeed.length} begivenheder har koordinater
                   </Text>
                   <Text style={styles.emptyHint}>Kør fixtures sync for at geocode stadions</Text>
                 </>
@@ -474,9 +501,9 @@ export default function EventsScreen() {
             </View>
           ) : (
             <>
-              <MapView 
-                ref={mapRef} 
-                style={styles.map} 
+              <MapView
+                ref={mapRef}
+                style={styles.map}
                 initialRegion={FARUM_REGION}
                 rotateEnabled={false}
                 pitchEnabled={false}
@@ -489,7 +516,6 @@ export default function EventsScreen() {
                     anchor={{ x: 0.5, y: 1 }}
                     centerOffset={{ x: 0, y: -16 }}
                     flat={false}
-                    tracksViewChanges={false}
                   >
                     <MapMarkerIcon
                       logoUrl={item.logoUrl}

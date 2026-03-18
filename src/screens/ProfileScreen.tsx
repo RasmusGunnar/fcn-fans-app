@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   TextInput,
+  Linking,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,6 +24,11 @@ import { getPublicUrl } from '../lib/storageUrl';
 import { Avatar } from '../components/Avatar';
 import { supabase } from '../lib/supabase';
 import { ensureProfile } from '../lib/profile';
+import {
+  getPushStatusSnapshot,
+  syncPushNotifications,
+  type PushUiStatus,
+} from '../lib/notifications';
 import {
   fetchMyProfile,
   fetchMyCommunities,
@@ -126,6 +132,11 @@ export default function ProfileScreen() {
   const [displayNameInput, setDisplayNameInput] = useState('');
   const [avatarUrlInput, setAvatarUrlInput] = useState<string | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushStatus, setPushStatus] = useState<PushUiStatus>('not_setup');
+  const [pushPermissionStatus, setPushPermissionStatus] = useState<string>('undetermined');
+  const [pushTokenPreview, setPushTokenPreview] = useState<string | null>(null);
+  const [pushMessage, setPushMessage] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     if (!user?.id) {
@@ -177,15 +188,88 @@ export default function ProfileScreen() {
     setLoading(false);
   }, [user?.id, user?.email]);
 
+  const loadPushStatus = useCallback(async () => {
+    if (!user?.id) return;
+
+    setPushLoading(true);
+    try {
+      const snapshot = await getPushStatusSnapshot(user.id);
+      setPushStatus(snapshot.status);
+      setPushPermissionStatus(snapshot.permissionStatus);
+      setPushTokenPreview(snapshot.savedTokenPreview);
+
+      if (snapshot.status === 'enabled') {
+        setPushMessage('Push er klar til nye opslag, svar og events.');
+      } else if (snapshot.status === 'denied') {
+        setPushMessage('Push er afvist på denne enhed. Åbn indstillinger for at aktivere igen.');
+      } else if (snapshot.status === 'not_setup') {
+        setPushMessage('Aktivér push for at få besked om nye opslag, svar og events.');
+      } else {
+        setPushMessage('Kunne ikke læse push-status lige nu.');
+      }
+    } finally {
+      setPushLoading(false);
+    }
+  }, [user?.id]);
+
   useEffect(() => {
     loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    loadPushStatus();
+  }, [loadPushStatus]);
+
   useFocusEffect(
     React.useCallback(() => {
       loadData();
-    }, [loadData]),
+      loadPushStatus();
+    }, [loadData, loadPushStatus]),
   );
+
+  const handlePushSetup = async () => {
+    if (!user?.id) return;
+
+    setPushLoading(true);
+    try {
+      const result = await syncPushNotifications(user.id);
+      setPushStatus(result.status);
+      setPushPermissionStatus(result.permissionStatus);
+      setPushTokenPreview(result.token ? `${result.token.slice(0, 10)}…${result.token.slice(-6)}` : null);
+
+      if (result.status === 'enabled') {
+        setPushMessage('Push-notifikationer er nu aktiveret på denne enhed.');
+      } else if (result.status === 'denied') {
+        setPushMessage('Push blev afvist. Giv adgang i systemindstillinger for at aktivere.');
+      } else if (result.status === 'error') {
+        setPushMessage(result.errorMessage ?? 'Push-opsætning fejlede.');
+      } else {
+        setPushMessage('Push er endnu ikke sat fuldt op.');
+      }
+    } catch (e: any) {
+      console.error('[ProfileScreen] Push setup failed:', e);
+      setPushStatus('error');
+      setPushMessage(e?.message ?? 'Push-opsætning fejlede.');
+    } finally {
+      setPushLoading(false);
+    }
+  };
+
+  const handleOpenDeviceSettings = async () => {
+    try {
+      await Linking.openSettings();
+    } catch (e) {
+      console.warn('[ProfileScreen] Could not open settings:', e);
+      Alert.alert('Fejl', 'Kunne ikke åbne enhedens indstillinger.');
+    }
+  };
+
+  const getPushStatusLabel = () => {
+    if (pushStatus === 'enabled') return 'Aktiveret';
+    if (pushStatus === 'denied') return 'Afvist';
+    if (pushStatus === 'error') return 'Fejl';
+    return 'Ikke sat op';
+  };
 
   const handleLogout = async () => {
     try {
@@ -553,10 +637,53 @@ export default function ProfileScreen() {
 
       {/* Settings */}
       <Card style={{ marginBottom: spacing.md }}>
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text.primary }]}>
+            NOTIFIKATIONER
+          </Text>
+          <Ionicons name="notifications" size={theme.components.icon.size.sm} color={theme.colors.primary} />
+        </View>
+        <View style={styles.pushStatusRow}>
+          <View style={styles.pushStatusCopy}>
+            <Text style={[styles.pushStatusTitle, { color: theme.colors.text.primary }]}>
+              Push-status: {getPushStatusLabel()}
+            </Text>
+            <Text style={[styles.pushStatusBody, { color: theme.colors.text.secondary }]}>
+              {pushMessage ?? 'Få besked om nye opslag, svar og kommende events.'}
+            </Text>
+            <Text style={[styles.pushMeta, { color: theme.colors.text.secondary }]}>
+              Tilladelse: {pushPermissionStatus}
+            </Text>
+            {pushTokenPreview ? (
+              <Text style={[styles.pushMeta, { color: theme.colors.text.secondary }]}>
+                Token: {pushTokenPreview}
+              </Text>
+            ) : null}
+          </View>
+          <Pill label={getPushStatusLabel()} />
+        </View>
+        <View style={styles.pushActionRow}>
+          <View style={styles.pushActionButton}>
+            <OutlineButton
+              title={pushLoading ? 'Tjekker...' : 'Aktivér / test push'}
+              onPress={handlePushSetup}
+              disabled={pushLoading}
+            />
+          </View>
+          {pushStatus === 'denied' ? (
+            <View style={styles.pushActionButton}>
+              <OutlineButton title="Åbn indstillinger" onPress={handleOpenDeviceSettings} />
+            </View>
+          ) : null}
+        </View>
+      </Card>
+
+      <Card style={{ marginBottom: spacing.md }}>
         <ProfileRow
           icon="notifications"
           title="Notifikationer"
-          onPress={() => Alert.alert('Notifikationer', 'Kommer snart!')}
+          subtitle="Status og opsætning vises ovenfor"
+          onPress={handlePushSetup}
           styles={styles}
         />
         <ProfileRow
@@ -786,6 +913,37 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     newEventButtonText: {
       fontSize: theme.typography.small.fontSize,
       fontWeight: '600',
+    },
+    pushStatusRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: theme.spacing[3],
+      marginBottom: spacing.sm,
+    },
+    pushStatusCopy: {
+      flex: 1,
+    },
+    pushStatusTitle: {
+      fontSize: theme.typography.body.fontSize,
+      fontWeight: '700',
+      marginBottom: theme.spacing[1],
+    },
+    pushStatusBody: {
+      fontSize: theme.typography.body.fontSize,
+      marginBottom: theme.spacing[2],
+    },
+    pushMeta: {
+      fontSize: theme.typography.small.fontSize,
+      marginTop: theme.spacing[0],
+    },
+    pushActionRow: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      marginTop: spacing.sm,
+    },
+    pushActionButton: {
+      flex: 1,
     },
     emptyText: {
       fontSize: theme.typography.body.fontSize,

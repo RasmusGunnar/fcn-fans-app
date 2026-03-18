@@ -123,8 +123,8 @@ export default function CommunitiesScreen() {
   );
 
   const mapCommunities = useMemo(
-    () => communities.filter(hasCoords),
-    [communities],
+    () => filteredCommunities.filter(hasCoords),
+    [filteredCommunities],
   );
 
   const mapRegion = useMemo<Region | null>(() => {
@@ -222,6 +222,7 @@ export default function CommunitiesScreen() {
                   <MapMarkerIcon
                     logoUrl={getCommunityMarkerLogo(community)}
                     type={community.type}
+                    memberCount={community.member_count}
                   />
                 </Marker>
               ))}

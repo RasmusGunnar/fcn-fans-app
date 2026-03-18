@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
-import { resolveAvatarUrl } from '../utils/avatar';
 import { useAuth } from '../auth/AuthProvider';
+import { fetchAttendanceSnapshot } from '../services/attendance';
 
 export interface AttendanceResult {
   countGoing: number;
@@ -25,53 +25,14 @@ export function useAttendance({ entityType, entityId }: { entityType: 'event' | 
     setLoading(true);
     setError(null);
     try {
-      // Count
-      const { data: countData, error: countError } = await supabase
-        .from('rsvps')
-        .select('id', { count: 'exact' })
-        .eq('entity_type', entityType)
-        .eq('entity_id', entityId)
-        .eq('status', 'going');
-      if (countError) throw countError;
-      setCountGoing(countData?.length || 0);
-
-      // Avatars
-      const { data: avatarData, error: avatarError } = await supabase
-        .from('rsvps')
-        .select('user_id')
-        .eq('entity_type', entityType)
-        .eq('entity_id', entityId)
-        .eq('status', 'going')
-        .order('created_at', { ascending: false })
-        .limit(5);
-      if (avatarError) throw avatarError;
-      const userIds = avatarData?.map((r: any) => r.user_id) || [];
-      let avatarUrls: string[] = [];
-      if (userIds.length > 0) {
-        const { data: profiles, error: profileError } = await supabase
-          .from('profiles')
-          .select('id, avatar_url')
-          .in('id', userIds);
-        if (profileError) throw profileError;
-          avatarUrls = profiles.map((p: any) => resolveAvatarUrl(p.avatar_url)).filter((url): url is string => !!url);
-      }
-      setAvatars(avatarUrls);
-
-      // IsGoing
-      let going = false;
-      if (user?.id) {
-        const { data: myRsvp, error: myRsvpError } = await supabase
-          .from('rsvps')
-          .select('id')
-          .eq('entity_type', entityType)
-          .eq('entity_id', entityId)
-          .eq('user_id', user.id)
-          .eq('status', 'going')
-          .single();
-        if (myRsvpError && myRsvpError.code !== 'PGRST116') throw myRsvpError;
-        going = !!myRsvp;
-      }
-      setIsGoing(going);
+      const snapshot = await fetchAttendanceSnapshot({
+        entityType,
+        entityId,
+        currentUserId: user?.id,
+      });
+      setCountGoing(snapshot.countGoing);
+      setAvatars(snapshot.avatars);
+      setIsGoing(snapshot.isGoing);
     } catch (err: any) {
       setError(err.message || 'Fejl ved attendance');
     } finally {
@@ -85,9 +46,15 @@ export function useAttendance({ entityType, entityId }: { entityType: 'event' | 
 
   const toggleGoing = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       if (!user?.id) throw new Error('Ikke logget ind');
       const userId = user.id;
+      const nextIsGoing = !isGoing;
+
+      setIsGoing(nextIsGoing);
+      setCountGoing((current) => Math.max(0, current + (nextIsGoing ? 1 : -1)));
+
       logger.log('[Attendance] toggle start', { entityId, entityType, userId, isGoing });
       if (isGoing) {
         // Delete RSVP
@@ -118,11 +85,13 @@ export function useAttendance({ entityType, entityId }: { entityType: 'event' | 
       }
       await fetchAttendance();
     } catch (err: any) {
+      setIsGoing(isGoing);
+      setCountGoing(countGoing);
       setError(err.message || 'Fejl ved toggle');
     } finally {
       setLoading(false);
     }
-  }, [entityType, entityId, user?.id, isGoing, fetchAttendance]);
+  }, [entityType, entityId, user?.id, isGoing, countGoing, fetchAttendance]);
 
   return {
     countGoing,

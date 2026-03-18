@@ -1,33 +1,131 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  View,
-  Text,
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Image,
+  Linking,
+  Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
-  Pressable,
-  Image,
-  ActivityIndicator,
+  Text,
+  View,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Card } from '../components/ui/Card';
+import { useAuth } from '../auth/AuthProvider';
+import { InlineComments } from '../components/comments/InlineComments';
+import { AttendanceBubbles } from '../components/social/AttendanceBubbles';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { OutlineButton } from '../components/ui/OutlineButton';
-import { SectionTitle } from '../components/ui/SectionTitle';
-import { ListRowIcon } from '../components/ui/ListRowIcon';
-import { InlineComments } from '../components/comments/InlineComments';
-import { useAuth } from '../auth/AuthProvider';
-import { colors, spacing } from '../theme';
-import { useTheme } from '../theme';
+import { Card } from '../components/ui/Card';
 import type { RootStackParamList } from '../navigation/types';
-import { formatDateDa, type Fixture } from '../services/fixtures';
-import { fetchFixtureById } from '../services/eventsApi';
+import { fetchFixtureById, type Fixture } from '../services/eventsApi';
+import { formatDateDa } from '../services/fixtures';
 import { getMatchHeroUrl, getTeamHeroImage } from '../services/sportsdb';
 import { useAttendance } from '../hooks/useAttendance';
-import { AttendanceBubbles } from '../components/social/AttendanceBubbles';
+import { spacing, useTheme } from '../theme';
 
 type MatchDetailsRouteProp = RouteProp<RootStackParamList, 'MatchDetails'>;
+type MatchParticipationChoice = 'going' | 'tv' | 'not_going' | null;
+
+const FCN_TICKET_URL = 'https://billet.fcn.dk';
+
+function isFcnHomeMatch(fixture: Fixture): boolean {
+  return fixture.home_team.toLowerCase().includes('nordsj');
+}
+
+function buildMatchMapsUrl(fixture: Fixture): string | null {
+  if (fixture.lat != null && fixture.lng != null) {
+    return Platform.OS === 'ios'
+      ? `http://maps.apple.com/?ll=${fixture.lat},${fixture.lng}`
+      : `https://www.google.com/maps/search/?api=1&query=${fixture.lat},${fixture.lng}`;
+  }
+
+  const venueLabel = [fixture.venue, fixture.venue_city].filter(Boolean).join(', ').trim();
+  if (!venueLabel) return null;
+
+  const encoded = encodeURIComponent(venueLabel);
+  return Platform.OS === 'ios'
+    ? `http://maps.apple.com/?q=${encoded}`
+    : `https://www.google.com/maps/search/?api=1&query=${encoded}`;
+}
+
+function formatAttendanceCta(isGoing: boolean): string {
+  return isGoing ? 'Du kommer til kampen' : 'Jeg kommer';
+}
+
+function formatCountdownLabel(kickoffAt: string, now: Date): string {
+  const diffMs = new Date(kickoffAt).getTime() - now.getTime();
+  const diffHours = diffMs / (1000 * 60 * 60);
+
+  if (diffMs <= 0) return 'Kampen er i gang';
+  if (diffHours < 2) return 'Starter snart 🔥';
+  if (diffHours < 48) return `Starter om ${Math.ceil(diffHours)} timer`;
+  return `Starter om ${Math.ceil(diffHours / 24)} dage`;
+}
+
+function getMatchdayState(kickoffAt: string, now: Date) {
+  const diffMs = new Date(kickoffAt).getTime() - now.getTime();
+  const diffHours = diffMs / (1000 * 60 * 60);
+  return {
+    isLive: diffMs <= 0,
+    isMatchday: diffHours <= 6,
+    diffHours,
+  };
+}
+
+function MatchStatusChip({ label }: { label: string }) {
+  const theme = useTheme();
+  const styles = stylesFactory(theme);
+
+  return (
+    <View style={styles.matchStatusChip}>
+      <Text style={styles.matchStatusChipText}>{label}</Text>
+    </View>
+  );
+}
+
+function MatchChipRow({ children }: { children: React.ReactNode }) {
+  const theme = useTheme();
+  const styles = stylesFactory(theme);
+  return <View style={styles.heroChipRow}>{children}</View>;
+}
+
+function MatchActivityRow({
+  icon,
+  title,
+  subtitle,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  subtitle: string;
+}) {
+  const theme = useTheme();
+  const styles = stylesFactory(theme);
+
+  return (
+    <Pressable style={styles.activityRow}>
+      <View style={styles.activityIconWrap}>
+        <Ionicons name={icon} size={theme.components.icon.size.sm} color={theme.colors.primary} />
+      </View>
+      <View style={styles.activityContent}>
+        <Text style={styles.activityTitle}>{title}</Text>
+        <Text style={styles.activitySubtitle}>{subtitle}</Text>
+      </View>
+      <View style={styles.activityCtaWrap}>
+        <Text style={styles.activityCtaText}>Se mere</Text>
+        <Ionicons
+          name="chevron-forward"
+          size={theme.components.icon.size.sm}
+          color={theme.colors.text.secondary}
+        />
+      </View>
+    </Pressable>
+  );
+}
 
 export default function MatchDetailsScreen() {
   const navigation = useNavigation();
@@ -36,27 +134,63 @@ export default function MatchDetailsScreen() {
   const insets = useSafeAreaInsets();
   const { user, isAppAdmin } = useAuth();
   const theme = useTheme();
-  const styles = createStyles(theme);
+  const styles = stylesFactory(theme);
   const [fixture, setFixture] = useState<Fixture | null>(null);
   const [loading, setLoading] = useState(true);
   const [heroUrl, setHeroUrl] = useState<string | null>(null);
+  const [now, setNow] = useState(() => new Date());
+  const [participationChoice, setParticipationChoice] = useState<MatchParticipationChoice>(null);
+  const [checkedIn, setCheckedIn] = useState(false);
+  const heroPulse = useRef(new Animated.Value(1)).current;
   const attendance = useAttendance({ entityType: 'match', entityId: fixtureId });
 
-  // Fetch fixture by ID
   useEffect(() => {
     if (fixtureId) {
       loadFixture();
     }
   }, [fixtureId]);
 
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(new Date());
+    }, 60000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(heroPulse, {
+          toValue: 1.03,
+          duration: 2600,
+          useNativeDriver: true,
+        }),
+        Animated.timing(heroPulse, {
+          toValue: 1,
+          duration: 2600,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+
+    animation.start();
+    return () => animation.stop();
+  }, [heroPulse]);
+
+  useEffect(() => {
+    if (attendance.isGoing) {
+      setParticipationChoice('going');
+    }
+  }, [attendance.isGoing]);
+
   const loadFixture = async () => {
     if (!fixtureId) return;
     setLoading(true);
     const data = await fetchFixtureById(fixtureId);
     if (data) {
-      setFixture(data as any);
-      // Resolve hero: try raw first, then team API
-      let hero = getMatchHeroUrl(data as any);
+      setFixture(data);
+      let hero = getMatchHeroUrl(data);
       if (!hero && data.home_team_provider_id) {
         hero = await getTeamHeroImage(data.home_team_provider_id);
       }
@@ -65,7 +199,6 @@ export default function MatchDetailsScreen() {
     setLoading(false);
   };
 
-  // Loading state
   if (loading) {
     return (
       <SafeAreaView
@@ -88,7 +221,6 @@ export default function MatchDetailsScreen() {
     );
   }
 
-  // Fallback if no fixture provided or found
   if (!fixture) {
     return (
       <SafeAreaView
@@ -111,12 +243,181 @@ export default function MatchDetailsScreen() {
     );
   }
 
+  const isHomeMatch = isFcnHomeMatch(fixture);
+  const mapsUrl = buildMatchMapsUrl(fixture);
+  const attendanceCtaLabel = formatAttendanceCta(attendance.isGoing);
+  const competitionLabel = [fixture.competition, fixture.round].filter(Boolean).join(' · ');
+  const countdownLabel = formatCountdownLabel(fixture.kickoff_at, now);
+  const matchdayState = getMatchdayState(fixture.kickoff_at, now);
+  const handleOpenRoute = async () => {
+    if (!mapsUrl) return;
+    try {
+      await Linking.openURL(mapsUrl);
+    } catch (error) {
+      console.error('[MatchDetails] Route open error:', error);
+      Alert.alert('Fejl', 'Kunne ikke åbne kortet.');
+    }
+  };
+
+  const handleOpenTickets = async () => {
+    try {
+      await Linking.openURL(FCN_TICKET_URL);
+    } catch (error) {
+      console.error('[MatchDetails] Ticket open error:', error);
+      Alert.alert('Fejl', 'Kunne ikke åbne billetsiden.');
+    }
+  };
+
+  const handleOpenAttendees = () => {
+    (navigation as any).navigate('EventAttendees', {
+      entityId: fixture.id,
+      entityType: 'match',
+      title: 'Fans på stadion',
+    });
+  };
+
+  const handleSelectParticipation = async (choice: Exclude<MatchParticipationChoice, null>) => {
+    setParticipationChoice(choice);
+
+    if (choice === 'going') {
+      if (!attendance.isGoing) {
+        await attendance.toggleGoing();
+      }
+      return;
+    }
+
+    if (attendance.isGoing) {
+      await attendance.toggleGoing();
+    }
+  };
+
+  const handleCheckIn = () => {
+    setCheckedIn(true);
+  };
+
+  const renderParticipationCard = () => {
+    return (
+      <Card style={styles.stateCard}>
+        {participationChoice === null ? (
+          <>
+            <Text style={styles.stateCardTitle}>Skal du med til kampen?</Text>
+            <View style={styles.choiceButtonGroup}>
+              <OutlineButton title="Jeg kommer" onPress={() => handleSelectParticipation('going')} />
+              <OutlineButton title="Ser den på TV" onPress={() => handleSelectParticipation('tv')} />
+              <OutlineButton
+                title="Forhindret"
+                onPress={() => handleSelectParticipation('not_going')}
+              />
+            </View>
+          </>
+        ) : participationChoice === 'going' || attendance.isGoing ? (
+          <>
+            <Text style={styles.stateCardEyebrow}>MATCHDAY STATUS</Text>
+            <Text style={styles.stateCardTitle}>Du deltager</Text>
+            <Text style={styles.stateCardBody}>
+              Du er klar til kampdag sammen med de andre fans.
+            </Text>
+            <Pressable
+              style={[styles.joinCta, attendance.isGoing ? styles.joinCtaActive : styles.joinCtaIdle]}
+              onPress={attendance.toggleGoing}
+              disabled={attendance.loading}
+            >
+              <Ionicons
+                name={attendance.isGoing ? 'checkmark-circle' : 'person-add'}
+                size={24}
+                color={attendance.isGoing ? theme.colors.text.inverse : theme.colors.primary}
+              />
+              <Text
+                style={[
+                  styles.joinText,
+                  {
+                    color: attendance.isGoing
+                      ? theme.colors.text.inverse
+                      : theme.colors.primary,
+                  },
+                ]}
+              >
+                {attendanceCtaLabel}
+              </Text>
+            </Pressable>
+          </>
+        ) : participationChoice === 'tv' ? (
+          <>
+            <Text style={styles.stateCardEyebrow}>MATCHDAY STATUS</Text>
+            <Text style={styles.stateCardTitle}>Ser den på TV</Text>
+            <Text style={styles.stateCardBody}>
+              Fans ser kampen hjemme, men du har stadig fuld adgang til Kampsnak.
+            </Text>
+            <View style={styles.stateSecondaryActions}>
+              <View style={styles.stateSecondaryAction}>
+                <OutlineButton title="Jeg kommer" onPress={() => handleSelectParticipation('going')} />
+              </View>
+              <View style={styles.stateSecondaryAction}>
+                <OutlineButton
+                  title="Forhindret"
+                  onPress={() => handleSelectParticipation('not_going')}
+                />
+              </View>
+            </View>
+          </>
+        ) : (
+          <>
+            <Text style={styles.stateCardEyebrow}>MATCHDAY STATUS</Text>
+            <Text style={styles.stateCardTitle}>Forhindret</Text>
+            <Text style={styles.stateCardBody}>
+              Du kan ikke komme, men du kan stadig være med i samtalen før kampstart.
+            </Text>
+            <View style={styles.stateSecondaryActions}>
+              <View style={styles.stateSecondaryAction}>
+                <OutlineButton title="Jeg kommer" onPress={() => handleSelectParticipation('going')} />
+              </View>
+              <View style={styles.stateSecondaryAction}>
+                <OutlineButton title="Ser den på TV" onPress={() => handleSelectParticipation('tv')} />
+              </View>
+            </View>
+          </>
+        )}
+      </Card>
+    );
+  };
+
+  const renderMatchdayCard = () => {
+    if (!matchdayState.isMatchday) return null;
+
+    return (
+      <Card style={styles.matchdayCard}>
+        <Text style={styles.matchdayCardTitle}>Er du på stadion?</Text>
+        {checkedIn ? (
+          <>
+            <Text style={styles.matchdayCardBody}>✅ Du er checket ind</Text>
+            <Text style={styles.matchdayCardSubtext}>Vi ses på lægterne!</Text>
+          </>
+        ) : (
+          <>
+            <Text style={styles.matchdayCardSubtext}>Tjek ind og vær en del af stemningen</Text>
+            <PrimaryButton title="📍 Tjek ind" onPress={handleCheckIn} />
+            <View style={styles.matchdayActionsRow}>
+              <View style={styles.matchdayActionButton}>
+                <OutlineButton
+                  title="🎟 Vis billet"
+                  onPress={() => Alert.alert('Billet', 'Billetvisning kommer snart')}
+                />
+              </View>
+              <View style={styles.matchdayActionButton}>
+                <OutlineButton title="🛒 Køb billet" onPress={handleOpenTickets} />
+              </View>
+            </View>
+          </>
+        )}
+      </Card>
+    );
+  };
+
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.bg.default }]}
       edges={['top']}
     >
-      {/* Custom Header */}
       <View style={[styles.header, { backgroundColor: theme.colors.primary }]}>
         <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={theme.colors.bg.card} />
@@ -126,127 +427,195 @@ export default function MatchDetailsScreen() {
 
       <ScrollView
         style={styles.scrollView}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        automaticallyAdjustKeyboardInsets
         contentContainerStyle={{ paddingBottom: insets.bottom + spacing.lg }}
       >
-        {/* Hero with H2H overlay */}
-        {(() => {
-          return (
-            <View style={styles.heroContainer}>
-              {heroUrl ? (
-                <Image source={{ uri: heroUrl }} style={styles.heroImage} resizeMode="cover" />
+        <View style={styles.heroContainer}>
+          {heroUrl ? (
+            <Image source={{ uri: heroUrl }} style={styles.heroImage} resizeMode="cover" />
+          ) : (
+            <View style={[styles.heroFallback, { backgroundColor: theme.colors.primary }]} />
+          )}
+          <View
+            style={[
+              styles.heroDarkOverlay,
+              matchdayState.isMatchday ? styles.heroDarkOverlayMatchday : null,
+            ]}
+          />
+
+          <View style={styles.heroTopRow}>
+            <MatchChipRow>
+              <MatchStatusChip label={isHomeMatch ? 'Hjemmekamp' : 'Udekamp'} />
+              {competitionLabel ? <MatchStatusChip label={competitionLabel} /> : null}
+            </MatchChipRow>
+          </View>
+
+          <Animated.View style={[styles.h2hOverlay, { transform: [{ scale: heroPulse }] }]}>
+            <View style={styles.h2hBadge}>
+              {fixture.home_logo_url ? (
+                <Image
+                  source={{ uri: fixture.home_logo_url }}
+                  style={styles.h2hLogoImg}
+                  resizeMode="cover"
+                />
               ) : (
-                <View style={[styles.heroFallback, { backgroundColor: theme.colors.primary }]} />
+                <Text style={[styles.teamText, { color: theme.colors.primary }]}>
+                  {fixture.home_team.substring(0, 3).toUpperCase()}
+                </Text>
               )}
-              <View style={styles.heroDarkOverlay} />
-              <View style={styles.h2hOverlay}>
-                <View style={styles.h2hBadge}>
-                  {fixture.home_logo_url ? (
-                    <Image
-                      source={{ uri: fixture.home_logo_url }}
-                      style={styles.h2hLogoImg}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <Text style={[styles.teamText, { color: theme.colors.primary }]}>
-                      {fixture.home_team.substring(0, 3).toUpperCase()}
-                    </Text>
-                  )}
-                </View>
-                <Text style={[styles.h2hVsText, { color: theme.colors.text.inverse }]}>VS</Text>
-                <View style={styles.h2hBadge}>
-                  {fixture.away_logo_url ? (
-                    <Image
-                      source={{ uri: fixture.away_logo_url }}
-                      style={styles.h2hLogoImg}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <Text style={[styles.teamText, { color: theme.colors.primary }]}>
-                      {fixture.away_team.substring(0, 3).toUpperCase()}
-                    </Text>
-                  )}
-                </View>
+            </View>
+            <Text style={[styles.h2hVsText, { color: theme.colors.text.inverse }]}>VS</Text>
+            <View style={styles.h2hBadge}>
+              {fixture.away_logo_url ? (
+                <Image
+                  source={{ uri: fixture.away_logo_url }}
+                  style={styles.h2hLogoImg}
+                  resizeMode="cover"
+                />
+              ) : (
+                <Text style={[styles.teamText, { color: theme.colors.primary }]}>
+                  {fixture.away_team.substring(0, 3).toUpperCase()}
+                </Text>
+              )}
+            </View>
+          </Animated.View>
+
+          <View style={styles.countdownWrap}>
+            <Text style={styles.countdownText}>{countdownLabel}</Text>
+          </View>
+
+          <View style={styles.heroBottomGradient} />
+        </View>
+
+        <View style={styles.contentBlock}>
+          <Card style={styles.matchInfoCard}>
+            <Text style={styles.matchInfoEyebrow}>Næste kamp</Text>
+            <Text style={styles.matchInfoTitle}>
+              {fixture.home_team} vs {fixture.away_team}
+            </Text>
+            <View style={styles.matchInfoDetails}>
+              <View style={styles.matchInfoIconBlock}>
+                <Ionicons
+                  name="location-outline"
+                  size={theme.components.icon.size.md}
+                  color={theme.colors.primary}
+                />
+              </View>
+              <View style={styles.matchInfoContent}>
+                {fixture.venue ? (
+                  <Text style={styles.matchInfoVenue}>
+                    {fixture.venue}
+                    {fixture.venue_city ? ` · ${fixture.venue_city}` : ''}
+                  </Text>
+                ) : null}
+                <Text style={styles.matchInfoMeta}>{formatDateDa(fixture.kickoff_at)}</Text>
+                <Text style={styles.matchInfoStatus}>
+                  {attendance.isGoing ? 'Du deltager' : 'Vælg hvordan du følger kampen'}
+                </Text>
               </View>
             </View>
-          );
-        })()}
-
-        {/* Match Info Card */}
-        <Card style={styles.matchCard}>
-          {(fixture.competition || fixture.round) && (
-            <Text style={[styles.leagueText, { color: theme.colors.text.secondary }]}>
-              {fixture.competition}
-              {fixture.round ? ` - ${fixture.round}` : ''}
-            </Text>
-          )}
-          <ListRowIcon icon="calendar" title={formatDateDa(fixture.kickoff_at)} />
-          {fixture.venue && (
-            <ListRowIcon
-              icon="location"
-              title={fixture.venue}
-              subtitle={fixture.venue_city || undefined}
-            />
-          )}
-        </Card>
-
-        {/* CTA Buttons */}
-        <View style={styles.ctaRow}>
-          <View style={styles.ctaButton}>
-            <PrimaryButton title="Køb billet" onPress={() => console.log('Buy ticket')} />
-          </View>
-          <View style={styles.ctaButton}>
-            <OutlineButton title="Rutevejledning" onPress={() => console.log('Route')} />
-          </View>
-        </View>
-
-        {/* Attendance/RSVP UI */}
-        <View style={{ alignItems: 'center', marginVertical: spacing.md }}>
-          <AttendanceBubbles
-            avatars={attendance.avatars}
-            count={attendance.countGoing}
-            max={5}
-            size={20}
-            textVariant="caption"
-          />
-          <Pressable
-            style={[
-              styles.joinCta,
-              { backgroundColor: theme.colors.bg.card, borderColor: theme.colors.primary },
-              attendance.isGoing ? { opacity: 1 } : { opacity: 0.8 },
-            ]}
-            onPress={attendance.toggleGoing}
-            disabled={attendance.loading}
-          >
-            <Ionicons name={attendance.isGoing ? 'person' : 'person-add'} size={24} color={theme.colors.primary} />
-            <Text style={[styles.joinText, { color: theme.colors.primary }]}> {attendance.isGoing ? 'Deltager' : 'Deltag'} ({attendance.countGoing})</Text>
-          </Pressable>
-        </View>
-
-        {/* Fan Activities */}
-        <View style={styles.section}>
-          <SectionTitle title="FAN AKTIVITETER" />
-          <Card style={styles.activitiesCard}>
-            <ListRowIcon icon="bus" title="Bustur til Brøndby" subtitle="18. januar 2025" />
-            <ListRowIcon icon="restaurant" title="Fælles frokost" subtitle="Før kampen" />
           </Card>
-        </View>
 
-        {/* Fan Comments */}
-        <View style={styles.section}>
-          <InlineComments
-            targetType="match"
-            targetId={fixture.id}
-            currentUserId={user?.id || ''}
-            isAppAdmin={isAppAdmin}
-            variant="screen"
-          />
+          {renderMatchdayCard()}
+          {renderParticipationCard()}
+
+          <Pressable style={styles.communityStrip} onPress={handleOpenAttendees}>
+            <View style={styles.communityStripLead}>
+              <AttendanceBubbles
+                avatars={attendance.avatars}
+                count={attendance.countGoing}
+                max={5}
+                size={22}
+                textVariant="caption"
+                showCountText={false}
+              />
+              <View style={styles.communityStripCopy}>
+                <Text style={styles.communityStripTitle}>
+                  🔥 {attendance.countGoing} fans klar til kampdag
+                </Text>
+                <Text style={styles.communityStripMeta}>Se alle deltagere</Text>
+              </View>
+            </View>
+            <Ionicons
+              name="chevron-forward"
+              size={theme.components.icon.size.sm}
+              color={theme.colors.text.secondary}
+            />
+          </Pressable>
+
+          <View style={styles.secondaryCtaRow}>
+            {isHomeMatch ? (
+              <View style={styles.secondaryCtaButton}>
+                <OutlineButton title="Køb billet" onPress={handleOpenTickets} />
+              </View>
+            ) : null}
+            <View style={styles.secondaryCtaButton}>
+              <OutlineButton
+                title="Rutevejledning"
+                onPress={handleOpenRoute}
+                disabled={!mapsUrl}
+              />
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionHeading}>FANAKTIVITETER</Text>
+            <Card style={styles.activitiesCard}>
+              <MatchActivityRow
+                icon="bus-outline"
+                title="Bustur til kampen"
+                subtitle="Koordinér transport og mødetid med de andre fans"
+              />
+              <View style={styles.activityDivider} />
+              <MatchActivityRow
+                icon="restaurant-outline"
+                title="Fælles optakt"
+                subtitle="Planlæg mødested og få gang i stemningen før kickoff"
+              />
+            </Card>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionHeading}>FAN ZONE</Text>
+            <Card style={styles.commentsZoneCard}>
+              <View style={styles.commentsIntro}>
+                <Text style={styles.commentsIntroTitle}>Kampsnak</Text>
+                <Text style={styles.commentsIntroBody}>
+                  Del forventningerne til kampen og fang stemningen med de andre fans.
+                </Text>
+              </View>
+              <InlineComments
+                targetType="match"
+                targetId={fixture.id}
+                currentUserId={user?.id || ''}
+                isAppAdmin={isAppAdmin}
+                variant="inline"
+                maxInlineComments={Infinity}
+                titleOverride="Kampsnak"
+                composerPlaceholder="Del stemningen før kamp…"
+                quickActionMode="submit"
+                quickActionFeedbackForValue={(value) =>
+                  value === 'Jeg er på vej' ? 'Du er på vej 🔴' : 'Du deltager i snakken'
+                }
+                replyModeLabel="Svar"
+                quickActionChips={[
+                  'Jeg er på vej',
+                  'Mødes før kamp?',
+                  'Hvem er på stadion?',
+                  'Mit bud på kampen',
+                ]}
+              />
+            </Card>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const createStyles = (theme: ReturnType<typeof useTheme>) =>
+const stylesFactory = (theme: ReturnType<typeof useTheme>) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -269,7 +638,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
     heroContainer: {
       width: '100%',
-      height: 200,
+      height: theme.spacing[16] + theme.spacing[16] + theme.spacing[10],
       position: 'relative',
       overflow: 'hidden',
     },
@@ -286,16 +655,48 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       ...StyleSheet.absoluteFillObject,
       backgroundColor: theme.colors.overlay.heroScrim,
     },
+    heroDarkOverlayMatchday: {
+      backgroundColor: theme.colors.overlay.heroScrim,
+      opacity: 0.92,
+    },
+    heroTopRow: {
+      position: 'absolute',
+      top: spacing.md,
+      left: spacing.md,
+      right: spacing.md,
+      zIndex: 2,
+    },
+    heroChipRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      gap: spacing.xs,
+    },
+    matchStatusChip: {
+      paddingHorizontal: theme.spacing[3],
+      paddingVertical: theme.spacing[1],
+      borderRadius: theme.radius.pill,
+      backgroundColor: theme.colors.overlay.medium,
+      borderWidth: theme.layout.borderHairline,
+      borderColor: theme.colors.overlay.light,
+    },
+    matchStatusChipText: {
+      color: theme.colors.text.inverse,
+      fontWeight: '700',
+      fontSize: theme.typography.caption.fontSize,
+    },
     h2hOverlay: {
       ...StyleSheet.absoluteFillObject,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: spacing.lg,
+      gap: spacing.xl,
+      paddingTop: theme.spacing[16],
+      paddingBottom: theme.spacing[16],
     },
     h2hBadge: {
-      width: theme.spacing[14],
-      height: theme.spacing[14],
+      width: theme.spacing[16] + theme.spacing[10],
+      height: theme.spacing[16] + theme.spacing[10],
       borderRadius: theme.radius.pill,
       backgroundColor: 'transparent',
       overflow: 'hidden',
@@ -303,46 +704,296 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       justifyContent: 'center',
     },
     h2hLogoImg: {
-      width: theme.spacing[14],
-      height: theme.spacing[14],
+      width: theme.spacing[16] + theme.spacing[10],
+      height: theme.spacing[16] + theme.spacing[10],
     },
     h2hVsText: {
-      fontSize: theme.typography.h1.fontSize,
+      fontSize: theme.typography.h2.fontSize,
       fontWeight: '800',
       textShadowColor: theme.colors.overlay.textShadow,
       textShadowOffset: { width: 0, height: 1 },
       textShadowRadius: 3,
     },
-    matchCard: {
-      margin: spacing.md,
+    countdownWrap: {
+      position: 'absolute',
+      left: spacing.md,
+      right: spacing.md,
+      bottom: theme.spacing[16] - spacing.sm,
+      alignItems: 'center',
+      zIndex: 2,
     },
-    matchRow: {
+    countdownText: {
+      color: theme.colors.text.inverse,
+      fontSize: theme.typography.caption.fontSize,
+      fontWeight: '700',
+      backgroundColor: theme.colors.overlay.medium,
+      paddingHorizontal: theme.spacing[3],
+      paddingVertical: theme.spacing[1],
+      borderRadius: theme.radius.pill,
+      overflow: 'hidden',
+    },
+    heroBottomGradient: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: 0,
+      height: theme.spacing[16],
+      backgroundColor: theme.colors.overlay.heroScrim,
+      zIndex: 2,
+    },
+    contentBlock: {
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.md,
+      gap: spacing.md,
+    },
+    matchInfoCard: {
+      marginBottom: theme.spacing[0],
+    },
+    matchInfoEyebrow: {
+      fontSize: theme.typography.caption.fontSize,
+      fontWeight: '700',
+      color: theme.colors.text.secondary,
+      letterSpacing: 0.5,
+      marginBottom: spacing.xs,
+    },
+    matchInfoDetails: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.sm,
+    },
+    matchInfoIconBlock: {
+      width: theme.spacing[10],
+      height: theme.spacing[10],
+      borderRadius: theme.radius.md,
+      backgroundColor: theme.colors.bg.subtle,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    matchInfoContent: {
+      flex: 1,
+    },
+    choiceCard: {
+      marginBottom: theme.spacing[0],
+    },
+    stateCard: {
+      marginBottom: theme.spacing[0],
+    },
+    stateCardEyebrow: {
+      fontSize: theme.typography.caption.fontSize,
+      fontWeight: '700',
+      color: theme.colors.text.secondary,
+      letterSpacing: 0.5,
+      marginBottom: spacing.xs,
+    },
+    stateCardTitle: {
+      fontSize: theme.typography.h3.fontSize,
+      fontWeight: '700',
+      color: theme.colors.text.primary,
+      marginBottom: spacing.sm,
+    },
+    choiceButtonGroup: {
+      gap: spacing.sm,
+    },
+    stateCardBody: {
+      fontSize: theme.typography.body.fontSize,
+      color: theme.colors.text.secondary,
+      lineHeight: theme.spacing[4],
+      marginBottom: spacing.sm,
+    },
+    stateSecondaryActions: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      marginTop: spacing.xs,
+    },
+    stateSecondaryAction: {
+      flex: 1,
+    },
+    matchdayCard: {
+      marginBottom: theme.spacing[0],
+    },
+    matchdayCardTitle: {
+      fontSize: theme.typography.h3.fontSize,
+      fontWeight: '700',
+      color: theme.colors.text.primary,
+      marginBottom: theme.spacing[1],
+    },
+    matchdayCardBody: {
+      fontSize: theme.typography.body.fontSize,
+      fontWeight: '700',
+      color: theme.colors.text.primary,
+      marginBottom: theme.spacing[1],
+    },
+    matchdayCardSubtext: {
+      fontSize: theme.typography.caption.fontSize,
+      color: theme.colors.text.secondary,
+      marginBottom: spacing.sm,
+    },
+    matchdayActionsRow: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      marginTop: spacing.sm,
+    },
+    matchdayActionButton: {
+      flex: 1,
+    },
+    matchInfoTitle: {
+      fontSize: theme.typography.h3.fontSize,
+      fontWeight: '800',
+      color: theme.colors.text.primary,
+      marginBottom: spacing.xs,
+    },
+    matchInfoMeta: {
+      fontSize: theme.typography.body.fontSize,
+      fontWeight: '600',
+      color: theme.colors.text.primary,
+      marginBottom: theme.spacing[1],
+    },
+    matchInfoStatus: {
+      fontSize: theme.typography.caption.fontSize,
+      fontWeight: '600',
+      color: theme.colors.text.secondary,
+    },
+    matchInfoVenue: {
+      fontSize: theme.typography.body.fontSize,
+      fontWeight: '600',
+      color: theme.colors.text.primary,
+      marginBottom: theme.spacing[1],
+    },
+    communityStrip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.sm,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: theme.radius.lg,
+      backgroundColor: theme.colors.bg.card,
+      borderWidth: theme.layout.borderHairline,
+      borderColor: theme.colors.border.subtle,
+    },
+    communityStripLead: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      flex: 1,
+    },
+    communityStripCopy: {
+      flex: 1,
+    },
+    communityStripTitle: {
+      fontSize: theme.typography.body.fontSize,
+      fontWeight: '700',
+      color: theme.colors.text.primary,
+      marginBottom: theme.spacing[0],
+    },
+    communityStripMeta: {
+      fontSize: theme.typography.caption.fontSize,
+      color: theme.colors.text.secondary,
+      fontWeight: '600',
+    },
+    joinCta: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      marginVertical: spacing.lg,
+      borderWidth: theme.layout.borderWidth,
+      borderRadius: theme.radius.md,
+      paddingVertical: spacing.sm,
     },
-    team: {
-      alignItems: 'center',
+    joinCtaIdle: {
+      backgroundColor: theme.colors.bg.card,
+      borderColor: theme.colors.primary,
+    },
+    joinCtaActive: {
+      backgroundColor: theme.colors.primary,
+      borderColor: theme.colors.primary,
+    },
+    joinText: {
+      fontSize: theme.typography.h3.fontSize,
+      fontWeight: '700',
+      marginLeft: spacing.sm,
+    },
+    secondaryCtaRow: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+    },
+    secondaryCtaButton: {
       flex: 1,
     },
-    teamCircle: {
-      width: theme.spacing[12],
-      height: theme.spacing[12],
-      borderRadius: theme.radius.pill,
+    section: {
+      marginBottom: spacing.sm,
+    },
+    commentsZoneCard: {
+      paddingHorizontal: theme.spacing[0],
+      paddingVertical: theme.spacing[0],
+      overflow: 'hidden',
+    },
+    sectionHeading: {
+      fontSize: theme.typography.caption.fontSize,
+      fontWeight: '700',
+      color: theme.colors.text.secondary,
+      marginBottom: spacing.sm,
+      letterSpacing: 0.5,
+    },
+    activitiesCard: {
+      marginBottom: theme.spacing[0],
+    },
+    activityRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    activityIconWrap: {
+      width: theme.spacing[9],
+      height: theme.spacing[9],
+      borderRadius: theme.radius.md,
+      backgroundColor: theme.colors.bg.subtle,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    teamLogo: {
-      width: theme.spacing[12],
-      height: theme.spacing[12],
-      borderRadius: theme.radius.pill,
+    activityContent: {
+      flex: 1,
     },
-    teamName: {
+    activityTitle: {
       fontSize: theme.typography.body.fontSize,
       fontWeight: '600',
-      marginTop: spacing.sm,
-      textAlign: 'center',
+      color: theme.colors.text.primary,
+      marginBottom: theme.spacing[0],
+    },
+    activitySubtitle: {
+      fontSize: theme.typography.caption.fontSize,
+      color: theme.colors.text.secondary,
+      lineHeight: theme.spacing[3],
+    },
+    activityCtaWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing[1],
+    },
+    activityCtaText: {
+      fontSize: theme.typography.caption.fontSize,
+      color: theme.colors.text.secondary,
+      fontWeight: '600',
+    },
+    activityDivider: {
+      height: theme.layout.borderHairline,
+      backgroundColor: theme.colors.border.subtle,
+      marginVertical: spacing.xs,
+    },
+    commentsIntro: {
+      marginBottom: spacing.xs,
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.md,
+    },
+    commentsIntroTitle: {
+      fontSize: theme.typography.body.fontSize,
+      color: theme.colors.text.primary,
+      fontWeight: '700',
+      marginBottom: theme.spacing[1],
+    },
+    commentsIntroBody: {
+      fontSize: theme.typography.caption.fontSize,
+      color: theme.colors.text.secondary,
+      lineHeight: theme.spacing[4],
     },
     teamText: {
       fontSize: theme.typography.h2.fontSize,
@@ -361,82 +1012,5 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     loadingText: {
       fontSize: theme.typography.body.fontSize,
       marginTop: spacing.md,
-    },
-    vs: {
-      fontSize: theme.typography.h2.fontSize,
-      fontWeight: '700',
-      marginHorizontal: spacing.md,
-    },
-    leagueText: {
-      fontSize: theme.typography.body.fontSize,
-      textAlign: 'center',
-      marginBottom: spacing.md,
-    },
-    divider: {
-      height: theme.layout.borderWidth,
-      marginBottom: spacing.md,
-    },
-    ctaRow: {
-      flexDirection: 'row',
-      paddingHorizontal: spacing.md,
-      marginBottom: spacing.md,
-    },
-    ctaButton: {
-      flex: 1,
-      marginHorizontal: spacing.xs,
-    },
-    joinCta: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderWidth: theme.layout.borderWidth,
-      borderRadius: theme.radius.md,
-      paddingVertical: spacing.lg,
-      marginHorizontal: spacing.md,
-      marginBottom: spacing.md,
-    },
-    joinText: {
-      fontSize: theme.typography.h3.fontSize,
-      fontWeight: '600',
-      marginLeft: spacing.sm,
-    },
-    section: {
-      paddingHorizontal: spacing.md,
-      marginBottom: spacing.md,
-    },
-    activitiesCard: {
-      marginBottom: spacing.md,
-    },
-    commentsCard: {
-      marginBottom: spacing.md,
-    },
-    commentRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingVertical: spacing.sm,
-      borderBottomWidth: theme.layout.borderWidth,
-    },
-    avatar: {
-      width: theme.spacing[10],
-      height: theme.spacing[10],
-      borderRadius: theme.radius.pill,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginRight: spacing.sm,
-    },
-    avatarText: {
-      fontSize: theme.typography.body.fontSize,
-      fontWeight: '700',
-    },
-    commentContent: {
-      flex: 1,
-    },
-    commentAuthor: {
-      fontSize: theme.typography.body.fontSize,
-      fontWeight: '600',
-    },
-    commentText: {
-      fontSize: theme.typography.body.fontSize,
-      marginTop: theme.spacing[0],
     },
   });

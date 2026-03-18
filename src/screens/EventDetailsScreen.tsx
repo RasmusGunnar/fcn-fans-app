@@ -38,8 +38,6 @@ import { canDeleteEvent, canEditEvent } from '../utils/permissions';
 
 type EventDetailsRouteProp = RouteProp<{ EventDetails: { eventId: string } }, 'EventDetails'>;
 
-// --- Helpers ---
-
 function formatDateDa(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleDateString('da-DK', {
@@ -87,7 +85,26 @@ function buildMapsDestination(event: Event): string | null {
   return event.location_address?.trim() || null;
 }
 
-// --- Component ---
+function buildMapsUrl(event: Event): string | null {
+  if (event.lat != null && event.lng != null) {
+    return Platform.OS === 'ios'
+      ? `http://maps.apple.com/?ll=${event.lat},${event.lng}`
+      : `https://www.google.com/maps/search/?api=1&query=${event.lat},${event.lng}`;
+  }
+
+  const destination = buildMapsDestination(event);
+  if (!destination) return null;
+
+  const encoded = encodeURIComponent(destination);
+  return Platform.OS === 'ios'
+    ? `http://maps.apple.com/?q=${encoded}`
+    : `https://www.google.com/maps/search/?api=1&query=${encoded}`;
+}
+
+function formatAttendeeCount(count: number): string {
+  if (count === 1) return '1 deltager';
+  return `${count} deltagere`;
+}
 
 export default function EventDetailsScreen() {
   const navigation = useNavigation();
@@ -112,7 +129,6 @@ export default function EventDetailsScreen() {
     loadEvent();
   }, [loadEvent]);
 
-  // Re-fetch when returning from edit screen
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       if (event) loadEvent();
@@ -124,7 +140,7 @@ export default function EventDetailsScreen() {
     if (!event) return;
     try {
       await Share.share({
-        message: `${event.title}\n${event.description || ''}\n\u{1F4C5} ${formatDateDa(event.start_at)}`,
+        message: `${event.title}\n${event.description || ''}\n${formatDateDa(event.start_at)}`,
         title: event.title,
       });
     } catch (error) {
@@ -135,30 +151,7 @@ export default function EventDetailsScreen() {
   const handleFindvej = async () => {
     if (!event) return;
     try {
-      let url: string | null = null;
-
-      // Try coordinates first
-      if (event.lat != null && event.lng != null) {
-        url =
-          Platform.OS === 'ios'
-            ? `http://maps.apple.com/?ll=${event.lat},${event.lng}`
-            : `geo:${event.lat},${event.lng}`;
-      }
-      // Fall back to address
-      else {
-        const destination = buildMapsDestination(event);
-        const addressParts = destination ? [destination] : [];
-
-        if (addressParts.length > 0) {
-          const address = addressParts.join(' ');
-          const encoded = encodeURIComponent(address);
-          url =
-            Platform.OS === 'ios'
-              ? `http://maps.apple.com/?q=${encoded}`
-              : `geo:0,0?q=${encoded}`;
-        }
-      }
-
+      const url = buildMapsUrl(event);
       if (url) {
         await Linking.openURL(url);
       }
@@ -173,7 +166,7 @@ export default function EventDetailsScreen() {
 
   const handleDeleteEvent = async () => {
     Alert.alert('Slet event', 'Er du sikker på du vil slette dette event?', [
-      { text: 'Annullér', style: 'cancel' },
+      { text: 'Annuller', style: 'cancel' },
       {
         text: 'Slet',
         style: 'destructive',
@@ -189,7 +182,6 @@ export default function EventDetailsScreen() {
     ]);
   };
 
-  // --- Loading ---
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -215,7 +207,6 @@ export default function EventDetailsScreen() {
     );
   }
 
-  // --- Not found ---
   if (!event) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -245,12 +236,12 @@ export default function EventDetailsScreen() {
     );
   }
 
-  // --- Derived ---
   const coverUrl = getCoverUrl(event);
   const dateStr = formatDateDa(event.start_at);
   const timeStr = formatTimeDa(event.start_at);
   const endStr = event.end_at ? formatTimeDa(event.end_at) : null;
   const addressDisplay = buildAddressDisplay(event);
+  const attendeeCountLabel = formatAttendeeCount(attendance.countGoing);
 
   const showEditOption = canEditEvent(
     user?.id,
@@ -291,7 +282,7 @@ export default function EventDetailsScreen() {
         <Text variant="h3" color="inverse" style={styles.headerTitle}>
           Event detaljer
         </Text>
-        <View style={{ flex: 1 }} />
+        <View style={styles.headerSpacer} />
         {menuOptions.length > 0 && (
           <OptionsMenu
             options={menuOptions}
@@ -302,7 +293,7 @@ export default function EventDetailsScreen() {
       </View>
 
       <KeyboardAvoidingView
-        style={{ flex: 1 }}
+        style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={insets.top + theme.spacing[11]}
       >
@@ -311,7 +302,6 @@ export default function EventDetailsScreen() {
           contentContainerStyle={{ paddingBottom: insets.bottom + theme.spacing[8] }}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Cover Image / Placeholder */}
           <View style={styles.coverContainer}>
             {coverUrl ? (
               <Image source={{ uri: coverUrl }} style={styles.coverImage} resizeMode="cover" />
@@ -329,7 +319,6 @@ export default function EventDetailsScreen() {
             </View>
           </View>
 
-          {/* Title + organizer */}
           <View style={styles.section}>
             <Text variant="h2" color="primary" style={styles.title}>
               {event.title}
@@ -341,7 +330,6 @@ export default function EventDetailsScreen() {
             )}
           </View>
 
-          {/* Details card */}
           <Card style={styles.card}>
             <Text variant="h3" color="primary" style={styles.sectionTitle}>
               Detaljer
@@ -360,7 +348,7 @@ export default function EventDetailsScreen() {
                 </Text>
                 <Text variant="body" color="primary" style={styles.metaValue}>
                   {dateStr}, kl. {timeStr}
-                  {endStr && ` \u2013 ${endStr}`}
+                  {endStr && ` – ${endStr}`}
                 </Text>
               </View>
             </View>
@@ -391,56 +379,84 @@ export default function EventDetailsScreen() {
                 </View>
               </View>
             )}
-
-            <Pressable
-              style={styles.metaRow}
-              onPress={() => (navigation as any).navigate('EventAttendees', { eventId: event.id })}
-            >
-              <View style={styles.metaIconCircle}>
-                <Ionicons
-                  name="people-outline"
-                  size={theme.components.icon.size.sm}
-                  color={theme.colors.primary}
-                />
-              </View>
-              <View style={styles.metaContent}>
-                <View style={styles.attendeesRow}>
-                  <AttendanceBubbles
-                    avatars={attendance.avatars}
-                    count={attendance.countGoing}
-                    max={5}
-                    size={theme.spacing[5]}
-                    textVariant="caption"
-                  />
-                  <View style={styles.attendeesLinkRow}>
-                    <Text variant="caption" style={styles.attendeesLinkText}>
-                      Alle
-                    </Text>
-                    <Ionicons
-                      name="chevron-forward"
-                      size={theme.components.icon.size.sm}
-                      color={theme.colors.text.secondary}
-                      style={styles.attendeesChevron}
-                    />
-                  </View>
-                </View>
-              </View>
-            </Pressable>
           </Card>
 
-          {/* Description */}
-          {event.description ? (
-            <Card style={styles.card}>
-              <Text variant="h3" color="primary" style={styles.sectionTitle}>
-                Om eventet
-              </Text>
-              <Text variant="body" color="primary" style={styles.description}>
-                {event.description}
-              </Text>
-            </Card>
-          ) : null}
+          <Card style={styles.card}>
+            <View style={styles.attendanceCardHeader}>
+              <View style={styles.attendanceCopy}>
+                <Text variant="h3" color="primary" style={styles.attendanceTitle}>
+                  {attendance.isGoing ? 'Du deltager' : 'Skal du med?'}
+                </Text>
+                <Text variant="body" color="secondary">
+                  {attendeeCountLabel}
+                </Text>
+              </View>
+              <Pressable
+                style={styles.attendeesPreviewButton}
+                onPress={() => (navigation as any).navigate('EventAttendees', { eventId: event.id })}
+              >
+                <AttendanceBubbles
+                  avatars={attendance.avatars}
+                  count={attendance.countGoing}
+                  max={5}
+                  size={theme.spacing[5]}
+                  textVariant="caption"
+                />
+              </Pressable>
+            </View>
 
-          {/* Quick actions */}
+            <View style={styles.attendanceActions}>
+              <Pressable
+                style={[
+                  styles.joinButton,
+                  {
+                    backgroundColor: attendance.isGoing
+                      ? theme.colors.primary
+                      : theme.colors.bg.card,
+                    borderColor: theme.colors.primary,
+                    borderWidth: theme.layout.borderWidth,
+                  },
+                ]}
+                onPress={attendance.toggleGoing}
+                disabled={attendance.loading}
+              >
+                <Ionicons
+                  name={attendance.isGoing ? 'checkmark-circle' : 'person-add'}
+                  size={theme.components.icon.size.sm}
+                  color={attendance.isGoing ? theme.colors.text.inverse : theme.colors.primary}
+                />
+                <Text
+                  variant="body"
+                  style={{
+                    color: attendance.isGoing ? theme.colors.text.inverse : theme.colors.primary,
+                    fontWeight: '600',
+                    marginLeft: theme.spacing[2],
+                  }}
+                >
+                  {attendance.isGoing ? 'Du deltager' : 'Jeg kommer'}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={styles.secondaryLinkButton}
+                onPress={() => (navigation as any).navigate('EventAttendees', { eventId: event.id })}
+              >
+                <Text variant="caption" style={styles.secondaryLinkText}>
+                  Se deltagere
+                </Text>
+                <Ionicons
+                  name="chevron-forward"
+                  size={theme.components.icon.size.sm}
+                  color={theme.colors.text.secondary}
+                />
+              </Pressable>
+              {attendance.error ? (
+                <Text variant="caption" color="secondary" style={styles.attendanceError}>
+                  {attendance.error}
+                </Text>
+              ) : null}
+            </View>
+          </Card>
+
           <View style={styles.actionsRow}>
             <Pressable style={styles.actionButton} onPress={handleShare}>
               <Ionicons
@@ -479,7 +495,17 @@ export default function EventDetailsScreen() {
             </Pressable>
           </View>
 
-          {/* Organizer */}
+          {event.description ? (
+            <Card style={styles.card}>
+              <Text variant="h3" color="primary" style={styles.sectionTitle}>
+                Om eventet
+              </Text>
+              <Text variant="body" color="primary" style={styles.description}>
+                {event.description}
+              </Text>
+            </Card>
+          ) : null}
+
           {event.organizer && (
             <Card style={styles.card}>
               <Text variant="h3" color="primary" style={styles.sectionTitle}>
@@ -492,7 +518,7 @@ export default function EventDetailsScreen() {
                   label={event.organizer.name}
                 />
                 <View style={styles.organizerInfo}>
-                  <Text variant="body" color="primary" style={{ fontWeight: '600' }}>
+                  <Text variant="body" color="primary" style={styles.organizerName}>
                     {event.organizer.name}
                   </Text>
                   {event.organizer.description && (
@@ -505,45 +531,6 @@ export default function EventDetailsScreen() {
             </Card>
           )}
 
-          {/* Attendance/RSVP UI */}
-          <Card style={styles.card}>
-            <View style={styles.attendanceActions}>
-                <Pressable
-                  style={[
-                    styles.joinButton,
-                    {
-                      backgroundColor: attendance.isGoing
-                        ? theme.colors.primary
-                        : theme.colors.bg.card,
-                      borderColor: theme.colors.primary,
-                      borderWidth: 1,
-                    },
-                  ]}
-                  onPress={() => {
-                    attendance.toggleGoing();
-                  }}
-                  disabled={attendance.loading}
-                >
-                  <Ionicons
-                    name={attendance.isGoing ? 'person' : 'person-add'}
-                    size={theme.components.icon.size.sm}
-                    color={attendance.isGoing ? theme.colors.text.inverse : theme.colors.primary}
-                  />
-                  <Text
-                    variant="body"
-                    style={{
-                      color: attendance.isGoing ? theme.colors.text.inverse : theme.colors.primary,
-                      fontWeight: '600',
-                      marginLeft: theme.spacing[2],
-                    }}
-                  >
-                    {attendance.isGoing ? 'Deltager' : 'Deltag'} ({attendance.countGoing})
-                  </Text>
-                </Pressable>
-            </View>
-          </Card>
-
-          {/* Comments */}
           <View style={styles.section}>
             <InlineComments
               targetType="event"
@@ -560,12 +547,13 @@ export default function EventDetailsScreen() {
   );
 }
 
-// --- Styles ---
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.primary,
+  },
+  flex: {
+    flex: 1,
   },
   header: {
     flexDirection: 'row',
@@ -580,6 +568,9 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontWeight: '700',
+  },
+  headerSpacer: {
+    flex: 1,
   },
   scrollView: {
     flex: 1,
@@ -648,23 +639,22 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingTop: theme.spacing[1],
   },
-  attendeesRow: {
+  attendanceCardHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: theme.spacing[2],
+    marginBottom: theme.spacing[3],
   },
-  attendeesLinkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginLeft: theme.spacing[2],
+  attendanceCopy: {
+    flex: 1,
   },
-  attendeesLinkText: {
-    color: theme.colors.text.secondary,
+  attendanceTitle: {
     fontWeight: '600',
   },
-  attendeesChevron: {
-    marginLeft: theme.spacing[1],
+  attendeesPreviewButton: {
+    minWidth: theme.spacing[12],
+    alignItems: 'flex-end',
   },
   metaValue: {
     fontWeight: '600',
@@ -706,9 +696,15 @@ const styles = StyleSheet.create({
   organizerInfo: {
     flex: 1,
   },
+  organizerName: {
+    fontWeight: '600',
+  },
   attendanceActions: {
     width: '100%',
     gap: theme.spacing[2],
+  },
+  attendanceError: {
+    textAlign: 'left',
   },
   joinButton: {
     flexDirection: 'row',
@@ -718,8 +714,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing[4],
     borderRadius: theme.radius.md,
   },
-  ctaContainer: {
-    marginHorizontal: theme.spacing[4],
-    marginBottom: theme.spacing[4],
+  secondaryLinkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: theme.spacing[1],
+  },
+  secondaryLinkText: {
+    color: theme.colors.text.secondary,
+    fontWeight: '600',
   },
 });

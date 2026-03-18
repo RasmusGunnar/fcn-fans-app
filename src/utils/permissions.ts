@@ -47,8 +47,9 @@ export function canEditPost(
 ): boolean {
   if (isAppAdmin) return true;
   if (!userId) return false;
-  return post.author_id === userId;
-  // TODO: Add community admin check: || (communityRole in ('owner','admin') && post.community_id matches)
+  if (post.author_id === userId) return true;
+  if (communityRole && ['owner', 'admin'].includes(communityRole)) return true;
+  return false;
 }
 
 /**

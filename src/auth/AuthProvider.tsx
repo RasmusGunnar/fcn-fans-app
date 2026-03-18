@@ -1,7 +1,10 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Alert } from 'react-native';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import * as Crypto from 'expo-crypto';
 import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
+import { isSystemAdmin } from '../services/rbac';
 
 type User = any;
 type Session = any;
@@ -33,17 +36,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const checkAdminStatus = async (userId: string) => {
       try {
-        // Use RPC function to check admin status (bypasses RLS)
-        const { data: isAdmin, error } = await supabase.rpc('is_app_admin');
-
+        // Primary path: RPC function (bypasses RLS)
+        const { data: rpcIsAdmin, error } = await supabase.rpc('is_app_admin');
         if (error) {
-          throw error;
+          logger.warn('[AuthProvider] RPC admin check failed, falling back to direct lookup:', error);
+        }
+
+        let resolvedIsAdmin = !error && !!rpcIsAdmin;
+
+        // Fallback: direct self-row lookup in app_admins via existing RLS policy.
+        // This keeps the underlying source of truth the same while avoiding silent false negatives.
+        if (!resolvedIsAdmin) {
+          const directIsAdmin = await isSystemAdmin();
+          if (directIsAdmin && !rpcIsAdmin) {
+            logger.warn('[AuthProvider] Admin fallback activated: RPC returned false but app_admins lookup returned true', {
+              userId,
+            });
+          }
+          resolvedIsAdmin = directIsAdmin;
         }
 
         if (mounted) {
-          setIsAppAdmin(!!isAdmin);
+          setIsAppAdmin(resolvedIsAdmin);
           if (__DEV__) {
-            logger.log('[AuthProvider] Admin check result:', { userId, isAdmin: !!isAdmin });
+            logger.log('[AuthProvider] Admin check result:', {
+              userId,
+              rpcIsAdmin: !error && !!rpcIsAdmin,
+              resolvedIsAdmin,
+            });
           }
         }
       } catch (e) {
@@ -151,9 +171,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signInWithApple = async () => {
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithOAuth({ provider: 'apple' as any });
+      const isAvailable = await AppleAuthentication.isAvailableAsync();
+      if (!isAvailable) {
+        throw new Error('Apple Sign In er ikke tilgængelig på denne enhed');
+      }
+
+      const rawNonce = Crypto.randomUUID();
+      const hashedNonce = await Crypto.digestStringAsync(
+        Crypto.CryptoDigestAlgorithm.SHA256,
+        rawNonce,
+      );
+
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+        nonce: hashedNonce,
+      });
+
+      if (!credential.identityToken) {
+        throw new Error('Apple returnerede ikke et identity token');
+      }
+
+      const { error } = await supabase.auth.signInWithIdToken({
+        provider: 'apple',
+        token: credential.identityToken,
+        nonce: rawNonce,
+      });
+
       if (error) throw error;
     } catch (e: any) {
+      const code = e?.code ?? e?.name;
+      if (code === 'ERR_REQUEST_CANCELED' || code === 'ERR_CANCELED') {
+        return;
+      }
+      logger.warn('[AuthProvider] Apple sign-in error:', e);
       Alert.alert('Fejl', e.message ?? String(e));
     } finally {
       setLoading(false);

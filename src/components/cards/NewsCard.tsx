@@ -13,6 +13,7 @@ import { defaultTheme } from '../../theme';
 import type { CategoryKey } from '../../theme/categories';
 import { NewsItem } from '../../types/news';
 import { resolveActorLine, type ProfileMap } from '../../utils/actor';
+import { useCommunityRole } from '../../hooks/useCommunityRole';
 import { canDeleteFeedItem } from '../../utils/permissions';
 import { Avatar } from '../Avatar';
 import { OptionsMenu, OptionsMenuOption } from '../OptionsMenu';
@@ -40,6 +41,7 @@ function getTimeAgo(isoDate: string): string {
 interface NewsCardProps {
   newsItem: NewsItem;
   currentUserId?: string; // Current user ID to check if news is own
+  currentIsAppAdmin?: boolean;
   userAvatarUrl?: string; // Current user's avatar URL
   communityMap?: Record<string, string>; // Map of community ID -> name
   profileMap?: ProfileMap;
@@ -58,6 +60,7 @@ interface NewsCardProps {
 export function NewsCard({
   newsItem,
   currentUserId,
+  currentIsAppAdmin,
   userAvatarUrl,
   communityMap = {},
   profileMap,
@@ -74,24 +77,32 @@ export function NewsCard({
 }: NewsCardProps) {
   const navigation = useNavigation<any>();
   const { user, isAppAdmin } = useAuth();
+  const viewerUserId = currentUserId ?? user?.id;
+  const viewerIsAppAdmin = currentIsAppAdmin ?? isAppAdmin;
   const timeAgo = getTimeAgo(newsItem.createdAt);
+  const newsCreatedBy = newsItem.createdBy ?? (newsItem as any).created_by ?? null;
+  const newsActorType = newsItem.actorType ?? (newsItem as any).actor_type ?? 'user';
+  const newsActorId = newsItem.actorId ?? (newsItem as any).actor_id ?? newsCreatedBy;
+  const newsCommunityId = newsItem.communityId ?? (newsItem as any).community_id ?? null;
+  const authoredCommunityId =
+    newsActorType === 'community' ? newsActorId || newsCommunityId || null : null;
+  const { role: authoredCommunityRole } = useCommunityRole(authoredCommunityId);
 
   const resolvedActor = resolveActorLine({
-    actorType: newsItem.actorType,
-    authorId: newsItem.actorType === 'user' ? newsItem.actorId || newsItem.createdBy : undefined,
+    actorType: newsActorType,
+    authorId: newsActorType === 'user' ? newsActorId || newsCreatedBy || undefined : undefined,
     authorEmail: newsItem.actorName || undefined,
     profileMap,
-    communityName: newsItem.actorType === 'community' ? communityMap[newsItem.actorId] : undefined,
+    communityName: newsActorType === 'community' ? communityMap[newsActorId] : undefined,
   });
   const authorName = resolvedActor.displayName;
 
   // Resolve avatar URL: prefer profileMap lookup for the actor, fall back to current user's avatar
-  const actorUserId =
-    newsItem.actorType === 'user' ? newsItem.actorId || newsItem.createdBy : newsItem.createdBy;
+  const actorUserId = newsActorType === 'user' ? newsActorId || newsCreatedBy : newsCreatedBy;
   const actorProfile = profileMap?.[actorUserId];
   const resolvedAvatarUrl =
     actorProfile?.avatar_url ??
-    (currentUserId === newsItem.createdBy ? userAvatarUrl : undefined) ??
+    (currentUserId === newsCreatedBy ? userAvatarUrl : undefined) ??
     undefined;
 
   const handleOpenLink = () => {
@@ -101,11 +112,11 @@ export function NewsCard({
   };
 
   const showDeleteOption = canDeleteFeedItem({
-    isAppAdmin,
-    viewerUserId: user?.id,
-    itemAuthorId: newsItem.createdBy,
-    itemActorType: newsItem.actorType,
-    itemCommunityRole: null,
+    isAppAdmin: viewerIsAppAdmin,
+    viewerUserId,
+    itemAuthorId: newsCreatedBy ?? undefined,
+    itemActorType: newsActorType,
+    itemCommunityRole: authoredCommunityRole,
   });
 
   const handleDeleteNews = async () => {
@@ -133,17 +144,19 @@ export function NewsCard({
   // Build card behavior model
   const cardModel = buildCardBehaviorModel({
     kind: 'news',
-    actorType: newsItem.actorType === 'community' ? 'community' : 'fan',
+    actorType: newsActorType === 'community' ? 'community' : 'fan',
     actorName: authorName,
     newsUrl: newsItem.url,
   });
+
+  const hasRightSlot = newsMenuOptions.length > 0;
 
   return (
     <CardRoot
       targetType="news"
       targetId={newsItem.id || newsItem.url}
-      currentUserId={user?.id}
-      isAppAdmin={isAppAdmin}
+      currentUserId={viewerUserId}
+      isAppAdmin={viewerIsAppAdmin}
       onOpenDetail={
         cardModel.pressBehavior === 'open_external'
           ? () => Linking.openURL(cardModel.externalUrl!)
@@ -171,11 +184,7 @@ export function NewsCard({
             ? () => navigation.navigate('PublicProfile', { userId: actorUserId })
             : undefined
         }
-        rightSlot={
-          showDeleteOption && newsMenuOptions.length > 0 ? (
-            <OptionsMenu options={newsMenuOptions} />
-          ) : undefined
-        }
+        rightSlot={hasRightSlot ? <OptionsMenu options={newsMenuOptions} /> : undefined}
       />
 
       {/* Render note FIRST if it exists */}

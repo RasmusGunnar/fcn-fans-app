@@ -1,28 +1,60 @@
-import React, { useMemo, useState } from 'react';
-import { Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Screen, Text, Button, Card } from '../../components/ui';
-import { useTheme } from '../../theme';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Alert,
+  Animated,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../auth/AuthProvider';
-import { uploadAvatar } from '../../lib/uploadAvatar';
-import { getPublicUrl } from '../../lib/storageUrl';
-import { supabase } from '../../lib/supabase';
+import { Avatar } from '../../components/Avatar';
+import { Text } from '../../components/ui';
 import { logger } from '../../lib/logger';
 import { ensureProfile } from '../../lib/profile';
-import { Avatar } from '../../components/Avatar';
+import { getPublicUrl } from '../../lib/storageUrl';
+import { supabase } from '../../lib/supabase';
+import { uploadAvatar } from '../../lib/uploadAvatar';
 import type { OnboardingStackParamList } from '../../navigation/OnboardingStack';
+import { useTheme } from '../../theme';
+import { isCompactDevice } from '../../utils/isCompactDevice';
 
 type Props = NativeStackScreenProps<OnboardingStackParamList, 'OnboardingProfile'>;
 
-export default function OnboardingProfileSetupScreen({ navigation }: Props) {
+export default function OnboardingProfileSetupScreen({ navigation, route }: Props) {
   const theme = useTheme();
   const styles = createStyles(theme);
   const { user } = useAuth();
+  const step = route.params?.step ?? 1;
+  const totalSteps = route.params?.totalSteps ?? 2;
 
   const [displayNameInput, setDisplayNameInput] = useState('');
   const [avatarUrlInput, setAvatarUrlInput] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [saving, setSaving] = useState(false);
+  const entranceOpacity = useRef(new Animated.Value(0)).current;
+  const entranceTranslateY = useRef(new Animated.Value(10)).current;
+  const hasAvatar = !!avatarUrlInput;
+  const appLogo = require('../../../assets/NewLogo.png');
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(entranceOpacity, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+      Animated.timing(entranceTranslateY, {
+        toValue: 0,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [entranceOpacity, entranceTranslateY]);
 
   const canContinue = useMemo(() => {
     return displayNameInput.trim().length > 0 && !!avatarUrlInput && !saving;
@@ -108,95 +140,227 @@ export default function OnboardingProfileSetupScreen({ navigation }: Props) {
     }
   };
 
-  return (
-    <Screen scrollable>
-      <View style={styles.header}>
-        <Text variant="h1">Opsæt din profil</Text>
-        <Text variant="body" color="secondary">
-          Vi skal bruge et kaldenavn og et profilbillede.
+  const compact = isCompactDevice();
+  const Content = (
+    <>
+      {/* Removed manual back button from onboarding profile setup */}
+      <Animated.View
+        style={{
+          opacity: entranceOpacity,
+          transform: [{ translateY: entranceTranslateY }],
+        }}
+      >
+      <View style={styles.heroSection}>
+        <View style={styles.brandMark}>
+          <View style={styles.logoSurface}>
+            <Image source={appLogo} style={styles.logoImage} resizeMode="contain" />
+          </View>
+        </View>
+        <Text variant="small" color="secondary">
+          Trin {step} af {totalSteps}
+        </Text>
+        <Text variant="h1" style={styles.headline}>
+          Gør profilen til din
+        </Text>
+        <Text variant="body" color="secondary" style={styles.subtitle}>
+          Vælg et kaldenavn og et profilbillede, så andre fans kan kende dig.
         </Text>
       </View>
 
-      <Card style={styles.card}>
-        <Text variant="bodyBold" style={styles.label}>
-          Kaldenavn
-        </Text>
-        <TextInput
-          value={displayNameInput}
-          onChangeText={setDisplayNameInput}
-          placeholder="Dit kaldenavn"
-          placeholderTextColor={theme.colors.text.secondary}
-          style={styles.input}
-          editable={!saving}
-        />
-
-        <Text variant="bodyBold" style={styles.label}>
-          Profilbillede
-        </Text>
-        <View style={styles.avatarRow}>
-          <Pressable onPress={handleUploadAvatar} style={styles.avatarButton}>
+      <View style={styles.profileSection}>
+        <Pressable onPress={handleUploadAvatar} style={styles.avatarTouchTarget}>
+          <View style={styles.avatarSurface}>
             <Avatar
               userId={user?.id}
               avatarUrl={avatarUrlInput}
-              size={72}
+              size={theme.spacing[11] + theme.spacing[11]}
               label={displayNameInput || user?.email || 'Fan'}
             />
-            <Text variant="small" color="secondary" style={styles.avatarHint}>
-              Tryk for at uploade
-            </Text>
-          </Pressable>
-          <Button
-            title={uploadingAvatar ? 'Uploader...' : 'Upload'}
-            onPress={handleUploadAvatar}
-            disabled={uploadingAvatar}
-            variant="outline"
+          </View>
+          <Text style={styles.avatarHint}>
+            {uploadingAvatar
+              ? 'Henter billede...'
+              : hasAvatar
+                ? 'Skift profilbillede'
+                : 'Vælg profilbillede'}
+          </Text>
+        </Pressable>
+
+        <View style={styles.inputSection}>
+          <Text style={styles.inputLabel}>Kaldenavn</Text>
+          <TextInput
+            value={displayNameInput}
+            onChangeText={setDisplayNameInput}
+            placeholder="Dit kaldenavn"
+            placeholderTextColor={theme.colors.text.secondary}
+            style={styles.displayNameInput}
+            editable={!saving}
+            autoCapitalize="words"
+            returnKeyType="done"
+            maxLength={32}
           />
         </View>
-      </Card>
-
-      <View style={styles.footer}>
-        <Button title={saving ? 'Gemmer...' : 'Fortsæt'} onPress={handleContinue} disabled={!canContinue} fullWidth />
       </View>
-    </Screen>
+
+        <View style={styles.bottomActions}>
+          <Pressable
+          style={({ pressed }) => [
+            styles.primaryButton,
+            !canContinue && styles.primaryButtonDisabled,
+            pressed && canContinue && styles.primaryButtonPressed,
+          ]}
+          onPress={handleContinue}
+          disabled={!canContinue}
+          accessibilityRole="button"
+        >
+          <Text style={styles.primaryButtonText}>{saving ? 'Gemmer...' : 'Fortsæt'}</Text>
+        </Pressable>
+      </View>
+      </Animated.View>
+    </>
+  );
+
+  return (
+    <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
+      {compact ? (
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.content}>{Content}</View>
+        </ScrollView>
+      ) : (
+        <View style={styles.content}>{Content}</View>
+      )}
+    </SafeAreaView>
   );
 }
 
 const createStyles = (theme: ReturnType<typeof useTheme>) =>
   StyleSheet.create({
-    header: {
-      gap: theme.spacing[2],
+    root: {
+      flex: 1,
+      backgroundColor: theme.colors.bg.canvas,
+    },
+    content: {
+      flex: 1,
+      paddingHorizontal: theme.spacing[6],
+      paddingBottom: theme.spacing[4],
+    },
+    heroSection: {
+      alignItems: 'center',
       marginBottom: theme.spacing[4],
+      gap: theme.spacing[2],
     },
-    card: {
-      padding: theme.spacing[4],
-      gap: theme.spacing[3],
+    brandMark: {
+      marginBottom: theme.spacing[2],
     },
-    label: {
-      marginTop: theme.spacing[2],
-    },
-    input: {
+    logoSurface: {
+      width: theme.spacing[8] + theme.spacing[8],
+      height: theme.spacing[8] + theme.spacing[8],
+      borderRadius: theme.radius.pill,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.colors.bg.surface,
       borderWidth: theme.layout.borderWidth,
-      borderColor: theme.colors.border.default,
-      padding: theme.spacing[3],
-      borderRadius: theme.radius.sm,
-      backgroundColor: theme.colors.bg.card,
-      fontSize: theme.typography.body.fontSize,
-      color: theme.colors.text.primary,
+      borderColor: theme.colors.border.subtle,
     },
-    avatarRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: theme.spacing[3],
+    logoImage: {
+      width: theme.spacing[10],
+      height: theme.spacing[10],
     },
-    avatarButton: {
-      alignItems: 'center',
-      gap: theme.spacing[1],
-    },
-    avatarHint: {
+    headline: {
       textAlign: 'center',
     },
-    footer: {
+    subtitle: {
+      textAlign: 'center',
+      maxWidth: theme.spacing[16] + theme.spacing[16] + theme.spacing[16],
+    },
+    profileSection: {
+      flex: 1,
+      alignItems: 'center',
+    },
+    avatarSection: {
+      alignItems: 'center',
+      marginBottom: theme.spacing[6],
+      justifyContent: 'center',
+    },
+    avatarTouchTarget: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: 112,
+      height: 112,
+      borderRadius: theme.radius.pill,
+      backgroundColor: theme.colors.bg.surface,
+      shadowColor: theme.colors.text.primary,
+      shadowOpacity: 0.12,
+      shadowRadius: 14,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: theme.elevation.sm.android,
+      marginBottom: theme.spacing[1],
+    },
+    avatarSurface: {
+      width: 96,
+      height: 96,
+      borderRadius: theme.radius.pill,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.colors.bg.elevated,
+      borderWidth: theme.layout.borderWidth,
+      borderColor: theme.colors.border.subtle,
+    },
+    avatarHint: {
+      marginTop: theme.spacing[2],
+      fontSize: 14,
+      color: theme.colors.text.secondary,
+      textAlign: 'center',
+    },
+    inputSection: {
+      width: '100%',
       marginTop: theme.spacing[5],
+      marginBottom: theme.spacing[1],
+    },
+    inputLabel: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: theme.colors.text.primary,
+      marginBottom: theme.spacing[2],
+    },
+    displayNameInput: {
+      width: '100%',
+      borderRadius: theme.radius.lg,
+      paddingHorizontal: theme.spacing[4],
+      paddingVertical: theme.spacing[4],
+      fontSize: 16,
+      borderWidth: 1,
+      borderColor: theme.colors.border.default,
+      backgroundColor: theme.colors.bg.surface,
+      color: theme.colors.text.primary,
+    },
+    bottomActions: {
+      paddingHorizontal: theme.spacing[6],
+      paddingTop: theme.spacing[1],
+      paddingBottom: theme.spacing[4],
+    },
+    primaryButton: {
+      width: '100%',
+      borderRadius: theme.radius.pill,
+      paddingVertical: theme.spacing[3],
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.colors.brand.accent,
+    },
+    primaryButtonDisabled: {
+      opacity: 0.4,
+    },
+    primaryButtonText: {
+      fontSize: 17,
+      fontWeight: '600',
+      color: theme.colors.bg.surface,
+    },
+    primaryButtonPressed: {
+      opacity: 0.94,
+      transform: [{ scale: 0.985 }],
     },
   });
