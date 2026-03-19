@@ -17,7 +17,7 @@ export function getMatchdayTiming(kickoffAt: string, now: Date): MatchdayTimingS
   return {
     diffHours,
     isLive: diffMs <= 0,
-    isMatchday: diffHours <= MATCHDAY_WINDOW_HOURS,
+    isMatchday: Math.abs(diffHours) <= MATCHDAY_WINDOW_HOURS,
   };
 }
 
@@ -30,7 +30,7 @@ export function getMatchViewState({
   isGoing: boolean;
   isCheckedIn: boolean;
 }): MatchViewState {
-  if (isCheckedIn) return 'checked_in_confirmed';
+  if (isMatchday && isCheckedIn) return 'checked_in_confirmed';
   if (isMatchday && isGoing) return 'matchday_action';
   return 'pre_match';
 }

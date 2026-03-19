@@ -318,7 +318,7 @@ export default function HomeScreen() {
     (navigation as any).navigate('EventAttendees', {
       entityId: nextFixture.id,
       entityType: 'match',
-      title: 'Tjekket ind p\u00e5 stadion',
+      title: 'Tjekket ind på stadion',
       mode: 'checkin',
     });
   }, [navigation, nextFixture?.id]);
@@ -329,7 +329,7 @@ export default function HomeScreen() {
     try {
       await Linking.openURL(FCN_TICKET_URL);
     } catch {
-      Alert.alert('Fejl', 'Kunne ikke \u00e5bne billetsiden.');
+      Alert.alert('Fejl', 'Kunne ikke åbne billetsiden.');
     }
   }, [canBuyNextMatchTicket]);
 
@@ -339,7 +339,7 @@ export default function HomeScreen() {
     try {
       await Linking.openURL(nextMatchMapsUrl);
     } catch {
-      Alert.alert('Fejl', 'Kunne ikke \u00e5bne kortet.');
+      Alert.alert('Fejl', 'Kunne ikke åbne kortet.');
     }
   }, [nextMatchMapsUrl]);
 
@@ -388,7 +388,7 @@ export default function HomeScreen() {
         ]
       : [
           {
-            label: 'K\u00f8b billet',
+            label: 'Køb billet',
             icon: 'ticket-outline' as const,
             onPress: handleOpenNextMatchTickets,
             disabled: !canBuyNextMatchTicket,
@@ -423,8 +423,8 @@ export default function HomeScreen() {
       ListHeaderComponent={
         <>
           <AppHeader
-            title="FC Nordsj\u00e6lland"
-            subtitle="Fan F\u00e6llesskab"
+            title="FC Nordsjælland"
+            subtitle="Fan Fællesskab"
             onPressProfile={() => (navigation as any).navigate('Profile')}
           />
           {/* Next Match Hero Badge - Edge to edge */}
@@ -477,7 +477,7 @@ export default function HomeScreen() {
             name="Ultras FCN"
             members={89}
             timeAgo="1 time siden"
-            description="FCN's mest passionerede fans. Vi st\u00f8tter holdet gennem tykt og tyndt med sang, flag og uforbeholden st\u00f8tte."
+            description="FCN's mest passionerede fans. Vi støtter holdet gennem tykt og tyndt med sang, flag og uforbeholden støtte."
             liked={factionLiked}
             likes={factionLikes}
             comments={1}

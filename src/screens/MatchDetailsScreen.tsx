@@ -41,7 +41,7 @@ function formatCountdownLabel(kickoffAt: string, now: Date): string {
   const diffHours = diffMs / (1000 * 60 * 60);
 
   if (diffMs <= 0) return 'Kampen er i gang';
-  if (diffHours < 2) return 'Starter snart \uD83D\uDD25';
+  if (diffHours < 2) return 'Starter snart 🔥';
   if (diffHours < 48) return `Starter om ${Math.ceil(diffHours)} timer`;
   return `Starter om ${Math.ceil(diffHours / 24)} dage`;
 }
@@ -225,7 +225,7 @@ export default function MatchDetailsScreen() {
           <Text style={[styles.errorText, { color: theme.colors.text.primary }]}>
             Kunne ikke finde kampdata
           </Text>
-          <PrimaryButton title="G\u00e5 tilbage" onPress={() => navigation.goBack()} />
+          <PrimaryButton title="Gå tilbage" onPress={() => navigation.goBack()} />
         </View>
       </SafeAreaView>
     );
@@ -233,23 +233,24 @@ export default function MatchDetailsScreen() {
 
   const isHomeMatch = isFcnHomeMatch(fixture);
   const mapsUrl = buildMatchMapsUrl(fixture);
-  const isGoingToMatch = participationChoice === 'going' || attendance.isGoing || matchCheckIn.isCheckedIn;
-  const competitionLabel = [fixture.competition, fixture.round].filter(Boolean).join(' \u00b7 ');
+  const competitionLabel = [fixture.competition, fixture.round].filter(Boolean).join(' · ');
   const countdownLabel = formatCountdownLabel(fixture.kickoff_at, now);
   const liveMatchdayState = getMatchdayTiming(fixture.kickoff_at, now);
   const matchdayState = applyMatchdayPreview(liveMatchdayState);
+  const baseIsGoingToMatch = participationChoice === 'going' || attendance.isGoing;
   const matchViewState = getMatchViewState({
     isMatchday: matchdayState.isMatchday,
-    isGoing: isGoingToMatch,
+    isGoing: baseIsGoingToMatch,
     isCheckedIn: matchCheckIn.isCheckedIn,
   });
+  const isGoingToMatch = baseIsGoingToMatch || matchViewState === 'checked_in_confirmed';
   const handleOpenRoute = async () => {
     if (!mapsUrl) return;
     try {
       await Linking.openURL(mapsUrl);
     } catch (error) {
       console.error('[MatchDetails] Route open error:', error);
-      Alert.alert('Fejl', 'Kunne ikke \u00e5bne kortet.');
+      Alert.alert('Fejl', 'Kunne ikke åbne kortet.');
     }
   };
 
@@ -258,7 +259,7 @@ export default function MatchDetailsScreen() {
       await Linking.openURL(FCN_TICKET_URL);
     } catch (error) {
       console.error('[MatchDetails] Ticket open error:', error);
-      Alert.alert('Fejl', 'Kunne ikke \u00e5bne billetsiden.');
+      Alert.alert('Fejl', 'Kunne ikke åbne billetsiden.');
     }
   };
 
@@ -274,7 +275,7 @@ export default function MatchDetailsScreen() {
     (navigation as any).navigate('EventAttendees', {
       entityId: fixture.id,
       entityType: 'match',
-      title: 'Tjekket ind p\u00e5 stadion',
+      title: 'Tjekket ind på stadion',
       mode: 'checkin',
     });
   };
@@ -298,7 +299,7 @@ export default function MatchDetailsScreen() {
     try {
       await matchCheckIn.checkIn();
     } catch {
-      Alert.alert('Fejl', 'Kunne ikke gennemf\u00f8re check-in.');
+      Alert.alert('Fejl', 'Kunne ikke gennemføre check-in.');
     }
   };
 
@@ -312,7 +313,7 @@ export default function MatchDetailsScreen() {
         {participationChoice === 'tv' ? (
           <>
             <Text style={styles.stateCardEyebrow}>DIN STATUS</Text>
-            <Text style={styles.stateCardTitle}>Ser den p\u00e5 TV</Text>
+            <Text style={styles.stateCardTitle}>Ser den på TV</Text>
             <Text style={styles.stateCardBody}>
               Fans ser kampen hjemme, men du har stadig fuld adgang til Kampsnak.
             </Text>
@@ -330,11 +331,11 @@ export default function MatchDetailsScreen() {
             <Text style={styles.stateCardEyebrow}>DIN STATUS</Text>
             <Text style={styles.stateCardTitle}>Forhindret</Text>
             <Text style={styles.stateCardBody}>
-              Du kan ikke komme, men du kan stadig v\u00e6re med i samtalen f\u00f8r kampstart.
+              Du kan ikke komme, men du kan stadig være med i samtalen før kampstart.
             </Text>
             <View style={styles.stateSecondaryActions}>
               <View style={styles.stateSecondaryAction}>
-                <OutlineButton title="Ser den p\u00e5 TV" onPress={() => handleSelectParticipation('tv')} />
+                <OutlineButton title="Ser den på TV" onPress={() => handleSelectParticipation('tv')} />
               </View>
             </View>
           </>
@@ -343,12 +344,12 @@ export default function MatchDetailsScreen() {
             <Text style={styles.stateCardEyebrow}>ANDRE MULIGHEDER</Text>
             <Text style={styles.stateCardTitle}>Hvis du ikke kommer</Text>
             <Text style={styles.stateCardBody}>
-              V\u00e6lg en anden m\u00e5de at f\u00f8lge kampen p\u00e5. Du kan stadig \u00e6ndre mening og bruge
+              Vælg en anden måde at følge kampen på. Du kan stadig ændre mening og bruge
               panelet ovenfor, hvis du vil med.
             </Text>
             <View style={styles.stateSecondaryActions}>
               <View style={styles.stateSecondaryAction}>
-                <OutlineButton title="Ser den p\u00e5 TV" onPress={() => handleSelectParticipation('tv')} />
+                <OutlineButton title="Ser den på TV" onPress={() => handleSelectParticipation('tv')} />
               </View>
               <View style={styles.stateSecondaryAction}>
                 <OutlineButton
@@ -416,7 +417,7 @@ export default function MatchDetailsScreen() {
         }
         secondaryActions={[
           {
-            label: 'K\u00f8b billet',
+            label: 'Køb billet',
             icon: 'ticket-outline',
             onPress: handleOpenTickets,
             disabled: !isHomeMatch,
@@ -524,7 +525,7 @@ export default function MatchDetailsScreen() {
 
         <View style={styles.contentBlock}>
           <Card style={styles.matchInfoCard}>
-            <Text style={styles.matchInfoEyebrow}>N\u00e6ste kamp</Text>
+            <Text style={styles.matchInfoEyebrow}>Næste kamp</Text>
             <Text style={styles.matchInfoTitle}>
               {fixture.home_team} vs {fixture.away_team}
             </Text>
@@ -540,12 +541,12 @@ export default function MatchDetailsScreen() {
                 {fixture.venue ? (
                   <Text style={styles.matchInfoVenue}>
                     {fixture.venue}
-                    {fixture.venue_city ? ` \u00b7 ${fixture.venue_city}` : ''}
+                    {fixture.venue_city ? ` · ${fixture.venue_city}` : ''}
                   </Text>
                 ) : null}
                 <Text style={styles.matchInfoMeta}>{formatDateDa(fixture.kickoff_at)}</Text>
                 <Text style={styles.matchInfoStatus}>
-                  {isGoingToMatch ? 'Du kommer til kampen' : 'V\u00e6lg hvordan du f\u00f8lger kampen'}
+                  {isGoingToMatch ? 'Du kommer til kampen' : 'Vælg hvordan du følger kampen'}
                 </Text>
               </View>
             </View>
@@ -586,13 +587,13 @@ export default function MatchDetailsScreen() {
               <MatchActivityRow
                 icon="bus-outline"
                 title="Bustur til kampen"
-                subtitle="Koordin\u00e9r transport og m\u00f8detid med de andre fans"
+                subtitle="Koordinér transport og mødetid med de andre fans"
               />
               <View style={styles.activityDivider} />
               <MatchActivityRow
                 icon="restaurant-outline"
-                title="F\u00e6lles optakt"
-                subtitle="Planl\u00e6g m\u00f8dested og f\u00e5 gang i stemningen f\u00f8r kickoff"
+                title="Fælles optakt"
+                subtitle="Planlæg mødested og få gang i stemningen før kickoff"
               />
             </Card>
           </View>
@@ -614,17 +615,17 @@ export default function MatchDetailsScreen() {
                 variant="inline"
                 maxInlineComments={Infinity}
                 titleOverride="Kampsnak"
-                composerPlaceholder="Del stemningen f\u00f8r kamp..."
+                composerPlaceholder="Del stemningen før kamp..."
                 quickActionMode="submit"
                 quickActionFeedbackForValue={(value) =>
-                  value === 'Jeg er p\u00e5 vej' ? 'Du er p\u00e5 vej \uD83D\uDD34' : 'Du deltager i snakken'
+                  value === 'Jeg er på vej' ? 'Du er på vej 🔴' : 'Du deltager i snakken'
                 }
                 replyModeLabel="Svar"
                 quickActionChips={[
-                  'Jeg er p\u00e5 vej',
-                  'M\u00f8des f\u00f8r kamp?',
-                  'Hvem er p\u00e5 stadion?',
-                  'Mit bud p\u00e5 kampen',
+                  'Jeg er på vej',
+                  'Mødes før kamp?',
+                  'Hvem er på stadion?',
+                  'Mit bud på kampen',
                 ]}
               />
             </Card>
