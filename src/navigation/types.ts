@@ -14,6 +14,15 @@ export type AppTabsParamList = {
   Profile: undefined;
 };
 
+export type EventAttendeesParams =
+  | { eventId: string; title?: string; entityType?: 'event'; mode?: 'attendance' | 'checkin' }
+  | {
+      entityId: string;
+      entityType: 'event' | 'match';
+      title?: string;
+      mode?: 'attendance' | 'checkin';
+    };
+
 export type LibraryStackParamList = {
   LibraryMain: undefined;
   // Future: add detail screens here (e.g., SongDetails, LinkDetails, VideoDetails)
@@ -27,6 +36,7 @@ export type RootStackParamList = {
   Create: undefined;
 
   MatchDetails: { fixtureId: string };
+  EventAttendees: EventAttendeesParams;
 
   // Existing routes are declared in stack navigators
 };

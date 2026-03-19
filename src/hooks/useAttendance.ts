@@ -9,6 +9,7 @@ export interface AttendanceResult {
   avatars: string[];
   isGoing: boolean;
   toggleGoing: () => Promise<void>;
+  refresh: () => Promise<void>;
   loading: boolean;
   error: string | null;
 }
@@ -22,6 +23,15 @@ export function useAttendance({ entityType, entityId }: { entityType: 'event' | 
   const [error, setError] = useState<string | null>(null);
 
   const fetchAttendance = useCallback(async () => {
+    if (!entityId) {
+      setCountGoing(0);
+      setAvatars([]);
+      setIsGoing(false);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -48,6 +58,7 @@ export function useAttendance({ entityType, entityId }: { entityType: 'event' | 
     setLoading(true);
     setError(null);
     try {
+      if (!entityId) throw new Error('Ingen attendance reference');
       if (!user?.id) throw new Error('Ikke logget ind');
       const userId = user.id;
       const nextIsGoing = !isGoing;
@@ -98,6 +109,7 @@ export function useAttendance({ entityType, entityId }: { entityType: 'event' | 
     avatars,
     isGoing,
     toggleGoing,
+    refresh: fetchAttendance,
     loading,
     error,
   };

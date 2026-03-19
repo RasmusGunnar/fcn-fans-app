@@ -2,8 +2,10 @@ import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   AppState,
   FlatList,
+  Linking,
   RefreshControl,
   StyleSheet,
   Text,
@@ -16,11 +18,26 @@ import { FanFactionCard } from '../components/cards/FanFactionCard';
 import { FeedItemRenderer } from '../components/feed/FeedItemRenderer';
 import NextMatchBadge from '../components/home/NextMatchBadge';
 import { Card } from '../components/ui/Card';
+import { useAttendance } from '../hooks/useAttendance';
+import { useMatchCheckIn } from '../hooks/useMatchCheckIn';
 import { fetchNextFixture, formatShortDateDa, type Fixture } from '../services/fixtures';
 import { getMatchHeroUrl, getTeamHeroImage } from '../services/sportsdb';
 import { useFeed } from '../state/FeedContext';
 import { colors, spacing } from '../theme';
 import { getFeedItemKey } from '../types/feed';
+import { buildMatchMapsUrl, FCN_TICKET_URL, isFcnHomeMatch } from '../utils/matchLinks';
+import { getMatchdayTiming, getMatchViewState } from '../utils/matchdayState';
+import { applyMatchdayPreview } from '../utils/matchdayPreview';
+
+function formatKickoffCountdown(kickoffAt: string, now: Date): string {
+  const diffMs = new Date(kickoffAt).getTime() - now.getTime();
+  const diffHours = diffMs / (1000 * 60 * 60);
+
+  if (diffMs <= 0) return 'Kampen er i gang';
+  if (diffHours < 2) return 'Starter snart';
+  if (diffHours < 48) return `Afspark om ${Math.ceil(diffHours)} timer`;
+  return `Afspark om ${Math.ceil(diffHours / 24)} dage`;
+}
 
 export default function HomeScreen() {
   const navigation = useNavigation();
@@ -48,6 +65,14 @@ export default function HomeScreen() {
   const [nextFixtureHeroUrl, setNextFixtureHeroUrl] = useState<string | null>(null);
   const [currentPlayingVideoPostId, setCurrentPlayingVideoPostId] = useState<string | null>(null);
   const [isAppActive, setIsAppActive] = useState(true);
+  const [now, setNow] = useState(() => new Date());
+  const nextMatchAttendance = useAttendance({
+    entityType: 'match',
+    entityId: nextFixture?.id ?? '',
+  });
+  const nextMatchCheckIn = useMatchCheckIn(nextFixture?.id ?? '', nextFixture?.kickoff_at ?? null);
+  const nextMatchAttendanceRefresh = nextMatchAttendance.refresh;
+  const nextMatchCheckInRefresh = nextMatchCheckIn.refresh;
 
   // Rate-limit focus refetches (skip if last fetch was < 5 s ago)
   const lastFocusFetchRef = useRef<number>(0);
@@ -105,6 +130,14 @@ export default function HomeScreen() {
     return () => subscription.remove();
   }, []);
 
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(new Date());
+    }, 60000);
+
+    return () => clearInterval(timer);
+  }, []);
+
   const loadNextFixture = async () => {
     setLoadingFixture(true);
     const fixture = await fetchNextFixture();
@@ -126,6 +159,11 @@ export default function HomeScreen() {
     React.useCallback(() => {
       loadNextFixture();
 
+      if (nextFixture?.id) {
+        void nextMatchAttendanceRefresh();
+        void nextMatchCheckInRefresh();
+      }
+
       // Refresh feed when returning from other screens (e.g. after creating an event)
       const now = Date.now();
       const elapsed = now - lastFocusFetchRef.current;
@@ -138,8 +176,14 @@ export default function HomeScreen() {
       return () => {
         setCurrentPlayingVideoPostId(null);
       };
-    }, [fetchPosts]),
+    }, [fetchPosts, nextFixture?.id, nextMatchAttendanceRefresh, nextMatchCheckInRefresh]),
   );
+
+  useEffect(() => {
+    if (!nextFixture?.id) return;
+    void nextMatchAttendanceRefresh();
+    void nextMatchCheckInRefresh();
+  }, [nextFixture?.id, nextMatchAttendanceRefresh, nextMatchCheckInRefresh]);
 
   const [factionLiked, setFactionLiked] = useState(false);
   const [factionLikes, setFactionLikes] = useState(7);
@@ -207,6 +251,156 @@ export default function HomeScreen() {
         }
       : null;
 
+  const nextMatchCountdownLabel = useMemo(() => {
+    if (!nextFixture?.kickoff_at) return null;
+    return formatKickoffCountdown(nextFixture.kickoff_at, now);
+  }, [nextFixture?.kickoff_at, now]);
+
+  const nextMatchdayState = useMemo(() => {
+    if (!nextFixture?.kickoff_at) return { diffHours: Infinity, isMatchday: false, isLive: false };
+    return applyMatchdayPreview(getMatchdayTiming(nextFixture.kickoff_at, now));
+  }, [nextFixture?.kickoff_at, now]);
+
+  const nextMatchViewState = useMemo(
+    () =>
+      getMatchViewState({
+        isMatchday: nextMatchdayState.isMatchday,
+        isGoing: nextMatchAttendance.isGoing,
+        isCheckedIn: nextMatchCheckIn.isCheckedIn,
+      }),
+    [nextMatchAttendance.isGoing, nextMatchCheckIn.isCheckedIn, nextMatchdayState.isMatchday],
+  );
+
+  const nextMatchPanelCount =
+    nextMatchViewState === 'pre_match'
+      ? nextMatchAttendance.countGoing
+      : nextMatchCheckIn.countCheckedIn;
+  const nextMatchPanelAvatars =
+    nextMatchViewState === 'pre_match' ? nextMatchAttendance.avatars : nextMatchCheckIn.avatars;
+  const nextMatchPrimaryLabel =
+    nextMatchViewState === 'checked_in_confirmed'
+      ? undefined
+      : nextMatchViewState === 'matchday_action'
+        ? nextMatchCheckIn.loading
+          ? 'Tjekker ind...'
+          : 'Tjek ind'
+        : nextMatchAttendance.isGoing
+          ? 'Du kommer'
+          : 'Jeg kommer';
+  const nextMatchPrimaryDisabled =
+    nextMatchViewState === 'checked_in_confirmed'
+      ? true
+      : nextMatchViewState === 'matchday_action'
+        ? nextMatchCheckIn.loading
+        : nextMatchAttendance.isGoing || nextMatchAttendance.loading;
+  const nextMatchMapsUrl = useMemo(
+    () => (nextFixture ? buildMatchMapsUrl(nextFixture) : null),
+    [nextFixture],
+  );
+  const canBuyNextMatchTicket = Boolean(nextFixture && isFcnHomeMatch(nextFixture));
+
+  const handleOpenNextMatch = useCallback(() => {
+    if (!matchForBadge) return;
+    (navigation as any).navigate('MatchDetails', { fixtureId: matchForBadge.id });
+  }, [matchForBadge, navigation]);
+
+  const handleOpenNextMatchAttendees = useCallback(() => {
+    if (!nextFixture?.id) return;
+    (navigation as any).navigate('EventAttendees', {
+      entityId: nextFixture.id,
+      entityType: 'match',
+      title: 'Fans der kommer',
+    });
+  }, [navigation, nextFixture?.id]);
+
+  const handleOpenNextMatchCheckedInFans = useCallback(() => {
+    if (!nextFixture?.id) return;
+    (navigation as any).navigate('EventAttendees', {
+      entityId: nextFixture.id,
+      entityType: 'match',
+      title: 'Tjekket ind p\u00e5 stadion',
+      mode: 'checkin',
+    });
+  }, [navigation, nextFixture?.id]);
+
+  const handleOpenNextMatchTickets = useCallback(async () => {
+    if (!canBuyNextMatchTicket) return;
+
+    try {
+      await Linking.openURL(FCN_TICKET_URL);
+    } catch {
+      Alert.alert('Fejl', 'Kunne ikke \u00e5bne billetsiden.');
+    }
+  }, [canBuyNextMatchTicket]);
+
+  const handleOpenNextMatchRoute = useCallback(async () => {
+    if (!nextMatchMapsUrl) return;
+
+    try {
+      await Linking.openURL(nextMatchMapsUrl);
+    } catch {
+      Alert.alert('Fejl', 'Kunne ikke \u00e5bne kortet.');
+    }
+  }, [nextMatchMapsUrl]);
+
+  const handleNextMatchPrimaryAction = useCallback(async () => {
+    if (!nextFixture?.id) return;
+
+    if (nextMatchViewState === 'matchday_action') {
+      try {
+        await nextMatchCheckIn.checkIn();
+        return;
+      } catch {
+        return;
+      }
+    }
+
+    if (nextMatchViewState === 'pre_match' && !nextMatchAttendance.isGoing) {
+      try {
+        await nextMatchAttendance.toggleGoing();
+        return;
+      } catch {
+        return;
+      }
+    }
+  }, [
+    nextFixture?.id,
+    nextMatchAttendance,
+    nextMatchCheckIn,
+    nextMatchViewState,
+  ]);
+
+  const nextMatchSecondaryActions =
+    nextMatchViewState === 'matchday_action' || nextMatchViewState === 'checked_in_confirmed'
+      ? [
+          {
+            label: 'Se kampdetaljer',
+            icon: 'arrow-forward-circle-outline' as const,
+            onPress: handleOpenNextMatch,
+            disabled: false,
+          },
+          {
+            label: 'Vejvisning',
+            icon: 'navigate-outline' as const,
+            onPress: handleOpenNextMatchRoute,
+            disabled: !nextMatchMapsUrl,
+          },
+        ]
+      : [
+          {
+            label: 'K\u00f8b billet',
+            icon: 'ticket-outline' as const,
+            onPress: handleOpenNextMatchTickets,
+            disabled: !canBuyNextMatchTicket,
+          },
+          {
+            label: 'Vejvisning',
+            icon: 'navigate-outline' as const,
+            onPress: handleOpenNextMatchRoute,
+            disabled: !nextMatchMapsUrl,
+          },
+        ];
+
   return (
     <FlatList
       data={homeFeedItems}
@@ -229,16 +423,30 @@ export default function HomeScreen() {
       ListHeaderComponent={
         <>
           <AppHeader
-            title="FC Nordsjælland"
-            subtitle="Fan Fællesskab"
+            title="FC Nordsj\u00e6lland"
+            subtitle="Fan F\u00e6llesskab"
             onPressProfile={() => (navigation as any).navigate('Profile')}
           />
           {/* Next Match Hero Badge - Edge to edge */}
           {matchForBadge && (
             <NextMatchBadge
               match={matchForBadge}
-              onPress={() =>
-                (navigation as any).navigate('MatchDetails', { fixtureId: matchForBadge.id })
+              countdownLabel={nextMatchCountdownLabel ?? undefined}
+              matchStatusPanel={{
+                viewState: nextMatchViewState,
+                isGoing: nextMatchAttendance.isGoing,
+                avatars: nextMatchPanelAvatars,
+                count: nextMatchPanelCount,
+                primaryLabel: nextMatchPrimaryLabel,
+                primaryDisabled: nextMatchPrimaryDisabled,
+                secondaryActions: nextMatchSecondaryActions
+              }}
+              onPress={handleOpenNextMatch}
+              onPressPrimaryAction={handleNextMatchPrimaryAction}
+              onPressSocial={
+                nextMatchViewState === 'pre_match'
+                  ? handleOpenNextMatchAttendees
+                  : handleOpenNextMatchCheckedInFans
               }
             />
           )}
@@ -269,7 +477,7 @@ export default function HomeScreen() {
             name="Ultras FCN"
             members={89}
             timeAgo="1 time siden"
-            description="FCN's mest passionerede fans. Vi støtter holdet gennem tykt og tyndt med sang, flag og uforbeholden støtte."
+            description="FCN's mest passionerede fans. Vi st\u00f8tter holdet gennem tykt og tyndt med sang, flag og uforbeholden st\u00f8tte."
             liked={factionLiked}
             likes={factionLikes}
             comments={1}
@@ -295,3 +503,6 @@ const createStyles = () =>
     emptyText: { fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: spacing.xs },
     emptySubtext: { fontSize: 14, color: colors.subtext },
   });
+
+
+

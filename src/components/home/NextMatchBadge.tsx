@@ -1,9 +1,9 @@
-// PATCH: NextMatchBadge UI polish (edge-to-edge + bottom row)
 import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
 import { Image, ImageBackground, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../../theme';
-import { AttendanceBubbles } from '../social/AttendanceBubbles';
+import { MatchdayStatusPanel, type MatchdayStatusPanelAction } from '../match/MatchdayStatusPanel';
+import type { MatchViewState } from '../../utils/matchdayState';
 
 interface NextMatchBadgeProps {
   match: {
@@ -19,160 +19,127 @@ interface NextMatchBadgeProps {
     title: string;
     subtitle: string;
   };
-  weather?: {
-    icon?: string;
-    temperature?: string;
-    condition?: string;
-  };
-  matchAttendance?: {
+  matchStatusPanel?: {
+    viewState: MatchViewState;
+    isGoing: boolean;
     avatars: string[];
-    countGoing: number;
+    count: number;
+    primaryLabel?: string;
+    primaryDisabled?: boolean;
+    secondaryActions: MatchdayStatusPanelAction[];
   };
+  countdownLabel?: string;
+  onPressPrimaryAction?: () => void;
+  onPressSocial?: () => void;
   onPress: () => void;
 }
 
 const NextMatchBadge: React.FC<NextMatchBadgeProps> = ({
   match,
-  weather,
-  matchAttendance,
+  matchStatusPanel,
+  countdownLabel,
+  onPressPrimaryAction,
+  onPressSocial,
   onPress,
 }) => {
   const theme = useTheme();
   const styles = createStyles(theme);
+
   if (!match) return null;
 
+  const normalizedCountdownLabel = countdownLabel?.replace(/^Afspark om/i, 'Kickoff om');
+
   return (
-    <Pressable
-      onPress={onPress}
-      style={styles.outerWrapper}
-      android_ripple={{ color: theme.colors.overlay.light }}
-    >
-      <View style={styles.badgeCard}>
-        <ImageBackground
-          source={{ uri: match.coverUrl }}
-          style={styles.heroBackground}
-          imageStyle={styles.heroBackground}
-        >
-          {/* Top and bottom scrims for overlay */}
-          <LinearGradient
-            colors={[theme.colors.overlay.medium, 'transparent']}
-            locations={[0, 0.4]}
-            style={styles.topScrim}
-          />
-          <LinearGradient
-            colors={[
-              'transparent',
-              theme.colors.overlay.heavy,
-              theme.mode === 'light' ? theme.colors.text.primary : theme.colors.bg.default,
-            ]}
-            locations={[0, 0.6, 1]}
-            style={styles.bottomScrim}
-          />
+    <View style={styles.wrapper}>
+      <Pressable
+        onPress={onPress}
+        style={styles.outerWrapper}
+        android_ripple={{ color: theme.colors.overlay.light }}
+      >
+        <View style={styles.badgeCard}>
+          <ImageBackground
+            source={{ uri: match.coverUrl }}
+            style={styles.heroBackground}
+            imageStyle={styles.heroBackground}
+          >
+            <LinearGradient
+              colors={[theme.colors.overlay.medium, 'transparent']}
+              locations={[0, 0.35]}
+              style={styles.topScrim}
+            />
+            <LinearGradient
+              colors={['transparent', theme.colors.overlay.heavy]}
+              locations={[0.3, 1]}
+              style={styles.mainScrim}
+            />
+            <LinearGradient
+              colors={['transparent', theme.colors.bg.default]}
+              locations={[0, 1]}
+              style={styles.bottomFade}
+            />
 
-          {/* Top label badge */}
-          <View style={styles.topLabelChip}>
-            <Text style={styles.labelText}>NÆSTE HJEMMEKAMP</Text>
-          </View>
+            <View style={styles.labelChip}>
+              <Text style={styles.labelText}>Næste kamp</Text>
+            </View>
 
-          {/* Main content */}
-          <View style={styles.contentWrapper}>
-            <View style={styles.mainContent}>
-              {/* Matchup Area: Logos + VS + Teams + Kickoff + Venue */}
-              <View style={styles.matchupArea}>
-                <View style={styles.matchupRow}>
-                  {/* Home Team Logo */}
-                  {match.homeLogo ? (
-                    <View style={styles.teamLogoContainer}>
-                      <Image
-                        source={{ uri: match.homeLogo }}
-                        style={styles.teamLogo}
-                        resizeMode="contain"
-                      />
-                    </View>
-                  ) : (
-                    <View style={[styles.teamLogoContainer, styles.teamLogoPlaceholder]}>
-                      <Text style={styles.teamInitial}>{match.homeTeam.charAt(0)}</Text>
-                    </View>
-                  )}
+            <View style={styles.heroContent}>
+              <View style={styles.matchupRow}>
+                {match.homeLogo ? (
+                  <View style={styles.teamLogoContainer}>
+                    <Image source={{ uri: match.homeLogo }} style={styles.teamLogo} resizeMode="contain" />
+                  </View>
+                ) : (
+                  <View style={[styles.teamLogoContainer, styles.teamLogoPlaceholder]}>
+                    <Text style={styles.teamInitial}>{match.homeTeam.charAt(0)}</Text>
+                  </View>
+                )}
 
-                  {/* VS */}
-                  <Text style={styles.vsText}>VS</Text>
+                <Text style={styles.vsText}>VS</Text>
 
-                  {/* Away Team Logo */}
-                  {match.awayLogo ? (
-                    <View style={styles.teamLogoContainer}>
-                      <Image
-                        source={{ uri: match.awayLogo }}
-                        style={styles.teamLogo}
-                        resizeMode="contain"
-                      />
-                    </View>
-                  ) : (
-                    <View style={[styles.teamLogoContainer, styles.teamLogoPlaceholder]}>
-                      <Text style={styles.teamInitial}>{match.awayTeam.charAt(0)}</Text>
-                    </View>
-                  )}
-                </View>
+                {match.awayLogo ? (
+                  <View style={styles.teamLogoContainer}>
+                    <Image source={{ uri: match.awayLogo }} style={styles.teamLogo} resizeMode="contain" />
+                  </View>
+                ) : (
+                  <View style={[styles.teamLogoContainer, styles.teamLogoPlaceholder]}>
+                    <Text style={styles.teamInitial}>{match.awayTeam.charAt(0)}</Text>
+                  </View>
+                )}
+              </View>
 
-                {/* Team Names */}
-                <View style={styles.matchInfo}>
-                  <Text style={styles.teamNameSmall}>{match.homeTeam}</Text>
-                  <Text style={styles.teamNameSmall}>{match.awayTeam}</Text>
-                </View>
-
-                {/* Kickoff */}
-                {match.kickoff && <Text style={styles.matchDateTime}>{match.subtitle}</Text>}
-
-                {/* Venue */}
-                {(match.venue || match.venueCity) && (
+              <View style={styles.metaBlock}>
+                <Text style={styles.matchDate}>{match.subtitle}</Text>
+                {normalizedCountdownLabel ? (
+                  <Text style={styles.countdownText}>{normalizedCountdownLabel}</Text>
+                ) : null}
+                {(match.venue || match.venueCity) ? (
                   <Text style={styles.venueText}>
                     {match.venue && match.venueCity
                       ? `${match.venue}, ${match.venueCity}`
                       : match.venue || match.venueCity || ''}
                   </Text>
-                )}
+                ) : null}
               </View>
             </View>
+          </ImageBackground>
+        </View>
+      </Pressable>
 
-            {/* Footer bar with translucent background */}
-            <View style={styles.footerBar}>
-              <View style={styles.footerLeft}>
-                {/* Weather */}
-                <View style={styles.weatherBox}>
-                  <Text style={styles.weatherIcon}>{weather?.icon || '☀️'}</Text>
-                  <Text style={styles.weatherTemp}>{weather?.temperature || '—'}</Text>
-                  {weather?.condition && (
-                    <Text style={styles.weatherCondition} numberOfLines={1}>
-                      {weather.condition}
-                    </Text>
-                  )}
-                </View>
-                {/* Attendance */}
-                {matchAttendance && matchAttendance.countGoing > 0 ? (
-                  <AttendanceBubbles
-                    avatars={matchAttendance.avatars}
-                    count={matchAttendance.countGoing}
-                    max={5}
-                    size={20}
-                    textVariant="caption"
-                  />
-                ) : (
-                  <Text style={styles.attendeeCount}>0 deltager</Text>
-                )}
-              </View>
-              {/* CTA */}
-              <Pressable
-                onPress={onPress}
-                style={styles.ctaButton}
-                android_ripple={{ color: theme.colors.overlay.light }}
-              >
-                <Text style={styles.ctaText}>Læs mere</Text>
-              </Pressable>
-            </View>
-          </View>
-        </ImageBackground>
-      </View>
-    </Pressable>
+      {matchStatusPanel ? (
+        <MatchdayStatusPanel
+          viewState={matchStatusPanel.viewState}
+          isGoing={matchStatusPanel.isGoing}
+          avatars={matchStatusPanel.avatars}
+          count={matchStatusPanel.count}
+          primaryLabel={matchStatusPanel.primaryLabel}
+          primaryDisabled={matchStatusPanel.primaryDisabled}
+          onPressPrimary={onPressPrimaryAction || onPress}
+          onPressSocial={onPressSocial}
+          secondaryActions={matchStatusPanel.secondaryActions}
+          style={styles.statusPanel}
+        />
+      ) : null}
+    </View>
   );
 };
 
@@ -183,6 +150,10 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => {
     Platform.OS === 'ios' ? theme.elevation.sm.ios : { elevation: theme.elevation.sm.android };
 
   return StyleSheet.create({
+    wrapper: {
+      width: '100%',
+      backgroundColor: theme.colors.bg.default,
+    },
     outerWrapper: {
       width: '100%',
     },
@@ -195,39 +166,34 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => {
     },
     heroBackground: {
       width: '100%',
-      height: 220,
+      height: 232,
     },
     topScrim: {
       position: 'absolute',
       top: 0,
       left: 0,
       right: 0,
-      height: '40%',
+      height: '34%',
     },
-    bottomScrim: {
+    mainScrim: {
       position: 'absolute',
-      bottom: 0,
+      top: 0,
       left: 0,
       right: 0,
-      height: '50%',
+      bottom: 0,
     },
-    contentWrapper: {
-      flex: 1,
-      justifyContent: 'space-between',
+    bottomFade: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: 0,
+      height: theme.spacing[12],
     },
-    mainContent: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-      paddingTop: theme.spacing[6],
-      paddingBottom: theme.spacing[12],
-      paddingHorizontal: theme.spacing[4],
-    },
-    topLabelChip: {
+    labelChip: {
       position: 'absolute',
       top: theme.spacing[3],
-      left: theme.spacing[3],
-      zIndex: 10,
+      alignSelf: 'center',
+      zIndex: 2,
       backgroundColor: theme.colors.brand.accent,
       borderRadius: theme.radius.pill,
       paddingHorizontal: theme.spacing[3],
@@ -235,43 +201,28 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => {
     },
     labelText: {
       color: theme.colors.text.inverse,
-      fontSize: 10,
+      fontSize: theme.typography.caption.fontSize,
       fontWeight: '700',
-      letterSpacing: 0.8,
+      letterSpacing: 0.4,
     },
-    title: {
-      color: theme.colors.text.inverse,
-      fontSize: 18,
-      fontWeight: '700',
-      textAlign: 'center',
-      textShadowColor: theme.colors.overlay.textShadow,
-      textShadowOffset: { width: 0, height: 1 },
-      textShadowRadius: 2,
-    },
-    subtitle: {
-      color: theme.colors.text.inverse,
-      fontSize: 14,
-      fontWeight: '600',
-      opacity: 0.9,
-      marginTop: theme.spacing[2],
-      textAlign: 'center',
-      textShadowColor: theme.colors.overlay.textShadow,
-      textShadowOffset: { width: 0, height: 1 },
-      textShadowRadius: 2,
-    },
-    matchupArea: {
+    heroContent: {
+      flex: 1,
       alignItems: 'center',
-      marginTop: theme.spacing[3],
+      justifyContent: 'center',
+      paddingHorizontal: theme.spacing[5],
+      paddingTop: theme.spacing[7],
+      paddingBottom: theme.spacing[7],
     },
     matchupRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: theme.spacing[5],
+      gap: theme.spacing[6],
+      marginBottom: theme.spacing[4],
     },
     teamLogoContainer: {
-      width: 56,
-      height: 56,
+      width: theme.spacing[16],
+      height: theme.spacing[16],
       justifyContent: 'center',
       alignItems: 'center',
     },
@@ -285,29 +236,33 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => {
     },
     teamInitial: {
       color: theme.colors.text.inverse,
-      fontSize: 20,
+      fontSize: theme.typography.h2.fontSize,
       fontWeight: '700',
     },
     vsText: {
       color: theme.colors.text.inverse,
-      fontSize: 14,
-      fontWeight: '700',
-      opacity: 0.8,
+      fontSize: theme.typography.h3.fontSize,
+      fontWeight: '800',
+      opacity: 0.92,
     },
-    teamNameSmall: {
-      color: theme.colors.text.inverse,
-      fontSize: 12,
-      fontWeight: '600',
-      marginTop: theme.spacing[1],
-    },
-    matchInfo: {
+    metaBlock: {
       alignItems: 'center',
-      marginTop: theme.spacing[2],
+      gap: theme.spacing[1],
     },
-    matchDateTime: {
+    matchDate: {
       color: theme.colors.text.inverse,
-      fontSize: 14,
+      fontSize: theme.typography.body.fontSize,
+      fontWeight: '700',
+      textAlign: 'center',
+      textShadowColor: theme.colors.overlay.textShadow,
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 2,
+    },
+    countdownText: {
+      color: theme.colors.text.inverse,
+      fontSize: theme.typography.caption.fontSize,
       fontWeight: '600',
+      opacity: 0.9,
       textAlign: 'center',
       textShadowColor: theme.colors.overlay.textShadow,
       textShadowOffset: { width: 0, height: 1 },
@@ -315,85 +270,19 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => {
     },
     venueText: {
       color: theme.colors.text.inverse,
-      fontSize: 12,
-      opacity: 0.8,
-      marginTop: theme.spacing[1],
+      fontSize: theme.typography.caption.fontSize,
+      fontWeight: '600',
+      opacity: 0.88,
       textAlign: 'center',
       textShadowColor: theme.colors.overlay.textShadow,
       textShadowOffset: { width: 0, height: 1 },
       textShadowRadius: 2,
     },
-    footerBar: {
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      backgroundColor: theme.colors.overlay.heavy,
-      paddingHorizontal: theme.spacing[4],
-      paddingVertical: theme.spacing[4],
-    },
-    footerLeft: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      flex: 1,
-      gap: theme.spacing[4],
-    },
-    weatherBox: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: theme.spacing[1],
-    },
-    weatherIcon: {
-      color: theme.colors.text.inverse,
-      fontSize: 14,
-    },
-    weatherTemp: {
-      color: theme.colors.text.inverse,
-      fontSize: 13,
-      fontWeight: '600',
-    },
-    weatherCondition: {
-      color: theme.colors.text.inverse,
-      fontSize: 11,
-      opacity: 0.7,
-    },
-    attendeesBox: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: theme.spacing[2],
-    },
-    avatarStack: {
-      flexDirection: 'row',
-      alignItems: 'center',
-    },
-    avatar: {
-      width: 22,
-      height: 22,
-      borderRadius: theme.radius.pill,
-      borderWidth: 2,
-      borderColor: theme.mode === 'light' ? theme.colors.text.primary : theme.colors.bg.default,
-    },
-    attendeeCount: {
-      color: theme.colors.text.inverse,
-      fontSize: 12,
-      fontWeight: '600',
-    },
-    ctaButton: {
-      backgroundColor: theme.colors.brand.accent,
-      borderRadius: theme.radius.pill,
-      paddingHorizontal: theme.spacing[4],
-      paddingVertical: theme.spacing[2],
-      height: 36,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    ctaText: {
-      color: theme.colors.text.inverse,
-      fontSize: 13,
-      fontWeight: '700',
+    statusPanel: {
+      marginHorizontal: theme.spacing[3],
+      marginTop: -theme.spacing[3],
+      marginBottom: theme.spacing[3],
     },
   });
 };
+

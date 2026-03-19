@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../auth/AuthProvider';
 import { InlineComments } from '../components/comments/InlineComments';
+import { MatchdayStatusPanel } from '../components/match/MatchdayStatusPanel';
 import { AttendanceBubbles } from '../components/social/AttendanceBubbles';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { OutlineButton } from '../components/ui/OutlineButton';
@@ -26,55 +27,23 @@ import { fetchFixtureById, type Fixture } from '../services/eventsApi';
 import { formatDateDa } from '../services/fixtures';
 import { getMatchHeroUrl, getTeamHeroImage } from '../services/sportsdb';
 import { useAttendance } from '../hooks/useAttendance';
+import { useMatchCheckIn } from '../hooks/useMatchCheckIn';
 import { spacing, useTheme } from '../theme';
+import { buildMatchMapsUrl, FCN_TICKET_URL, isFcnHomeMatch } from '../utils/matchLinks';
+import { getMatchdayTiming, getMatchViewState } from '../utils/matchdayState';
+import { applyMatchdayPreview } from '../utils/matchdayPreview';
 
 type MatchDetailsRouteProp = RouteProp<RootStackParamList, 'MatchDetails'>;
 type MatchParticipationChoice = 'going' | 'tv' | 'not_going' | null;
-
-const FCN_TICKET_URL = 'https://billet.fcn.dk';
-
-function isFcnHomeMatch(fixture: Fixture): boolean {
-  return fixture.home_team.toLowerCase().includes('nordsj');
-}
-
-function buildMatchMapsUrl(fixture: Fixture): string | null {
-  if (fixture.lat != null && fixture.lng != null) {
-    return Platform.OS === 'ios'
-      ? `http://maps.apple.com/?ll=${fixture.lat},${fixture.lng}`
-      : `https://www.google.com/maps/search/?api=1&query=${fixture.lat},${fixture.lng}`;
-  }
-
-  const venueLabel = [fixture.venue, fixture.venue_city].filter(Boolean).join(', ').trim();
-  if (!venueLabel) return null;
-
-  const encoded = encodeURIComponent(venueLabel);
-  return Platform.OS === 'ios'
-    ? `http://maps.apple.com/?q=${encoded}`
-    : `https://www.google.com/maps/search/?api=1&query=${encoded}`;
-}
-
-function formatAttendanceCta(isGoing: boolean): string {
-  return isGoing ? 'Du kommer til kampen' : 'Jeg kommer';
-}
 
 function formatCountdownLabel(kickoffAt: string, now: Date): string {
   const diffMs = new Date(kickoffAt).getTime() - now.getTime();
   const diffHours = diffMs / (1000 * 60 * 60);
 
   if (diffMs <= 0) return 'Kampen er i gang';
-  if (diffHours < 2) return 'Starter snart 🔥';
+  if (diffHours < 2) return 'Starter snart \uD83D\uDD25';
   if (diffHours < 48) return `Starter om ${Math.ceil(diffHours)} timer`;
   return `Starter om ${Math.ceil(diffHours / 24)} dage`;
-}
-
-function getMatchdayState(kickoffAt: string, now: Date) {
-  const diffMs = new Date(kickoffAt).getTime() - now.getTime();
-  const diffHours = diffMs / (1000 * 60 * 60);
-  return {
-    isLive: diffMs <= 0,
-    isMatchday: diffHours <= 6,
-    diffHours,
-  };
 }
 
 function MatchStatusChip({ label }: { label: string }) {
@@ -140,9 +109,10 @@ export default function MatchDetailsScreen() {
   const [heroUrl, setHeroUrl] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
   const [participationChoice, setParticipationChoice] = useState<MatchParticipationChoice>(null);
-  const [checkedIn, setCheckedIn] = useState(false);
   const heroPulse = useRef(new Animated.Value(1)).current;
+  const checkInPulse = useRef(new Animated.Value(0)).current;
   const attendance = useAttendance({ entityType: 'match', entityId: fixtureId });
+  const matchCheckIn = useMatchCheckIn(fixtureId, fixture?.kickoff_at ?? null);
 
   useEffect(() => {
     if (fixtureId) {
@@ -183,6 +153,24 @@ export default function MatchDetailsScreen() {
       setParticipationChoice('going');
     }
   }, [attendance.isGoing]);
+
+  useEffect(() => {
+    if (!matchCheckIn.isCheckedIn) return;
+
+    checkInPulse.setValue(0);
+    Animated.sequence([
+      Animated.timing(checkInPulse, {
+        toValue: 1,
+        duration: 260,
+        useNativeDriver: true,
+      }),
+      Animated.timing(checkInPulse, {
+        toValue: 0.7,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [checkInPulse, matchCheckIn.isCheckedIn]);
 
   const loadFixture = async () => {
     if (!fixtureId) return;
@@ -237,7 +225,7 @@ export default function MatchDetailsScreen() {
           <Text style={[styles.errorText, { color: theme.colors.text.primary }]}>
             Kunne ikke finde kampdata
           </Text>
-          <PrimaryButton title="Gå tilbage" onPress={() => navigation.goBack()} />
+          <PrimaryButton title="G\u00e5 tilbage" onPress={() => navigation.goBack()} />
         </View>
       </SafeAreaView>
     );
@@ -245,17 +233,23 @@ export default function MatchDetailsScreen() {
 
   const isHomeMatch = isFcnHomeMatch(fixture);
   const mapsUrl = buildMatchMapsUrl(fixture);
-  const attendanceCtaLabel = formatAttendanceCta(attendance.isGoing);
-  const competitionLabel = [fixture.competition, fixture.round].filter(Boolean).join(' · ');
+  const isGoingToMatch = participationChoice === 'going' || attendance.isGoing || matchCheckIn.isCheckedIn;
+  const competitionLabel = [fixture.competition, fixture.round].filter(Boolean).join(' \u00b7 ');
   const countdownLabel = formatCountdownLabel(fixture.kickoff_at, now);
-  const matchdayState = getMatchdayState(fixture.kickoff_at, now);
+  const liveMatchdayState = getMatchdayTiming(fixture.kickoff_at, now);
+  const matchdayState = applyMatchdayPreview(liveMatchdayState);
+  const matchViewState = getMatchViewState({
+    isMatchday: matchdayState.isMatchday,
+    isGoing: isGoingToMatch,
+    isCheckedIn: matchCheckIn.isCheckedIn,
+  });
   const handleOpenRoute = async () => {
     if (!mapsUrl) return;
     try {
       await Linking.openURL(mapsUrl);
     } catch (error) {
       console.error('[MatchDetails] Route open error:', error);
-      Alert.alert('Fejl', 'Kunne ikke åbne kortet.');
+      Alert.alert('Fejl', 'Kunne ikke \u00e5bne kortet.');
     }
   };
 
@@ -264,7 +258,7 @@ export default function MatchDetailsScreen() {
       await Linking.openURL(FCN_TICKET_URL);
     } catch (error) {
       console.error('[MatchDetails] Ticket open error:', error);
-      Alert.alert('Fejl', 'Kunne ikke åbne billetsiden.');
+      Alert.alert('Fejl', 'Kunne ikke \u00e5bne billetsiden.');
     }
   };
 
@@ -272,7 +266,16 @@ export default function MatchDetailsScreen() {
     (navigation as any).navigate('EventAttendees', {
       entityId: fixture.id,
       entityType: 'match',
-      title: 'Fans på stadion',
+      title: 'Fans der kommer',
+    });
+  };
+
+  const handleOpenCheckedInFans = () => {
+    (navigation as any).navigate('EventAttendees', {
+      entityId: fixture.id,
+      entityType: 'match',
+      title: 'Tjekket ind p\u00e5 stadion',
+      mode: 'checkin',
     });
   };
 
@@ -291,66 +294,61 @@ export default function MatchDetailsScreen() {
     }
   };
 
-  const handleCheckIn = () => {
-    setCheckedIn(true);
+  const handleCheckIn = async () => {
+    try {
+      await matchCheckIn.checkIn();
+    } catch {
+      Alert.alert('Fejl', 'Kunne ikke gennemf\u00f8re check-in.');
+    }
   };
 
   const renderParticipationCard = () => {
+    if (isGoingToMatch) {
+      return null;
+    }
+
     return (
       <Card style={styles.stateCard}>
-        {participationChoice === null ? (
+        {participationChoice === 'tv' ? (
           <>
-            <Text style={styles.stateCardTitle}>Skal du med til kampen?</Text>
-            <View style={styles.choiceButtonGroup}>
-              <OutlineButton title="Jeg kommer" onPress={() => handleSelectParticipation('going')} />
-              <OutlineButton title="Ser den på TV" onPress={() => handleSelectParticipation('tv')} />
-              <OutlineButton
-                title="Forhindret"
-                onPress={() => handleSelectParticipation('not_going')}
-              />
-            </View>
-          </>
-        ) : participationChoice === 'going' || attendance.isGoing ? (
-          <>
-            <Text style={styles.stateCardEyebrow}>MATCHDAY STATUS</Text>
-            <Text style={styles.stateCardTitle}>Du deltager</Text>
-            <Text style={styles.stateCardBody}>
-              Du er klar til kampdag sammen med de andre fans.
-            </Text>
-            <Pressable
-              style={[styles.joinCta, attendance.isGoing ? styles.joinCtaActive : styles.joinCtaIdle]}
-              onPress={attendance.toggleGoing}
-              disabled={attendance.loading}
-            >
-              <Ionicons
-                name={attendance.isGoing ? 'checkmark-circle' : 'person-add'}
-                size={24}
-                color={attendance.isGoing ? theme.colors.text.inverse : theme.colors.primary}
-              />
-              <Text
-                style={[
-                  styles.joinText,
-                  {
-                    color: attendance.isGoing
-                      ? theme.colors.text.inverse
-                      : theme.colors.primary,
-                  },
-                ]}
-              >
-                {attendanceCtaLabel}
-              </Text>
-            </Pressable>
-          </>
-        ) : participationChoice === 'tv' ? (
-          <>
-            <Text style={styles.stateCardEyebrow}>MATCHDAY STATUS</Text>
-            <Text style={styles.stateCardTitle}>Ser den på TV</Text>
+            <Text style={styles.stateCardEyebrow}>DIN STATUS</Text>
+            <Text style={styles.stateCardTitle}>Ser den p\u00e5 TV</Text>
             <Text style={styles.stateCardBody}>
               Fans ser kampen hjemme, men du har stadig fuld adgang til Kampsnak.
             </Text>
             <View style={styles.stateSecondaryActions}>
               <View style={styles.stateSecondaryAction}>
-                <OutlineButton title="Jeg kommer" onPress={() => handleSelectParticipation('going')} />
+                <OutlineButton
+                  title="Forhindret"
+                  onPress={() => handleSelectParticipation('not_going')}
+                />
+              </View>
+            </View>
+          </>
+        ) : participationChoice === 'not_going' ? (
+          <>
+            <Text style={styles.stateCardEyebrow}>DIN STATUS</Text>
+            <Text style={styles.stateCardTitle}>Forhindret</Text>
+            <Text style={styles.stateCardBody}>
+              Du kan ikke komme, men du kan stadig v\u00e6re med i samtalen f\u00f8r kampstart.
+            </Text>
+            <View style={styles.stateSecondaryActions}>
+              <View style={styles.stateSecondaryAction}>
+                <OutlineButton title="Ser den p\u00e5 TV" onPress={() => handleSelectParticipation('tv')} />
+              </View>
+            </View>
+          </>
+        ) : (
+          <>
+            <Text style={styles.stateCardEyebrow}>ANDRE MULIGHEDER</Text>
+            <Text style={styles.stateCardTitle}>Hvis du ikke kommer</Text>
+            <Text style={styles.stateCardBody}>
+              V\u00e6lg en anden m\u00e5de at f\u00f8lge kampen p\u00e5. Du kan stadig \u00e6ndre mening og bruge
+              panelet ovenfor, hvis du vil med.
+            </Text>
+            <View style={styles.stateSecondaryActions}>
+              <View style={styles.stateSecondaryAction}>
+                <OutlineButton title="Ser den p\u00e5 TV" onPress={() => handleSelectParticipation('tv')} />
               </View>
               <View style={styles.stateSecondaryAction}>
                 <OutlineButton
@@ -360,56 +358,91 @@ export default function MatchDetailsScreen() {
               </View>
             </View>
           </>
-        ) : (
-          <>
-            <Text style={styles.stateCardEyebrow}>MATCHDAY STATUS</Text>
-            <Text style={styles.stateCardTitle}>Forhindret</Text>
-            <Text style={styles.stateCardBody}>
-              Du kan ikke komme, men du kan stadig være med i samtalen før kampstart.
-            </Text>
-            <View style={styles.stateSecondaryActions}>
-              <View style={styles.stateSecondaryAction}>
-                <OutlineButton title="Jeg kommer" onPress={() => handleSelectParticipation('going')} />
-              </View>
-              <View style={styles.stateSecondaryAction}>
-                <OutlineButton title="Ser den på TV" onPress={() => handleSelectParticipation('tv')} />
-              </View>
-            </View>
-          </>
         )}
       </Card>
     );
   };
 
-  const renderMatchdayCard = () => {
-    if (!matchdayState.isMatchday) return null;
+  const renderStatusPanel = () => {
+    const checkInConfirmationStyle = {
+      opacity: checkInPulse.interpolate({
+        inputRange: [0, 1],
+        outputRange: [1, 0.92],
+      }),
+      transform: [
+        {
+          scale: checkInPulse.interpolate({
+            inputRange: [0, 1],
+            outputRange: [1, 1.03],
+          }),
+        },
+      ],
+    };
+    const panelCount =
+      matchViewState === 'pre_match' ? attendance.countGoing : matchCheckIn.countCheckedIn;
+    const panelAvatars =
+      matchViewState === 'pre_match' ? attendance.avatars : matchCheckIn.avatars;
+    const panelPrimaryLabel =
+      matchViewState === 'checked_in_confirmed'
+        ? undefined
+        : matchViewState === 'matchday_action'
+          ? matchCheckIn.loading
+            ? 'Tjekker ind...'
+            : 'Tjek ind'
+          : isGoingToMatch
+            ? 'Du kommer'
+            : 'Jeg kommer';
+    const panelPrimaryDisabled =
+      matchViewState === 'checked_in_confirmed'
+        ? true
+        : matchViewState === 'matchday_action'
+          ? matchCheckIn.loading
+          : isGoingToMatch || attendance.loading;
+    const panel = (
+      <MatchdayStatusPanel
+        viewState={matchViewState}
+        isGoing={isGoingToMatch}
+        avatars={panelAvatars}
+        count={panelCount}
+        primaryLabel={panelPrimaryLabel}
+        primaryDisabled={panelPrimaryDisabled}
+        onPressPrimary={
+          matchViewState === 'matchday_action'
+            ? handleCheckIn
+            : () => handleSelectParticipation('going')
+        }
+        onPressSocial={
+          matchViewState === 'pre_match' ? handleOpenAttendees : handleOpenCheckedInFans
+        }
+        secondaryActions={[
+          {
+            label: 'K\u00f8b billet',
+            icon: 'ticket-outline',
+            onPress: handleOpenTickets,
+            disabled: !isHomeMatch,
+          },
+          {
+            label: 'Vejvisning',
+            icon: 'navigate-outline',
+            onPress: handleOpenRoute,
+            disabled: !mapsUrl,
+          },
+        ]}
+        style={styles.statusPanel}
+      />
+    );
 
     return (
-      <Card style={styles.matchdayCard}>
-        <Text style={styles.matchdayCardTitle}>Er du på stadion?</Text>
-        {checkedIn ? (
-          <>
-            <Text style={styles.matchdayCardBody}>✅ Du er checket ind</Text>
-            <Text style={styles.matchdayCardSubtext}>Vi ses på lægterne!</Text>
-          </>
+      <View style={styles.statusPanelWrap}>
+        {matchViewState === 'checked_in_confirmed' ? (
+          <Animated.View style={checkInConfirmationStyle}>{panel}</Animated.View>
         ) : (
-          <>
-            <Text style={styles.matchdayCardSubtext}>Tjek ind og vær en del af stemningen</Text>
-            <PrimaryButton title="📍 Tjek ind" onPress={handleCheckIn} />
-            <View style={styles.matchdayActionsRow}>
-              <View style={styles.matchdayActionButton}>
-                <OutlineButton
-                  title="🎟 Vis billet"
-                  onPress={() => Alert.alert('Billet', 'Billetvisning kommer snart')}
-                />
-              </View>
-              <View style={styles.matchdayActionButton}>
-                <OutlineButton title="🛒 Køb billet" onPress={handleOpenTickets} />
-              </View>
-            </View>
-          </>
+          panel
         )}
-      </Card>
+        {matchCheckIn.error ? (
+          <Text style={styles.statusPanelError}>{matchCheckIn.error}</Text>
+        ) : null}
+      </View>
     );
   };
 
@@ -491,7 +524,7 @@ export default function MatchDetailsScreen() {
 
         <View style={styles.contentBlock}>
           <Card style={styles.matchInfoCard}>
-            <Text style={styles.matchInfoEyebrow}>Næste kamp</Text>
+            <Text style={styles.matchInfoEyebrow}>N\u00e6ste kamp</Text>
             <Text style={styles.matchInfoTitle}>
               {fixture.home_team} vs {fixture.away_team}
             </Text>
@@ -507,58 +540,45 @@ export default function MatchDetailsScreen() {
                 {fixture.venue ? (
                   <Text style={styles.matchInfoVenue}>
                     {fixture.venue}
-                    {fixture.venue_city ? ` · ${fixture.venue_city}` : ''}
+                    {fixture.venue_city ? ` \u00b7 ${fixture.venue_city}` : ''}
                   </Text>
                 ) : null}
                 <Text style={styles.matchInfoMeta}>{formatDateDa(fixture.kickoff_at)}</Text>
                 <Text style={styles.matchInfoStatus}>
-                  {attendance.isGoing ? 'Du deltager' : 'Vælg hvordan du følger kampen'}
+                  {isGoingToMatch ? 'Du kommer til kampen' : 'V\u00e6lg hvordan du f\u00f8lger kampen'}
                 </Text>
               </View>
             </View>
           </Card>
 
-          {renderMatchdayCard()}
+          {renderStatusPanel()}
           {renderParticipationCard()}
 
-          <Pressable style={styles.communityStrip} onPress={handleOpenAttendees}>
-            <View style={styles.communityStripLead}>
-              <AttendanceBubbles
-                avatars={attendance.avatars}
-                count={attendance.countGoing}
-                max={5}
-                size={22}
-                textVariant="caption"
-                showCountText={false}
-              />
-              <View style={styles.communityStripCopy}>
-                <Text style={styles.communityStripTitle}>
-                  🔥 {attendance.countGoing} fans klar til kampdag
-                </Text>
-                <Text style={styles.communityStripMeta}>Se alle deltagere</Text>
+          {matchViewState === 'pre_match' ? (
+            <Pressable style={styles.communityStrip} onPress={handleOpenAttendees}>
+              <View style={styles.communityStripLead}>
+                <AttendanceBubbles
+                  avatars={attendance.avatars}
+                  count={attendance.countGoing}
+                  max={5}
+                  size={22}
+                  textVariant="caption"
+                  showCountText={false}
+                />
+                <View style={styles.communityStripCopy}>
+                  <Text style={styles.communityStripTitle}>
+                    {attendance.countGoing.toLocaleString('da-DK')} {attendance.countGoing === 1 ? 'fan kommer' : 'fans kommer'}
+                  </Text>
+                  <Text style={styles.communityStripMeta}>Se alle deltagere</Text>
+                </View>
               </View>
-            </View>
-            <Ionicons
-              name="chevron-forward"
-              size={theme.components.icon.size.sm}
-              color={theme.colors.text.secondary}
-            />
-          </Pressable>
-
-          <View style={styles.secondaryCtaRow}>
-            {isHomeMatch ? (
-              <View style={styles.secondaryCtaButton}>
-                <OutlineButton title="Køb billet" onPress={handleOpenTickets} />
-              </View>
-            ) : null}
-            <View style={styles.secondaryCtaButton}>
-              <OutlineButton
-                title="Rutevejledning"
-                onPress={handleOpenRoute}
-                disabled={!mapsUrl}
+              <Ionicons
+                name="chevron-forward"
+                size={theme.components.icon.size.sm}
+                color={theme.colors.text.secondary}
               />
-            </View>
-          </View>
+            </Pressable>
+          ) : null}
 
           <View style={styles.section}>
             <Text style={styles.sectionHeading}>FANAKTIVITETER</Text>
@@ -566,13 +586,13 @@ export default function MatchDetailsScreen() {
               <MatchActivityRow
                 icon="bus-outline"
                 title="Bustur til kampen"
-                subtitle="Koordinér transport og mødetid med de andre fans"
+                subtitle="Koordin\u00e9r transport og m\u00f8detid med de andre fans"
               />
               <View style={styles.activityDivider} />
               <MatchActivityRow
                 icon="restaurant-outline"
-                title="Fælles optakt"
-                subtitle="Planlæg mødested og få gang i stemningen før kickoff"
+                title="F\u00e6lles optakt"
+                subtitle="Planl\u00e6g m\u00f8dested og f\u00e5 gang i stemningen f\u00f8r kickoff"
               />
             </Card>
           </View>
@@ -594,17 +614,17 @@ export default function MatchDetailsScreen() {
                 variant="inline"
                 maxInlineComments={Infinity}
                 titleOverride="Kampsnak"
-                composerPlaceholder="Del stemningen før kamp…"
+                composerPlaceholder="Del stemningen f\u00f8r kamp..."
                 quickActionMode="submit"
                 quickActionFeedbackForValue={(value) =>
-                  value === 'Jeg er på vej' ? 'Du er på vej 🔴' : 'Du deltager i snakken'
+                  value === 'Jeg er p\u00e5 vej' ? 'Du er p\u00e5 vej \uD83D\uDD34' : 'Du deltager i snakken'
                 }
                 replyModeLabel="Svar"
                 quickActionChips={[
-                  'Jeg er på vej',
-                  'Mødes før kamp?',
-                  'Hvem er på stadion?',
-                  'Mit bud på kampen',
+                  'Jeg er p\u00e5 vej',
+                  'M\u00f8des f\u00f8r kamp?',
+                  'Hvem er p\u00e5 stadion?',
+                  'Mit bud p\u00e5 kampen',
                 ]}
               />
             </Card>
@@ -808,33 +828,16 @@ const stylesFactory = (theme: ReturnType<typeof useTheme>) =>
     stateSecondaryAction: {
       flex: 1,
     },
-    matchdayCard: {
+    statusPanelWrap: {
+      gap: spacing.xs,
+    },
+    statusPanel: {
       marginBottom: theme.spacing[0],
     },
-    matchdayCardTitle: {
-      fontSize: theme.typography.h3.fontSize,
-      fontWeight: '700',
-      color: theme.colors.text.primary,
-      marginBottom: theme.spacing[1],
-    },
-    matchdayCardBody: {
-      fontSize: theme.typography.body.fontSize,
-      fontWeight: '700',
-      color: theme.colors.text.primary,
-      marginBottom: theme.spacing[1],
-    },
-    matchdayCardSubtext: {
+    statusPanelError: {
+      marginTop: spacing.xs,
       fontSize: theme.typography.caption.fontSize,
-      color: theme.colors.text.secondary,
-      marginBottom: spacing.sm,
-    },
-    matchdayActionsRow: {
-      flexDirection: 'row',
-      gap: spacing.sm,
-      marginTop: spacing.sm,
-    },
-    matchdayActionButton: {
-      flex: 1,
+      color: theme.colors.error,
     },
     matchInfoTitle: {
       fontSize: theme.typography.h3.fontSize,
@@ -890,34 +893,6 @@ const stylesFactory = (theme: ReturnType<typeof useTheme>) =>
       fontSize: theme.typography.caption.fontSize,
       color: theme.colors.text.secondary,
       fontWeight: '600',
-    },
-    joinCta: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderWidth: theme.layout.borderWidth,
-      borderRadius: theme.radius.md,
-      paddingVertical: spacing.sm,
-    },
-    joinCtaIdle: {
-      backgroundColor: theme.colors.bg.card,
-      borderColor: theme.colors.primary,
-    },
-    joinCtaActive: {
-      backgroundColor: theme.colors.primary,
-      borderColor: theme.colors.primary,
-    },
-    joinText: {
-      fontSize: theme.typography.h3.fontSize,
-      fontWeight: '700',
-      marginLeft: spacing.sm,
-    },
-    secondaryCtaRow: {
-      flexDirection: 'row',
-      gap: spacing.sm,
-    },
-    secondaryCtaButton: {
-      flex: 1,
     },
     section: {
       marginBottom: spacing.sm,
@@ -1014,3 +989,5 @@ const stylesFactory = (theme: ReturnType<typeof useTheme>) =>
       marginTop: spacing.md,
     },
   });
+
+
