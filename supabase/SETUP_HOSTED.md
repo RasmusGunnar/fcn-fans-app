@@ -187,7 +187,12 @@ npx supabase functions deploy parse-link --no-verify-jwt
 npx supabase functions deploy get_next_fixture
 npx supabase functions deploy send-push
 npx supabase functions deploy sync_fcn_fixtures
+npx supabase functions deploy weekly_top_fan
 ```
+
+For `weekly_top_fan`, also set `SYNC_SECRET` in Supabase secrets and run
+`supabase/sql/2026-03-20_schedule_weekly_top_fan.sql` manually with the real
+project ref and sync secret.
 
 ## ✅ Setup Checklist
 

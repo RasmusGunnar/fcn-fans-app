@@ -15,13 +15,10 @@ import { logger } from '../lib/logger';
 
 const Stack = createNativeStackNavigator();
 
-function isProfileComplete(profile: UserProfile | null): boolean {
+function hasCompletedCoreProfile(profile: UserProfile | null): boolean {
   if (!profile) return false;
 
-  const hasDisplayName =
-    typeof profile.display_name === 'string' && profile.display_name.trim().length > 0;
-
-  return hasDisplayName && profile.onboarding_complete === true;
+  return typeof profile.display_name === 'string' && profile.display_name.trim().length > 0;
 }
 
 function Inner() {
@@ -40,8 +37,16 @@ function Inner() {
 
     try {
       const result = await fetchMyProfile(user.id);
+      logger.log('[RootNavigator] Profile load result', {
+        profileLoading: false,
+        profile: result,
+        display_name: result?.display_name ?? null,
+        avatar_url: result?.avatar_url ?? null,
+        onboarding_complete: result?.onboarding_complete ?? null,
+      });
       setProfile(result);
-    } catch {
+    } catch (error) {
+      logger.warn('[RootNavigator] Profile load failed', error);
       setProfile(null);
     } finally {
       setProfileLoading(false);
@@ -78,20 +83,49 @@ function Inner() {
 
 
   if (loading || profileLoading) {
+    logger.log('[RootNavigator] Rendering LoadingScreen', {
+      loading,
+      profileLoading,
+      profile,
+      display_name: profile?.display_name ?? null,
+      avatar_url: profile?.avatar_url ?? null,
+      onboarding_complete: profile?.onboarding_complete ?? null,
+    });
     return <LoadingScreen />;
   }
 
   if (!user) {
-    logger.log('[RootNavigator] Rendering AuthStack');
+    logger.log('[RootNavigator] Rendering AuthStack', {
+      loading,
+      profileLoading,
+      profile,
+      display_name: profile?.display_name ?? null,
+      avatar_url: profile?.avatar_url ?? null,
+      onboarding_complete: profile?.onboarding_complete ?? null,
+    });
     return <AuthStack />;
   }
 
-  if (!isProfileComplete(profile)) {
-    logger.log('[RootNavigator] Rendering OnboardingStack', { display_name: profile?.display_name, onboarding_complete: profile?.onboarding_complete });
+  if (profile && !hasCompletedCoreProfile(profile)) {
+    logger.log('[RootNavigator] Rendering OnboardingStack', {
+      loading,
+      profileLoading,
+      profile,
+      display_name: profile?.display_name,
+      avatar_url: profile?.avatar_url,
+      onboarding_complete: profile?.onboarding_complete,
+    });
     return <OnboardingStack />;
   }
 
-  logger.log('[RootNavigator] Rendering AppTabs', { display_name: profile?.display_name, onboarding_complete: profile?.onboarding_complete });
+  logger.log('[RootNavigator] Rendering AppTabs', {
+    loading,
+    profileLoading,
+    profile,
+    display_name: profile?.display_name,
+    avatar_url: profile?.avatar_url,
+    onboarding_complete: profile?.onboarding_complete,
+  });
   return <AppTabs />;
 }
 

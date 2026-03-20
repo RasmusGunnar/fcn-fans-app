@@ -19,6 +19,7 @@ import {
 import { fetchNewsItems } from '../services/newsApi';
 import { fetchLatestPublishedWeeklyTopFan } from '../services/weeklyTopFanApi';
 import { FeedItem } from '../types/feed';
+import type { FanLevelKey } from '../types/fan';
 import { NewsItem } from '../types/news';
 import { Post } from '../types/post';
 import { normalizeMedia } from '../utils/media';
@@ -71,11 +72,53 @@ const compareFeedItems = (a: FeedItem, b: FeedItem, currentWeekStartDate: string
   return new Date(bTime).getTime() - new Date(aTime).getTime();
 };
 
+type FeedProfileEntry = {
+  display_name: string | null;
+  avatar_url: string | null;
+  fan_level_key: FanLevelKey | null;
+};
+
+const FEED_PROFILE_SELECT_ATTEMPTS = [
+  'id, display_name, avatar_url, fan_level_key',
+  'id, display_name, avatar_url',
+] as const;
+
+async function fetchFeedProfilesByIds(authorIds: string[]): Promise<Record<string, FeedProfileEntry>> {
+  if (authorIds.length === 0) {
+    return {};
+  }
+
+  for (const select of FEED_PROFILE_SELECT_ATTEMPTS) {
+    const { data, error } = await supabase.from('profiles').select(select).in('id', authorIds);
+
+    if (error) {
+      logger.warn('[FeedProvider] profile lookup failed for select:', { select, error });
+      continue;
+    }
+
+    const profileMap: Record<string, FeedProfileEntry> = {};
+    (data || []).forEach((profile: any) => {
+      profileMap[profile.id] = {
+        display_name: profile.display_name ?? null,
+        avatar_url: profile.avatar_url ?? null,
+        fan_level_key: 'fan_level_key' in profile ? profile.fan_level_key ?? null : null,
+      };
+    });
+
+    return profileMap;
+  }
+
+  return {};
+}
+
 interface FeedContextType {
   posts: Post[];
   feedItems: FeedItem[]; // Combined feed using unified FeedItem type
   communityMap: Record<string, string>; // Map of community ID -> name
-  profileMap: Record<string, { display_name: string | null; avatar_url: string | null }>; // Map of user ID -> profile
+  profileMap: Record<
+    string,
+    { display_name: string | null; avatar_url: string | null; fan_level_key: FanLevelKey | null }
+  >; // Map of user ID -> profile
   likeMap: Record<string, { liked: boolean; likes: number }>; // Like states by "${kind}:${id}"
   commentCountMap: Record<string, number>; // Comment counts by "${kind}:${id}"
   commentPreviewMap: Record<string, CommentPreview[]>; // Comment previews by "${kind}:${id}"
@@ -98,7 +141,10 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
   const [communityMap, setCommunityMap] = useState<Record<string, string>>({});
   const [profileMap, setProfileMap] = useState<
-    Record<string, { display_name: string | null; avatar_url: string | null }>
+    Record<
+      string,
+      { display_name: string | null; avatar_url: string | null; fan_level_key: FanLevelKey | null }
+    >
   >({});
   const [likeMap, setLikeMap] = useState<Record<string, { liked: boolean; likes: number }>>({});
   const [commentCountMap, setCommentCountMap] = useState<Record<string, number>>({});
@@ -134,26 +180,12 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
 
       // Fetch author profiles for all posts
       const authorIds = [...new Set((postsData || []).map((p) => p.author_id).filter(Boolean))];
-      const newProfileMap: Record<
-        string,
-        { display_name: string | null; avatar_url: string | null }
-      > = {};
+      const newProfileMap: Record<string, FeedProfileEntry> = {};
 
       if (authorIds.length > 0) {
         try {
-          const { data: profiles, error: profileError } = await supabase
-            .from('profiles')
-            .select('id, display_name, avatar_url')
-            .in('id', authorIds);
-
-          if (!profileError && profiles) {
-            profiles.forEach((profile) => {
-              newProfileMap[profile.id] = {
-                display_name: profile.display_name,
-                avatar_url: profile.avatar_url,
-              };
-            });
-          }
+          const resolvedProfiles = await fetchFeedProfilesByIds(authorIds);
+          Object.assign(newProfileMap, resolvedProfiles);
         } catch (e) {
           logger.warn('[FeedProvider] Failed to fetch profiles:', e);
         }
@@ -258,6 +290,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
           [weeklyTopFanItem!.userId]: {
             display_name: weeklyTopFanItem!.displayName,
             avatar_url: weeklyTopFanItem!.avatarUrl ?? null,
+            fan_level_key: weeklyTopFanItem!.fanLevelKey,
           },
         }));
       }

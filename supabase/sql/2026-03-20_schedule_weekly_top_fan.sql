@@ -4,6 +4,10 @@
 --   <YOUR_PROJECT_REF>
 --   <YOUR_SYNC_SECRET>
 --
+-- Manual prod step:
+--   Replace both placeholders, make sure the weekly_top_fan Edge Function is
+--   deployed, and set SYNC_SECRET in Supabase secrets before running this SQL.
+--
 -- Timezone assumption:
 --   Supabase pg_cron commonly runs on UTC.
 --   Europe/Copenhagen is UTC+1 in winter and UTC+2 in summer.
@@ -11,6 +15,10 @@
 --   this cron calls the function at 10:00 UTC and 11:00 UTC every Monday.
 --   The edge function itself only generates the card when the local
 --   Copenhagen time is actually Monday 12:00, so only one run wins.
+--   The function now scores the previous completed week using a fixed
+--   [week_start_date, week_start_date + 7 days) interval.
+--   Keep the cron body minimal; normal weekly production should not send an
+--   explicit week_start_date.
 
 select cron.unschedule('weekly-top-fan');
 

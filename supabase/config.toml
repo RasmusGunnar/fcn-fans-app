@@ -18,3 +18,7 @@ verify_jwt = false
 # weekly_top_fan: cron-driven editorial feed card generation via x-sync-secret.
 [functions.weekly_top_fan]
 verify_jwt = false
+
+# weekly_ranking: user-specific ranking now uses userId in request body instead of function auth.
+[functions.weekly_ranking]
+verify_jwt = false

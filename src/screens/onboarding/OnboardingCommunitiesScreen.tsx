@@ -31,6 +31,42 @@ type CommunityCardModel = Community & {
   imageUrl: string | null;
 };
 
+function isProfileCompleteForApp(
+  profile:
+    | {
+        display_name?: string | null;
+        avatar_url?: string | null;
+        onboarding_complete?: boolean | null;
+      }
+    | null
+    | undefined,
+): boolean {
+  const hasDisplayName =
+    typeof profile?.display_name === 'string' && profile.display_name.trim().length > 0;
+  const hasAvatar =
+    typeof profile?.avatar_url === 'string' && profile.avatar_url.trim().length > 0;
+
+  if (!hasDisplayName) {
+    return false;
+  }
+
+  if (profile?.onboarding_complete === true) {
+    return true;
+  }
+
+  if (profile?.onboarding_complete === false) {
+    return false;
+  }
+
+  return hasAvatar;
+}
+
+function isMissingOnboardingColumnError(error: unknown): boolean {
+  const message =
+    typeof error === 'object' && error && 'message' in error ? String(error.message) : '';
+  return message.toLowerCase().includes('onboarding_complete');
+}
+
 function sortSuggestedCommunities(communities: Community[]): Community[] {
   return [...communities].sort((a, b) => {
     const typeDiff = (a.type === 'fan_faction' ? 0 : 1) - (b.type === 'fan_faction' ? 0 : 1);
@@ -131,35 +167,39 @@ export default function OnboardingCommunitiesScreen({ navigation, route }: Props
       throw new Error('Missing authenticated user');
     }
 
-    const { data: updatedProfile, error: updateError } = await supabase
+    const { error: updateError } = await supabase
       .from('profiles')
       .update({ onboarding_complete: true })
       .eq('id', user.id)
-      .select('id, display_name, onboarding_complete')
-      .single();
+      .select('id')
+      .maybeSingle();
 
-    if (updateError) {
+    if (updateError && !isMissingOnboardingColumnError(updateError)) {
       throw updateError;
     }
 
-    if (!updatedProfile?.display_name?.trim() || updatedProfile.onboarding_complete !== true) {
-      throw new Error('Profile completion write did not return a valid completed profile');
+    if (updateError) {
+      logger.warn(
+        '[OnboardingCommunitiesScreen] onboarding_complete update unavailable, continuing with legacy completion fallback',
+        updateError,
+      );
+    } else {
+      const parent = navigation.getParent?.();
+      if (parent) {
+        parent.dispatch(StackActions.replace('Main'));
+      }
+      return;
     }
 
     const refreshedProfile = await fetchMyProfile(user.id);
-    const isComplete =
-      !!refreshedProfile?.display_name?.trim() && refreshedProfile.onboarding_complete === true;
-
-    if (!isComplete) {
+    if (!isProfileCompleteForApp(refreshedProfile)) {
       throw new Error('Profile refresh did not confirm onboarding completion');
     }
 
     const parent = navigation.getParent?.();
-    if (!parent) {
-      throw new Error('Could not access parent navigator for onboarding exit');
+    if (parent) {
+      parent.dispatch(StackActions.replace('Main'));
     }
-
-    parent.dispatch(StackActions.replace('Main'));
   };
 
   const handleContinue = async () => {

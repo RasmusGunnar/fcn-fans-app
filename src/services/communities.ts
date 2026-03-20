@@ -143,11 +143,25 @@ export async function getMemberCounts(communityIds: string[]): Promise<Record<st
  */
 export async function getCommunities(): Promise<Community[]> {
   try {
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('communities')
       .select('*')
-      .eq('visibility', 'public')
+      .or('visibility.eq.public,visibility.is.null')
       .order('name', { ascending: true });
+
+    if (error && error.message?.toLowerCase().includes('visibility')) {
+      logger.warn(
+        '[communities] visibility filter unavailable, falling back to legacy query:',
+        error,
+      );
+
+      const legacyResponse = await supabase.from('communities').select('*').order('name', {
+        ascending: true,
+      });
+
+      data = legacyResponse.data;
+      error = legacyResponse.error;
+    }
 
     if (error) {
       logger.warn('[communities] Error fetching communities:', error);

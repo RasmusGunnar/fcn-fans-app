@@ -1,6 +1,7 @@
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { getProfileSafe } from '../lib/profile';
+import type { FanLevelKey } from '../types/fan';
 
 // ===== TYPES =====
 
@@ -9,7 +10,28 @@ export interface UserProfile {
   display_name: string | null;
   avatar_url: string | null;
   member_since: string | null;
+  fan_level_key: FanLevelKey | null;
   onboarding_complete?: boolean | null;
+}
+
+const PROFILE_SELECT_ATTEMPTS = [
+  'id, display_name, avatar_url, member_since, fan_level_key, onboarding_complete',
+  'id, display_name, avatar_url, member_since, fan_level_key',
+  'id, display_name, avatar_url, member_since, onboarding_complete',
+  'id, display_name, avatar_url, member_since',
+] as const;
+
+function normalizeUserProfile(
+  profile: Partial<UserProfile> & Pick<UserProfile, 'id'>,
+): UserProfile {
+  return {
+    id: profile.id,
+    display_name: profile.display_name ?? null,
+    avatar_url: profile.avatar_url ?? null,
+    member_since: profile.member_since ?? null,
+    fan_level_key: profile.fan_level_key ?? null,
+    onboarding_complete: profile.onboarding_complete ?? null,
+  };
 }
 
 export interface MyCommunity {
@@ -78,10 +100,18 @@ export function formatEventDate(isoDate: string): string {
  */
 export async function fetchMyProfile(userId: string): Promise<UserProfile | null> {
   try {
-    return await getProfileSafe<UserProfile>(
-      userId,
-      'id, display_name, avatar_url, member_since, onboarding_complete',
-    );
+    for (const select of PROFILE_SELECT_ATTEMPTS) {
+      const profile = await getProfileSafe<Partial<UserProfile> & Pick<UserProfile, 'id'>>(
+        userId,
+        select,
+      );
+
+      if (profile) {
+        return normalizeUserProfile(profile);
+      }
+    }
+
+    return null;
   } catch (err) {
     logger.error('[profileApi] Unexpected error fetching profile:', err);
     return null;

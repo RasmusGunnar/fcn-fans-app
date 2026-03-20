@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { fetchWeeklyRanking, type WeeklyRankingData } from '../../api/weeklyRanking';
 import { Avatar } from '../Avatar';
 import { FanLevelBadge } from '../fan/FanLevelBadge';
 import { Badge, Button, Card, Text } from '../ui';
@@ -73,6 +74,20 @@ function normalizeContentTypeLabel(label?: string | null): string | null {
   return label.trim() || null;
 }
 
+function formatRankingSummary(score: number, rank: number, totalUsers: number): string {
+  if (totalUsers > 0) {
+    return `${score} point · nr. ${rank} af ${totalUsers} denne uge`;
+  }
+
+  return `${score} point denne uge`;
+}
+
+function getRankingHelperText(rank: number): string {
+  if (rank === 1) return 'Du fører ugens ranking lige nu';
+  if (rank <= 3) return 'Du ligger helt i toppen denne uge';
+  return 'Top 3 er tæt på 👀';
+}
+
 export function WeeklyTopFanCard({
   avatarUrl,
   displayName,
@@ -92,6 +107,11 @@ export function WeeklyTopFanCard({
 }: WeeklyTopFanCardProps) {
   const theme = useTheme();
   const styles = createStyles(theme);
+  const [rankingOpen, setRankingOpen] = useState(false);
+  const [rankingLoading, setRankingLoading] = useState(false);
+  const [rankingLoaded, setRankingLoaded] = useState(false);
+  const [rankingError, setRankingError] = useState(false);
+  const [rankingData, setRankingData] = useState<WeeklyRankingData | null>(null);
   const weekNumber = getIsoWeekNumber(weekStartDate);
   const spotlightTitle = title.trim() || 'Ugens Topfan';
   const overline = weekNumber ? `Uge ${weekNumber} · 🏆 ${spotlightTitle}` : `🏆 ${spotlightTitle}`;
@@ -124,12 +144,12 @@ export function WeeklyTopFanCard({
           accessibilityLabel: formatMetric(commentsCount, 'kommentar', 'kommentarer')!,
         }
       : null,
-  ].filter(Boolean) as Array<{
+  ].filter(Boolean) as {
     key: string;
     icon: keyof typeof Ionicons.glyphMap;
     value: string;
     accessibilityLabel: string;
-  }>;
+  }[];
   const gradientColors = [
     theme.colors.pill.red.bg,
     theme.colors.bg.subtle,
@@ -137,6 +157,31 @@ export function WeeklyTopFanCard({
     theme.colors.bg.surface,
   ] as const;
   const gradientLocations = [0, 0.18, 0.48, 1] as const;
+
+  const handleToggleRanking = async () => {
+    const nextOpen = !rankingOpen;
+    setRankingOpen(nextOpen);
+
+    // Ranking is user-specific, so fetch it on first expand instead of adding another feed item.
+    if (!nextOpen || rankingLoaded || rankingLoading) {
+      return;
+    }
+
+    setRankingLoading(true);
+    setRankingLoaded(true);
+    setRankingError(false);
+
+    const data = await fetchWeeklyRanking();
+
+    if (!data) {
+      setRankingError(true);
+      setRankingLoading(false);
+      return;
+    }
+
+    setRankingData(data);
+    setRankingLoading(false);
+  };
 
   return (
     <Card variant="hero" style={styles.card}>
@@ -236,6 +281,60 @@ export function WeeklyTopFanCard({
                 Se opslag →
               </Text>
             </Pressable>
+          ) : null}
+        </View>
+
+        <View style={styles.rankingShell}>
+          <Pressable onPress={handleToggleRanking} style={styles.rankingToggle}>
+            <Text variant="caption" color="primary" style={styles.referenceActionText}>
+              {rankingOpen ? 'Skjul din placering' : 'Se din placering'}
+            </Text>
+            <Ionicons
+              name={rankingOpen ? 'chevron-up' : 'chevron-down'}
+              size={theme.spacing[4]}
+              color={theme.colors.text.secondary}
+            />
+          </Pressable>
+
+          {rankingOpen ? (
+            <View style={styles.rankingPanel}>
+              {rankingLoading ? (
+                <Text variant="body" color="secondary">
+                  Henter din placering...
+                </Text>
+              ) : rankingError ? (
+                <Text variant="body" color="secondary">
+                  Placering kunne ikke hentes lige nu
+                </Text>
+              ) : rankingData?.rank !== null && rankingData ? (
+                <>
+                  <Text variant="caption" color="secondary">
+                    Din placering denne uge
+                  </Text>
+                  <Text variant="h2" color="primary">
+                    #{rankingData.rank}
+                  </Text>
+                  <Text variant="body" color="secondary">
+                    {formatRankingSummary(
+                      rankingData.score,
+                      rankingData.rank,
+                      rankingData.totalUsers,
+                    )}
+                  </Text>
+                  <Text variant="caption" color="secondary">
+                    {getRankingHelperText(rankingData.rank)}
+                  </Text>
+                </>
+              ) : rankingData ? (
+                <Text variant="body" color="secondary">
+                  Du har ikke aktivitet endnu denne uge
+                </Text>
+              ) : (
+                <Text variant="body" color="secondary">
+                  Placering kunne ikke hentes lige nu
+                </Text>
+              )}
+            </View>
           ) : null}
         </View>
       </View>
@@ -403,6 +502,26 @@ function createStyles(theme: Theme) {
     },
     referenceActionText: {
       fontWeight: '700',
+    },
+    rankingShell: {
+      gap: theme.spacing[2],
+      marginTop: theme.spacing[1],
+    },
+    rankingToggle: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: theme.spacing[2],
+      paddingVertical: theme.spacing[1],
+    },
+    rankingPanel: {
+      gap: theme.spacing[1],
+      paddingVertical: theme.spacing[3],
+      paddingHorizontal: theme.spacing[3],
+      borderRadius: theme.radius.md,
+      backgroundColor: theme.colors.bg.elevated,
+      borderWidth: theme.layout.borderHairline,
+      borderColor: theme.colors.border.default,
     },
   });
 }

@@ -2,7 +2,6 @@
  * Unified feed item types for the home screen feed
  */
 
-import { targetKey } from '../utils/targetKey';
 import type { FanLevelKey } from './fan';
 import { NewsItem } from './news';
 import { Post } from './post';
@@ -108,5 +107,5 @@ export function isNewsItem(item: FeedItem): item is { kind: 'news'; id: string; 
  * Helper to create feed item key for likes/state management
  */
 export function getFeedItemKey(item: FeedItem): string {
-  return targetKey(item.kind, item.id);
+  return `${item.kind}:${item.id}`;
 }

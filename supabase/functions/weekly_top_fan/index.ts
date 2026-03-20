@@ -95,23 +95,26 @@ function getWeekStartDate(baseDate: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-function getWindowStartIso(baseDate: Date): string {
-  return new Date(baseDate.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
-}
-
-function getCooldownStartDate(weekStartDate: string): string {
-  const date = new Date(`${weekStartDate}T00:00:00Z`);
-  date.setUTCDate(date.getUTCDate() - 21);
+function addDays(dateString: string, days: number): string {
+  const date = new Date(`${dateString}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
 }
 
-function getFanLevelKeyFromWeeklyScore(score: number): FanLevelKey {
-  if (score >= 90) return 'top_fan';
-  if (score >= 70) return 'dedicated';
-  if (score >= 50) return 'community_core';
-  if (score >= 35) return 'regular_voice';
-  if (score >= 20) return 'community_member';
-  return 'new_fan';
+function getPreviousWeekStartDate(baseDate: Date): string {
+  return addDays(getWeekStartDate(baseDate), -7);
+}
+
+function getWeekWindowStartIso(weekStartDate: string): string {
+  return new Date(`${weekStartDate}T00:00:00Z`).toISOString();
+}
+
+function getWeekWindowEndIso(weekStartDate: string): string {
+  return new Date(`${addDays(weekStartDate, 7)}T00:00:00Z`).toISOString();
+}
+
+function getCooldownStartDate(weekStartDate: string): string {
+  return addDays(weekStartDate, -21);
 }
 
 function isFanLevelKey(value: unknown): value is FanLevelKey {
@@ -341,8 +344,11 @@ serve(async (req) => {
       });
     }
 
-    const weekStartDate = requestData.week_start_date || getWeekStartDate(now);
-    const windowStartIso = getWindowStartIso(now);
+    // Score the completed week keyed by its Monday date, so reruns always use the
+    // same closed [week_start_date, week_start_date + 7 days) interval.
+    const weekStartDate = requestData.week_start_date || getPreviousWeekStartDate(now);
+    const windowStartIso = getWeekWindowStartIso(weekStartDate);
+    const windowEndIso = getWeekWindowEndIso(weekStartDate);
     const cooldownStartDate = getCooldownStartDate(weekStartDate);
 
     const { data: existingWeeklyTopFan, error: existingError } = await supabase
@@ -373,15 +379,18 @@ serve(async (req) => {
         supabase
           .from('posts')
           .select('id, author_id, text, created_at')
-          .gte('created_at', windowStartIso),
+          .gte('created_at', windowStartIso)
+          .lt('created_at', windowEndIso),
         supabase
           .from('comments_v2')
           .select('id, author_id, text, created_at')
-          .gte('created_at', windowStartIso),
+          .gte('created_at', windowStartIso)
+          .lt('created_at', windowEndIso),
         supabase
           .from('match_checkins')
           .select('match_id, user_id, created_at')
-          .gte('created_at', windowStartIso),
+          .gte('created_at', windowStartIso)
+          .lt('created_at', windowEndIso),
         supabase
           .from('weekly_top_fan')
           .select('user_id')
@@ -420,6 +429,7 @@ serve(async (req) => {
             .select('target_id')
             .eq('target_type', 'post')
             .gte('created_at', windowStartIso)
+            .lt('created_at', windowEndIso)
             .in('target_id', postIds)
         : Promise.resolve({ data: [], error: null }),
       commentIds.length > 0
@@ -428,6 +438,7 @@ serve(async (req) => {
             .select('target_id')
             .eq('target_type', 'comment')
             .gte('created_at', windowStartIso)
+            .lt('created_at', windowEndIso)
             .in('target_id', commentIds)
         : Promise.resolve({ data: [], error: null }),
     ]);
@@ -609,8 +620,8 @@ serve(async (req) => {
       week_start_date: weekStartDate,
       generated_at: now.toISOString(),
       user_id: winner.userId,
-      fan_level_key:
-        winnerProfile.fanLevelKey || getFanLevelKeyFromWeeklyScore(winner.weeklyScore),
+      // profiles.fan_level_key is the primary source of truth.
+      fan_level_key: winnerProfile.fanLevelKey || 'community_member',
       weekly_score: winner.weeklyScore,
       reason_type: reasonCopy.reasonType,
       reference_post_id: reasonCopy.referencePostId,

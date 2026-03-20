@@ -1,4 +1,5 @@
 import { logger } from '../lib/logger';
+import { getSafeFanLevelKey } from '../lib/fanLevel';
 import { supabase } from '../lib/supabase';
 import { fetchPollVotes } from './pollService';
 import type { FeedWeeklyTopFanData } from '../types/feed';
@@ -27,7 +28,7 @@ type ReferencedPostRow = {
   text: string | null;
   poll_data?: {
     question?: string;
-    options?: Array<{ id?: string; text?: string }>;
+    options?: { id?: string; text?: string }[];
   } | null;
 };
 
@@ -35,6 +36,17 @@ type ReferencedCommentRow = {
   id: string;
   text: string | null;
 };
+
+type WeeklyTopFanProfile = {
+  display_name: string | null;
+  avatar_url: string | null;
+  fan_level_key?: FanLevelKey | null;
+};
+
+const WEEKLY_TOP_FAN_PROFILE_SELECT_ATTEMPTS = [
+  'display_name, avatar_url, fan_level_key',
+  'display_name, avatar_url',
+] as const;
 
 function extractHighlightText(body: string): string {
   const cleaned = body
@@ -52,7 +64,7 @@ function extractHighlightText(body: string): string {
 
 async function countRows(
   table: 'likes_v2' | 'comments_v2' | 'poll_votes',
-  filters: Array<[string, string | number | boolean]>,
+  filters: [string, string | number | boolean][],
 ): Promise<number | null> {
   let query = supabase.from(table).select('*', { count: 'exact', head: true });
 
@@ -68,6 +80,33 @@ async function countRows(
   }
 
   return count ?? 0;
+}
+
+async function fetchWeeklyTopFanProfile(userId: string): Promise<WeeklyTopFanProfile | null> {
+  for (const select of WEEKLY_TOP_FAN_PROFILE_SELECT_ATTEMPTS) {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select(select)
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error) {
+      logger.warn('[weeklyTopFanApi] profile lookup failed for select:', { select, error });
+      continue;
+    }
+
+    if (!data) {
+      return null;
+    }
+
+    return {
+      display_name: data.display_name ?? null,
+      avatar_url: data.avatar_url ?? null,
+      fan_level_key: 'fan_level_key' in data ? ((data as any).fan_level_key ?? null) : null,
+    };
+  }
+
+  return null;
 }
 
 export async function fetchLatestPublishedWeeklyTopFan(): Promise<FeedWeeklyTopFanData | null> {
@@ -107,17 +146,7 @@ export async function fetchLatestPublishedWeeklyTopFan(): Promise<FeedWeeklyTopF
     return null;
   }
 
-  const { data: profileData, error: profileError } = await supabase
-    .from('profiles')
-    .select('display_name, avatar_url')
-    .eq('id', row.user_id)
-    .maybeSingle();
-
-  if (profileError) {
-    logger.warn('[weeklyTopFanApi] profile lookup failed:', profileError);
-  }
-
-  const profile = profileData || null;
+  const profile = await fetchWeeklyTopFanProfile(row.user_id);
   let contentTypeLabel: string | null = null;
   let highlightText: string | null = extractHighlightText(row.body) || null;
   let likesCount: number | null = null;
@@ -195,7 +224,7 @@ export async function fetchLatestPublishedWeeklyTopFan(): Promise<FeedWeeklyTopF
     userId: row.user_id,
     displayName: profile?.display_name?.trim() || 'Fan',
     avatarUrl: profile?.avatar_url ?? null,
-    fanLevelKey: row.fan_level_key,
+    fanLevelKey: getSafeFanLevelKey(profile?.fan_level_key ?? row.fan_level_key),
     weeklyScore: row.weekly_score,
     reasonType: row.reason_type,
     referencePostId: row.reference_post_id,

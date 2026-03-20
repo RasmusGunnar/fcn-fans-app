@@ -12,11 +12,11 @@ import { FanBarometerCompactCard } from '../components/fan/FanBarometerCompactCa
 import { FanLevelBadge } from '../components/fan/FanLevelBadge';
 import { AppHeader } from '../components/AppHeader';
 import { Text } from '../components/ui';
+import { getSafeFanLevelKey } from '../lib/fanLevel';
 import { getFanLevelDescription } from '../lib/fanbarometer';
 import { fetchUserCommentedPostIds } from '../services/commentsApi';
 import { useFeed } from '../state/FeedContext';
 import { useTheme, type Theme } from '../theme';
-import type { FanLevelKey } from '../types/fan';
 import { targetKey } from '../utils/targetKey';
 
 type FeedPost = ReturnType<typeof useFeed>['posts'][number];
@@ -43,7 +43,7 @@ export default function PublicProfileScreen() {
   const authorProfile = userId ? profileMap?.[userId] : undefined;
   const displayName = authorProfile?.display_name || 'Fan';
   const avatarUrl = authorProfile?.avatar_url || null;
-  const fanLevel: FanLevelKey = 'community_member';
+  const fanLevel = getSafeFanLevelKey(authorProfile?.fan_level_key);
   const levelDescription = getFanLevelDescription(fanLevel);
 
   // ---------- user's own posts ----------

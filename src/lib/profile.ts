@@ -1,39 +1,65 @@
 import { supabase } from './supabase';
-import { logger } from './logger';
+import { DEFAULT_FAN_LEVEL_KEY } from './fanLevel';
 
 export async function ensureProfile(userId: string): Promise<boolean> {
   try {
-    const payload = {
+    const basePayload = {
       id: userId,
       display_name: null,
       avatar_url: null,
-      onboarding_complete: false,
     };
 
-    const { error } = await supabase
-      .from('profiles')
-      .upsert(payload, { onConflict: 'id', ignoreDuplicates: true } as any);
+    const payloadAttempts = [
+      {
+        ...basePayload,
+        fan_level_key: DEFAULT_FAN_LEVEL_KEY,
+        onboarding_complete: false,
+      },
+      {
+        ...basePayload,
+        fan_level_key: DEFAULT_FAN_LEVEL_KEY,
+      },
+      {
+        ...basePayload,
+        onboarding_complete: false,
+      },
+      basePayload,
+    ];
 
-    if (!error) {
-      console.log('[profile] Profile ensured for user:', userId);
-      return true;
+    let lastError: unknown = null;
+
+    for (const payload of payloadAttempts) {
+      const { error } = await supabase
+        .from('profiles')
+        .upsert(payload, { onConflict: 'id', ignoreDuplicates: true } as any);
+
+      if (!error) {
+        console.log('[profile] Profile ensured for user:', userId);
+        return true;
+      }
+
+      lastError = error;
     }
 
-    console.warn('[profile] Upsert failed, falling back to insert:', error);
+    console.warn('[profile] Upsert failed, falling back to insert:', lastError);
 
-    const { error: insertError } = await supabase.from('profiles').insert(payload);
+    for (const payload of payloadAttempts) {
+      const { error: insertError } = await supabase.from('profiles').insert(payload);
 
-    if (!insertError) {
-      console.log('[profile] Profile inserted for user:', userId);
-      return true;
+      if (!insertError) {
+        console.log('[profile] Profile inserted for user:', userId);
+        return true;
+      }
+
+      if ((insertError as any)?.code === '23505') {
+        console.log('[profile] Profile already exists for user:', userId);
+        return true;
+      }
+
+      lastError = insertError;
     }
 
-    if ((insertError as any)?.code === '23505') {
-      console.log('[profile] Profile already exists for user:', userId);
-      return true;
-    }
-
-    console.warn('[profile] Failed to insert profile:', insertError);
+    console.warn('[profile] Failed to insert profile:', lastError);
     return false;
   } catch (err) {
     console.warn('[profile] Unexpected error ensuring profile:', err);

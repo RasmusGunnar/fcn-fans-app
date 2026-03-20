@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
 import { useAuth } from '../../auth/AuthProvider';
 import { Avatar } from '../../components/Avatar';
 import { Text } from '../../components/ui';
@@ -20,6 +21,7 @@ import { getPublicUrl } from '../../lib/storageUrl';
 import { supabase } from '../../lib/supabase';
 import { uploadAvatar } from '../../lib/uploadAvatar';
 import type { OnboardingStackParamList } from '../../navigation/OnboardingStack';
+import { fetchMyProfile } from '../../services/profileApi';
 import { useTheme } from '../../theme';
 import { isCompactDevice } from '../../utils/isCompactDevice';
 
@@ -55,6 +57,31 @@ export default function OnboardingProfileSetupScreen({ navigation, route }: Prop
       }),
     ]).start();
   }, [entranceOpacity, entranceTranslateY]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadExistingProfile = async () => {
+      if (!user?.id) return;
+
+      const profile = await fetchMyProfile(user.id);
+      if (!isMounted || !profile) return;
+
+      if (profile.display_name?.trim()) {
+        setDisplayNameInput((prev) => (prev.trim().length > 0 ? prev : profile.display_name ?? ''));
+      }
+
+      if (profile.avatar_url) {
+        setAvatarUrlInput((prev) => prev ?? profile.avatar_url ?? null);
+      }
+    };
+
+    void loadExistingProfile();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id]);
 
   const canContinue = useMemo(() => {
     return displayNameInput.trim().length > 0 && !!avatarUrlInput && !saving;
@@ -101,34 +128,49 @@ export default function OnboardingProfileSetupScreen({ navigation, route }: Prop
     try {
       await ensureProfile(user.id);
 
-      const payload = {
+      const basePayload = {
         display_name: trimmedName,
         avatar_url: avatarUrlInput,
-        onboarding_complete: false,
       };
+      const payloads = [{ ...basePayload, onboarding_complete: false }, basePayload];
+      let saved = false;
 
-      const { data: updated, error: updateError } = await supabase
-        .from('profiles')
-        .update(payload)
-        .eq('id', user.id)
-        .select('id')
-        .maybeSingle();
+      for (const payload of payloads) {
+        const { data: updated, error: updateError } = await supabase
+          .from('profiles')
+          .update(payload)
+          .eq('id', user.id)
+          .select('id')
+          .maybeSingle();
 
-      if (updateError || !updated) {
+        if (!updateError && updated) {
+          saved = true;
+          break;
+        }
+
         if (updateError) {
           logger.warn('[OnboardingProfile] Update failed, trying upsert:', updateError);
         }
+
         const { data: upserted, error: upsertError } = await supabase
           .from('profiles')
           .upsert({ id: user.id, ...payload }, { onConflict: 'id' })
           .select('id')
           .maybeSingle();
 
-        if (upsertError || !upserted) {
-          logger.warn('[OnboardingProfile] Upsert failed:', upsertError);
-          Alert.alert('Fejl', 'Kunne ikke gemme profilen. Prøv igen.');
-          return;
+        if (!upsertError && upserted) {
+          saved = true;
+          break;
         }
+
+        if (upsertError) {
+          logger.warn('[OnboardingProfile] Upsert failed:', upsertError);
+        }
+      }
+
+      if (!saved) {
+        Alert.alert('Fejl', 'Kunne ikke gemme profilen. Prøv igen.');
+        return;
       }
 
       navigation.navigate('OnboardingCommunities');
@@ -150,72 +192,72 @@ export default function OnboardingProfileSetupScreen({ navigation, route }: Prop
           transform: [{ translateY: entranceTranslateY }],
         }}
       >
-      <View style={styles.heroSection}>
-        <View style={styles.brandMark}>
-          <View style={styles.logoSurface}>
-            <Image source={appLogo} style={styles.logoImage} resizeMode="contain" />
+        <View style={styles.heroSection}>
+          <View style={styles.brandMark}>
+            <View style={styles.logoSurface}>
+              <Image source={appLogo} style={styles.logoImage} resizeMode="contain" />
+            </View>
           </View>
+          <Text variant="small" color="secondary">
+            Trin {step} af {totalSteps}
+          </Text>
+          <Text variant="h1" style={styles.headline}>
+            Gør profilen til din
+          </Text>
+          <Text variant="body" color="secondary" style={styles.subtitle}>
+            Vælg et kaldenavn og et profilbillede, så andre fans kan kende dig.
+          </Text>
         </View>
-        <Text variant="small" color="secondary">
-          Trin {step} af {totalSteps}
-        </Text>
-        <Text variant="h1" style={styles.headline}>
-          Gør profilen til din
-        </Text>
-        <Text variant="body" color="secondary" style={styles.subtitle}>
-          Vælg et kaldenavn og et profilbillede, så andre fans kan kende dig.
-        </Text>
-      </View>
 
-      <View style={styles.profileSection}>
-        <Pressable onPress={handleUploadAvatar} style={styles.avatarTouchTarget}>
-          <View style={styles.avatarSurface}>
-            <Avatar
-              userId={user?.id}
-              avatarUrl={avatarUrlInput}
-              size={theme.spacing[11] + theme.spacing[11]}
-              label={displayNameInput || user?.email || 'Fan'}
+        <View style={styles.profileSection}>
+          <Pressable onPress={handleUploadAvatar} style={styles.avatarTouchTarget}>
+            <View style={styles.avatarSurface}>
+              <Avatar
+                userId={user?.id}
+                avatarUrl={avatarUrlInput}
+                size={theme.spacing[11] + theme.spacing[11]}
+                label={displayNameInput || user?.email || 'Fan'}
+              />
+            </View>
+            <Text style={styles.avatarHint}>
+              {uploadingAvatar
+                ? 'Henter billede...'
+                : hasAvatar
+                  ? 'Skift profilbillede'
+                  : 'Vælg profilbillede'}
+            </Text>
+          </Pressable>
+
+          <View style={styles.inputSection}>
+            <Text style={styles.inputLabel}>Kaldenavn</Text>
+            <TextInput
+              value={displayNameInput}
+              onChangeText={setDisplayNameInput}
+              placeholder="Dit kaldenavn"
+              placeholderTextColor={theme.colors.text.secondary}
+              style={styles.displayNameInput}
+              editable={!saving}
+              autoCapitalize="words"
+              returnKeyType="done"
+              maxLength={32}
             />
           </View>
-          <Text style={styles.avatarHint}>
-            {uploadingAvatar
-              ? 'Henter billede...'
-              : hasAvatar
-                ? 'Skift profilbillede'
-                : 'Vælg profilbillede'}
-          </Text>
-        </Pressable>
-
-        <View style={styles.inputSection}>
-          <Text style={styles.inputLabel}>Kaldenavn</Text>
-          <TextInput
-            value={displayNameInput}
-            onChangeText={setDisplayNameInput}
-            placeholder="Dit kaldenavn"
-            placeholderTextColor={theme.colors.text.secondary}
-            style={styles.displayNameInput}
-            editable={!saving}
-            autoCapitalize="words"
-            returnKeyType="done"
-            maxLength={32}
-          />
         </View>
-      </View>
 
         <View style={styles.bottomActions}>
           <Pressable
-          style={({ pressed }) => [
-            styles.primaryButton,
-            !canContinue && styles.primaryButtonDisabled,
-            pressed && canContinue && styles.primaryButtonPressed,
-          ]}
-          onPress={handleContinue}
-          disabled={!canContinue}
-          accessibilityRole="button"
-        >
-          <Text style={styles.primaryButtonText}>{saving ? 'Gemmer...' : 'Fortsæt'}</Text>
-        </Pressable>
-      </View>
+            style={({ pressed }) => [
+              styles.primaryButton,
+              !canContinue && styles.primaryButtonDisabled,
+              pressed && canContinue && styles.primaryButtonPressed,
+            ]}
+            onPress={handleContinue}
+            disabled={!canContinue}
+            accessibilityRole="button"
+          >
+            <Text style={styles.primaryButtonText}>{saving ? 'Gemmer...' : 'Fortsæt'}</Text>
+          </Pressable>
+        </View>
       </Animated.View>
     </>
   );

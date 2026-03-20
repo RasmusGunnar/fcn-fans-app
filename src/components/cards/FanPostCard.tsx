@@ -7,13 +7,13 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Image, Pressable, Share, StyleSheet, TextInput, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../auth/AuthProvider';
+import { getSafeFanLevelKey } from '../../lib/fanLevel';
 import { logger } from '../../lib/logger';
 import { getPublicUrl } from '../../lib/storageUrl';
 import { supabase } from '../../lib/supabase';
 import type { CommentPreview } from '../../services/likesApi';
 import { defaultTheme } from '../../theme';
 import type { CategoryKey } from '../../theme/categories';
-import type { FanLevelKey } from '../../types/fan';
 import { Post } from '../../types/post';
 import { resolveActorLine, type ProfileMap } from '../../utils/actor';
 import { useCommunityRole } from '../../hooks/useCommunityRole';
@@ -187,7 +187,11 @@ function normalizeType(typeValue: any): 'image' | 'video' | null {
 
 interface FanPostCardProps {
   post: Post;
-  authorProfile?: { display_name: string | null; avatar_url: string | null };
+  authorProfile?: {
+    display_name: string | null;
+    avatar_url: string | null;
+    fan_level_key?: string | null;
+  };
   communityMap?: Record<string, string>;
   profileMap?: ProfileMap;
   categoryKey?: CategoryKey;
@@ -380,8 +384,7 @@ export function FanPostCard({
       ? `${groupDisplay} · ${timeAgo}`
       : timeAgo;
 
-  // Temporary debug stub until author fan level is provided from real data.
-  const authorFanLevel: FanLevelKey = 'community_member';
+  const authorFanLevel = getSafeFanLevelKey(authorProfile?.fan_level_key);
   const hasRightSlot = postMenuOptions.length > 0;
 
   return (

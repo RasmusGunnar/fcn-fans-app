@@ -3,6 +3,7 @@ import { Alert } from 'react-native';
 import type { CommentPreview } from '../../services/likesApi';
 import type { CategoryKey } from '../../theme/categories';
 import type { FeedItem } from '../../types/feed';
+import type { FanLevelKey } from '../../types/fan';
 import { toEventCardVM } from '../../utils/eventCardVM';
 import { PollCard } from '../PollCard';
 import { FanPostCard, NewsCard, WeeklyTopFanCard } from '../cards';
@@ -16,7 +17,10 @@ export type FeedItemRendererProps = {
   likeState: { liked: boolean; likes: number };
   commentCount: number;
   commentPreviews: CommentPreview[];
-  safeProfileMap: Record<string, { display_name: string | null; avatar_url: string | null }>;
+  safeProfileMap: Record<
+    string,
+    { display_name: string | null; avatar_url: string | null; fan_level_key: FanLevelKey | null }
+  >;
   communityMap: Record<string, string>;
   attendanceMap?: Record<string, { count: number; avatars: string[]; isGoing: boolean }>;
   toggleLike: (kind: any, id: string, userId: string) => void;

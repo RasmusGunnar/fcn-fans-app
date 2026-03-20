@@ -1,4 +1,13 @@
-export type ProfileMap = Record<string, { display_name: string | null; avatar_url: string | null }>;
+import type { FanLevelKey } from '../types/fan';
+
+export type ProfileMap = Record<
+  string,
+  {
+    display_name: string | null;
+    avatar_url: string | null;
+    fan_level_key?: FanLevelKey | null;
+  }
+>;
 
 export function resolveProfileDisplayName(
   profileMap: ProfileMap | undefined,

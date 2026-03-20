@@ -19,6 +19,8 @@ import { FanLevelBadge } from '../components/fan/FanLevelBadge';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Pill } from '../components/ui/Pill';
+import { getSafeFanLevelKey } from '../lib/fanLevel';
+import { getNextFanLevel } from '../lib/fanbarometer';
 import { OutlineButton } from '../components/ui/OutlineButton';
 import { spacing } from '../theme';
 import { useTheme } from '../theme';
@@ -27,7 +29,6 @@ import { getPublicUrl } from '../lib/storageUrl';
 import { Avatar } from '../components/Avatar';
 import { supabase } from '../lib/supabase';
 import { ensureProfile } from '../lib/profile';
-import type { FanLevelKey } from '../types/fan';
 import {
   getPushStatusSnapshot,
   syncPushNotifications,
@@ -141,11 +142,11 @@ export default function ProfileScreen() {
   const [pushPermissionStatus, setPushPermissionStatus] = useState<string>('undetermined');
   const [pushTokenPreview, setPushTokenPreview] = useState<string | null>(null);
   const [pushMessage, setPushMessage] = useState<string | null>(null);
-  const fanLevel: FanLevelKey = 'community_member';
+  const fanLevel = getSafeFanLevelKey(profile?.fan_level_key);
   const debugScore = 180;
   const debugProgress = 0.53;
-  const debugNextLevel: FanLevelKey = 'regular_voice';
-  const debugPointsToNext = 70;
+  const debugNextLevel = getNextFanLevel(fanLevel);
+  const debugPointsToNext = debugNextLevel ? 70 : null;
 
   const loadData = useCallback(async () => {
     if (!user?.id) {
@@ -365,6 +366,7 @@ export default function ProfileScreen() {
                 display_name: trimmedName,
                 avatar_url: avatarUrl,
                 member_since: null,
+                fan_level_key: profile?.fan_level_key ?? fanLevel,
                 onboarding_complete: true,
               },
         );
