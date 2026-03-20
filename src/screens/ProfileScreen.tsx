@@ -14,7 +14,10 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../auth/AuthProvider';
+import { FanBarometerCard } from '../components/fan/FanBarometerCard';
+import { FanLevelBadge } from '../components/fan/FanLevelBadge';
 import { Card } from '../components/ui/Card';
+import { Badge } from '../components/ui/Badge';
 import { Pill } from '../components/ui/Pill';
 import { OutlineButton } from '../components/ui/OutlineButton';
 import { spacing } from '../theme';
@@ -24,6 +27,7 @@ import { getPublicUrl } from '../lib/storageUrl';
 import { Avatar } from '../components/Avatar';
 import { supabase } from '../lib/supabase';
 import { ensureProfile } from '../lib/profile';
+import type { FanLevelKey } from '../types/fan';
 import {
   getPushStatusSnapshot,
   syncPushNotifications,
@@ -137,6 +141,11 @@ export default function ProfileScreen() {
   const [pushPermissionStatus, setPushPermissionStatus] = useState<string>('undetermined');
   const [pushTokenPreview, setPushTokenPreview] = useState<string | null>(null);
   const [pushMessage, setPushMessage] = useState<string | null>(null);
+  const fanLevel: FanLevelKey = 'community_member';
+  const debugScore = 180;
+  const debugProgress = 0.53;
+  const debugNextLevel: FanLevelKey = 'regular_voice';
+  const debugPointsToNext = 70;
 
   const loadData = useCallback(async () => {
     if (!user?.id) {
@@ -471,7 +480,17 @@ export default function ProfileScreen() {
       {!uploadingAvatar && (
         <Card style={[styles.avatarBanner, { marginBottom: spacing.md }]}>
           <View style={styles.bannerContent}>
-            <Ionicons name="camera" size={24} color={theme.colors.primary} />
+            <View
+              style={[
+                styles.bannerIconShell,
+                {
+                  backgroundColor: theme.colors.bg.subtle,
+                  borderColor: theme.colors.border.default,
+                },
+              ]}
+            >
+              <Ionicons name="camera" size={20} color={theme.colors.primary} />
+            </View>
             <View style={styles.bannerText}>
               <Text style={[styles.bannerTitle, { color: theme.colors.text.primary }]}>
                 {profile?.avatar_url ? 'Skift profilbillede' : 'Tilføj profilbillede'}
@@ -482,13 +501,19 @@ export default function ProfileScreen() {
             </View>
           </View>
           <Pressable
-            style={[styles.bannerButton, { backgroundColor: theme.colors.primary }]}
+            style={[
+              styles.bannerButton,
+              {
+                backgroundColor: 'transparent',
+                borderColor: theme.colors.border.default,
+              },
+            ]}
             onPress={handleUploadAvatar}
           >
-            <Text style={[styles.bannerButtonText, { color: theme.colors.bg.card }]}>
+            <Text style={[styles.bannerButtonText, { color: theme.colors.primary }]}>
               {profile?.avatar_url ? 'Skift' : 'Upload'}
             </Text>
-            <Ionicons name="arrow-forward" size={16} color={theme.colors.bg.card} />
+            <Ionicons name="arrow-forward" size={16} color={theme.colors.primary} />
           </Pressable>
         </Card>
       )}
@@ -506,10 +531,18 @@ export default function ProfileScreen() {
       )}
 
       {/* Profile Card */}
-      <Card style={{ marginTop: spacing.md, marginBottom: spacing.md }}>
+      <Card style={styles.profileCard}>
         <View style={styles.profileSummary}>
           <Pressable onPress={handleUploadAvatar} disabled={uploadingAvatar}>
-            <View style={styles.avatar}>
+            <View
+              style={[
+                styles.avatar,
+                {
+                  backgroundColor: theme.colors.bg.canvas,
+                  borderColor: theme.colors.border.default,
+                },
+              ]}
+            >
               <Avatar
                 userId={user?.id}
                 avatarUrl={profile?.avatar_url}
@@ -520,54 +553,84 @@ export default function ProfileScreen() {
               <View
                 style={[
                   styles.avatarOverlay,
-                  { backgroundColor: theme.colors.primary, borderColor: theme.colors.bg.card },
+                  {
+                    backgroundColor: theme.colors.bg.surface,
+                    borderColor: theme.colors.border.default,
+                  },
                 ]}
               >
-                <Ionicons name="camera" size={20} color={theme.colors.bg.card} />
+                <Ionicons name="camera" size={18} color={theme.colors.primary} />
               </View>
             </View>
           </Pressable>
           <View style={styles.profileInfo}>
-            <Text style={[styles.profileName, { color: theme.colors.text.primary }]}>
-              {profile?.display_name || user?.email || 'Fan'}
-            </Text>
-            <Text style={[styles.profileLabel, { color: theme.colors.text.secondary }]}>Kaldenavn</Text>
-            <TextInput
-              value={displayNameInput}
-              onChangeText={setDisplayNameInput}
-              placeholder="Dit kaldenavn"
-              placeholderTextColor={theme.colors.text.secondary}
+            <View style={styles.profileIdentityBlock}>
+              <Text style={[styles.profileName, { color: theme.colors.text.primary }]}>
+                {profile?.display_name || user?.email || 'Fan'}
+              </Text>
+              <Text style={[styles.profileSubtext, { color: theme.colors.text.secondary }]}>
+                {profile?.member_since
+                  ? `Medlem siden ${formatMemberSince(profile.member_since)}`
+                  : 'Ny bruger'}
+              </Text>
+            </View>
+            <View style={styles.badges}>
+              <FanLevelBadge level={fanLevel} size="md" labelMode="short" />
+              {ownedCount > 0 && (
+                <Badge
+                  label={`Ejer af ${ownedCount} fællesskab${ownedCount > 1 ? 'er' : ''}`}
+                  variant="brandSoft"
+                  size="sm"
+                />
+              )}
+            </View>
+            <View
               style={[
-                styles.profileInput,
+                styles.profileEditor,
                 {
-                  borderColor: theme.colors.border.default,
-                  color: theme.colors.text.primary,
-                  backgroundColor: theme.colors.bg.elevated,
+                  borderColor: theme.colors.border.light,
                 },
               ]}
-              editable={!savingProfile}
-            />
-            <Text style={[styles.profileSubtext, { color: theme.colors.text.secondary }]}>
-              {profile?.member_since
-                ? `Medlem siden ${formatMemberSince(profile.member_since)}`
-                : 'Ny bruger'}
-            </Text>
-            <View style={styles.badges}>
-              <Pill label="Fan" />
-              {ownedCount > 0 && (
-                <Pill label={`Ejer af ${ownedCount} fællesskab${ownedCount > 1 ? 'er' : ''}`} />
-              )}
+            >
+              <Text style={[styles.profileLabel, { color: theme.colors.text.secondary }]}>
+                Kaldenavn
+              </Text>
+              <TextInput
+                value={displayNameInput}
+                onChangeText={setDisplayNameInput}
+                placeholder="Dit kaldenavn"
+                placeholderTextColor={theme.colors.text.secondary}
+                style={[
+                  styles.profileInput,
+                  {
+                    borderColor: theme.colors.border.light,
+                    color: theme.colors.text.primary,
+                    backgroundColor: 'transparent',
+                  },
+                ]}
+                editable={!savingProfile}
+              />
             </View>
           </View>
         </View>
-        <View style={{ marginTop: spacing.md }}>
+        <View style={styles.profileActions}>
           <OutlineButton
             title={savingProfile ? 'Gemmer...' : 'Gem & fortsæt'}
             onPress={handleSaveProfile}
             disabled={savingProfile}
+            fullWidth={false}
           />
         </View>
       </Card>
+
+      <FanBarometerCard
+        level={fanLevel}
+        score={debugScore}
+        progress={debugProgress}
+        nextLevel={debugNextLevel}
+        pointsToNext={debugPointsToNext}
+        state="ready"
+      />
 
       {/* Owned Communities */}
       {ownerCommunities.length > 0 && (
@@ -777,33 +840,50 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
     profileSummary: {
       flexDirection: 'row',
-      alignItems: 'center',
+      alignItems: 'flex-start',
+      gap: theme.spacing[3],
     },
     avatar: {
       position: 'relative',
-      marginRight: spacing.md,
+      padding: theme.spacing[1],
+      borderRadius: theme.radius.pill,
+      borderWidth: theme.layout.borderHairline,
     },
     avatarOverlay: {
       position: 'absolute',
       bottom: 0,
       right: 0,
-      width: theme.spacing[6],
-      height: theme.spacing[6],
+      width: theme.spacing[5] + theme.layout.borderWidth,
+      height: theme.spacing[5] + theme.layout.borderWidth,
       borderRadius: theme.radius.pill,
       alignItems: 'center',
       justifyContent: 'center',
-      borderWidth: theme.layout.borderWidth * 2,
+      borderWidth: theme.layout.borderHairline,
+    },
+    profileCard: {
+      marginBottom: spacing.md,
+      backgroundColor: theme.colors.bg.surface,
     },
     avatarBanner: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      padding: spacing.md,
+      paddingVertical: theme.spacing[2],
+      paddingHorizontal: spacing.md,
+      gap: theme.spacing[3],
     },
     bannerContent: {
       flexDirection: 'row',
       alignItems: 'center',
       flex: 1,
+    },
+    bannerIconShell: {
+      width: theme.spacing[10],
+      height: theme.spacing[10],
+      borderRadius: theme.radius.pill,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: theme.layout.borderHairline,
     },
     bannerText: {
       marginLeft: spacing.sm,
@@ -823,41 +903,60 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       paddingVertical: spacing.xs,
       paddingHorizontal: spacing.sm,
       borderRadius: theme.radius.sm,
+      borderWidth: theme.layout.borderHairline,
       gap: theme.spacing[1],
     },
     bannerButtonText: {
-      fontSize: theme.typography.body.fontSize,
+      fontSize: theme.typography.small.fontSize,
       fontWeight: '600',
     },
     profileInfo: {
       flex: 1,
+      gap: theme.spacing[2],
+    },
+    profileIdentityBlock: {
+      gap: theme.spacing[0],
     },
     profileName: {
       fontSize: theme.typography.h3.fontSize,
       fontWeight: '700',
     },
     profileLabel: {
-      fontSize: 12,
+      fontSize: theme.typography.small.fontSize,
       fontWeight: '600',
-      marginTop: spacing.xs,
-      marginBottom: spacing.xs,
+      textTransform: 'uppercase',
+      letterSpacing: 0.6,
+      marginBottom: theme.spacing[1],
+    },
+    profileEditor: {
+      borderRadius: theme.radius.md,
+      backgroundColor: 'transparent',
+      marginTop: theme.spacing[1],
     },
     profileInput: {
-      borderWidth: 1,
-      borderRadius: spacing.xs,
-      paddingVertical: spacing.sm,
-      paddingHorizontal: spacing.md,
+      borderWidth: theme.layout.borderHairline,
+      borderRadius: theme.radius.md,
+      paddingVertical: theme.spacing[1] + theme.layout.borderHairline,
+      paddingHorizontal: theme.spacing[3],
       fontSize: 14,
     },
     profileSubtext: {
-      fontSize: theme.typography.body.fontSize,
-      marginTop: spacing.xs,
-      marginBottom: spacing.sm,
+      fontSize: theme.typography.caption.fontSize,
+      marginTop: theme.spacing[0],
     },
     badges: {
       flexDirection: 'row',
-      gap: spacing.xs,
+      alignItems: 'center',
+      gap: theme.spacing[2],
       flexWrap: 'wrap',
+      marginTop: theme.spacing[1],
+    },
+    profileActions: {
+      marginTop: theme.spacing[5],
+      paddingTop: theme.spacing[3],
+      borderTopWidth: theme.layout.borderHairline,
+      borderTopColor: theme.colors.border.light,
+      alignItems: 'flex-end',
     },
     sectionHeader: {
       flexDirection: 'row',

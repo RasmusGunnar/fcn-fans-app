@@ -3,6 +3,7 @@
  */
 
 import { targetKey } from '../utils/targetKey';
+import type { FanLevelKey } from './fan';
 import { NewsItem } from './news';
 import { Post } from './post';
 
@@ -53,6 +54,33 @@ export type FeedMatchData = {
   heroUrl?: string | null;
 };
 
+export type WeeklyTopFanReasonType = 'post' | 'comment' | 'activity' | 'checkin';
+
+export type FeedWeeklyTopFanData = {
+  id: string;
+  weekStartDate: string;
+  generatedAt?: string | null;
+  userId: string;
+  displayName: string;
+  avatarUrl?: string | null;
+  fanLevelKey: FanLevelKey;
+  weeklyScore: number;
+  reasonType: WeeklyTopFanReasonType;
+  referencePostId?: string | null;
+  referenceCommentId?: string | null;
+  title: string;
+  subtitle: string;
+  body: string;
+  ctaLabel: string;
+  isPublished: boolean;
+  createdAt: string;
+  contentTypeLabel?: string | null;
+  highlightText?: string | null;
+  likesCount?: number | null;
+  commentsCount?: number | null;
+  votesCount?: number | null;
+};
+
 /**
  * Union type for all feed items
  * Each item has a discriminator 'kind' and a unique 'id'
@@ -62,7 +90,8 @@ export type FeedItem =
   | { kind: 'news'; id: string; data: NewsItem }
   | { kind: 'event'; id: string; data: FeedEventData }
   | { kind: 'bus_trip'; id: string; data: FeedBusTripData }
-  | { kind: 'match'; id: string; data: FeedMatchData };
+  | { kind: 'match'; id: string; data: FeedMatchData }
+  | { kind: 'weekly_top_fan'; id: string; data: FeedWeeklyTopFanData };
 
 /**
  * Type guard functions

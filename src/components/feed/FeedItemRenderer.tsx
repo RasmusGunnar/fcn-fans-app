@@ -5,7 +5,7 @@ import type { CategoryKey } from '../../theme/categories';
 import type { FeedItem } from '../../types/feed';
 import { toEventCardVM } from '../../utils/eventCardVM';
 import { PollCard } from '../PollCard';
-import { FanPostCard, NewsCard } from '../cards';
+import { FanPostCard, NewsCard, WeeklyTopFanCard } from '../cards';
 import { EventCard } from '../cards/EventCard';
 
 export type FeedItemRendererProps = {
@@ -30,6 +30,8 @@ export type FeedItemRendererProps = {
   onPressEvent?: (eventId: string) => void;
   onPressBusTrip?: (busTripId: string) => void;
   onPressMatch?: (matchId: string) => void;
+  onPressProfile?: (userId: string) => void;
+  onPressPost?: (postId: string) => void;
 };
 
 export function FeedItemRenderer(props: FeedItemRendererProps): React.ReactElement | null {
@@ -55,6 +57,8 @@ export function FeedItemRenderer(props: FeedItemRendererProps): React.ReactEleme
     onPressEvent,
     onPressBusTrip,
     onPressMatch,
+    onPressProfile,
+    onPressPost,
   } = props;
 
   switch (item.kind) {
@@ -126,6 +130,30 @@ export function FeedItemRenderer(props: FeedItemRendererProps): React.ReactEleme
             incrementCommentCount('news', item.id);
             addCommentPreview('news', item.id, comment);
           }}
+        />
+      );
+    }
+
+    case 'weekly_top_fan': {
+      return (
+        <WeeklyTopFanCard
+          avatarUrl={item.data.avatarUrl}
+          displayName={item.data.displayName}
+          fanLevelKey={item.data.fanLevelKey}
+          weekStartDate={item.data.weekStartDate}
+          title={item.data.title}
+          subtitle={item.data.subtitle}
+          body={item.data.body}
+          ctaLabel={item.data.ctaLabel}
+          contentTypeLabel={item.data.contentTypeLabel}
+          highlightText={item.data.highlightText}
+          likesCount={item.data.likesCount}
+          commentsCount={item.data.commentsCount}
+          votesCount={item.data.votesCount}
+          onPressProfile={() => onPressProfile?.(item.data.userId)}
+          onPressReference={
+            item.data.referencePostId ? () => onPressPost?.(item.data.referencePostId!) : undefined
+          }
         />
       );
     }

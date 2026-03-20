@@ -5,3 +5,4 @@ export { FanPostCard } from './FanPostCard';
 export { NewsCard } from './NewsCard';
 export { EventCard } from './EventCard';
 export { FanFactionCard } from './FanFactionCard';
+export { WeeklyTopFanCard } from './WeeklyTopFanCard';

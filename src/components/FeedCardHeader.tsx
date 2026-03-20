@@ -7,6 +7,7 @@ interface FeedCardHeaderProps {
   avatarSlot?: ReactNode; // Render prop for avatar (Avatar component or fallback)
   title?: string;
   subtitle?: string;
+  inlineBadge?: ReactNode;
   rightSlot?: ReactNode; // OptionsMenu or other right-aligned content
   onPressAuthor?: () => void; // Navigate to author profile
 }
@@ -19,21 +20,27 @@ export function FeedCardHeader({
   avatarSlot,
   title,
   subtitle,
+  inlineBadge,
   rightSlot,
   onPressAuthor,
 }: FeedCardHeaderProps) {
   const theme = useTheme();
   const styles = createStyles(theme);
-  const showHeaderRow = Boolean(avatarSlot || title || subtitle || rightSlot);
+  const showHeaderRow = Boolean(avatarSlot || title || subtitle || inlineBadge || rightSlot);
 
   const authorContent = (
     <>
       {avatarSlot ? avatarSlot : null}
       <View style={[styles.headerInfo, !avatarSlot && styles.headerInfoNoAvatar]}>
-        {!!title && (
-          <Text variant="bodyBold" style={styles.title}>
-            {title}
-          </Text>
+        {(title || inlineBadge) && (
+          <View style={styles.titleRow}>
+            {!!title && (
+              <Text variant="bodyBold" numberOfLines={1} style={styles.title}>
+                {title}
+              </Text>
+            )}
+            {inlineBadge ? <View style={styles.inlineBadgeWrap}>{inlineBadge}</View> : null}
+          </View>
         )}
         {subtitle && (
           <Text variant="small" color="muted" style={styles.subtitle}>
@@ -114,6 +121,19 @@ function createStyles(theme: Theme) {
     title: {
       fontSize: 14,
       fontWeight: '600',
+      flexShrink: 1,
+    },
+    titleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flexWrap: 'nowrap',
+      gap: theme.spacing[2],
+      minWidth: 0,
+    },
+    inlineBadgeWrap: {
+      flexShrink: 0,
+      alignSelf: 'center',
+      paddingTop: theme.layout.borderHairline,
     },
     subtitle: {
       marginTop: theme.spacing[0],

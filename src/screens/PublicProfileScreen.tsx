@@ -8,11 +8,15 @@ import { useRoute } from '@react-navigation/native';
 import { useAuth } from '../auth/AuthProvider';
 import { Avatar } from '../components/Avatar';
 import { FanPostCard } from '../components/cards/FanPostCard';
+import { FanBarometerCompactCard } from '../components/fan/FanBarometerCompactCard';
+import { FanLevelBadge } from '../components/fan/FanLevelBadge';
 import { AppHeader } from '../components/AppHeader';
 import { Text } from '../components/ui';
+import { getFanLevelDescription } from '../lib/fanbarometer';
 import { fetchUserCommentedPostIds } from '../services/commentsApi';
 import { useFeed } from '../state/FeedContext';
 import { useTheme, type Theme } from '../theme';
+import type { FanLevelKey } from '../types/fan';
 import { targetKey } from '../utils/targetKey';
 
 type FeedPost = ReturnType<typeof useFeed>['posts'][number];
@@ -39,6 +43,8 @@ export default function PublicProfileScreen() {
   const authorProfile = userId ? profileMap?.[userId] : undefined;
   const displayName = authorProfile?.display_name || 'Fan';
   const avatarUrl = authorProfile?.avatar_url || null;
+  const fanLevel: FanLevelKey = 'community_member';
+  const levelDescription = getFanLevelDescription(fanLevel);
 
   // ---------- user's own posts ----------
   const userPosts = useMemo(() => {
@@ -197,6 +203,13 @@ export default function PublicProfileScreen() {
       <Text variant="body" color="secondary" style={styles.statsLine}>
         {userPosts.length} opslag · {commentedOnCount} kommentarer
       </Text>
+      <View style={styles.badgeWrap}>
+        <FanLevelBadge level={fanLevel} size="md" labelMode="short" />
+        <Text variant="small" color="secondary" style={styles.badgeDescription}>
+          {levelDescription}
+        </Text>
+      </View>
+      <FanBarometerCompactCard level={fanLevel} state="ready" />
     </View>
   );
 
@@ -235,6 +248,15 @@ function createStyles(theme: Theme) {
     statsLine: {
       textAlign: 'center',
       marginTop: theme.spacing[1],
+    },
+    badgeWrap: {
+      alignItems: 'center',
+      marginTop: theme.spacing[2],
+    },
+    badgeDescription: {
+      marginTop: theme.spacing[1],
+      textAlign: 'center',
+      maxWidth: '82%',
     },
     sectionTitle: {
       marginTop: theme.spacing[4],

@@ -13,11 +13,13 @@ import { supabase } from '../../lib/supabase';
 import type { CommentPreview } from '../../services/likesApi';
 import { defaultTheme } from '../../theme';
 import type { CategoryKey } from '../../theme/categories';
+import type { FanLevelKey } from '../../types/fan';
 import { Post } from '../../types/post';
 import { resolveActorLine, type ProfileMap } from '../../utils/actor';
 import { useCommunityRole } from '../../hooks/useCommunityRole';
 import { canDeleteFeedItem, canEditPost } from '../../utils/permissions';
 import { Avatar } from '../Avatar';
+import { FanLevelBadge } from '../fan/FanLevelBadge';
 import { FeedVideo } from '../feed/FeedVideo';
 import { OptionsMenu, OptionsMenuOption } from '../OptionsMenu';
 import { Text } from '../ui';
@@ -378,6 +380,8 @@ export function FanPostCard({
       ? `${groupDisplay} · ${timeAgo}`
       : timeAgo;
 
+  // Temporary debug stub until author fan level is provided from real data.
+  const authorFanLevel: FanLevelKey = 'community_member';
   const hasRightSlot = postMenuOptions.length > 0;
 
   return (
@@ -409,6 +413,7 @@ export function FanPostCard({
         nameLine={cardModel.nameLine}
         fallbackTitle={headerTitle}
         subtitle={headerSubtitle}
+        inlineBadge={<FanLevelBadge level={authorFanLevel} size="sm" labelMode="short" />}
         onPressAuthor={
           postAuthorId
             ? () => navigation.navigate('PublicProfile', { userId: postAuthorId })

@@ -6,6 +6,7 @@ export type CardHeaderProps = {
   fallbackTitle?: string;
   subtitle?: string | undefined;
   avatarSlot?: React.ReactNode;
+  inlineBadge?: React.ReactNode;
   rightSlot?: React.ReactNode;
   onPressAuthor?: () => void;
 };
@@ -15,6 +16,7 @@ export function CardHeader({
   fallbackTitle,
   subtitle,
   avatarSlot,
+  inlineBadge,
   rightSlot,
   onPressAuthor,
 }: CardHeaderProps) {
@@ -25,6 +27,7 @@ export function CardHeader({
       title={title ?? undefined}
       subtitle={subtitle ?? undefined}
       avatarSlot={avatarSlot}
+      inlineBadge={inlineBadge}
       rightSlot={rightSlot}
       onPressAuthor={onPressAuthor}
     />

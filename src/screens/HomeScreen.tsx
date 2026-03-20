@@ -229,6 +229,12 @@ export default function HomeScreen() {
         onPressMatch={(matchId) =>
           (navigation as any).navigate('MatchDetails', { fixtureId: matchId })
         }
+        onPressProfile={(userId) =>
+          userId === user?.id
+            ? (navigation as any).navigate('Profile')
+            : (navigation as any).navigate('PublicProfile', { userId })
+        }
+        onPressPost={(postId) => (navigation as any).navigate('PostDetail', { postId })}
       />
     );
   };

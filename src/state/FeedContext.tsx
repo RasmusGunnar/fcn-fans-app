@@ -17,6 +17,7 @@ import {
   type LikeTargetType,
 } from '../services/likesApi';
 import { fetchNewsItems } from '../services/newsApi';
+import { fetchLatestPublishedWeeklyTopFan } from '../services/weeklyTopFanApi';
 import { FeedItem } from '../types/feed';
 import { NewsItem } from '../types/news';
 import { Post } from '../types/post';
@@ -37,7 +38,37 @@ const getCreated = (item: FeedItem) => {
     const e = item.data as any;
     return e.createdAt ?? e.created_at ?? e.startAt ?? e.start_at ?? null;
   }
+  if (item.kind === 'weekly_top_fan') {
+    const weekly = item.data as any;
+    return weekly.createdAt ?? weekly.created_at ?? weekly.generatedAt ?? weekly.generated_at ?? null;
+  }
   return null;
+};
+
+const getCurrentWeekStartDate = (baseDate = new Date()) => {
+  const date = new Date(
+    Date.UTC(baseDate.getUTCFullYear(), baseDate.getUTCMonth(), baseDate.getUTCDate()),
+  );
+  const day = date.getUTCDay();
+  const offset = day === 0 ? -6 : 1 - day;
+  date.setUTCDate(date.getUTCDate() + offset);
+  return date.toISOString().slice(0, 10);
+};
+
+const isCurrentWeekWeeklyTopFan = (item: FeedItem, currentWeekStartDate: string) => {
+  return item.kind === 'weekly_top_fan' && item.data.weekStartDate === currentWeekStartDate;
+};
+
+const compareFeedItems = (a: FeedItem, b: FeedItem, currentWeekStartDate: string) => {
+  const aIsPinnedWeeklyTopFan = isCurrentWeekWeeklyTopFan(a, currentWeekStartDate);
+  const bIsPinnedWeeklyTopFan = isCurrentWeekWeeklyTopFan(b, currentWeekStartDate);
+
+  if (aIsPinnedWeeklyTopFan && !bIsPinnedWeeklyTopFan) return -1;
+  if (!aIsPinnedWeeklyTopFan && bIsPinnedWeeklyTopFan) return 1;
+
+  const aTime = getCreated(a) ?? new Date().toISOString();
+  const bTime = getCreated(b) ?? new Date().toISOString();
+  return new Date(bTime).getTime() - new Date(aTime).getTime();
 };
 
 interface FeedContextType {
@@ -86,6 +117,8 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
     let newsItems: NewsItem[] = [];
     let upcomingEvents: Event[] = [];
     let upcomingBusTrips: BusTrip[] = [];
+    let weeklyTopFanItem: Awaited<ReturnType<typeof fetchLatestPublishedWeeklyTopFan>> = null;
+    const currentWeekStartDate = getCurrentWeekStartDate();
 
     // Fetch posts in separate try/catch so news_items errors don't block posts
     try {
@@ -217,14 +250,34 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       upcomingBusTrips = [];
     }
 
+    try {
+      weeklyTopFanItem = await fetchLatestPublishedWeeklyTopFan();
+      if (weeklyTopFanItem?.userId) {
+        setProfileMap((prev) => ({
+          ...prev,
+          [weeklyTopFanItem!.userId]: {
+            display_name: weeklyTopFanItem!.displayName,
+            avatar_url: weeklyTopFanItem!.avatarUrl ?? null,
+          },
+        }));
+      }
+    } catch (e: any) {
+      logger.warn('[FeedProvider] fetchLatestPublishedWeeklyTopFan failed:', e?.message || e);
+      weeklyTopFanItem = null;
+    }
+
     // Merge posts, news, events, and bus trips into combined feed
     try {
       const safePostsArray = transformedPosts ?? [];
       const safeNewsArray = newsItems ?? [];
       const safeEventsArray = upcomingEvents ?? [];
       const safeBusTripsArray = upcomingBusTrips ?? [];
+      const safeWeeklyTopFanItem = weeklyTopFanItem ?? null;
 
       const combinedFeed: FeedItem[] = [
+        ...(safeWeeklyTopFanItem
+          ? [{ kind: 'weekly_top_fan', id: safeWeeklyTopFanItem.id, data: safeWeeklyTopFanItem } as FeedItem]
+          : []),
         ...safePostsArray.map((post): FeedItem => ({ kind: 'post', id: post.id, data: post })),
         ...safeNewsArray.map((news): FeedItem => ({ kind: 'news', id: news.id, data: news })),
         ...safeEventsArray.map(
@@ -272,11 +325,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       ];
 
       // Sort by timestamp descending with guard for missing timestamps
-      combinedFeed.sort((a, b) => {
-        const aTime = getCreated(a) ?? new Date().toISOString();
-        const bTime = getCreated(b) ?? new Date().toISOString();
-        return new Date(bTime).getTime() - new Date(aTime).getTime();
-      });
+      combinedFeed.sort((a, b) => compareFeedItems(a, b, currentWeekStartDate));
 
       setFeedItems(combinedFeed);
 
@@ -523,12 +572,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       }
       // Prepend and re-sort
       const updated = [feedPost, ...prev];
-      updated.sort((a, b) => {
-        const aTime = getCreated(a);
-        const bTime = getCreated(b);
-        if (!aTime || !bTime) return 0;
-        return new Date(bTime).getTime() - new Date(aTime).getTime();
-      });
+      updated.sort((a, b) => compareFeedItems(a, b, getCurrentWeekStartDate()));
       return updated;
     });
   }, []);
