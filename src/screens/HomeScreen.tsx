@@ -27,6 +27,7 @@ import { getFeedItemKey } from '../types/feed';
 import { buildMatchMapsUrl, FCN_TICKET_URL, isFcnHomeMatch } from '../utils/matchLinks';
 import { getMatchdayTiming, getMatchViewState } from '../utils/matchdayState';
 import { applyMatchdayPreview } from '../utils/matchdayPreview';
+import { getPrimaryMediaKind } from '../utils/media';
 
 function formatKickoffCountdown(kickoffAt: string, now: Date): string {
   const diffMs = new Date(kickoffAt).getTime() - now.getTime();
@@ -92,7 +93,7 @@ export default function HomeScreen() {
         const feedItem = viewableItem.item as any;
         if (!feedItem || feedItem.kind !== 'post') return false;
         const post = feedItem.data as any;
-        return post?.media?.[0]?.type === 'video';
+        return getPrimaryMediaKind(post?.media) === 'video';
       });
 
       if (visibleVideoPost?.item) {

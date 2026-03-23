@@ -160,6 +160,10 @@ export function getMediaKind(media: MediaItem | undefined): 'image' | 'video' | 
   return null;
 }
 
+export function getPrimaryMediaKind(media: unknown): 'image' | 'video' | null {
+  return getMediaKind(normalizeMedia(media)[0]);
+}
+
 export function resolveRenderableMedia(media: unknown): ResolvedMediaItem[] {
   return normalizeMedia(media)
     .map((item) => {
