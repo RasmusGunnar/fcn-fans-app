@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { logger } from '../lib/logger';
 import {
   View,
@@ -17,9 +17,17 @@ import { PickedMedia, pickFromLibrary, pickCameraPhoto, recordVideo } from '../l
 import { uploadMediaToSupabase } from '../lib/upload';
 import { useAuth } from '../auth/AuthProvider';
 import { supabase } from '../lib/supabase';
+import { fetchLinkPreview } from '../services/newsApi';
 import { useFeed } from '../state/FeedContext';
 import { Post } from '../types/post';
 import type { Actor } from '../types/news';
+import {
+  buildPostLinkPreview,
+  extractFirstUrl,
+  isMissingLinkPreviewColumnError,
+  normalizePostLinkPreview,
+} from '../utils/linkPreview';
+import { LinkPreviewCard } from './LinkPreviewCard';
 
 interface PostComposerProps {
   onSuccess?: () => void;
@@ -36,6 +44,85 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
   const [text, setText] = useState('');
   const [attachment, setAttachment] = useState<PickedMedia | null>(null);
   const [loading, setLoading] = useState(false);
+  const [linkPreview, setLinkPreview] = useState<Post['linkPreview']>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [dismissedUrl, setDismissedUrl] = useState<string | null>(null);
+  const previewRequestIdRef = useRef(0);
+  const detectedUrl = useMemo(() => extractFirstUrl(text), [text]);
+  const activePreviewUrl = useMemo(() => {
+    if (!detectedUrl || detectedUrl === dismissedUrl) {
+      return null;
+    }
+
+    return detectedUrl;
+  }, [detectedUrl, dismissedUrl]);
+  const resolvedLinkPreview = useMemo(
+    () =>
+      activePreviewUrl
+        ? linkPreview?.url === activePreviewUrl
+          ? linkPreview
+          : buildPostLinkPreview(activePreviewUrl)
+        : null,
+    [activePreviewUrl, linkPreview],
+  );
+
+  useEffect(() => {
+    if (!detectedUrl) {
+      setDismissedUrl(null);
+      return;
+    }
+
+    if (dismissedUrl && dismissedUrl !== detectedUrl) {
+      setDismissedUrl(null);
+    }
+  }, [detectedUrl, dismissedUrl]);
+
+  useEffect(() => {
+    const requestId = ++previewRequestIdRef.current;
+
+    if (!activePreviewUrl) {
+      setLinkPreview(null);
+      setPreviewError(null);
+      setLoadingPreview(false);
+      return;
+    }
+
+    const fallbackPreview = buildPostLinkPreview(activePreviewUrl);
+    setLinkPreview(fallbackPreview);
+    setPreviewError(null);
+    setLoadingPreview(true);
+
+    const timer = setTimeout(async () => {
+      try {
+        const preview = await fetchLinkPreview(activePreviewUrl);
+        if (previewRequestIdRef.current !== requestId) {
+          return;
+        }
+
+        setLinkPreview(buildPostLinkPreview(preview.url || activePreviewUrl, preview));
+      } catch (error: any) {
+        if (previewRequestIdRef.current !== requestId) {
+          return;
+        }
+
+        logger.warn('[PostComposer] Link preview fetch failed', {
+          url: activePreviewUrl,
+          message: error?.message || error,
+        });
+        setLinkPreview(fallbackPreview);
+        setPreviewError('Kunne ikke hente metadata');
+      } finally {
+        if (previewRequestIdRef.current === requestId) {
+          setLoadingPreview(false);
+        }
+      }
+    }, 700);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [activePreviewUrl]);
 
   const handlePickLibrary = async () => {
     logger.log('[PostComposer] Pick from library clicked');
@@ -93,6 +180,7 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
 
     setLoading(true);
     let mediaArray: Post['media'] = [];
+    const linkPreviewPayload = resolvedLinkPreview ? { ...resolvedLinkPreview } : null;
 
     try {
       // Upload attachment if present (reuse existing upload flow)
@@ -142,19 +230,53 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
               ? [`community:${actor.id}`]
               : ['home'];
 
-        const { data, error } = await supabase
-          .from('posts')
-          .insert({
-            author_id: user.id,
-            actor_type: resolvedActorType,
-            actor_id: resolvedActorId,
-            text: text.trim(),
-            media: mediaArray,
-            feed_targets: resolvedFeedTargets,
-            media_type: attachment?.type ?? null,
-            ...(actor?.type === 'community' ? { community_id: actor.id } : {}),
-          })
-          .select('id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets');
+        const baseInsertPayload = {
+          author_id: user.id,
+          actor_type: resolvedActorType,
+          actor_id: resolvedActorId,
+          text: text.trim(),
+          media: mediaArray,
+          feed_targets: resolvedFeedTargets,
+          media_type: attachment?.type ?? null,
+          ...(actor?.type === 'community' ? { community_id: actor.id } : {}),
+        };
+        let data: any[] | null = null;
+        let error: any = null;
+
+        const insertAttempts = [
+          {
+            payload: {
+              ...baseInsertPayload,
+              link_preview: linkPreviewPayload,
+            },
+            select:
+              'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets, link_preview',
+          },
+          {
+            payload: baseInsertPayload,
+            select: 'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets',
+          },
+        ] as const;
+
+        for (const attempt of insertAttempts) {
+          const result = await supabase.from('posts').insert(attempt.payload).select(attempt.select);
+
+          if (!result.error) {
+            data = result.data;
+            error = null;
+            break;
+          }
+
+          error = result.error;
+          if (!isMissingLinkPreviewColumnError(result.error)) {
+            break;
+          }
+
+          logger.warn('[PostComposer] posts.insert missing link_preview column, retrying without it', {
+            error: result.error,
+          });
+        }
+
         if (error) throw error;
 
         if (data && data[0]) {
@@ -176,6 +298,9 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
             feedTargets: dbRecord.feed_targets ?? ['home'],
             createdAt: dbRecord.created_at || new Date().toISOString(),
             text: dbRecord.text,
+            linkPreview: normalizePostLinkPreview(
+              'link_preview' in dbRecord ? dbRecord.link_preview : null,
+            ),
             likesCount: 0,
             commentsCount: 0,
             likedByMe: false,
@@ -204,6 +329,7 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
       communityId: actor?.type === 'community' ? actor.id : null,
       createdAt: new Date().toISOString(),
       text: text.trim(),
+      linkPreview: linkPreviewPayload,
       likesCount: 0,
       commentsCount: 0,
       likedByMe: false,
@@ -230,6 +356,10 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
     setLoading(false);
     setText('');
     setAttachment(null);
+    setLinkPreview(null);
+    setLoadingPreview(false);
+    setPreviewError(null);
+    setDismissedUrl(null);
     logger.log('[PostComposer] Post published successfully, calling onSuccess');
     onSuccess?.();
   };
@@ -248,6 +378,20 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
           onChangeText={setText}
           editable={!loading}
         />
+        {resolvedLinkPreview ? (
+          <LinkPreviewCard
+            preview={resolvedLinkPreview}
+            mode="composer"
+            loading={loadingPreview}
+            error={previewError}
+            onRemove={() => {
+              if (activePreviewUrl) {
+                setDismissedUrl(activePreviewUrl);
+              }
+            }}
+            style={styles.linkPreviewCard}
+          />
+        ) : null}
         {attachment && (
           <View style={styles.previewContainer}>
             {attachment.type === 'image' ? (
@@ -348,6 +492,9 @@ function createStyles(theme: Theme) {
     previewContainer: {
       marginTop: theme.spacing[4],
       gap: theme.spacing[2],
+    },
+    linkPreviewCard: {
+      marginTop: theme.spacing[3],
     },
     previewImage: {
       width: '100%',

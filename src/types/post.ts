@@ -10,6 +10,18 @@ export interface PollData {
   expires_at: string;
 }
 
+export type PostLinkProvider = 'instagram' | 'facebook' | 'generic';
+
+export interface PostLinkPreview {
+  url: string;
+  provider: PostLinkProvider;
+  domain: string;
+  title?: string | null;
+  description?: string | null;
+  imageUrl?: string | null;
+  siteName?: string | null;
+}
+
 export interface Post {
   id: string;
   authorName: string;
@@ -29,6 +41,7 @@ export interface Post {
   createdAt: string;
   text: string;
   poll_data?: PollData | null;
+  linkPreview?: PostLinkPreview | null;
   imageUri?: string;
   media?: {
     bucket?: string;

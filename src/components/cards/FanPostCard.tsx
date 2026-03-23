@@ -32,6 +32,7 @@ import { canDeleteFeedItem, canEditPost } from '../../utils/permissions';
 import { Avatar } from '../Avatar';
 import { FanLevelBadge } from '../fan/FanLevelBadge';
 import { FeedVideo } from '../feed/FeedVideo';
+import { LinkPreviewCard } from '../LinkPreviewCard';
 import { OptionsMenu, OptionsMenuOption } from '../OptionsMenu';
 import { Text } from '../ui';
 import { buildCardBehaviorModel } from './cardBehaviorModel';
@@ -259,6 +260,7 @@ export function FanPostCard({
   const m0 = mediaArray[0] || null;
   const mediaKind = primaryMedia?.type ?? null;
   const hasMultipleMedia = resolvedMedia.length > 1;
+  const postLinkPreview = post.linkPreview ?? null;
 
   const mediaUri = primaryMedia?.uri ?? null;
 
@@ -278,6 +280,17 @@ export function FanPostCard({
   const deepLink = Linking.createURL(`/post/${post.id}`);
   const handleShare = () => {
     Share.share({ message: `${cleanedPostText}\n${deepLink}` }).catch(() => {});
+  };
+  const handleOpenPostLink = (event?: GestureResponderEvent) => {
+    event?.stopPropagation();
+
+    if (!postLinkPreview?.url) {
+      return;
+    }
+
+    Linking.openURL(postLinkPreview.url).catch((error) => {
+      logger.warn('[FanPostCard] Failed to open link preview URL', error);
+    });
   };
   const handleOpenMediaViewer = (index: number) => (event?: GestureResponderEvent) => {
     event?.stopPropagation();
@@ -387,7 +400,7 @@ export function FanPostCard({
     kind: 'post',
     actorType: isCommunityPost ? 'community' : 'fan',
     actorName: isCommunityPost ? communityName || 'Fællesskab' : authorDisplayName,
-    postLinkUrl: undefined, // Posts don't have embedded links in current data model
+    postLinkUrl: undefined, // Link-preview taps are scoped to the preview card
   });
 
   // Compute onOpenDetail based on model
@@ -574,6 +587,13 @@ export function FanPostCard({
           )}
         </View>
       )}
+      {postLinkPreview ? (
+        <LinkPreviewCard
+          preview={postLinkPreview}
+          onPress={handleOpenPostLink}
+          style={styles.linkPreview}
+        />
+      ) : null}
     </CardRoot>
   );
 }
@@ -633,6 +653,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: theme.spacing[3],
+  },
+  linkPreview: {
+    marginTop: theme.spacing[3],
   },
   commentsContainer: {
     paddingTop: theme.spacing[2],
