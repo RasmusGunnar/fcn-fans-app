@@ -4,18 +4,28 @@
 
 import * as Linking from 'expo-linking';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Image, Pressable, Share, StyleSheet, TextInput, View } from 'react-native';
+import {
+  Alert,
+  GestureResponderEvent,
+  Image,
+  Pressable,
+  Share,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../auth/AuthProvider';
 import { getSafeFanLevelKey } from '../../lib/fanLevel';
 import { logger } from '../../lib/logger';
-import { getPublicUrl } from '../../lib/storageUrl';
 import { supabase } from '../../lib/supabase';
+import { navigationRef } from '../../navigation/navigationRef';
 import type { CommentPreview } from '../../services/likesApi';
 import { defaultTheme } from '../../theme';
 import type { CategoryKey } from '../../theme/categories';
 import { Post } from '../../types/post';
 import { resolveActorLine, type ProfileMap } from '../../utils/actor';
+import { resolveRenderableMedia } from '../../utils/media';
 import { cleanText } from '../../utils/text';
 import { useCommunityRole } from '../../hooks/useCommunityRole';
 import { canDeleteFeedItem, canEditPost } from '../../utils/permissions';
@@ -174,18 +184,6 @@ function normalizeMedia(raw: any): MediaItem[] {
   return [];
 }
 
-function normalizeType(typeValue: any): 'image' | 'video' | null {
-  if (!typeValue) return null;
-  const lower = String(typeValue).toLowerCase();
-  // BASELINE: Accept common aliases
-  if (lower === 'image' || lower === 'photo' || lower === 'img') return 'image';
-  if (lower === 'video' || lower === 'movie') return 'video';
-  // BASELINE: Check file extensions
-  if (lower.match(/\.(jpg|jpeg|png|heic|webp)$/)) return 'image';
-  if (lower.match(/\.(mp4|mov|m4v|webm)$/)) return 'video';
-  return null;
-}
-
 interface FanPostCardProps {
   post: Post;
   authorProfile?: {
@@ -256,34 +254,50 @@ export function FanPostCard({
 
   // BASELINE: Deterministic media parsing with DEV logging
   const mediaArray = useMemo(() => normalizeMedia(post.media), [post.media]);
+  const resolvedMedia = useMemo(() => resolveRenderableMedia(post.media), [post.media]);
+  const primaryMedia = resolvedMedia[0] || null;
   const m0 = mediaArray[0] || null;
-  const mediaKind = normalizeType(m0?.type) || normalizeType((post as any).media_type);
+  const mediaKind = primaryMedia?.type ?? null;
+  const hasMultipleMedia = resolvedMedia.length > 1;
 
-  // BASELINE: Simple URL resolution
-  const mediaUri = useMemo(() => {
-    if (!m0) return null;
-    // Prefer bucket+path (new storage pattern)
-    if (m0.bucket && m0.path) {
-      return getPublicUrl(m0.bucket, m0.path);
-    }
-    // Legacy fields
-    if (m0.publicUrl) return m0.publicUrl;
-    if (m0.url) return m0.url;
-    return null;
-  }, [m0]);
+  const mediaUri = primaryMedia?.uri ?? null;
 
   // Instagram-style aspect ratio for images (portrait→4:5, square→1:1, landscape→16:9)
   const imageAspectRatio = useImageRatio(
     mediaKind === 'image' ? mediaUri : null,
-    m0?.width,
-    m0?.height,
+    primaryMedia?.width,
+    primaryMedia?.height,
   );
+
+  useEffect(() => {
+    setImageLoadError(false);
+  }, [mediaUri]);
 
   // BASELINE: Remove complex video state management - keep only essential edit handlers
 
   const deepLink = Linking.createURL(`/post/${post.id}`);
   const handleShare = () => {
     Share.share({ message: `${cleanedPostText}\n${deepLink}` }).catch(() => {});
+  };
+  const handleOpenMediaViewer = (index: number) => (event?: GestureResponderEvent) => {
+    event?.stopPropagation();
+
+    if (resolvedMedia.length === 0) {
+      return;
+    }
+
+    const params = {
+      items: resolvedMedia,
+      initialIndex: Math.max(0, Math.min(index, resolvedMedia.length - 1)),
+      postId: post.id,
+    };
+
+    if (navigationRef.isReady()) {
+      navigationRef.navigate('MediaViewer', params);
+      return;
+    }
+
+    navigation.navigate('MediaViewer', params);
   };
 
   // Permission checks - use isAppAdmin from context
@@ -401,6 +415,13 @@ export function FanPostCard({
 
   const authorFanLevel = getSafeFanLevelKey(fallbackAuthorFanLevelKey);
   const hasRightSlot = postMenuOptions.length > 0;
+  const mediaCountBadge = hasMultipleMedia ? (
+    <View style={styles.mediaCountBadge}>
+      <Text variant="caption" color="inverse">
+        {`1 / ${resolvedMedia.length}`}
+      </Text>
+    </View>
+  ) : null;
 
   return (
     <CardRoot
@@ -497,18 +518,21 @@ export function FanPostCard({
               )}
             </View>
           ) : mediaKind === 'video' ? (
-            <View style={styles.mediaContainer}>
-              <FeedVideo
-                uri={mediaUri}
-                isActive={isActiveVideo}
-                isAppActive={isAppActive}
-                naturalWidth={m0?.width}
-                naturalHeight={m0?.height}
-                onError={(e) => {
-                  logger.error('[VideoError]', { postId: post.id, error: e });
-                }}
-              />
-            </View>
+            <Pressable style={styles.mediaPressable} onPress={handleOpenMediaViewer(0)}>
+              <View style={styles.mediaContainer}>
+                <FeedVideo
+                  uri={mediaUri}
+                  isActive={isActiveVideo}
+                  isAppActive={isAppActive}
+                  naturalWidth={primaryMedia?.width}
+                  naturalHeight={primaryMedia?.height}
+                  onError={(e) => {
+                    logger.error('[VideoError]', { postId: post.id, error: e });
+                  }}
+                />
+                {mediaCountBadge}
+              </View>
+            </Pressable>
           ) : mediaKind === 'image' ? (
             imageLoadError ? (
               <View style={styles.mediaFallback}>
@@ -522,16 +546,19 @@ export function FanPostCard({
                 )}
               </View>
             ) : (
-              <View style={[styles.mediaContainer, { aspectRatio: imageAspectRatio }]}>
-                <Image
-                  source={{ uri: mediaUri }}
-                  style={styles.image}
-                  resizeMode="cover"
-                  onError={(e) => {
-                    setImageLoadError(true);
-                  }}
-                />
-              </View>
+              <Pressable style={styles.mediaPressable} onPress={handleOpenMediaViewer(0)}>
+                <View style={[styles.mediaContainer, { aspectRatio: imageAspectRatio }]}>
+                  <Image
+                    source={{ uri: mediaUri }}
+                    style={styles.image}
+                    resizeMode="cover"
+                    onError={() => {
+                      setImageLoadError(true);
+                    }}
+                  />
+                  {mediaCountBadge}
+                </View>
+              </Pressable>
             )
           ) : (
             <View style={styles.mediaFallback}>
@@ -571,10 +598,25 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing[3],
     alignSelf: 'stretch',
   },
+  mediaPressable: {
+    width: '100%',
+  },
   // Media container: width fills parent, aspect ratio determined by child (FeedVideo or image)
   mediaContainer: {
     width: '100%',
     backgroundColor: theme.colors.border.default,
+  },
+  mediaCountBadge: {
+    position: 'absolute',
+    top: theme.spacing[3],
+    right: theme.spacing[3],
+    minHeight: theme.spacing[8],
+    minWidth: theme.spacing[12],
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.overlay.heavy,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   video: {
     width: '100%',

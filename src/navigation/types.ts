@@ -1,3 +1,5 @@
+import type { ResolvedMediaItem } from '../utils/media';
+
 // Central navigation param lists used across screens
 
 export type AuthStackParamList = {
@@ -34,6 +36,11 @@ export type RootStackParamList = {
 
   CreateNewEvent: undefined;
   Create: undefined;
+  MediaViewer: {
+    items: ResolvedMediaItem[];
+    initialIndex?: number;
+    postId?: string;
+  };
 
   MatchDetails: { fixtureId: string };
   EventAttendees: EventAttendeesParams;

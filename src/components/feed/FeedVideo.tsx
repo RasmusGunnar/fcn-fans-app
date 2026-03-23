@@ -5,7 +5,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { AVPlaybackStatus, ResizeMode, Video } from 'expo-av';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { GestureResponderEvent, Pressable, StyleSheet, View } from 'react-native';
 import { defaultTheme } from '../../theme';
 
 const theme = defaultTheme;
@@ -94,7 +94,8 @@ export function FeedVideo({
     [metaRatio],
   );
 
-  const toggleMute = useCallback(() => {
+  const toggleMute = useCallback((event?: GestureResponderEvent) => {
+    event?.stopPropagation();
     setIsMuted((prev) => !prev);
   }, []);
 

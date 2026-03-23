@@ -9,6 +9,7 @@ import { AppTabs } from './AppTabs';
 import { useAuth } from '../auth/AuthProvider';
 import CreateNewEventScreen from '../screens/CreateNewEventScreen';
 import LoadingScreen from '../screens/LoadingScreen';
+import MediaViewerScreen from '../screens/MediaViewerScreen';
 import { fetchMyProfile, type UserProfile } from '../services/profileApi';
 import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
@@ -165,6 +166,11 @@ export function RootNavigator() {
           name="CreateNewEvent"
           component={CreateNewEventScreen}
           options={{ presentation: 'modal' }}
+        />
+        <Stack.Screen
+          name="MediaViewer"
+          component={MediaViewerScreen}
+          options={{ presentation: 'fullScreenModal', animation: 'fade', gestureEnabled: true }}
         />
       </Stack.Navigator>
     </NavigationContainer>

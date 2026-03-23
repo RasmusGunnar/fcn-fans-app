@@ -1,4 +1,3 @@
-import { supabase } from '../lib/supabase';
 import { getPublicUrl } from '../lib/storageUrl';
 
 /**
@@ -16,6 +15,11 @@ export type MediaItem = {
   type?: 'image' | 'video';
   width?: number;
   height?: number;
+};
+
+export type ResolvedMediaItem = MediaItem & {
+  uri: string;
+  type: 'image' | 'video';
 };
 
 /**
@@ -137,6 +141,42 @@ export function isVideoMedia(media: MediaItem | undefined): boolean {
     lowerUrl.includes('.m4v') ||
     lowerUrl.includes('video')
   );
+}
+
+export function getMediaKind(media: MediaItem | undefined): 'image' | 'video' | null {
+  if (!media) return null;
+
+  if (media.type === 'image' || media.type === 'video') {
+    return media.type;
+  }
+
+  const checkableUrl = media.url || media.publicUrl || media.path || '';
+  if (!checkableUrl) return null;
+
+  const lowerUrl = checkableUrl.toLowerCase();
+  if (lowerUrl.match(/\.(jpg|jpeg|png|heic|webp)(?:$|[?#])/)) return 'image';
+  if (lowerUrl.match(/\.(mp4|mov|m4v|webm)(?:$|[?#])/)) return 'video';
+  if (lowerUrl.includes('video')) return 'video';
+  return null;
+}
+
+export function resolveRenderableMedia(media: unknown): ResolvedMediaItem[] {
+  return normalizeMedia(media)
+    .map((item) => {
+      const uri = resolveMediaUrl(item);
+      const type = getMediaKind(item);
+
+      if (!uri || !type) {
+        return null;
+      }
+
+      return {
+        ...item,
+        uri,
+        type,
+      };
+    })
+    .filter(Boolean) as ResolvedMediaItem[];
 }
 
 /**
