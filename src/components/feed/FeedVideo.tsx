@@ -53,7 +53,7 @@ export interface FeedVideoProps {
 /**
  * Instagram-style feed video:
  *  - Autoplay/pause driven by `isActive` + `isAppActive`.
- *  - Muted by default; tap toggles mute.
+ *  - Autoplay is muted by default; explicit control toggles sound.
  *  - Loops.
  *  - Aspect ratio derived from natural size (or 4:5 fallback).
  */
@@ -76,16 +76,11 @@ export function FeedVideo({
 
   // Play or pause based on active state
   const shouldPlay = isActive && isAppActive;
+  const effectiveMuted = isMuted || !shouldPlay;
 
   useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    if (shouldPlay) {
-      v.playAsync().catch(() => {});
-    } else {
-      v.pauseAsync().catch(() => {});
-    }
-  }, [shouldPlay]);
+    setIsMuted(true);
+  }, [uri]);
 
   // Detect natural size from loaded video if metadata wasn't provided
   const handleLoad = useCallback(
@@ -105,26 +100,30 @@ export function FeedVideo({
 
   return (
     <View style={[styles.container, { aspectRatio: ratioToNumber(finalRatio) }]}>
-      <Pressable style={styles.pressableOverlay} onPress={toggleMute}>
-        <Video
-          ref={videoRef}
-          source={{ uri }}
-          style={styles.video}
-          resizeMode={ResizeMode.COVER}
-          shouldPlay={shouldPlay}
-          isLooping
-          isMuted={isMuted}
-          onLoad={handleLoad}
-          onError={onError}
+      <Video
+        ref={videoRef}
+        source={{ uri }}
+        style={styles.video}
+        resizeMode={ResizeMode.COVER}
+        shouldPlay={shouldPlay}
+        isLooping
+        isMuted={effectiveMuted}
+        onLoad={handleLoad}
+        onError={onError}
+      />
+      <Pressable
+        style={styles.muteButton}
+        onPress={toggleMute}
+        hitSlop={theme.spacing[2]}
+        accessibilityRole="button"
+        accessibilityLabel={effectiveMuted ? 'Slå lyd til' : 'Slå lyd fra'}
+        accessibilityHint="Skifter lyd på videoen"
+      >
+        <Ionicons
+          name={effectiveMuted ? 'volume-mute' : 'volume-high'}
+          size={theme.spacing[5]}
+          color={theme.colors.text.inverse}
         />
-        {/* Mute/unmute indicator */}
-        <View style={styles.muteButton}>
-          <Ionicons
-            name={isMuted ? 'volume-mute' : 'volume-high'}
-            size={theme.spacing[5]}
-            color={theme.colors.text.inverse}
-          />
-        </View>
       </Pressable>
     </View>
   );
@@ -135,9 +134,6 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: theme.colors.border.default,
     overflow: 'hidden',
-  },
-  pressableOverlay: {
-    flex: 1,
   },
   video: {
     width: '100%',
