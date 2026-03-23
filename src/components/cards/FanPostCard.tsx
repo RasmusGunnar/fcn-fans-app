@@ -3,6 +3,7 @@
 // NO hardcoded numbers or color strings allowed.
 
 import * as Linking from 'expo-linking';
+import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -25,6 +26,13 @@ import { defaultTheme } from '../../theme';
 import type { CategoryKey } from '../../theme/categories';
 import { Post } from '../../types/post';
 import { resolveActorLine, type ProfileMap } from '../../utils/actor';
+import {
+  getPromotedInstagramLinkPreview,
+  hydratePostLinkPreview,
+  mergePostLinkPreview,
+  shouldHydratePostLinkPreview,
+  stripFirstUrlFromDisplayText,
+} from '../../utils/linkPreview';
 import { resolveRenderableMedia } from '../../utils/media';
 import { cleanText } from '../../utils/text';
 import { useCommunityRole } from '../../hooks/useCommunityRole';
@@ -237,10 +245,12 @@ export function FanPostCard({
   const navigation = useNavigation<any>();
   const timeAgo = getTimeAgo(post.createdAt);
   const groupDisplay = cleanText(post.communityName || post.factionName);
-  const cleanedPostText = cleanText(post.text);
+  const cleanedPostText = cleanText(post.text).trim();
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(cleanedPostText);
   const [imageLoadError, setImageLoadError] = useState(false);
+  const [hydratedLinkPreview, setHydratedLinkPreview] = useState(post.linkPreview ?? null);
+  const sourceLinkPreview = post.linkPreview ?? null;
 
   const { user, isAppAdmin } = useAuth();
   const viewerUserId = currentUserId ?? user?.id;
@@ -259,10 +269,30 @@ export function FanPostCard({
   const primaryMedia = resolvedMedia[0] || null;
   const m0 = mediaArray[0] || null;
   const mediaKind = primaryMedia?.type ?? null;
+  const hasUploadedMedia = mediaArray.length > 0;
   const hasMultipleMedia = resolvedMedia.length > 1;
-  const postLinkPreview = post.linkPreview ?? null;
+  const postLinkPreview = useMemo(() => {
+    if (!post.linkPreview) {
+      return hydratedLinkPreview;
+    }
+
+    if (!hydratedLinkPreview) {
+      return post.linkPreview;
+    }
+
+    return mergePostLinkPreview(post.linkPreview, hydratedLinkPreview);
+  }, [hydratedLinkPreview, post.linkPreview]);
+  const promotedInstagramPreview = useMemo(
+    () =>
+      getPromotedInstagramLinkPreview({
+        hasUploadedMedia,
+        linkPreview: postLinkPreview,
+      }),
+    [hasUploadedMedia, postLinkPreview],
+  );
 
   const mediaUri = primaryMedia?.uri ?? null;
+  const promotedInstagramImageUri = promotedInstagramPreview?.imageUrl ?? null;
 
   // Instagram-style aspect ratio for images (portrait→4:5, square→1:1, landscape→16:9)
   const imageAspectRatio = useImageRatio(
@@ -270,10 +300,49 @@ export function FanPostCard({
     primaryMedia?.width,
     primaryMedia?.height,
   );
+  const promotedInstagramAspectRatio = useImageRatio(promotedInstagramImageUri);
+  const displayPostText = useMemo(
+    () =>
+      postLinkPreview
+        ? stripFirstUrlFromDisplayText(cleanedPostText, postLinkPreview.url)
+        : cleanedPostText,
+    [cleanedPostText, postLinkPreview],
+  );
+  const showPromotedInstagramPreview = Boolean(
+    promotedInstagramPreview && promotedInstagramImageUri && !imageLoadError,
+  );
+  const shouldHydrateLinkPreview = useMemo(
+    () => shouldHydratePostLinkPreview(postLinkPreview),
+    [postLinkPreview],
+  );
 
   useEffect(() => {
     setImageLoadError(false);
-  }, [mediaUri]);
+  }, [mediaUri, promotedInstagramImageUri]);
+
+  useEffect(() => {
+    setHydratedLinkPreview(sourceLinkPreview);
+  }, [post.id, sourceLinkPreview]);
+
+  useEffect(() => {
+    if (!postLinkPreview || !shouldHydrateLinkPreview) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void hydratePostLinkPreview(postLinkPreview).then((nextPreview) => {
+      if (!cancelled) {
+        setHydratedLinkPreview((currentPreview) =>
+          currentPreview ? mergePostLinkPreview(currentPreview, nextPreview) : nextPreview,
+        );
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [postLinkPreview, shouldHydrateLinkPreview]);
 
   // BASELINE: Remove complex video state management - keep only essential edit handlers
 
@@ -497,13 +566,15 @@ export function FanPostCard({
         </View>
       ) : bodyContent ? (
         bodyContent
-      ) : (
+      ) : displayPostText ? (
         <Text variant="body" color="primary" style={styles.text}>
-          {cleanedPostText}
+          {displayPostText}
         </Text>
+      ) : (
+        null
       )}
       {/* BASELINE: Deterministic media rendering - no silent failures */}
-      {!m0 ? null : (
+      {m0 ? (
         <View style={styles.mediaOuter}>
           {!mediaKind ? (
             <View style={styles.mediaFallback}>
@@ -586,8 +657,43 @@ export function FanPostCard({
             </View>
           )}
         </View>
-      )}
-      {postLinkPreview ? (
+      ) : showPromotedInstagramPreview ? (
+        <View style={styles.mediaOuter}>
+          <Pressable
+            style={styles.mediaPressable}
+            onPress={handleOpenPostLink}
+            accessibilityRole="link"
+            accessibilityLabel="Åbn Instagram eksternt"
+          >
+            <View style={[styles.mediaContainer, { aspectRatio: promotedInstagramAspectRatio }]}>
+              <Image
+                source={{ uri: promotedInstagramImageUri! }}
+                style={styles.image}
+                resizeMode="cover"
+                onError={() => {
+                  setImageLoadError(true);
+                }}
+              />
+              <View style={styles.promotedPreviewBadge}>
+                <Ionicons
+                  name="logo-instagram"
+                  size={theme.components.icon.size.sm}
+                  color={theme.colors.text.inverse}
+                />
+                <Text variant="caption" color="inverse" style={styles.promotedPreviewBadgeText}>
+                  Instagram
+                </Text>
+                <Ionicons
+                  name="open-outline"
+                  size={theme.components.icon.size.sm}
+                  color={theme.colors.text.inverse}
+                />
+              </View>
+            </View>
+          </Pressable>
+        </View>
+      ) : null}
+      {postLinkPreview && !showPromotedInstagramPreview ? (
         <LinkPreviewCard
           preview={postLinkPreview}
           onPress={handleOpenPostLink}
@@ -637,6 +743,21 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.overlay.heavy,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  promotedPreviewBadge: {
+    position: 'absolute',
+    top: theme.spacing[3],
+    left: theme.spacing[3],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[1],
+    paddingVertical: theme.spacing[1],
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.overlay.heavy,
+  },
+  promotedPreviewBadgeText: {
+    fontWeight: '600',
   },
   video: {
     width: '100%',

@@ -162,6 +162,14 @@ export function LinkPreviewCard({
             color={theme.colors.text.secondary}
           />
         </Pressable>
+      ) : onPress ? (
+        <View style={styles.actionIconWrap}>
+          <Ionicons
+            name="open-outline"
+            size={theme.components.icon.size.sm}
+            color={theme.colors.text.secondary}
+          />
+        </View>
       ) : null}
     </View>
   );
@@ -175,7 +183,7 @@ export function LinkPreviewCard({
       style={({ pressed }) => [pressed ? styles.cardPressed : null]}
       onPress={(event) => onPress(event)}
       accessibilityRole="link"
-      accessibilityLabel={`Åbn ${providerLabel}-link`}
+      accessibilityLabel={`Åbn ${providerLabel}-link eksternt`}
     >
       {content}
     </Pressable>
@@ -259,6 +267,12 @@ function createStyles(theme: Theme) {
       alignItems: 'center',
       gap: theme.spacing[2],
       marginTop: theme.spacing[1],
+    },
+    actionIconWrap: {
+      alignSelf: 'center',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexShrink: 0,
     },
     removeButton: {
       alignSelf: 'flex-start',
