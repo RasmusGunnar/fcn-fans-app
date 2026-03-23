@@ -23,9 +23,12 @@ import { Post } from '../types/post';
 import type { Actor } from '../types/news';
 import {
   buildPostLinkPreview,
+  canUseLinkPreviewColumn,
   extractFirstUrl,
   isMissingLinkPreviewColumnError,
-  normalizePostLinkPreview,
+  markLinkPreviewColumnAvailable,
+  markLinkPreviewColumnMissing,
+  resolvePostLinkPreview,
 } from '../utils/linkPreview';
 import { LinkPreviewCard } from './LinkPreviewCard';
 
@@ -80,6 +83,7 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
 
   useEffect(() => {
     const requestId = ++previewRequestIdRef.current;
+    let cancelled = false;
 
     if (!activePreviewUrl) {
       setLinkPreview(null);
@@ -96,13 +100,13 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
     const timer = setTimeout(async () => {
       try {
         const preview = await fetchLinkPreview(activePreviewUrl);
-        if (previewRequestIdRef.current !== requestId) {
+        if (cancelled || previewRequestIdRef.current !== requestId) {
           return;
         }
 
         setLinkPreview(buildPostLinkPreview(preview.url || activePreviewUrl, preview));
       } catch (error: any) {
-        if (previewRequestIdRef.current !== requestId) {
+        if (cancelled || previewRequestIdRef.current !== requestId) {
           return;
         }
 
@@ -113,13 +117,14 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
         setLinkPreview(fallbackPreview);
         setPreviewError('Kunne ikke hente metadata');
       } finally {
-        if (previewRequestIdRef.current === requestId) {
+        if (!cancelled && previewRequestIdRef.current === requestId) {
           setLoadingPreview(false);
         }
       }
     }, 700);
 
     return () => {
+      cancelled = true;
       clearTimeout(timer);
     };
   }, [activePreviewUrl]);
@@ -178,9 +183,21 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
       return;
     }
 
+    if (!user?.id) {
+      alert('Du skal være logget ind for at dele opslag.');
+      return;
+    }
+
     setLoading(true);
     let mediaArray: Post['media'] = [];
-    const linkPreviewPayload = resolvedLinkPreview ? { ...resolvedLinkPreview } : null;
+    const linkPreviewPayload = resolvedLinkPreview
+      ? { ...resolvedLinkPreview }
+      : detectedUrl && dismissedUrl === detectedUrl
+        ? {
+            ...buildPostLinkPreview(detectedUrl),
+            dismissed: true,
+          }
+        : null;
 
     try {
       // Upload attachment if present (reuse existing upload flow)
@@ -219,6 +236,7 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
 
     // Insert post and fetch it back from DB to ensure consistency (exactly as existing code)
     let dbPost: Post | null = null;
+    let insertErrorMessage: string | null = null;
     try {
       if (user?.id) {
         const resolvedActorType = actor?.type ?? 'user';
@@ -243,25 +261,37 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
         let data: any[] | null = null;
         let error: any = null;
 
-        const insertAttempts = [
-          {
-            payload: {
-              ...baseInsertPayload,
-              link_preview: linkPreviewPayload,
-            },
-            select:
-              'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets, link_preview',
-          },
-          {
-            payload: baseInsertPayload,
-            select: 'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets',
-          },
-        ] as const;
+        const insertAttempts = canUseLinkPreviewColumn()
+          ? ([
+              {
+                payload: {
+                  ...baseInsertPayload,
+                  link_preview: linkPreviewPayload,
+                },
+                select:
+                  'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets, link_preview',
+              },
+              {
+                payload: baseInsertPayload,
+                select:
+                  'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets',
+              },
+            ] as const)
+          : ([
+              {
+                payload: baseInsertPayload,
+                select:
+                  'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets',
+              },
+            ] as const);
 
         for (const attempt of insertAttempts) {
           const result = await supabase.from('posts').insert(attempt.payload).select(attempt.select);
 
           if (!result.error) {
+            if ('link_preview' in attempt.payload || attempt.select.includes('link_preview')) {
+              markLinkPreviewColumnAvailable();
+            }
             data = result.data;
             error = null;
             break;
@@ -271,6 +301,8 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
           if (!isMissingLinkPreviewColumnError(result.error)) {
             break;
           }
+
+          markLinkPreviewColumnMissing();
 
           logger.warn('[PostComposer] posts.insert missing link_preview column, retrying without it', {
             error: result.error,
@@ -298,9 +330,11 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
             feedTargets: dbRecord.feed_targets ?? ['home'],
             createdAt: dbRecord.created_at || new Date().toISOString(),
             text: dbRecord.text,
-            linkPreview: normalizePostLinkPreview(
-              'link_preview' in dbRecord ? dbRecord.link_preview : null,
-            ),
+            linkPreview:
+              resolvePostLinkPreview(
+                'link_preview' in dbRecord ? dbRecord.link_preview : linkPreviewPayload,
+                dbRecord.text,
+              ) ?? linkPreviewPayload,
             likesCount: 0,
             commentsCount: 0,
             likedByMe: false,
@@ -314,6 +348,13 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
       }
     } catch (e) {
       logger.warn('[PostComposer] Insert post error', e);
+      insertErrorMessage = e instanceof Error ? e.message : String(e);
+    }
+
+    if (user?.id && !dbPost) {
+      alert(`Post fejlede: ${insertErrorMessage ?? 'Kunne ikke gemme opslaget'}`);
+      setLoading(false);
+      return;
     }
 
     // Use DB-fetched post if available, otherwise fallback to locally constructed
@@ -343,25 +384,22 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
     };
 
     addPost(newPost);
-
-    // Optional: Soft refresh to sync with DB (ensures no duplicates due to dedupe logic)
-    try {
-      await fetchPosts();
-    } catch (e) {
-      if (__DEV__) {
-        logger.log('[PostComposer] Post-creation refresh skipped:', e);
-      }
-    }
-
-    setLoading(false);
     setText('');
     setAttachment(null);
     setLinkPreview(null);
     setLoadingPreview(false);
     setPreviewError(null);
     setDismissedUrl(null);
+    setLoading(false);
     logger.log('[PostComposer] Post published successfully, calling onSuccess');
     onSuccess?.();
+
+    // Soft refresh in the background so a slow feed reload never blocks composer state reset.
+    void fetchPosts().catch((e) => {
+      if (__DEV__) {
+        logger.log('[PostComposer] Post-creation refresh skipped:', e);
+      }
+    });
   };
 
   return (

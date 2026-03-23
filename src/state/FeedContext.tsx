@@ -41,7 +41,13 @@ import {
   withFeedEngagementSummary,
 } from '../utils/homeFeed';
 import { resolveAvatarUrl } from '../utils/avatar';
-import { isMissingLinkPreviewColumnError, normalizePostLinkPreview } from '../utils/linkPreview';
+import {
+  canUseLinkPreviewColumn,
+  isMissingLinkPreviewColumnError,
+  markLinkPreviewColumnAvailable,
+  markLinkPreviewColumnMissing,
+  resolvePostLinkPreview,
+} from '../utils/linkPreview';
 import { normalizeMedia } from '../utils/media';
 import { targetKey } from '../utils/targetKey';
 
@@ -309,7 +315,11 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       let postsData: any[] | null = null;
       let fetchError: any = null;
 
-      for (const select of POST_SELECT_ATTEMPTS) {
+      const postSelectAttempts = canUseLinkPreviewColumn()
+        ? POST_SELECT_ATTEMPTS
+        : POST_SELECT_ATTEMPTS.slice(1);
+
+      for (const select of postSelectAttempts) {
         const result = await supabase
           .from('posts')
           .select(select)
@@ -317,6 +327,9 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
           .limit(50);
 
         if (!result.error) {
+          if (select.includes('link_preview')) {
+            markLinkPreviewColumnAvailable();
+          }
           postsData = result.data;
           fetchError = null;
           break;
@@ -326,6 +339,8 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         if (!isMissingLinkPreviewColumnError(result.error)) {
           break;
         }
+
+        markLinkPreviewColumnMissing();
 
         logger.warn('[FeedProvider] posts select missing link_preview column, retrying without it', {
           select,
@@ -366,12 +381,6 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
 
       // Transform DB posts to Post type with normalized media
       transformedPosts = (postsData || []).map((dbPost) => {
-        console.log('[FeedContext] mapped post', {
-          id: dbPost.id,
-          hasPollData: !!dbPost.poll_data,
-          pollData: dbPost.poll_data,
-        });
-
         return withPostAuthorProfile({
           id: dbPost.id,
           authorName: newProfileMap[dbPost.author_id]?.display_name || 'Fan',
@@ -391,8 +400,9 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
           createdAt: dbPost.created_at,
           text: dbPost.text,
           poll_data: dbPost.poll_data ?? null,
-          linkPreview: normalizePostLinkPreview(
+          linkPreview: resolvePostLinkPreview(
             'link_preview' in dbPost ? dbPost.link_preview : null,
+            dbPost.text,
           ),
           likesCount: 0, // TODO: Add likes support
           commentsCount: 0, // TODO: Count comments

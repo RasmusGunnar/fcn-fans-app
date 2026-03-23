@@ -4,6 +4,31 @@ import { NewsItem, LinkPreview } from '../types/news';
 import { fixEncoding } from '../utils/fixEncoding';
 import { sanitizeNewsHeroImageUrl } from '../utils/newsMedia';
 
+const LINK_PREVIEW_TIMEOUT_MS = 8000;
+
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  message: string,
+): Promise<T> {
+  let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeoutHandle = setTimeout(() => {
+          reject(new Error(message));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+    }
+  }
+}
+
 async function readFunctionErrorDetails(error: any): Promise<{
   status?: number;
   body?: string;
@@ -33,9 +58,13 @@ export async function fetchLinkPreview(url: string): Promise<LinkPreview> {
   try {
     logger.log('[newsApi] fetchLinkPreview called with URL:', url);
 
-    const { data, error } = await supabase.functions.invoke('parse-link', {
-      body: { url },
-    });
+    const { data, error } = await withTimeout(
+      supabase.functions.invoke('parse-link', {
+        body: { url },
+      }),
+      LINK_PREVIEW_TIMEOUT_MS,
+      'Link preview timeout',
+    );
 
     if (error) {
       const details = await readFunctionErrorDetails(error);
@@ -67,6 +96,7 @@ export async function fetchLinkPreview(url: string): Promise<LinkPreview> {
       description: fixEncoding(data.description) || undefined,
       imageUrl: sanitizeNewsHeroImageUrl(data.imageUrl, data.resolvedUrl || url) || undefined,
       siteName: fixEncoding(data.siteName) || new URL(url).hostname,
+      hasVideo: Boolean(data.hasVideo),
     };
   } catch (error: any) {
     logger.error('[newsApi] fetchLinkPreview error:', error);

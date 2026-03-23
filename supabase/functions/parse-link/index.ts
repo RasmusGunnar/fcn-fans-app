@@ -14,8 +14,111 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
-const FETCH_TIMEOUT_MS = 12000;
+const FETCH_TIMEOUT_MS = 5000;
 const USER_AGENT = 'fcn-fans-parse-link/1.0';
+const YOUTUBE_VIDEO_ID_REGEX = /^[A-Za-z0-9_-]{11}$/;
+
+type PreviewProvider = 'youtube' | 'instagram' | 'facebook' | 'generic';
+
+function getPreviewProvider(url: string): PreviewProvider {
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./i, '').toLowerCase();
+
+    if (hostname.includes('youtube.com') || hostname === 'youtu.be') {
+      return 'youtube';
+    }
+
+    if (hostname.includes('instagram.com')) {
+      return 'instagram';
+    }
+
+    if (hostname.includes('facebook.com') || hostname === 'fb.watch') {
+      return 'facebook';
+    }
+  } catch {
+    // Fall through to generic
+  }
+
+  return 'generic';
+}
+
+function extractYouTubeVideoId(url: string): string | null {
+  try {
+    const parsedUrl = new URL(url);
+    const hostname = parsedUrl.hostname.replace(/^www\./i, '').toLowerCase();
+    const pathSegments = parsedUrl.pathname.split('/').filter(Boolean);
+
+    if (hostname === 'youtu.be') {
+      const candidate = pathSegments[0] ?? '';
+      return YOUTUBE_VIDEO_ID_REGEX.test(candidate) ? candidate : null;
+    }
+
+    if (!hostname.includes('youtube.com')) {
+      return null;
+    }
+
+    if (parsedUrl.pathname === '/watch') {
+      const candidate = parsedUrl.searchParams.get('v') ?? '';
+      return YOUTUBE_VIDEO_ID_REGEX.test(candidate) ? candidate : null;
+    }
+
+    if (pathSegments.length >= 2) {
+      const [, secondSegment] = pathSegments;
+      return YOUTUBE_VIDEO_ID_REGEX.test(secondSegment) ? secondSegment : null;
+    }
+  } catch {
+    // Ignore malformed URLs
+  }
+
+  return null;
+}
+
+function buildFallbackPreview(url: string, resolvedUrl: string) {
+  let parsedUrl: URL | null = null;
+
+  try {
+    parsedUrl = new URL(resolvedUrl);
+  } catch {
+    try {
+      parsedUrl = new URL(url);
+      resolvedUrl = parsedUrl.toString();
+    } catch {
+      parsedUrl = null;
+    }
+  }
+
+  const provider = getPreviewProvider(resolvedUrl);
+  const hostname = parsedUrl?.hostname.replace(/^www\./i, '') || 'link';
+  let title = hostname;
+  let siteName = hostname;
+  let imageUrl: string | null = null;
+  let hasVideo = false;
+
+  if (provider === 'youtube') {
+    const videoId = extractYouTubeVideoId(resolvedUrl);
+    title = 'YouTube-video';
+    siteName = 'YouTube';
+    hasVideo = true;
+    imageUrl = videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : null;
+  } else if (provider === 'instagram') {
+    const path = parsedUrl?.pathname.toLowerCase() || '';
+    hasVideo = path.includes('/reel/') || path.includes('/reels/') || path.includes('/tv/');
+    title = hasVideo ? 'Instagram reel' : 'Instagram-opslag';
+    siteName = 'Instagram';
+  } else if (provider === 'facebook') {
+    title = 'Facebook-link';
+    siteName = 'Facebook';
+  }
+
+  return {
+    resolvedUrl,
+    title,
+    description: '',
+    imageUrl,
+    hasVideo,
+    siteName,
+  };
+}
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -46,8 +149,7 @@ serve(async (req) => {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Preview fetch failed';
       console.error('[parse-link] Upstream fetch failed:', { url, message });
-      return new Response(JSON.stringify({ error: message, stage: 'fetch', url }), {
-        status: 502,
+      return new Response(JSON.stringify(buildFallbackPreview(url, resolvedUrl)), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }

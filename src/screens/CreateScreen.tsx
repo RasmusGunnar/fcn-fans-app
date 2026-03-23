@@ -12,6 +12,15 @@ import { PickedMedia, pickFromLibrary } from '../lib/mediaPicker';
 import { uploadMediaToSupabase } from '../lib/upload';
 import { useAuth } from '../auth/AuthProvider';
 import { supabase } from '../lib/supabase';
+import {
+  buildPostLinkPreview,
+  canUseLinkPreviewColumn,
+  extractFirstUrl,
+  isMissingLinkPreviewColumnError,
+  markLinkPreviewColumnAvailable,
+  markLinkPreviewColumnMissing,
+  resolvePostLinkPreview,
+} from '../utils/linkPreview';
 
 export default function CreateScreen() {
   const insets = useSafeAreaInsets();
@@ -20,18 +29,19 @@ export default function CreateScreen() {
   const route = useRoute() as any;
   const [text, setText] = useState('');
   const [audienceType, setAudienceType] = useState<'all' | 'community' | 'faction'>('all');
-  const [selectedCommunity, setSelectedCommunity] = useState('Farum Fans');
-  const [selectedFaction, setSelectedFaction] = useState('Farum Fighters');
+  const [selectedCommunity] = useState('Farum Fans');
+  const [selectedFaction] = useState('Farum Fighters');
   const [attachment, setAttachment] = useState<PickedMedia | null>(
     route?.params?.initialAttachment ?? null,
   );
-  const [loading, setLoading] = useState(false);
 
   const handlePublish = async () => {
     if (!text.trim()) {
       alert('Skriv noget før du udgiver!');
       return;
     }
+    const detectedLinkUrl = extractFirstUrl(text);
+    const linkPreviewPayload = detectedLinkUrl ? buildPostLinkPreview(detectedLinkUrl) : null;
     let mediaArray: Post['media'] = [];
     try {
       if (attachment && user?.id) {
@@ -91,11 +101,53 @@ export default function CreateScreen() {
           community_id: insertPayload.community_id,
         });
 
-        const { data, error } = await supabase
-          .from('posts')
-          .insert(insertPayload)
-          .select('id, created_at, author_id, text, media, community_id')
-          .single();
+        let data: any = null;
+        let error: any = null;
+
+        const insertAttempts = canUseLinkPreviewColumn()
+          ? ([
+              {
+                payload: {
+                  ...insertPayload,
+                  link_preview: linkPreviewPayload,
+                },
+                select: 'id, created_at, author_id, text, media, community_id, link_preview',
+              },
+              {
+                payload: insertPayload,
+                select: 'id, created_at, author_id, text, media, community_id',
+              },
+            ] as const)
+          : ([
+              {
+                payload: insertPayload,
+                select: 'id, created_at, author_id, text, media, community_id',
+              },
+            ] as const);
+
+        for (const attempt of insertAttempts) {
+          const result = await supabase
+            .from('posts')
+            .insert(attempt.payload)
+            .select(attempt.select)
+            .single();
+
+          if (!result.error) {
+            if ('link_preview' in attempt.payload || attempt.select.includes('link_preview')) {
+              markLinkPreviewColumnAvailable();
+            }
+            data = result.data;
+            error = null;
+            break;
+          }
+
+          error = result.error;
+          if (!isMissingLinkPreviewColumnError(result.error)) {
+            break;
+          }
+
+          markLinkPreviewColumnMissing();
+        }
 
         console.log('[CreateScreen] Insert response:', { error, dataExists: !!data });
         if (error) throw error;
@@ -112,6 +164,11 @@ export default function CreateScreen() {
           communityId: data.community_id ?? null,
           createdAt: data.created_at || new Date().toISOString(),
           text: data.text,
+          linkPreview:
+            resolvePostLinkPreview(
+              'link_preview' in data ? data.link_preview : linkPreviewPayload,
+              data.text,
+            ) ?? linkPreviewPayload,
           communityName: audienceType === 'community' ? selectedCommunity : undefined,
           factionName: audienceType === 'faction' ? selectedFaction : undefined,
           likesCount: 0,
@@ -128,7 +185,6 @@ export default function CreateScreen() {
       const errorMsg = e?.message || String(e);
       console.error('[CreateScreen] INSERT FAILED:', errorMsg);
       alert('Post fejlede: ' + errorMsg + '\n\nTjek: (1) Logget ind (2) Database forbinder (3) Policies tillader insert');
-      setLoading(false);
       return;
     }
 
@@ -143,6 +199,7 @@ export default function CreateScreen() {
           : null,
       createdAt: new Date().toISOString(),
       text: text.trim(),
+      linkPreview: linkPreviewPayload,
       communityName: audienceType === 'community' ? selectedCommunity : undefined,
       factionName: audienceType === 'faction' ? selectedFaction : undefined,
       likesCount: 0,
@@ -153,31 +210,16 @@ export default function CreateScreen() {
 
     addPost(newPost);
 
-    // Optional: Soft refresh to sync with DB (ensures no duplicates due to dedupe logic)
-    // This is safe because addPost has dedupe logic based on post.id
-    try {
-      await fetchPosts();
-    } catch (e) {
-      // Ignore refresh errors - optimistic update already happened
-      if (__DEV__) {
-        console.log('[CreateScreen] Post-creation refresh skipped:', e);
-      }
-    }
-
     setText('');
     setAudienceType('all');
     setAttachment(null);
-  };
 
-  const getAudienceDisplay = () => {
-    switch (audienceType) {
-      case 'community':
-        return selectedCommunity;
-      case 'faction':
-        return selectedFaction;
-      default:
-        return 'Alle fans';
-    }
+    // Soft refresh in the background so a slow feed reload never blocks create state reset.
+    void fetchPosts().catch((e) => {
+      if (__DEV__) {
+        console.log('[CreateScreen] Post-creation refresh skipped:', e);
+      }
+    });
   };
 
   return (
