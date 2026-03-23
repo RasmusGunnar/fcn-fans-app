@@ -41,13 +41,6 @@ import {
   withFeedEngagementSummary,
 } from '../utils/homeFeed';
 import { resolveAvatarUrl } from '../utils/avatar';
-import {
-  canUseLinkPreviewColumn,
-  isMissingLinkPreviewColumnError,
-  markLinkPreviewColumnAvailable,
-  markLinkPreviewColumnMissing,
-  resolvePostLinkPreview,
-} from '../utils/linkPreview';
 import { normalizeMedia } from '../utils/media';
 import { targetKey } from '../utils/targetKey';
 
@@ -60,10 +53,6 @@ type FeedProfileEntry = {
 const FEED_PROFILE_SELECT_ATTEMPTS = [
   'id, display_name, avatar_url, fan_level_key',
   'id, display_name, avatar_url',
-] as const;
-const POST_SELECT_ATTEMPTS = [
-  'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets, poll_data, link_preview',
-  'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets, poll_data',
 ] as const;
 
 async function fetchFeedProfilesByIds(authorIds: string[]): Promise<Record<string, FeedProfileEntry>> {
@@ -312,41 +301,11 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
 
     // Fetch posts in separate try/catch so news_items errors don't block posts
     try {
-      let postsData: any[] | null = null;
-      let fetchError: any = null;
-
-      const postSelectAttempts = canUseLinkPreviewColumn()
-        ? POST_SELECT_ATTEMPTS
-        : POST_SELECT_ATTEMPTS.slice(1);
-
-      for (const select of postSelectAttempts) {
-        const result = await supabase
-          .from('posts')
-          .select(select)
-          .order('created_at', { ascending: false })
-          .limit(50);
-
-        if (!result.error) {
-          if (select.includes('link_preview')) {
-            markLinkPreviewColumnAvailable();
-          }
-          postsData = result.data;
-          fetchError = null;
-          break;
-        }
-
-        fetchError = result.error;
-        if (!isMissingLinkPreviewColumnError(result.error)) {
-          break;
-        }
-
-        markLinkPreviewColumnMissing();
-
-        logger.warn('[FeedProvider] posts select missing link_preview column, retrying without it', {
-          select,
-          error: result.error,
-        });
-      }
+      const { data: postsData, error: fetchError } = await supabase
+        .from('posts')
+        .select('id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets, poll_data')
+        .order('created_at', { ascending: false })
+        .limit(50);
 
       if (fetchError) {
         throw fetchError;
@@ -381,6 +340,12 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
 
       // Transform DB posts to Post type with normalized media
       transformedPosts = (postsData || []).map((dbPost) => {
+        console.log('[FeedContext] mapped post', {
+          id: dbPost.id,
+          hasPollData: !!dbPost.poll_data,
+          pollData: dbPost.poll_data,
+        });
+
         return withPostAuthorProfile({
           id: dbPost.id,
           authorName: newProfileMap[dbPost.author_id]?.display_name || 'Fan',
@@ -400,10 +365,6 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
           createdAt: dbPost.created_at,
           text: dbPost.text,
           poll_data: dbPost.poll_data ?? null,
-          linkPreview: resolvePostLinkPreview(
-            'link_preview' in dbPost ? dbPost.link_preview : null,
-            dbPost.text,
-          ),
           likesCount: 0, // TODO: Add likes support
           commentsCount: 0, // TODO: Count comments
           likedByMe: false,

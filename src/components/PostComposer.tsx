@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { logger } from '../lib/logger';
 import {
   View,
@@ -17,20 +17,9 @@ import { PickedMedia, pickFromLibrary, pickCameraPhoto, recordVideo } from '../l
 import { uploadMediaToSupabase } from '../lib/upload';
 import { useAuth } from '../auth/AuthProvider';
 import { supabase } from '../lib/supabase';
-import { fetchLinkPreview } from '../services/newsApi';
 import { useFeed } from '../state/FeedContext';
 import { Post } from '../types/post';
 import type { Actor } from '../types/news';
-import {
-  buildPostLinkPreview,
-  canUseLinkPreviewColumn,
-  extractFirstUrl,
-  isMissingLinkPreviewColumnError,
-  markLinkPreviewColumnAvailable,
-  markLinkPreviewColumnMissing,
-  resolvePostLinkPreview,
-} from '../utils/linkPreview';
-import { LinkPreviewCard } from './LinkPreviewCard';
 
 interface PostComposerProps {
   onSuccess?: () => void;
@@ -38,32 +27,8 @@ interface PostComposerProps {
   feedTargets?: string[];
 }
 
-type CachedComposerPreview = {
-  preview: Post['linkPreview'];
-  error: string | null;
-  expiresAt: number;
-};
-
-const PREVIEW_SUCCESS_CACHE_TTL_MS = 5 * 60 * 1000;
-const PREVIEW_ERROR_CACHE_TTL_MS = 30 * 1000;
-const composerPreviewCache = new Map<string, CachedComposerPreview>();
-
-function getCachedComposerPreview(url: string): CachedComposerPreview | null {
-  const cached = composerPreviewCache.get(url);
-
-  if (!cached) {
-    return null;
-  }
-
-  if (cached.expiresAt <= Date.now()) {
-    composerPreviewCache.delete(url);
-    return null;
-  }
-
-  return cached;
-}
-
 export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProps) {
+  logger.log('[PostComposer] Component mounted');
   const theme = useTheme();
   const styles = createStyles(theme);
   const { user } = useAuth();
@@ -71,122 +36,6 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
   const [text, setText] = useState('');
   const [attachment, setAttachment] = useState<PickedMedia | null>(null);
   const [loading, setLoading] = useState(false);
-  const [linkPreview, setLinkPreview] = useState<Post['linkPreview']>(null);
-  const [loadingPreview, setLoadingPreview] = useState(false);
-  const [previewError, setPreviewError] = useState<string | null>(null);
-  const [dismissedUrl, setDismissedUrl] = useState<string | null>(null);
-  const previewRequestIdRef = useRef(0);
-  const lastRequestedUrlRef = useRef<string | null>(null);
-  const detectedUrl = useMemo(() => extractFirstUrl(text), [text]);
-  const activePreviewUrl = useMemo(() => {
-    if (!detectedUrl || detectedUrl === dismissedUrl) {
-      return null;
-    }
-
-    return detectedUrl;
-  }, [detectedUrl, dismissedUrl]);
-  const resolvedLinkPreview = useMemo(
-    () =>
-      activePreviewUrl
-        ? linkPreview?.url === activePreviewUrl
-          ? linkPreview
-          : buildPostLinkPreview(activePreviewUrl)
-        : null,
-    [activePreviewUrl, linkPreview],
-  );
-
-  useEffect(() => {
-    logger.log('[PostComposer] Component mounted');
-  }, []);
-
-  useEffect(() => {
-    if (!detectedUrl) {
-      setDismissedUrl(null);
-      return;
-    }
-
-    if (dismissedUrl && dismissedUrl !== detectedUrl) {
-      setDismissedUrl(null);
-    }
-  }, [detectedUrl, dismissedUrl]);
-
-  useEffect(() => {
-    const requestId = ++previewRequestIdRef.current;
-    let cancelled = false;
-
-    if (!activePreviewUrl) {
-      lastRequestedUrlRef.current = null;
-      setLinkPreview(null);
-      setPreviewError(null);
-      setLoadingPreview(false);
-      return;
-    }
-
-    const cachedPreview = getCachedComposerPreview(activePreviewUrl);
-    if (cachedPreview) {
-      lastRequestedUrlRef.current = activePreviewUrl;
-      setLinkPreview(cachedPreview.preview);
-      setPreviewError(cachedPreview.error);
-      setLoadingPreview(false);
-      return;
-    }
-
-    if (lastRequestedUrlRef.current === activePreviewUrl) {
-      return;
-    }
-
-    const fallbackPreview = buildPostLinkPreview(activePreviewUrl);
-    lastRequestedUrlRef.current = activePreviewUrl;
-    setLinkPreview(fallbackPreview);
-    setPreviewError(null);
-    setLoadingPreview(true);
-
-    const timer = setTimeout(async () => {
-      try {
-        const preview = await fetchLinkPreview(activePreviewUrl);
-        if (cancelled || previewRequestIdRef.current !== requestId) {
-          return;
-        }
-
-        const nextPreview = buildPostLinkPreview(activePreviewUrl, {
-          ...preview,
-          url: activePreviewUrl,
-        });
-        composerPreviewCache.set(activePreviewUrl, {
-          preview: nextPreview,
-          error: null,
-          expiresAt: Date.now() + PREVIEW_SUCCESS_CACHE_TTL_MS,
-        });
-        setLinkPreview(nextPreview);
-        setPreviewError(null);
-      } catch (error: any) {
-        if (cancelled || previewRequestIdRef.current !== requestId) {
-          return;
-        }
-
-        logger.warn('[PostComposer] Link preview fetch failed', {
-          url: activePreviewUrl,
-          message: error?.message || error,
-        });
-        composerPreviewCache.set(activePreviewUrl, {
-          preview: fallbackPreview,
-          error: 'Kunne ikke hente metadata',
-          expiresAt: Date.now() + PREVIEW_ERROR_CACHE_TTL_MS,
-        });
-        setLinkPreview(fallbackPreview);
-        setPreviewError('Kunne ikke hente metadata');
-      } finally {
-        if (!cancelled && previewRequestIdRef.current === requestId) {
-          setLoadingPreview(false);
-        }
-      }
-    }, 700);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [activePreviewUrl]);
 
   const handlePickLibrary = async () => {
     logger.log('[PostComposer] Pick from library clicked');
@@ -242,21 +91,8 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
       return;
     }
 
-    if (!user?.id) {
-      alert('Du skal være logget ind for at dele opslag.');
-      return;
-    }
-
     setLoading(true);
     let mediaArray: Post['media'] = [];
-    const linkPreviewPayload = resolvedLinkPreview
-      ? { ...resolvedLinkPreview }
-      : detectedUrl && dismissedUrl === detectedUrl
-        ? {
-            ...buildPostLinkPreview(detectedUrl),
-            dismissed: true,
-          }
-        : null;
 
     try {
       // Upload attachment if present (reuse existing upload flow)
@@ -295,7 +131,6 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
 
     // Insert post and fetch it back from DB to ensure consistency (exactly as existing code)
     let dbPost: Post | null = null;
-    let insertErrorMessage: string | null = null;
     try {
       if (user?.id) {
         const resolvedActorType = actor?.type ?? 'user';
@@ -307,67 +142,19 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
               ? [`community:${actor.id}`]
               : ['home'];
 
-        const baseInsertPayload = {
-          author_id: user.id,
-          actor_type: resolvedActorType,
-          actor_id: resolvedActorId,
-          text: text.trim(),
-          media: mediaArray,
-          feed_targets: resolvedFeedTargets,
-          media_type: attachment?.type ?? null,
-          ...(actor?.type === 'community' ? { community_id: actor.id } : {}),
-        };
-        let data: any[] | null = null;
-        let error: any = null;
-
-        const insertAttempts = canUseLinkPreviewColumn()
-          ? ([
-              {
-                payload: {
-                  ...baseInsertPayload,
-                  link_preview: linkPreviewPayload,
-                },
-                select:
-                  'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets, link_preview',
-              },
-              {
-                payload: baseInsertPayload,
-                select:
-                  'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets',
-              },
-            ] as const)
-          : ([
-              {
-                payload: baseInsertPayload,
-                select:
-                  'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets',
-              },
-            ] as const);
-
-        for (const attempt of insertAttempts) {
-          const result = await supabase.from('posts').insert(attempt.payload).select(attempt.select);
-
-          if (!result.error) {
-            if ('link_preview' in attempt.payload || attempt.select.includes('link_preview')) {
-              markLinkPreviewColumnAvailable();
-            }
-            data = result.data;
-            error = null;
-            break;
-          }
-
-          error = result.error;
-          if (!isMissingLinkPreviewColumnError(result.error)) {
-            break;
-          }
-
-          markLinkPreviewColumnMissing();
-
-          logger.warn('[PostComposer] posts.insert missing link_preview column, retrying without it', {
-            error: result.error,
-          });
-        }
-
+        const { data, error } = await supabase
+          .from('posts')
+          .insert({
+            author_id: user.id,
+            actor_type: resolvedActorType,
+            actor_id: resolvedActorId,
+            text: text.trim(),
+            media: mediaArray,
+            feed_targets: resolvedFeedTargets,
+            media_type: attachment?.type ?? null,
+            ...(actor?.type === 'community' ? { community_id: actor.id } : {}),
+          })
+          .select('id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets');
         if (error) throw error;
 
         if (data && data[0]) {
@@ -389,11 +176,6 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
             feedTargets: dbRecord.feed_targets ?? ['home'],
             createdAt: dbRecord.created_at || new Date().toISOString(),
             text: dbRecord.text,
-            linkPreview:
-              resolvePostLinkPreview(
-                'link_preview' in dbRecord ? dbRecord.link_preview : linkPreviewPayload,
-                dbRecord.text,
-              ) ?? linkPreviewPayload,
             likesCount: 0,
             commentsCount: 0,
             likedByMe: false,
@@ -407,13 +189,6 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
       }
     } catch (e) {
       logger.warn('[PostComposer] Insert post error', e);
-      insertErrorMessage = e instanceof Error ? e.message : String(e);
-    }
-
-    if (user?.id && !dbPost) {
-      alert(`Post fejlede: ${insertErrorMessage ?? 'Kunne ikke gemme opslaget'}`);
-      setLoading(false);
-      return;
     }
 
     // Use DB-fetched post if available, otherwise fallback to locally constructed
@@ -429,7 +204,6 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
       communityId: actor?.type === 'community' ? actor.id : null,
       createdAt: new Date().toISOString(),
       text: text.trim(),
-      linkPreview: linkPreviewPayload,
       likesCount: 0,
       commentsCount: 0,
       likedByMe: false,
@@ -443,25 +217,22 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
     };
 
     addPost(newPost);
-    setText('');
-    setAttachment(null);
-    setLinkPreview(null);
-    setLoadingPreview(false);
-    setPreviewError(null);
-    setDismissedUrl(null);
-    setLoading(false);
-    logger.log('[PostComposer] Post published successfully, calling onSuccess');
-    onSuccess?.();
 
-    // Soft refresh in the background so a slow feed reload never blocks composer state reset.
-    void fetchPosts().catch((e) => {
+    // Optional: Soft refresh to sync with DB (ensures no duplicates due to dedupe logic)
+    try {
+      await fetchPosts();
+    } catch (e) {
       if (__DEV__) {
         logger.log('[PostComposer] Post-creation refresh skipped:', e);
       }
-    });
+    }
+
+    setLoading(false);
+    setText('');
+    setAttachment(null);
+    logger.log('[PostComposer] Post published successfully, calling onSuccess');
+    onSuccess?.();
   };
-  const isSubmitting = loading;
-  const isSubmitDisabled = !text.trim() || isSubmitting;
 
   return (
     <View style={styles.container}>
@@ -477,20 +248,6 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
           onChangeText={setText}
           editable={!loading}
         />
-        {resolvedLinkPreview ? (
-          <LinkPreviewCard
-            preview={resolvedLinkPreview}
-            mode="composer"
-            loading={loadingPreview}
-            error={previewError}
-            onRemove={() => {
-              if (activePreviewUrl) {
-                setDismissedUrl(activePreviewUrl);
-              }
-            }}
-            style={styles.linkPreviewCard}
-          />
-        ) : null}
         {attachment && (
           <View style={styles.previewContainer}>
             {attachment.type === 'image' ? (
@@ -539,17 +296,17 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
         </Card>
       )}
 
-      <View style={[styles.submitButtonWrap, isSubmitDisabled ? styles.submitButtonWrapDisabled : null]}>
+      <View style={[styles.submitButtonWrap, !text.trim() || loading ? styles.submitButtonWrapDisabled : null]}>
         <View style={styles.submitButtonInner}>
           <PrimaryButton
-            title={isSubmitting ? 'Deler...' : 'Del opslag'}
+            title={loading ? 'Deler...' : 'Del opslag'}
             onPress={handlePublish}
-            disabled={isSubmitDisabled}
+            disabled={!text.trim() || loading}
           />
         </View>
       </View>
 
-      {isSubmitting && (
+      {loading && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="small" color={theme.colors.primary} />
         </View>
@@ -591,9 +348,6 @@ function createStyles(theme: Theme) {
     previewContainer: {
       marginTop: theme.spacing[4],
       gap: theme.spacing[2],
-    },
-    linkPreviewCard: {
-      marginTop: theme.spacing[3],
     },
     previewImage: {
       width: '100%',

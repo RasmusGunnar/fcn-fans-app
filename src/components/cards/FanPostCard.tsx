@@ -3,7 +3,6 @@
 // NO hardcoded numbers or color strings allowed.
 
 import * as Linking from 'expo-linking';
-import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -26,11 +25,6 @@ import { defaultTheme } from '../../theme';
 import type { CategoryKey } from '../../theme/categories';
 import { Post } from '../../types/post';
 import { resolveActorLine, type ProfileMap } from '../../utils/actor';
-import {
-  extractYouTubeVideoId,
-  getPromotedInstagramLinkPreview,
-  stripFirstUrlFromDisplayText,
-} from '../../utils/linkPreview';
 import { resolveRenderableMedia } from '../../utils/media';
 import { cleanText } from '../../utils/text';
 import { useCommunityRole } from '../../hooks/useCommunityRole';
@@ -38,7 +32,6 @@ import { canDeleteFeedItem, canEditPost } from '../../utils/permissions';
 import { Avatar } from '../Avatar';
 import { FanLevelBadge } from '../fan/FanLevelBadge';
 import { FeedVideo } from '../feed/FeedVideo';
-import { LinkPreviewCard } from '../LinkPreviewCard';
 import { OptionsMenu, OptionsMenuOption } from '../OptionsMenu';
 import { Text } from '../ui';
 import { buildCardBehaviorModel } from './cardBehaviorModel';
@@ -243,7 +236,7 @@ export function FanPostCard({
   const navigation = useNavigation<any>();
   const timeAgo = getTimeAgo(post.createdAt);
   const groupDisplay = cleanText(post.communityName || post.factionName);
-  const cleanedPostText = cleanText(post.text).trim();
+  const cleanedPostText = cleanText(post.text);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(cleanedPostText);
   const [imageLoadError, setImageLoadError] = useState(false);
@@ -265,20 +258,9 @@ export function FanPostCard({
   const primaryMedia = resolvedMedia[0] || null;
   const m0 = mediaArray[0] || null;
   const mediaKind = primaryMedia?.type ?? null;
-  const hasUploadedMedia = mediaArray.length > 0;
   const hasMultipleMedia = resolvedMedia.length > 1;
-  const postLinkPreview = post.linkPreview ?? null;
-  const promotedInstagramPreview = useMemo(
-    () =>
-      getPromotedInstagramLinkPreview({
-        hasUploadedMedia,
-        linkPreview: postLinkPreview,
-      }),
-    [hasUploadedMedia, postLinkPreview],
-  );
 
   const mediaUri = primaryMedia?.uri ?? null;
-  const promotedInstagramImageUri = promotedInstagramPreview?.imageUrl ?? null;
 
   // Instagram-style aspect ratio for images (portrait→4:5, square→1:1, landscape→16:9)
   const imageAspectRatio = useImageRatio(
@@ -286,59 +268,16 @@ export function FanPostCard({
     primaryMedia?.width,
     primaryMedia?.height,
   );
-  const promotedInstagramAspectRatio = useImageRatio(promotedInstagramImageUri);
-  const displayPostText = useMemo(
-    () =>
-      postLinkPreview
-        ? stripFirstUrlFromDisplayText(cleanedPostText, postLinkPreview.url)
-        : cleanedPostText,
-    [cleanedPostText, postLinkPreview],
-  );
-  const showPromotedInstagramPreview = Boolean(
-    promotedInstagramPreview && promotedInstagramImageUri && !imageLoadError,
-  );
-  const youtubeVideoId = useMemo(
-    () => extractYouTubeVideoId(postLinkPreview?.url),
-    [postLinkPreview?.url],
-  );
-  const opensYouTubeInApp = Boolean(youtubeVideoId);
 
   useEffect(() => {
     setImageLoadError(false);
-  }, [mediaUri, promotedInstagramImageUri]);
+  }, [mediaUri]);
 
   // BASELINE: Remove complex video state management - keep only essential edit handlers
 
   const deepLink = Linking.createURL(`/post/${post.id}`);
   const handleShare = () => {
     Share.share({ message: `${cleanedPostText}\n${deepLink}` }).catch(() => {});
-  };
-  const handleOpenPostLink = (event?: GestureResponderEvent) => {
-    event?.stopPropagation();
-
-    if (!postLinkPreview?.url) {
-      return;
-    }
-
-    if (youtubeVideoId) {
-      const params = {
-        videoId: youtubeVideoId,
-        url: postLinkPreview.url,
-        title: postLinkPreview.title ?? null,
-      };
-
-      if (navigationRef.isReady()) {
-        navigationRef.navigate('YouTubePlayer', params);
-        return;
-      }
-
-      navigation.navigate('YouTubePlayer', params);
-      return;
-    }
-
-    Linking.openURL(postLinkPreview.url).catch((error) => {
-      logger.warn('[FanPostCard] Failed to open link preview URL', error);
-    });
   };
   const handleOpenMediaViewer = (index: number) => (event?: GestureResponderEvent) => {
     event?.stopPropagation();
@@ -448,7 +387,7 @@ export function FanPostCard({
     kind: 'post',
     actorType: isCommunityPost ? 'community' : 'fan',
     actorName: isCommunityPost ? communityName || 'Fællesskab' : authorDisplayName,
-    postLinkUrl: undefined, // Link-preview taps are scoped to the preview card
+    postLinkUrl: undefined, // Posts don't have embedded links in current data model
   });
 
   // Compute onOpenDetail based on model
@@ -545,15 +484,13 @@ export function FanPostCard({
         </View>
       ) : bodyContent ? (
         bodyContent
-      ) : displayPostText ? (
-        <Text variant="body" color="primary" style={styles.text}>
-          {displayPostText}
-        </Text>
       ) : (
-        null
+        <Text variant="body" color="primary" style={styles.text}>
+          {cleanedPostText}
+        </Text>
       )}
       {/* BASELINE: Deterministic media rendering - no silent failures */}
-      {m0 ? (
+      {!m0 ? null : (
         <View style={styles.mediaOuter}>
           {!mediaKind ? (
             <View style={styles.mediaFallback}>
@@ -636,54 +573,7 @@ export function FanPostCard({
             </View>
           )}
         </View>
-      ) : showPromotedInstagramPreview ? (
-        <View style={styles.mediaOuter}>
-          <Pressable
-            style={styles.mediaPressable}
-            onPress={handleOpenPostLink}
-            accessibilityRole="link"
-            accessibilityLabel="Åbn Instagram eksternt"
-          >
-            <View style={[styles.mediaContainer, { aspectRatio: promotedInstagramAspectRatio }]}>
-              <Image
-                source={{ uri: promotedInstagramImageUri! }}
-                style={styles.image}
-                resizeMode="cover"
-                onError={() => {
-                  setImageLoadError(true);
-                }}
-              />
-              <View style={styles.promotedPreviewBadge}>
-                <Ionicons
-                  name="logo-instagram"
-                  size={theme.components.icon.size.sm}
-                  color={theme.colors.text.inverse}
-                />
-                <Text variant="caption" color="inverse" style={styles.promotedPreviewBadgeText}>
-                  Instagram
-                </Text>
-                <Ionicons
-                  name="open-outline"
-                  size={theme.components.icon.size.sm}
-                  color={theme.colors.text.inverse}
-                />
-              </View>
-            </View>
-          </Pressable>
-        </View>
-      ) : null}
-      {postLinkPreview && !showPromotedInstagramPreview ? (
-        <LinkPreviewCard
-          preview={postLinkPreview}
-          onPress={handleOpenPostLink}
-          actionIconName={opensYouTubeInApp ? 'play-circle-outline' : undefined}
-          accessibilityRole={opensYouTubeInApp ? 'button' : undefined}
-          accessibilityLabel={
-            opensYouTubeInApp ? 'Afspil YouTube-video i appen' : undefined
-          }
-          style={styles.linkPreview}
-        />
-      ) : null}
+      )}
     </CardRoot>
   );
 }
@@ -728,21 +618,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  promotedPreviewBadge: {
-    position: 'absolute',
-    top: theme.spacing[3],
-    left: theme.spacing[3],
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing[1],
-    paddingVertical: theme.spacing[1],
-    paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.colors.overlay.heavy,
-  },
-  promotedPreviewBadgeText: {
-    fontWeight: '600',
-  },
   video: {
     width: '100%',
     height: '100%',
@@ -758,9 +633,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: theme.spacing[3],
-  },
-  linkPreview: {
-    marginTop: theme.spacing[3],
   },
   commentsContainer: {
     paddingTop: theme.spacing[2],

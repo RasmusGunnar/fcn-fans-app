@@ -10,7 +10,6 @@ import { useAuth } from '../auth/AuthProvider';
 import CreateNewEventScreen from '../screens/CreateNewEventScreen';
 import LoadingScreen from '../screens/LoadingScreen';
 import MediaViewerScreen from '../screens/MediaViewerScreen';
-import YouTubePlayerScreen from '../screens/YouTubePlayerScreen';
 import { fetchMyProfile, type UserProfile } from '../services/profileApi';
 import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
@@ -171,11 +170,6 @@ export function RootNavigator() {
         <Stack.Screen
           name="MediaViewer"
           component={MediaViewerScreen}
-          options={{ presentation: 'fullScreenModal', animation: 'fade', gestureEnabled: true }}
-        />
-        <Stack.Screen
-          name="YouTubePlayer"
-          component={YouTubePlayerScreen}
           options={{ presentation: 'fullScreenModal', animation: 'fade', gestureEnabled: true }}
         />
       </Stack.Navigator>
