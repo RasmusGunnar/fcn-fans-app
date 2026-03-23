@@ -16,6 +16,7 @@ import { defaultTheme } from '../../theme';
 import type { CategoryKey } from '../../theme/categories';
 import { Post } from '../../types/post';
 import { resolveActorLine, type ProfileMap } from '../../utils/actor';
+import { cleanText } from '../../utils/text';
 import { useCommunityRole } from '../../hooks/useCommunityRole';
 import { canDeleteFeedItem, canEditPost } from '../../utils/permissions';
 import { Avatar } from '../Avatar';
@@ -236,9 +237,10 @@ export function FanPostCard({
 }: FanPostCardProps) {
   const navigation = useNavigation<any>();
   const timeAgo = getTimeAgo(post.createdAt);
-  const groupDisplay = post.communityName || post.factionName;
+  const groupDisplay = cleanText(post.communityName || post.factionName);
+  const cleanedPostText = cleanText(post.text);
   const [isEditing, setIsEditing] = useState(false);
-  const [editText, setEditText] = useState(post.text);
+  const [editText, setEditText] = useState(cleanedPostText);
   const [imageLoadError, setImageLoadError] = useState(false);
 
   const { user, isAppAdmin } = useAuth();
@@ -281,7 +283,7 @@ export function FanPostCard({
 
   const deepLink = Linking.createURL(`/post/${post.id}`);
   const handleShare = () => {
-    Share.share({ message: `${post.text}\n${deepLink}` }).catch(() => {});
+    Share.share({ message: `${cleanedPostText}\n${deepLink}` }).catch(() => {});
   };
 
   // Permission checks - use isAppAdmin from context
@@ -313,7 +315,7 @@ export function FanPostCard({
   };
 
   const handleCancelEdit = () => {
-    setEditText(post.text);
+    setEditText(cleanedPostText);
     setIsEditing(false);
   };
 
@@ -349,15 +351,28 @@ export function FanPostCard({
       icon: 'trash-outline',
     });
   }
-  const communityName =
-    communityId && communityMap?.[communityId] ? communityMap[communityId] : null;
+  const communityName = cleanText(
+    post.actorDisplayName ||
+      (communityId && communityMap?.[communityId] ? communityMap[communityId] : ''),
+  );
+  const fallbackActorDisplayName =
+    cleanText(post.actorDisplayName || (isCommunityPost ? communityName : '')) || '';
+  const fallbackActorAvatarUrl = post.actorAvatarUrl ?? null;
+  const fallbackAuthorDisplayName =
+    cleanText(post.authorDisplayName || authorProfile?.display_name || (post as any).authorName) || '';
+  const fallbackAuthorAvatarUrl = authorProfile?.avatar_url ?? post.authorAvatarUrl ?? null;
+  const fallbackAuthorFanLevelKey =
+    authorProfile?.fan_level_key ?? post.authorFanLevelKey ?? null;
+  const actorDisplayName = isCommunityPost
+    ? fallbackActorDisplayName || communityName || 'Fællesskab'
+    : fallbackAuthorDisplayName || 'Ukendt';
+  const actorAvatarUrl = isCommunityPost ? fallbackActorAvatarUrl : fallbackAuthorAvatarUrl;
+  const authorDisplayName = fallbackAuthorDisplayName || 'Ukendt';
 
   const cardModel = buildCardBehaviorModel({
     kind: 'post',
     actorType: isCommunityPost ? 'community' : 'fan',
-    actorName: isCommunityPost
-      ? (communityName ?? 'Fællesskab')
-      : authorProfile?.display_name || (post as any).authorName || 'Ukendt',
+    actorName: isCommunityPost ? communityName || 'Fællesskab' : authorDisplayName,
     postLinkUrl: undefined, // Posts don't have embedded links in current data model
   });
 
@@ -372,19 +387,19 @@ export function FanPostCard({
   const resolvedCategoryKey = categoryKey ?? 'fan'; // eslint-disable-line @typescript-eslint/no-unused-vars
   const resolvedAuthor = resolveActorLine({
     actorType: isCommunityPost ? 'community' : 'user',
-    authorId: postAuthorId ?? undefined,
-    authorEmail: authorProfile?.display_name || (post as any).authorName || undefined,
+    authorId: isCommunityPost ? undefined : postAuthorId ?? undefined,
+    authorEmail: isCommunityPost ? actorDisplayName || undefined : authorDisplayName || undefined,
     profileMap,
-    communityName: isCommunityPost ? (communityName ?? undefined) : undefined,
+    communityName: isCommunityPost ? actorDisplayName || undefined : undefined,
   });
-  const headerTitle = cardModel.nameLine ?? resolvedAuthor.displayName;
+  const headerTitle = cleanText(cardModel.nameLine || resolvedAuthor.displayName) || 'Ukendt';
   const headerSubtitle = isCommunityPost
     ? timeAgo
     : groupDisplay
-      ? `${groupDisplay} · ${timeAgo}`
+      ? cleanText(`${groupDisplay} · ${timeAgo}`)
       : timeAgo;
 
-  const authorFanLevel = getSafeFanLevelKey(authorProfile?.fan_level_key);
+  const authorFanLevel = getSafeFanLevelKey(fallbackAuthorFanLevelKey);
   const hasRightSlot = postMenuOptions.length > 0;
 
   return (
@@ -407,10 +422,10 @@ export function FanPostCard({
       <CardHeader
         avatarSlot={
           <Avatar
-            userId={postAuthorId ?? undefined}
-            avatarUrl={authorProfile?.avatar_url}
+            userId={isCommunityPost ? undefined : postAuthorId ?? undefined}
+            avatarUrl={actorAvatarUrl}
             size={40}
-            label={authorProfile?.display_name || post.authorName || 'Fan'}
+            label={actorDisplayName || authorDisplayName || 'Fan'}
           />
         }
         nameLine={cardModel.nameLine}
@@ -418,7 +433,7 @@ export function FanPostCard({
         subtitle={headerSubtitle}
         inlineBadge={<FanLevelBadge level={authorFanLevel} size="sm" labelMode="short" />}
         onPressAuthor={
-          postAuthorId
+          !isCommunityPost && postAuthorId
             ? () => navigation.navigate('PublicProfile', { userId: postAuthorId })
             : undefined
         }
@@ -450,7 +465,7 @@ export function FanPostCard({
         bodyContent
       ) : (
         <Text variant="body" color="primary" style={styles.text}>
-          {post.text}
+          {cleanedPostText}
         </Text>
       )}
       {/* BASELINE: Deterministic media rendering - no silent failures */}

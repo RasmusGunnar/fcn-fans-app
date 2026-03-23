@@ -13,11 +13,13 @@ export type MatchViewState = 'pre_match' | 'matchday_action' | 'checked_in_confi
 export function getMatchdayTiming(kickoffAt: string, now: Date): MatchdayTimingState {
   const diffMs = new Date(kickoffAt).getTime() - now.getTime();
   const diffHours = diffMs / MS_PER_HOUR;
+  const isMatchday = Math.abs(diffHours) <= MATCHDAY_WINDOW_HOURS;
 
   return {
     diffHours,
-    isLive: diffMs <= 0,
-    isMatchday: Math.abs(diffHours) <= MATCHDAY_WINDOW_HOURS,
+    // We do not have final whistle data, so "live" is limited to the same matchday window.
+    isLive: diffHours <= 0 && diffHours >= -MATCHDAY_WINDOW_HOURS,
+    isMatchday,
   };
 }
 

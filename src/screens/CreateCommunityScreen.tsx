@@ -1,16 +1,23 @@
 import React, { useState } from 'react';
-import { Text, TextInput, StyleSheet, Alert, ScrollView } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, TextInput } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PrimaryButton } from '../components/PrimaryButton';
-import { useTheme } from '../theme';
-import { createCommunity } from '../services/communities';
-import { geocodeAddress } from '../services/geocoding';
 import { logger } from '../lib/logger';
+import {
+  buildCommunityFeedSourceFromCommunity,
+  createCommunityFeedItem,
+} from '../services/communityFeedApi';
+import { geocodeAddress } from '../services/geocoding';
+import { createCommunity } from '../services/communities';
+import { useFeed } from '../state/FeedContext';
+import { useTheme } from '../theme';
+import { HOME_FEED_AUDIT_DEBUG_ENABLED } from '../utils/homeFeed';
 
 export default function CreateCommunityScreen() {
   const navigation = useNavigation();
   const theme = useTheme();
+  const { addCommunityFeedItem, fetchPosts } = useFeed();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [locationLabel, setLocationLabel] = useState('');
@@ -18,14 +25,13 @@ export default function CreateCommunityScreen() {
 
   const handleCreate = async () => {
     if (!name.trim()) {
-      Alert.alert('Fejl', 'Navn er påkrævet');
+      Alert.alert('Fejl', 'Navn er paakraevet');
       return;
     }
 
     setCreating(true);
 
     try {
-      // Prepare location data if provided
       let locationData: {
         location_label?: string | null;
         lat?: number | null;
@@ -38,7 +44,6 @@ export default function CreateCommunityScreen() {
       if (trimmedLocation) {
         locationData.location_label = trimmedLocation;
 
-        // Geocode the address
         const addressQuery = trimmedLocation.toLowerCase().includes('danmark')
           ? trimmedLocation
           : `${trimmedLocation}, Danmark`;
@@ -54,7 +59,6 @@ export default function CreateCommunityScreen() {
           logger.log('[CreateCommunity] Geocode success:', geocodeResult);
         } else {
           logger.warn('[CreateCommunity] Geocoding failed, continuing without coords');
-          // Continue without coords - we still save location_label
         }
       }
 
@@ -67,14 +71,51 @@ export default function CreateCommunityScreen() {
       );
 
       if (!community) {
-        Alert.alert('Fejl', 'Kunne ikke oprette fællesskab');
+        Alert.alert('Fejl', 'Kunne ikke oprette faellesskab');
         setCreating(false);
         return;
       }
 
+      const optimisticCommunityFeedItem = buildCommunityFeedSourceFromCommunity(community);
+      if (optimisticCommunityFeedItem) {
+        if (HOME_FEED_AUDIT_DEBUG_ENABLED) {
+          logger.log('[CreateCommunity][audit] adding optimistic home community item', {
+            communityId: optimisticCommunityFeedItem.community_id,
+            createdAt: optimisticCommunityFeedItem.created_at,
+          });
+        }
+        addCommunityFeedItem(optimisticCommunityFeedItem);
+      }
+
+      const communityFeedItem = await createCommunityFeedItem(community);
+      if (communityFeedItem) {
+        if (HOME_FEED_AUDIT_DEBUG_ENABLED) {
+          logger.log('[CreateCommunity][audit] persisted community feed item created', {
+            communityId: communityFeedItem.community_id,
+            createdAt: communityFeedItem.created_at,
+          });
+        }
+        addCommunityFeedItem(communityFeedItem);
+      } else {
+        logger.warn('[CreateCommunity] Community created without persisted feed item entry', {
+          communityId: community.id,
+        });
+      }
+
+      try {
+        await fetchPosts();
+      } catch (feedRefreshError) {
+        logger.warn('[CreateCommunity] Home feed refresh after community create failed', {
+          communityId: community.id,
+          error: feedRefreshError,
+        });
+      }
+
+      setCreating(false);
+
       const successMsg = locationData.lat
-        ? 'Fællesskabet er oprettet og vises på kortet!'
-        : 'Fællesskabet er oprettet! Du kan tilføje lokation senere.';
+        ? 'Faellesskabet er oprettet og vises paa kortet!'
+        : 'Faellesskabet er oprettet! Du kan tilfoeje lokation senere.';
 
       Alert.alert('Succes', successMsg, [
         {
@@ -89,7 +130,7 @@ export default function CreateCommunityScreen() {
       ]);
     } catch (err: any) {
       logger.error('[CreateCommunity] Error:', err);
-      Alert.alert('Fejl', err.message || 'Kunne ikke oprette fællesskab');
+      Alert.alert('Fejl', err.message || 'Kunne ikke oprette faellesskab');
       setCreating(false);
     }
   };
@@ -99,15 +140,15 @@ export default function CreateCommunityScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Opret fællesskab</Text>
-        <Text style={styles.subtitle}>Saml lokale fans i dit område</Text>
+        <Text style={styles.title}>Opret faellesskab</Text>
+        <Text style={styles.subtitle}>Saml lokale fans i dit omraade</Text>
 
         <Text style={styles.label}>Navn *</Text>
         <TextInput
           style={styles.input}
           value={name}
           onChangeText={setName}
-          placeholder="F.eks. Ganløse, Egedal, eller Nordsjælland"
+          placeholder="F.eks. Ganlose, Egedal, eller Nordsjaelland"
           placeholderTextColor={theme.colors.text.secondary}
         />
 
@@ -116,7 +157,7 @@ export default function CreateCommunityScreen() {
           style={[styles.input, styles.textArea]}
           value={description}
           onChangeText={setDescription}
-          placeholder="Fortæl om jeres fællesskab..."
+          placeholder="Fortael om jeres faellesskab..."
           placeholderTextColor={theme.colors.text.secondary}
           multiline
           numberOfLines={4}
@@ -127,12 +168,12 @@ export default function CreateCommunityScreen() {
           style={styles.input}
           value={locationLabel}
           onChangeText={setLocationLabel}
-          placeholder="F.eks. Ganløse, København, eller Fyn"
+          placeholder="F.eks. Ganlose, Kobenhavn, eller Fyn"
           placeholderTextColor={theme.colors.text.secondary}
         />
 
         <PrimaryButton
-          title={creating ? 'Opretter...' : 'Opret fællesskab'}
+          title={creating ? 'Opretter...' : 'Opret faellesskab'}
           onPress={handleCreate}
           disabled={creating}
         />

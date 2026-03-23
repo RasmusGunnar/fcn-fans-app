@@ -12,6 +12,7 @@ import LoadingScreen from '../screens/LoadingScreen';
 import { fetchMyProfile, type UserProfile } from '../services/profileApi';
 import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
+import { navigationRef } from './navigationRef';
 
 const Stack = createNativeStackNavigator();
 
@@ -134,13 +135,30 @@ export function RootNavigator() {
     prefixes: [Linking.createURL('/'), 'fcnfans://'],
     config: {
       screens: {
-        PostDetail: 'post/:id',
+        Main: {
+          screens: {
+            Home: {
+              screens: {
+                HomeMain: 'home',
+                MatchDetails: 'match/:fixtureId',
+                PostDetail: 'post/:postId',
+              },
+            },
+            Events: {
+              screens: {
+                EventsList: 'events',
+                EventDetails: 'event/:eventId',
+                BusTripDetails: 'bus-trip/:busTripId',
+              },
+            },
+          },
+        },
       },
     },
   };
 
   return (
-    <NavigationContainer linking={linking}>
+    <NavigationContainer ref={navigationRef} linking={linking}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Main" component={Inner} />
         <Stack.Screen

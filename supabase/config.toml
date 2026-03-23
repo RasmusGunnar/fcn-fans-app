@@ -15,10 +15,28 @@ verify_jwt = false
 [functions.sportsdb_team_hero]
 verify_jwt = false
 
+# parse-link: public preview fetcher for external URLs in "Del nyhed".
+[functions.parse-link]
+verify_jwt = false
+
 # weekly_top_fan: cron-driven editorial feed card generation via x-sync-secret.
 [functions.weekly_top_fan]
 verify_jwt = false
 
 # weekly_ranking: user-specific ranking now uses userId in request body instead of function auth.
 [functions.weekly_ranking]
+verify_jwt = false
+
+# sync_fan_levels: daily batch fan status writer via x-sync-secret.
+[functions.sync_fan_levels]
+verify_jwt = false
+
+# Push notification jobs: cron-driven via x-sync-secret.
+[functions.push_match_reminders]
+verify_jwt = false
+
+[functions.push_event_reminders]
+verify_jwt = false
+
+[functions.push_hot_posts]
 verify_jwt = false

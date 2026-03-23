@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { fetchPollVotes, type PollVotesMap, votePoll } from '../services/pollService';
 import { useTheme } from '../theme';
 import type { ProfileMap } from '../utils/actor';
+import { cleanText } from '../utils/text';
 import { Avatar } from './Avatar';
 import { PollVotersModal } from './PollVotersModal';
 import { Text } from './ui/Text';
@@ -33,10 +34,19 @@ export function PollCard({ pollData, postId, profileMap }: PollCardProps) {
   const accentColor = theme.colors.state.info;
   const subtleAccent = theme.colors.bg.subtle;
   const subtleAccentStrong = theme.colors.border.subtle;
-  const question = pollData?.question?.trim() || 'Afstemning';
+  const question = cleanText(pollData?.question).trim() || 'Afstemning';
   const isExpired = Boolean(pollData?.expires_at && new Date(pollData.expires_at) < new Date());
   const options = useMemo(
-    () => (Array.isArray(pollData?.options) ? pollData.options.filter(Boolean) : []),
+    () =>
+      Array.isArray(pollData?.options)
+        ? pollData.options
+            .filter(Boolean)
+            .map((option) => ({
+              ...option,
+              text: cleanText(option?.text).trim(),
+            }))
+            .filter((option) => option.text.length > 0)
+        : [],
     [pollData?.options],
   );
   const [selectedOption, setSelectedOption] = useState<string | null>(null);

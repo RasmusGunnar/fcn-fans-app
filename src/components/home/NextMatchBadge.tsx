@@ -2,6 +2,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
 import { Image, ImageBackground, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../../theme';
+import { cleanText } from '../../utils/text';
 import { MatchdayStatusPanel, type MatchdayStatusPanelAction } from '../match/MatchdayStatusPanel';
 import type { MatchViewState } from '../../utils/matchdayState';
 
@@ -47,7 +48,12 @@ const NextMatchBadge: React.FC<NextMatchBadgeProps> = ({
 
   if (!match) return null;
 
-  const normalizedCountdownLabel = countdownLabel?.replace(/^Afspark om/i, 'Kickoff om');
+  const normalizedCountdownLabel = cleanText(countdownLabel).replace(/^Afspark om/i, 'Kickoff om');
+  const cleanedHomeTeam = cleanText(match.homeTeam);
+  const cleanedAwayTeam = cleanText(match.awayTeam);
+  const cleanedSubtitle = cleanText(match.subtitle);
+  const cleanedVenue = cleanText(match.venue);
+  const cleanedVenueCity = cleanText(match.venueCity);
 
   return (
     <View style={styles.wrapper}>
@@ -90,7 +96,7 @@ const NextMatchBadge: React.FC<NextMatchBadgeProps> = ({
                   </View>
                 ) : (
                   <View style={[styles.teamLogoContainer, styles.teamLogoPlaceholder]}>
-                    <Text style={styles.teamInitial}>{match.homeTeam.charAt(0)}</Text>
+                    <Text style={styles.teamInitial}>{cleanedHomeTeam.charAt(0)}</Text>
                   </View>
                 )}
 
@@ -102,21 +108,21 @@ const NextMatchBadge: React.FC<NextMatchBadgeProps> = ({
                   </View>
                 ) : (
                   <View style={[styles.teamLogoContainer, styles.teamLogoPlaceholder]}>
-                    <Text style={styles.teamInitial}>{match.awayTeam.charAt(0)}</Text>
+                    <Text style={styles.teamInitial}>{cleanedAwayTeam.charAt(0)}</Text>
                   </View>
                 )}
               </View>
 
               <View style={styles.metaBlock}>
-                <Text style={styles.matchDate}>{match.subtitle}</Text>
+                <Text style={styles.matchDate}>{cleanedSubtitle}</Text>
                 {normalizedCountdownLabel ? (
                   <Text style={styles.countdownText}>{normalizedCountdownLabel}</Text>
                 ) : null}
-                {(match.venue || match.venueCity) ? (
+                {(cleanedVenue || cleanedVenueCity) ? (
                   <Text style={styles.venueText}>
-                    {match.venue && match.venueCity
-                      ? `${match.venue}, ${match.venueCity}`
-                      : match.venue || match.venueCity || ''}
+                    {cleanedVenue && cleanedVenueCity
+                      ? `${cleanedVenue}, ${cleanedVenueCity}`
+                      : cleanedVenue || cleanedVenueCity || ''}
                   </Text>
                 ) : null}
               </View>

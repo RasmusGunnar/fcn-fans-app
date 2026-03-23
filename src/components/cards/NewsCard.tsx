@@ -1,20 +1,22 @@
-// ✅ DESIGN SYSTEM GUARDRAIL: This file uses theme tokens via defaultTheme.
+// DESIGN SYSTEM GUARDRAIL: This file uses theme tokens via defaultTheme.
 // All spacing, colors, and radius values must use theme.spacing[N], theme.colors.*, theme.radius.*
 // NO hardcoded numbers or color strings allowed.
 
 import { useNavigation } from '@react-navigation/native';
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Image, Linking, Pressable, StyleSheet, View } from 'react-native';
 import { useAuth } from '../../auth/AuthProvider';
-import { supabase } from '../../lib/supabase';
 import { logger } from '../../lib/logger';
+import { supabase } from '../../lib/supabase';
 import type { CommentPreview } from '../../services/likesApi';
 import { defaultTheme } from '../../theme';
 import type { CategoryKey } from '../../theme/categories';
 import { NewsItem } from '../../types/news';
 import { resolveActorLine, type ProfileMap } from '../../utils/actor';
-import { useCommunityRole } from '../../hooks/useCommunityRole';
+import { sanitizeNewsHeroImageUrl } from '../../utils/newsMedia';
+import { cleanText } from '../../utils/text';
 import { canDeleteFeedItem } from '../../utils/permissions';
+import { useCommunityRole } from '../../hooks/useCommunityRole';
 import { Avatar } from '../Avatar';
 import { OptionsMenu, OptionsMenuOption } from '../OptionsMenu';
 import { Text } from '../ui';
@@ -40,15 +42,15 @@ function getTimeAgo(isoDate: string): string {
 
 interface NewsCardProps {
   newsItem: NewsItem;
-  currentUserId?: string; // Current user ID to check if news is own
+  currentUserId?: string;
   currentIsAppAdmin?: boolean;
-  userAvatarUrl?: string; // Current user's avatar URL
-  communityMap?: Record<string, string>; // Map of community ID -> name
+  userAvatarUrl?: string;
+  communityMap?: Record<string, string>;
   profileMap?: ProfileMap;
   categoryKey?: CategoryKey;
   liked?: boolean;
   likes?: number;
-  commentsCount?: number; // Comment count from commentCountMap
+  commentsCount?: number;
   onToggleLike?: () => void;
   onPressComment?: () => void;
   onPressShare?: () => void;
@@ -84,9 +86,18 @@ export function NewsCard({
   const newsActorType = newsItem.actorType ?? (newsItem as any).actor_type ?? 'user';
   const newsActorId = newsItem.actorId ?? (newsItem as any).actor_id ?? newsCreatedBy;
   const newsCommunityId = newsItem.communityId ?? (newsItem as any).community_id ?? null;
+  const cleanedSiteName = cleanText(newsItem.siteName);
+  const cleanedTitle = cleanText(newsItem.title);
+  const cleanedDescription = cleanText(newsItem.description);
+  const cleanedNote = cleanText(newsItem.note);
+  const heroImageUrl = useMemo(
+    () => sanitizeNewsHeroImageUrl(newsItem.imageUrl, newsItem.url),
+    [newsItem.imageUrl, newsItem.url],
+  );
   const authoredCommunityId =
     newsActorType === 'community' ? newsActorId || newsCommunityId || null : null;
   const { role: authoredCommunityRole } = useCommunityRole(authoredCommunityId);
+  const [imageFailed, setImageFailed] = useState(false);
 
   const resolvedActor = resolveActorLine({
     actorType: newsActorType,
@@ -97,7 +108,6 @@ export function NewsCard({
   });
   const authorName = resolvedActor.displayName;
 
-  // Resolve avatar URL: prefer profileMap lookup for the actor, fall back to current user's avatar
   const actorUserId = newsActorType === 'user' ? newsActorId || newsCreatedBy : newsCreatedBy;
   const actorProfile = profileMap?.[actorUserId];
   const resolvedAvatarUrl =
@@ -141,7 +151,6 @@ export function NewsCard({
 
   const theme = defaultTheme;
 
-  // Build card behavior model
   const cardModel = buildCardBehaviorModel({
     kind: 'news',
     actorType: newsActorType === 'community' ? 'community' : 'fan',
@@ -150,6 +159,11 @@ export function NewsCard({
   });
 
   const hasRightSlot = newsMenuOptions.length > 0;
+  const showHeroImage = Boolean(heroImageUrl) && !imageFailed;
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [heroImageUrl]);
 
   return (
     <CardRoot
@@ -187,40 +201,47 @@ export function NewsCard({
         rightSlot={hasRightSlot ? <OptionsMenu options={newsMenuOptions} /> : undefined}
       />
 
-      {/* Render note FIRST if it exists */}
-      {newsItem.note && newsItem.note.trim() ? (
+      {cleanedNote && cleanedNote.trim() ? (
         <View style={styles.noteBlock}>
-          <Text
-            variant="body"
-            color="primary"
-            numberOfLines={4}
-            ellipsizeMode="tail"
-          >
-            {newsItem.note}
+          <Text variant="body" color="primary" numberOfLines={4} ellipsizeMode="tail">
+            {cleanedNote}
           </Text>
         </View>
       ) : null}
 
-      {newsItem.imageUrl ? (
+      {showHeroImage ? (
         <CardMedia aspectRatio={16 / 9} fullBleed style={{ marginTop: theme.spacing[3] }}>
-          <Image source={{ uri: newsItem.imageUrl }} style={styles.mediaImage} resizeMode="cover" />
+          <Image
+            source={{ uri: heroImageUrl! }}
+            style={styles.mediaImage}
+            resizeMode="cover"
+            onError={() => setImageFailed(true)}
+          />
         </CardMedia>
-      ) : null}
+      ) : (
+        <CardMedia aspectRatio={16 / 9} fullBleed style={{ marginTop: theme.spacing[3] }}>
+          <View style={styles.mediaPlaceholder}>
+            <Text variant="small" color="secondary" style={styles.mediaPlaceholderText}>
+              {cleanedSiteName || 'Nyhed'}
+            </Text>
+          </View>
+        </CardMedia>
+      )}
 
       <View style={styles.linkContent}>
-        {newsItem.siteName && (
+        {cleanedSiteName && (
           <Text variant="small" color="secondary" style={styles.siteName}>
-            {newsItem.siteName}
+            {cleanedSiteName}
           </Text>
         )}
-        {newsItem.title && (
+        {cleanedTitle && (
           <Text variant="bodyBold" color="primary" style={styles.title} numberOfLines={2}>
-            {newsItem.title}
+            {cleanedTitle}
           </Text>
         )}
-        {newsItem.description && (
+        {cleanedDescription && (
           <Text variant="body" color="secondary" style={styles.description} numberOfLines={3}>
-            {newsItem.description}
+            {cleanedDescription}
           </Text>
         )}
         {newsItem.url ? (
@@ -242,6 +263,16 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     backgroundColor: theme.colors.border.default,
+  },
+  mediaPlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.bg.subtle,
+  },
+  mediaPlaceholderText: {
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
   },
   noteBlock: {
     marginTop: theme.spacing[3],

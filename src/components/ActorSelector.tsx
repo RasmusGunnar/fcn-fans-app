@@ -8,6 +8,7 @@ import { useFeed } from '../state/FeedContext';
 import { supabase } from '../lib/supabase';
 import { getMyCommunityRoles, canPostAsCommunity } from '../services/rbac';
 import { resolveProfileDisplayName } from '../utils/actor';
+import { resolveAvatarUrl } from '../utils/avatar';
 
 interface ActorSelectorProps {
   selectedActor: Actor;
@@ -19,6 +20,7 @@ interface EligibleCommunity {
   id: string;
   name: string;
   role: 'owner' | 'admin';
+  avatarUrl?: string | null;
 }
 
 export function ActorSelector({ selectedActor, onSelectActor, accentColor }: ActorSelectorProps) {
@@ -52,7 +54,7 @@ export function ActorSelector({ selectedActor, onSelectActor, accentColor }: Act
       // Step 3: Fetch community names
       const { data: communities, error } = await supabase
         .from('communities')
-        .select('id, name')
+        .select('id, name, avatar_url, avatar_path')
         .in('id', eligibleIds);
 
       if (error) {
@@ -66,6 +68,7 @@ export function ActorSelector({ selectedActor, onSelectActor, accentColor }: Act
           id: c.id,
           name: c.name,
           role: roleMap[c.id] as 'owner' | 'admin',
+          avatarUrl: resolveAvatarUrl(c.avatar_url ?? c.avatar_path ?? null),
         })) || [];
 
       console.log('[ActorSelector] Loaded eligible communities:', eligible.length);
@@ -97,6 +100,7 @@ export function ActorSelector({ selectedActor, onSelectActor, accentColor }: Act
       type: 'community',
       id: community.id,
       name: community.name,
+      avatarUrl: community.avatarUrl ?? null,
     });
   };
 
@@ -116,6 +120,7 @@ export function ActorSelector({ selectedActor, onSelectActor, accentColor }: Act
       type: 'community' as const,
       id: community.id,
       name: community.name,
+      avatarUrl: community.avatarUrl ?? null,
     })),
   ];
 

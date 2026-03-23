@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Image,
+  InteractionManager,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -20,12 +21,11 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../auth/AuthProvider';
 import { logger } from '../lib/logger';
-import { pickFromLibrary, pickCameraPhoto } from '../lib/mediaPicker';
+import { pickCameraPhoto, pickImageFromLibrary } from '../lib/mediaPicker';
 import { geocodeAddress } from '../services/geocoding';
 import { FeedItemRenderer } from '../components/feed/FeedItemRenderer';
 import { MembersStatRow } from '../components/social/MembersStatRow';
 import { IconButton } from '../components/ui';
-import { pickAndUploadCommunityImage } from '../lib/communityMediaUpload';
 import { getPublicUrl } from '../lib/storageUrl';
 import { supabase } from '../lib/supabase';
 import {
@@ -234,6 +234,15 @@ export default function CommunityDetailScreen() {
     }
   };
 
+  const runAfterEditSheetClose = useCallback((action: () => void | Promise<void>) => {
+    setShowEditSheet(false);
+    InteractionManager.runAfterInteractions(() => {
+      setTimeout(() => {
+        void action();
+      }, 150);
+    });
+  }, []);
+
   const handleUploadAvatar = async () => {
     if (!community) return;
 
@@ -242,16 +251,19 @@ export default function CommunityDetailScreen() {
       {
         text: 'Bibliotek',
         onPress: async () => {
-          const asset = await pickFromLibrary();
-          if (asset?.uri) {
-            setUploadingAvatar(true);
+          const asset = await pickImageFromLibrary();
+          if (!asset?.uri) return;
+
+          setUploadingAvatar(true);
+          try {
             const kind = community.type === 'fan_faction' ? 'logo' : 'image';
             const success = await uploadCommunityAvatar(id, asset.uri, kind);
-            setUploadingAvatar(false);
             if (success) {
               Alert.alert('Succes', 'Avatar uploadet!');
               loadData();
             }
+          } finally {
+            setUploadingAvatar(false);
           }
         },
       },
@@ -259,15 +271,18 @@ export default function CommunityDetailScreen() {
         text: 'Kamera',
         onPress: async () => {
           const asset = await pickCameraPhoto();
-          if (asset?.uri) {
-            setUploadingAvatar(true);
+          if (!asset?.uri) return;
+
+          setUploadingAvatar(true);
+          try {
             const kind = community.type === 'fan_faction' ? 'logo' : 'image';
             const success = await uploadCommunityAvatar(id, asset.uri, kind);
-            setUploadingAvatar(false);
             if (success) {
               Alert.alert('Succes', 'Avatar uploadet!');
               loadData();
             }
+          } finally {
+            setUploadingAvatar(false);
           }
         },
       },
@@ -282,16 +297,19 @@ export default function CommunityDetailScreen() {
       {
         text: 'Bibliotek',
         onPress: async () => {
-          const asset = await pickFromLibrary();
-          if (asset?.uri) {
-            setUploadingCover(true);
+          const asset = await pickImageFromLibrary();
+          if (!asset?.uri) return;
+
+          setUploadingCover(true);
+          try {
             const path = await uploadCommunityCover(id, asset.uri);
-            setUploadingCover(false);
             if (path) {
               setCommunity((prev) => (prev ? { ...prev, cover_path: path } : prev));
               Alert.alert('Succes', 'Hero-billede uploadet!');
               loadData();
             }
+          } finally {
+            setUploadingCover(false);
           }
         },
       },
@@ -299,15 +317,18 @@ export default function CommunityDetailScreen() {
         text: 'Kamera',
         onPress: async () => {
           const asset = await pickCameraPhoto();
-          if (asset?.uri) {
-            setUploadingCover(true);
+          if (!asset?.uri) return;
+
+          setUploadingCover(true);
+          try {
             const path = await uploadCommunityCover(id, asset.uri);
-            setUploadingCover(false);
             if (path) {
               setCommunity((prev) => (prev ? { ...prev, cover_path: path } : prev));
               Alert.alert('Succes', 'Hero-billede uploadet!');
               loadData();
             }
+          } finally {
+            setUploadingCover(false);
           }
         },
       },
@@ -374,39 +395,47 @@ export default function CommunityDetailScreen() {
   };
 
   const handleEditHero = async () => {
-    setShowEditSheet(false);
     if (!community) return;
-    const path = await pickAndUploadCommunityImage(community.id, 'cover');
-    if (path) {
-      await updateCommunity(community.id, { cover_path: path });
-      Alert.alert('Succes', 'Hero-billede uploadet!');
-      loadData();
-    }
+    runAfterEditSheetClose(handleUploadCover);
   };
 
   const handleRemoveHero = async () => {
     setShowEditSheet(false);
     if (!community) return;
-    await updateCommunity(community.id, { cover_path: null });
+    const success = await updateCommunity(community.id, { cover_path: null });
+    if (!success) {
+      Alert.alert('Fejl', 'Kunne ikke fjerne hero-billede. PrÃ¸v igen.');
+      return;
+    }
+
+    setCommunity((prev) => (prev ? { ...prev, cover_path: null } : prev));
     Alert.alert('Succes', 'Hero-billede fjernet!');
     loadData();
   };
 
   const handleEditAvatar = async () => {
-    setShowEditSheet(false);
     if (!community) return;
-    const path = await pickAndUploadCommunityImage(community.id, 'avatar');
-    if (path) {
-      await updateCommunity(community.id, { avatar_path: path });
-      Alert.alert('Succes', 'Logo/avatar uploadet!');
-      loadData();
-    }
+    runAfterEditSheetClose(handleUploadAvatar);
   };
 
   const handleRemoveAvatar = async () => {
     setShowEditSheet(false);
     if (!community) return;
-    await updateCommunity(community.id, { avatar_path: null, avatar_url: null });
+    const success = await updateCommunity(community.id, {
+      avatar_path: null,
+      avatar_url: null,
+      avatar_kind: null,
+    });
+    if (!success) {
+      Alert.alert('Fejl', 'Kunne ikke fjerne logo/avatar. PrÃ¸v igen.');
+      return;
+    }
+
+    setCommunity((prev) =>
+      prev
+        ? { ...prev, avatar_path: null, avatar_url: null, avatar_kind: null }
+        : prev,
+    );
     Alert.alert('Succes', 'Logo/avatar fjernet!');
     loadData();
   };

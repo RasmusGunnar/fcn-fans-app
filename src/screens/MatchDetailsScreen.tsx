@@ -179,8 +179,9 @@ export default function MatchDetailsScreen() {
     if (data) {
       setFixture(data);
       let hero = getMatchHeroUrl(data);
-      if (!hero && data.home_team_provider_id) {
-        hero = await getTeamHeroImage(data.home_team_provider_id);
+      const homeTeamHeroId = data.home_team_provider_id ?? data.home_team_id ?? null;
+      if (!hero && homeTeamHeroId) {
+        hero = await getTeamHeroImage(homeTeamHeroId);
       }
       setHeroUrl(hero);
     }

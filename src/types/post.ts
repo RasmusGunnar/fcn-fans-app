@@ -14,8 +14,13 @@ export interface Post {
   id: string;
   authorName: string;
   authorId?: string;
+  authorDisplayName?: string | null;
+  authorAvatarUrl?: string | null;
+  authorFanLevelKey?: import('./fan').FanLevelKey | null;
   actorType?: 'user' | 'community';
   actorId?: string;
+  actorDisplayName?: string | null;
+  actorAvatarUrl?: string | null;
   authorAvatarColor?: string;
   communityName?: string;
   factionName?: string;

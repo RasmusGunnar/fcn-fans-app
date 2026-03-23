@@ -1,5 +1,11 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { XMLParser } from "npm:fast-xml-parser@4";
+import { decodeHtml } from "../_shared/decodeHtml.ts";
+import {
+  fetchArticleMedia,
+  sanitizeNewsHeroImageUrl,
+} from "../_shared/newsMedia.ts";
+import { decodeResponseText, fixEncoding } from "../_shared/textEncoding.ts";
 
 type FeedResult = {
   feedUrl: string;
@@ -94,7 +100,7 @@ Deno.serve(async () => {
       totalFetched += 1;
 
       const parsed = parser.parse(xmlText);
-      const items = extractItems(parsed, defaultSiteName);
+      const items = await enrichItemsWithMedia(extractItems(parsed, defaultSiteName));
       const uniqueItems = items.filter((item) => {
         if (!item.url || !item.title) return false;
         if (seenUrls.has(item.url)) return false;
@@ -172,23 +178,20 @@ function extractItems(parsed: Record<string, unknown>, defaultSiteName: string):
 }
 
 function extractRssItems(channel: Record<string, unknown>, defaultSiteName: string): NewsItem[] {
-  const siteName = safeText(channel?.title) || defaultSiteName;
+  const siteName = decodeHtml(fixEncoding(safeText(channel?.title))) || defaultSiteName;
   const rawItems = ensureArray(channel?.item);
   return rawItems.map((item) => {
     const link = safeText(item?.link);
     const description = safeText(item?.description) || safeText(item?.["content:encoded"]);
-    const imageUrl =
-      safeText(item?.["media:content"]?.url) ||
-      safeText(item?.enclosure?.url) ||
-      extractImageFromHtml(description || "");
+    const imageUrl = extractFeedImageUrl(item, link, description);
     const createdAt = parseDate(
       safeText(item?.pubDate) || safeText(item?.["dc:date"]) || safeText(item?.updated),
     );
 
     return {
       url: link,
-      title: safeText(item?.title),
-      description: truncateText(stripHtml(description), 500),
+      title: decodeHtml(fixEncoding(safeText(item?.title))),
+      description: truncateText(decodeHtml(fixEncoding(stripHtml(description))), 500),
       image_url: imageUrl,
       site_name: siteName,
       created_at: createdAt,
@@ -197,26 +200,47 @@ function extractRssItems(channel: Record<string, unknown>, defaultSiteName: stri
 }
 
 function extractAtomItems(feed: Record<string, unknown>, defaultSiteName: string): NewsItem[] {
-  const siteName = safeText(feed?.title) || defaultSiteName;
+  const siteName = decodeHtml(fixEncoding(safeText(feed?.title))) || defaultSiteName;
   const rawItems = ensureArray(feed?.entry);
   return rawItems.map((entry) => {
     const link = extractAtomLink(entry?.link);
     const description = safeText(entry?.summary) || safeText(entry?.content);
-    const imageUrl =
-      safeText(entry?.["media:content"]?.url) ||
-      safeText(entry?.["media:thumbnail"]?.url) ||
-      extractImageFromHtml(description || "");
+    const imageUrl = extractFeedImageUrl(entry, link, description);
     const createdAt = parseDate(safeText(entry?.updated) || safeText(entry?.published));
 
     return {
       url: link,
-      title: safeText(entry?.title),
-      description: truncateText(stripHtml(description), 500),
+      title: decodeHtml(fixEncoding(safeText(entry?.title))),
+      description: truncateText(decodeHtml(fixEncoding(stripHtml(description))), 500),
       image_url: imageUrl,
       site_name: siteName,
       created_at: createdAt,
     };
   });
+}
+
+async function enrichItemsWithMedia(items: NewsItem[]): Promise<NewsItem[]> {
+  return await Promise.all(
+    items.map(async (item) => {
+      const sanitizedFeedImage = sanitizeNewsHeroImageUrl(item.image_url, item.url);
+      if (sanitizedFeedImage) {
+        return { ...item, image_url: sanitizedFeedImage };
+      }
+
+      try {
+        const article = await fetchArticleMedia(item.url, FETCH_TIMEOUT_MS, USER_AGENT);
+        return {
+          ...item,
+          image_url: article.media.imageUrl ?? null,
+        };
+      } catch {
+        return {
+          ...item,
+          image_url: null,
+        };
+      }
+    }),
+  );
 }
 
 async function fetchWithTimeout(url: string, timeoutMs: number): Promise<string> {
@@ -236,7 +260,7 @@ async function fetchWithTimeout(url: string, timeoutMs: number): Promise<string>
       throw new Error(`Fetch failed with status ${response.status}`);
     }
 
-    return await response.text();
+    return await decodeResponseText(response);
   } finally {
     clearTimeout(timeoutId);
   }
@@ -258,6 +282,48 @@ function extractAtomLink(linkNode: unknown): string {
 function ensureArray<T>(value: T | T[] | undefined | null): T[] {
   if (!value) return [];
   return Array.isArray(value) ? value : [value];
+}
+
+function extractUrlsFromNode(value: unknown): string[] {
+  return ensureArray(value)
+    .flatMap((node) => {
+      if (typeof node === "string") {
+        return [safeText(node)];
+      }
+
+      if (node && typeof node === "object") {
+        return [
+          safeText((node as Record<string, unknown>).url),
+          safeText((node as Record<string, unknown>).href),
+          safeText((node as Record<string, unknown>)["#text"]),
+        ];
+      }
+
+      return [];
+    })
+    .filter(Boolean);
+}
+
+function extractFeedImageUrl(
+  item: Record<string, unknown>,
+  link: string,
+  descriptionHtml: string,
+): string | null {
+  const candidates = [
+    ...extractUrlsFromNode(item?.["media:thumbnail"]),
+    ...extractUrlsFromNode(item?.["media:content"]),
+    ...extractUrlsFromNode(item?.enclosure),
+    extractImageFromHtml(descriptionHtml || ""),
+  ];
+
+  for (const candidate of candidates) {
+    const imageUrl = sanitizeNewsHeroImageUrl(candidate, link || "https://fcn.dk");
+    if (imageUrl) {
+      return imageUrl;
+    }
+  }
+
+  return null;
 }
 
 function safeText(value: unknown): string {

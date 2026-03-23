@@ -123,10 +123,11 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
       });
       setPreview(previewData);
       setLastFetchedUrl(targetUrl);
-    } catch (error) {
+    } catch (error: any) {
       logger.error('[NewsComposer] Preview fetch error:', {
         message: 'Kunne ikke hente preview',
-        error,
+        url: targetUrl,
+        error: error?.message || error,
       });
       setPreviewError('Kunne ikke hente preview');
     } finally {
@@ -337,6 +338,12 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
                 ) : null}
               </View>
             ) : null}
+
+            {!loadingPreview && previewError && normalizedUrl ? (
+              <Text style={styles.errorUrl} numberOfLines={2}>
+                {normalizedUrl}
+              </Text>
+            ) : null}
           </Card>
 
           {preview && (
@@ -448,6 +455,11 @@ function createStyles(theme: Theme) {
       fontSize: theme.typography.body.fontSize,
       color: theme.colors.state.success,
       fontWeight: '600',
+    },
+    errorUrl: {
+      marginTop: theme.spacing[1],
+      fontSize: theme.typography.small.fontSize,
+      color: theme.colors.text.secondary,
     },
     previewCard: {
       padding: theme.spacing[0],

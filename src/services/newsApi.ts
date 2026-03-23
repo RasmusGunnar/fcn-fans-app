@@ -1,6 +1,30 @@
-import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
+import { supabase } from '../lib/supabase';
 import { NewsItem, LinkPreview } from '../types/news';
+import { fixEncoding } from '../utils/fixEncoding';
+import { sanitizeNewsHeroImageUrl } from '../utils/newsMedia';
+
+async function readFunctionErrorDetails(error: any): Promise<{
+  status?: number;
+  body?: string;
+}> {
+  const response = error?.context;
+  if (!response) {
+    return {};
+  }
+
+  const status = typeof response.status === 'number' ? response.status : undefined;
+
+  try {
+    const body = await response.text();
+    return {
+      status,
+      body: typeof body === 'string' && body.trim().length > 0 ? body : undefined,
+    };
+  } catch {
+    return { status };
+  }
+}
 
 /**
  * Fetch link preview using Supabase Edge Function
@@ -14,8 +38,21 @@ export async function fetchLinkPreview(url: string): Promise<LinkPreview> {
     });
 
     if (error) {
-      logger.error('[newsApi] Edge function error:', error);
-      throw new Error(error.message || 'Kunne ikke hente link preview');
+      const details = await readFunctionErrorDetails(error);
+      logger.error('[newsApi] Edge function error:', {
+        name: error?.name,
+        message: error?.message,
+        status: details.status,
+        body: details.body,
+      });
+
+      const detailMessage =
+        details.body ||
+        (details.status ? `Preview fetch fejlede (${details.status})` : undefined) ||
+        error.message ||
+        'Kunne ikke hente link preview';
+
+      throw new Error(detailMessage);
     }
 
     if (!data) {
@@ -24,13 +61,12 @@ export async function fetchLinkPreview(url: string): Promise<LinkPreview> {
 
     logger.log('[newsApi] Link preview fetched:', data);
 
-    // Transform edge function response to LinkPreview
     return {
       url: data.resolvedUrl || url,
-      title: data.title || 'Ingen titel',
-      description: data.description || undefined,
-      imageUrl: data.imageUrl || undefined,
-      siteName: data.siteName || new URL(url).hostname,
+      title: fixEncoding(data.title) || 'Ingen titel',
+      description: fixEncoding(data.description) || undefined,
+      imageUrl: sanitizeNewsHeroImageUrl(data.imageUrl, data.resolvedUrl || url) || undefined,
+      siteName: fixEncoding(data.siteName) || new URL(url).hostname,
     };
   } catch (error: any) {
     logger.error('[newsApi] fetchLinkPreview error:', error);
@@ -48,7 +84,7 @@ export async function insertNewsItem(params: {
   note?: string;
   imageUrl?: string;
   siteName?: string;
-  createdBy: string; // Add created_by to params
+  createdBy: string;
   actorType: 'user' | 'community';
   actorId: string;
   communityId?: string;
@@ -56,21 +92,19 @@ export async function insertNewsItem(params: {
   try {
     logger.log('[newsApi] insertNewsItem called:', params);
 
-    // Log payload right before insert for RLS debugging
     const insertPayload = {
       url: params.url,
-      title: params.title,
-      description: params.description,
-      image_url: params.imageUrl,
-      site_name: params.siteName,
+      title: fixEncoding(params.title),
+      description: fixEncoding(params.description),
+      image_url: sanitizeNewsHeroImageUrl(params.imageUrl, params.url),
+      site_name: fixEncoding(params.siteName),
       created_by: params.createdBy,
       actor_type: params.actorType,
       actor_id: params.actorId,
       community_id: params.communityId,
-      note: params.note,
+      note: fixEncoding(params.note),
     };
 
-    // REAL JSON log of complete payload
     logger.log('[newsApi] insertPayload', insertPayload);
 
     const { data, error } = await supabase
@@ -87,9 +121,8 @@ export async function insertNewsItem(params: {
         hint: error.hint,
       });
 
-      // Detect duplicate URL constraint violation
       const isDuplicateUrl =
-        error.code === '23505' || // Postgres unique violation
+        error.code === '23505' ||
         error.message?.toLowerCase().includes('duplicate key') ||
         error.message?.toLowerCase().includes('unique constraint') ||
         error.details?.toLowerCase().includes('news_items_url_key') ||
@@ -98,7 +131,7 @@ export async function insertNewsItem(params: {
       if (isDuplicateUrl) {
         const duplicateError = new Error(
           'Det link er allerede delt i appen. Et link kan kun oprettes én gang.',
-        ) as any;
+        ) as Error & { kind?: string; originalCode?: string };
         duplicateError.kind = 'DUPLICATE_URL';
         duplicateError.originalCode = error.code;
         throw duplicateError;
@@ -113,19 +146,18 @@ export async function insertNewsItem(params: {
 
     logger.log('[newsApi] News item inserted successfully:', data.id);
 
-    // Transform DB response to NewsItem
     return {
       id: data.id,
       url: data.url,
-      title: data.title,
-      description: data.description,
-      note: data.note,
-      imageUrl: data.image_url,
-      siteName: data.site_name,
+      title: fixEncoding(data.title) ?? undefined,
+      description: fixEncoding(data.description) ?? undefined,
+      note: fixEncoding(data.note) ?? undefined,
+      imageUrl: sanitizeNewsHeroImageUrl(data.image_url, data.url) || undefined,
+      siteName: fixEncoding(data.site_name) ?? undefined,
       createdBy: data.created_by,
       actorType: data.actor_type,
       actorId: data.actor_id,
-      actorName: 'Ukendt', // Will be populated by feed context
+      actorName: 'Ukendt',
       communityId: data.community_id,
       createdAt: data.created_at,
       likesCount: 0,
@@ -150,7 +182,6 @@ export async function fetchNewsItems(limit: number = 50): Promise<NewsItem[]> {
       .limit(limit);
 
     if (error) {
-      // Handle PGRST205: table not found - this is expected before migration
       if (
         error.code === 'PGRST204' ||
         error.code === '42P01' ||
@@ -166,19 +197,18 @@ export async function fetchNewsItems(limit: number = 50): Promise<NewsItem[]> {
       throw error;
     }
 
-    // Transform DB results to NewsItem[]
     return (data || []).map((item) => ({
       id: item.id,
       url: item.url,
-      title: item.title,
-      description: item.description,
-      note: item.note,
-      imageUrl: item.image_url,
-      siteName: item.site_name,
+      title: fixEncoding(item.title) ?? undefined,
+      description: fixEncoding(item.description) ?? undefined,
+      note: fixEncoding(item.note) ?? undefined,
+      imageUrl: sanitizeNewsHeroImageUrl(item.image_url, item.url) || undefined,
+      siteName: fixEncoding(item.site_name) ?? undefined,
       createdBy: item.created_by,
       actorType: item.actor_type,
       actorId: item.actor_id,
-      actorName: 'Ukendt', // TODO: Join with profiles/communities for names
+      actorName: 'Ukendt',
       communityId: item.community_id,
       createdAt: item.created_at,
       likesCount: 0,
@@ -186,7 +216,6 @@ export async function fetchNewsItems(limit: number = 50): Promise<NewsItem[]> {
       likedByMe: false,
     }));
   } catch (error: any) {
-    // Catch any unexpected errors and log as warning, return empty array
     logger.warn(
       '[newsApi] fetchNewsItems failed (returning empty array):',
       error?.message || error,

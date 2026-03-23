@@ -1,17 +1,36 @@
 import { Platform } from 'react-native';
 
 export const FCN_TICKET_URL = 'https://billet.fcn.dk';
+const FCN_TEAM_PROVIDER_ID = '133890';
+const FCN_HOME_TEAM_MATCHERS = ['nordsjalland', 'nordsjaelland'];
 
 interface MatchLinkTarget {
   home_team: string;
+  home_team_provider_id?: string | null;
   lat?: number | null;
   lng?: number | null;
   venue?: string | null;
   venue_city?: string | null;
 }
 
-export function isFcnHomeMatch(fixture: Pick<MatchLinkTarget, 'home_team'>): boolean {
-  return fixture.home_team.toLowerCase().includes('nordsj');
+export function isFcnHomeMatch(
+  fixture: Pick<MatchLinkTarget, 'home_team' | 'home_team_provider_id'>,
+): boolean {
+  const homeTeamProviderId = String(fixture.home_team_provider_id ?? '').trim();
+  if (homeTeamProviderId === FCN_TEAM_PROVIDER_ID) {
+    return true;
+  }
+
+  const normalizedHomeTeam = fixture.home_team
+    .toLowerCase()
+    .trim()
+    .replace(/æ/g, 'ae')
+    .replace(/ø/g, 'o')
+    .replace(/å/g, 'a')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+  return FCN_HOME_TEAM_MATCHERS.some((matcher) => normalizedHomeTeam.includes(matcher));
 }
 
 export function buildMatchMapsUrl(

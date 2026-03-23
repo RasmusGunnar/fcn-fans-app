@@ -621,7 +621,7 @@ serve(async (req) => {
       generated_at: now.toISOString(),
       user_id: winner.userId,
       // profiles.fan_level_key is the primary source of truth.
-      fan_level_key: winnerProfile.fanLevelKey || 'community_member',
+      fan_level_key: winnerProfile.fanLevelKey || 'new_fan',
       weekly_score: winner.weeklyScore,
       reason_type: reasonCopy.reasonType,
       reference_post_id: reasonCopy.referencePostId,

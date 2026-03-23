@@ -1,6 +1,6 @@
 import type { FanLevelKey } from '../types/fan';
 
-export const DEFAULT_FAN_LEVEL_KEY: FanLevelKey = 'community_member';
+export const DEFAULT_FAN_LEVEL_KEY: FanLevelKey = 'new_fan';
 
 export function isFanLevelKey(value: unknown): value is FanLevelKey {
   return (

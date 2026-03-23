@@ -6,7 +6,7 @@ import type { FeedItem } from '../../types/feed';
 import type { FanLevelKey } from '../../types/fan';
 import { toEventCardVM } from '../../utils/eventCardVM';
 import { PollCard } from '../PollCard';
-import { FanPostCard, NewsCard, WeeklyTopFanCard } from '../cards';
+import { CommunityCard, FanPostCard, NewsCard, WeeklyTopFanCard } from '../cards';
 import { EventCard } from '../cards/EventCard';
 
 export type FeedItemRendererProps = {
@@ -34,6 +34,7 @@ export type FeedItemRendererProps = {
   onPressEvent?: (eventId: string) => void;
   onPressBusTrip?: (busTripId: string) => void;
   onPressMatch?: (matchId: string) => void;
+  onPressCommunity?: (communityId: string, title: string) => void;
   onPressProfile?: (userId: string) => void;
   onPressPost?: (postId: string) => void;
 };
@@ -61,13 +62,20 @@ export function FeedItemRenderer(props: FeedItemRendererProps): React.ReactEleme
     onPressEvent,
     onPressBusTrip,
     onPressMatch,
+    onPressCommunity,
     onPressProfile,
     onPressPost,
   } = props;
 
   switch (item.kind) {
     case 'post': {
-      const authorProfile = item.data.authorId ? safeProfileMap[item.data.authorId] : undefined;
+      const authorProfile = item.data.authorId
+        ? safeProfileMap[item.data.authorId] || {
+            display_name: item.data.authorDisplayName ?? item.data.authorName ?? null,
+            avatar_url: item.data.authorAvatarUrl ?? null,
+            fan_level_key: item.data.authorFanLevelKey ?? null,
+          }
+        : undefined;
       const categoryKey: CategoryKey = 'fan';
       const pollData = item.data.poll_data;
 
@@ -158,6 +166,18 @@ export function FeedItemRenderer(props: FeedItemRendererProps): React.ReactEleme
           onPressReference={
             item.data.referencePostId ? () => onPressPost?.(item.data.referencePostId!) : undefined
           }
+        />
+      );
+    }
+
+    case 'community': {
+      return (
+        <CommunityCard
+          name={item.data.name}
+          description={item.data.description}
+          avatarUrl={item.data.avatarUrl}
+          coverUrl={item.data.coverUrl}
+          onPressJoin={() => onPressCommunity?.(item.data.communityId, item.data.name)}
         />
       );
     }

@@ -8,6 +8,7 @@ import { FanLevelBadge } from '../fan/FanLevelBadge';
 import { Badge, Button, Card, Text } from '../ui';
 import { useTheme, type Theme } from '../../theme';
 import type { FanLevelKey } from '../../types/fan';
+import { cleanText } from '../../utils/text';
 
 const FALLBACK_BODY = 'Har været en af ugens mest aktive fans i fællesskabet.';
 
@@ -43,14 +44,14 @@ function getIsoWeekNumber(dateString?: string): number | null {
 }
 
 function extractHighlightBody(body: string): string {
-  const cleaned = body
+  const cleaned = cleanText(body)
     .replace(
       /^(Fremhævet for sit opslag|Fremhævet for kommentaren|Valgt på baggrund af sit opslag|Valgt på baggrund af kommentaren|Spotlight på opslaget|Spotlight på kommentaren):\s*/i,
       '',
     )
     .trim()
-    .replace(/^["“”«»]+/, '')
-    .replace(/["“”«»]+$/, '')
+    .replace(/^["«»]+/, '')
+    .replace(/["«»]+$/, '')
     .trim();
 
   return cleaned || FALLBACK_BODY;
@@ -67,11 +68,12 @@ function formatMetricValue(value: number | null | undefined): string | null {
 }
 
 function normalizeContentTypeLabel(label?: string | null): string | null {
-  if (!label) return null;
-  if (label.includes('Afstemning')) return 'Afstemning';
-  if (label.includes('Opslag')) return 'Opslag';
-  if (label.includes('Kommentar')) return 'Kommentar';
-  return label.trim() || null;
+  const cleanedLabel = cleanText(label).trim();
+  if (!cleanedLabel) return null;
+  if (cleanedLabel.includes('Afstemning')) return 'Afstemning';
+  if (cleanedLabel.includes('Opslag')) return 'Opslag';
+  if (cleanedLabel.includes('Kommentar')) return 'Kommentar';
+  return cleanedLabel || null;
 }
 
 function formatRankingSummary(score: number, rank: number, totalUsers: number): string {
@@ -113,12 +115,16 @@ export function WeeklyTopFanCard({
   const [rankingError, setRankingError] = useState(false);
   const [rankingData, setRankingData] = useState<WeeklyRankingData | null>(null);
   const weekNumber = getIsoWeekNumber(weekStartDate);
-  const spotlightTitle = title.trim() || 'Ugens Topfan';
-  const overline = weekNumber ? `Uge ${weekNumber} · 🏆 ${spotlightTitle}` : `🏆 ${spotlightTitle}`;
-  const resolvedSubtitle = subtitle.trim() || `${displayName} er fremhævet i denne uge`;
-  const resolvedBody = body.trim() || FALLBACK_BODY;
-  const resolvedHighlightText = (highlightText || extractHighlightBody(resolvedBody)).trim();
+  const cleanedDisplayName = cleanText(displayName).trim() || 'Fan';
+  const spotlightTitle = cleanText(title).trim() || 'Ugens Topfan';
+  const overline = weekNumber ? `Uge ${weekNumber} · ${spotlightTitle}` : spotlightTitle;
+  const resolvedSubtitle =
+    cleanText(subtitle).trim() || `${cleanedDisplayName} er fremhævet i denne uge`;
+  const resolvedBody = cleanText(body).trim() || FALLBACK_BODY;
+  const resolvedHighlightText =
+    cleanText(highlightText).trim() || extractHighlightBody(resolvedBody).trim();
   const normalizedContentTypeLabel = normalizeContentTypeLabel(contentTypeLabel);
+  const cleanedCtaLabel = cleanText(ctaLabel).trim() || 'Se profil';
   const metrics = [
     votesCount && votesCount > 0
       ? {
@@ -202,12 +208,12 @@ export function WeeklyTopFanCard({
           <Pressable onPress={onPressProfile} style={styles.avatarWrap}>
             <View style={styles.avatarGlow} />
             <View style={styles.avatarRing}>
-              <Avatar avatarUrl={avatarUrl} label={displayName} size={64} />
+              <Avatar avatarUrl={avatarUrl} label={cleanedDisplayName} size={64} />
             </View>
           </Pressable>
 
           <Text variant="h1" color="primary" numberOfLines={2} style={styles.displayName}>
-            {displayName}
+            {cleanedDisplayName}
           </Text>
 
           <Text variant="small" color="secondary" style={styles.statusLine}>
@@ -274,7 +280,7 @@ export function WeeklyTopFanCard({
         </View>
 
         <View style={styles.actionsRow}>
-          <Button title={ctaLabel} onPress={onPressProfile} variant="primary" size="sm" />
+          <Button title={cleanedCtaLabel} onPress={onPressProfile} variant="primary" size="sm" />
           {onPressReference ? (
             <Pressable onPress={onPressReference} style={styles.referenceAction}>
               <Text variant="caption" color="primary" style={styles.referenceActionText}>

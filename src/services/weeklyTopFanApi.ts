@@ -40,13 +40,9 @@ type ReferencedCommentRow = {
 type WeeklyTopFanProfile = {
   display_name: string | null;
   avatar_url: string | null;
-  fan_level_key?: FanLevelKey | null;
 };
 
-const WEEKLY_TOP_FAN_PROFILE_SELECT_ATTEMPTS = [
-  'display_name, avatar_url, fan_level_key',
-  'display_name, avatar_url',
-] as const;
+const WEEKLY_TOP_FAN_PROFILE_SELECT_ATTEMPTS = ['display_name, avatar_url'] as const;
 
 function extractHighlightText(body: string): string {
   const cleaned = body
@@ -102,7 +98,6 @@ async function fetchWeeklyTopFanProfile(userId: string): Promise<WeeklyTopFanPro
     return {
       display_name: data.display_name ?? null,
       avatar_url: data.avatar_url ?? null,
-      fan_level_key: 'fan_level_key' in data ? ((data as any).fan_level_key ?? null) : null,
     };
   }
 
@@ -224,7 +219,7 @@ export async function fetchLatestPublishedWeeklyTopFan(): Promise<FeedWeeklyTopF
     userId: row.user_id,
     displayName: profile?.display_name?.trim() || 'Fan',
     avatarUrl: profile?.avatar_url ?? null,
-    fanLevelKey: getSafeFanLevelKey(profile?.fan_level_key ?? row.fan_level_key),
+    fanLevelKey: getSafeFanLevelKey(row.fan_level_key),
     weeklyScore: row.weekly_score,
     reasonType: row.reason_type,
     referencePostId: row.reference_post_id,

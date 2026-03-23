@@ -14,7 +14,6 @@ import {
 } from 'react-native';
 import { useAuth } from '../auth/AuthProvider';
 import { AppHeader } from '../components/AppHeader';
-import { FanFactionCard } from '../components/cards/FanFactionCard';
 import { FeedItemRenderer } from '../components/feed/FeedItemRenderer';
 import NextMatchBadge from '../components/home/NextMatchBadge';
 import { Card } from '../components/ui/Card';
@@ -45,7 +44,7 @@ export default function HomeScreen() {
   const { user, isAppAdmin } = useAuth();
   const styles = createStyles();
   const {
-    feedItems,
+    homeFeedItems,
     communityMap,
     profileMap,
     likeMap,
@@ -77,14 +76,8 @@ export default function HomeScreen() {
   // Rate-limit focus refetches (skip if last fetch was < 5 s ago)
   const lastFocusFetchRef = useRef<number>(0);
 
-  // Defensive: Ensure feedItems is always an array and filter out any falsy values
-  const safeFeedItems = (Array.isArray(feedItems) ? feedItems : []).filter(Boolean);
-  const homeFeedItems = safeFeedItems.filter((item) => {
-    if (item.kind !== 'post') return true;
-    const post = item.data as any;
-    const feedTargets = Array.isArray(post.feedTargets) ? post.feedTargets : [];
-    return feedTargets.includes('home') || feedTargets.length === 0;
-  });
+  // Defensive: FeedContext now assembles a dedicated home feed.
+  const safeHomeFeedItems = (Array.isArray(homeFeedItems) ? homeFeedItems : []).filter(Boolean);
 
   // Ensure all maps have safe defaults
   const safeProfileMap = profileMap || {};
@@ -144,8 +137,9 @@ export default function HomeScreen() {
     setNextFixture(fixture);
     // Resolve hero: try raw first, then team API
     let hero = getMatchHeroUrl(fixture as any);
-    if (!hero && fixture?.home_team_provider_id) {
-      hero = await getTeamHeroImage(fixture.home_team_provider_id);
+    const homeTeamHeroId = fixture?.home_team_provider_id ?? fixture?.home_team_id ?? null;
+    if (!hero && homeTeamHeroId) {
+      hero = await getTeamHeroImage(homeTeamHeroId);
     }
     setNextFixtureHeroUrl(hero);
     setLoadingFixture(false);
@@ -185,14 +179,6 @@ export default function HomeScreen() {
     void nextMatchCheckInRefresh();
   }, [nextFixture?.id, nextMatchAttendanceRefresh, nextMatchCheckInRefresh]);
 
-  const [factionLiked, setFactionLiked] = useState(false);
-  const [factionLikes, setFactionLikes] = useState(7);
-
-  const toggleFactionLike = () => {
-    setFactionLiked(!factionLiked);
-    setFactionLikes(factionLiked ? factionLikes - 1 : factionLikes + 1);
-  };
-
   const renderFeedItem = ({ item }: { item: any }) => {
     const key = getFeedItemKey(item);
     const likeState = safeLikeMap[key] || { liked: false, likes: 0 };
@@ -228,6 +214,12 @@ export default function HomeScreen() {
         }
         onPressMatch={(matchId) =>
           (navigation as any).navigate('MatchDetails', { fixtureId: matchId })
+        }
+        onPressCommunity={(communityId, title) =>
+          (navigation as any).navigate('Communities', {
+            screen: 'CommunityDetail',
+            params: { id: communityId, title },
+          })
         }
         onPressProfile={(userId) =>
           userId === user?.id
@@ -409,7 +401,7 @@ export default function HomeScreen() {
 
   return (
     <FlatList
-      data={homeFeedItems}
+      data={safeHomeFeedItems}
       keyExtractor={(item) => getFeedItemKey(item)}
       renderItem={renderFeedItem}
       style={styles.container}
@@ -477,23 +469,6 @@ export default function HomeScreen() {
           )}
         </>
       }
-      ListFooterComponent={
-        <View style={styles.content}>
-          <FanFactionCard
-            name="Ultras FCN"
-            members={89}
-            timeAgo="1 time siden"
-            description="FCN's mest passionerede fans. Vi støtter holdet gennem tykt og tyndt med sang, flag og uforbeholden støtte."
-            liked={factionLiked}
-            likes={factionLikes}
-            comments={1}
-            onToggleLike={toggleFactionLike}
-            onPressComment={() => {}}
-            onPressShare={() => {}}
-            onPressJoin={() => {}}
-          />
-        </View>
-      }
     />
   );
 }
@@ -509,6 +484,7 @@ const createStyles = () =>
     emptyText: { fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: spacing.xs },
     emptySubtext: { fontSize: 14, color: colors.subtext },
   });
+
 
 
 

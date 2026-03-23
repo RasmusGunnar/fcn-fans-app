@@ -159,6 +159,9 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
 
         if (data && data[0]) {
           const dbRecord = data[0];
+          const actorDisplayName =
+            actor?.type === 'community' ? actor.name : user?.email ?? 'Ukendt';
+          const actorAvatarUrl = actor?.type === 'community' ? actor.avatarUrl ?? null : null;
           // DB-returned post is the source of truth
           dbPost = {
             id: dbRecord.id,
@@ -166,6 +169,9 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
             authorId: dbRecord.author_id,
             actorType: dbRecord.actor_type ?? 'user',
             actorId: dbRecord.actor_id ?? dbRecord.author_id,
+            actorDisplayName,
+            actorAvatarUrl,
+            communityName: actor?.type === 'community' ? actor.name : undefined,
             communityId: dbRecord.community_id ?? null,
             feedTargets: dbRecord.feed_targets ?? ['home'],
             createdAt: dbRecord.created_at || new Date().toISOString(),
@@ -192,6 +198,9 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
       authorId: user?.id,
       actorType: actor?.type ?? 'user',
       actorId: actor?.type === 'community' ? actor.id : user?.id,
+      actorDisplayName: actor?.type === 'community' ? actor.name : user?.email ?? 'Ukendt',
+      actorAvatarUrl: actor?.type === 'community' ? actor.avatarUrl ?? null : null,
+      communityName: actor?.type === 'community' ? actor.name : undefined,
       communityId: actor?.type === 'community' ? actor.id : null,
       createdAt: new Date().toISOString(),
       text: text.trim(),

@@ -9,6 +9,7 @@ import { useAuth } from '../../auth/AuthProvider';
 import type { CommentPreview } from '../../services/likesApi';
 import { defaultTheme } from '../../theme';
 import type { EventCardVM } from '../../utils/eventCardVM';
+import { cleanText } from '../../utils/text';
 import { Avatar } from '../Avatar';
 import { contentPaddingX } from '../feed/FeedCardShell';
 import { AttendanceBubbles } from '../social/AttendanceBubbles';
@@ -50,6 +51,13 @@ export function EventCard({
 
   const isMatch = vm.kind === 'match';
   const hasLogos = isMatch && (vm.homeLogo || vm.awayLogo);
+  const cleanedTitle = cleanText(vm.title);
+  const cleanedDescription = cleanText(vm.description);
+  const cleanedDateText = cleanText(vm.dateText);
+  const cleanedLocationText = cleanText(vm.locationText);
+  const cleanedOrganizerName = cleanText(vm.organizerName);
+  const cleanedStatusLine = cleanText(vm.statusLine);
+  const cleanedCtaLabel = cleanText(vm.ctaLabel) || 'Se detaljer';
 
   return (
     <CardRoot
@@ -136,11 +144,11 @@ export function EventCard({
 
       {/* Title */}
       <Text variant="h3" color="primary" style={styles.title}>
-        {vm.title}
+        {cleanedTitle}
       </Text>
 
       {/* Description */}
-      {vm.description ? (
+      {cleanedDescription ? (
         <Text
           variant="body"
           color="secondary"
@@ -148,12 +156,12 @@ export function EventCard({
           numberOfLines={3}
           ellipsizeMode="tail"
         >
-          {vm.description}
+          {cleanedDescription}
         </Text>
       ) : null}
 
       {/* Meta lines */}
-      {vm.dateText ? (
+      {cleanedDateText ? (
         <View style={styles.metaRow}>
           <Ionicons
             name="calendar-outline"
@@ -161,12 +169,12 @@ export function EventCard({
             color={theme.colors.text.muted}
           />
           <Text variant="body" color="muted" style={styles.metaText}>
-            {vm.dateText}
+            {cleanedDateText}
           </Text>
         </View>
       ) : null}
 
-      {vm.locationText ? (
+      {cleanedLocationText ? (
         <View style={styles.metaRow}>
           <Ionicons
             name="location-outline"
@@ -174,7 +182,7 @@ export function EventCard({
             color={theme.colors.text.muted}
           />
           <Text variant="body" color="muted" style={styles.metaText}>
-            {vm.locationText}
+            {cleanedLocationText}
           </Text>
         </View>
       ) : null}
@@ -183,19 +191,19 @@ export function EventCard({
       <View style={styles.divider} />
 
       {/* Organizer row */}
-      {vm.organizerName ? (
+      {cleanedOrganizerName ? (
         <View style={styles.organizerRow}>
           <Avatar
             avatarUrl={vm.organizerAvatarUrl}
             size={theme.spacing[7]}
-            label={vm.organizerName}
+            label={cleanedOrganizerName}
           />
           <View style={styles.organizerInfo}>
             <Text variant="caption" color="muted" style={styles.organizerLabel}>
               Arrangør
             </Text>
             <Text variant="body" color="primary" style={styles.organizerName}>
-              {vm.organizerName}
+              {cleanedOrganizerName}
             </Text>
           </View>
         </View>
@@ -215,16 +223,16 @@ export function EventCard({
       )}
 
       {/* Status line (accent) */}
-      {vm.statusLine ? (
+      {cleanedStatusLine ? (
         <Text variant="body" color="primary" style={styles.statusLine}>
-          {vm.statusLine}
+          {cleanedStatusLine}
         </Text>
       ) : null}
 
       {/* CTA button */}
       <Pressable style={styles.ctaButton} onPress={onPressDetail}>
         <Text variant="body" color="inverse" style={styles.ctaText}>
-          {vm.ctaLabel}
+          {cleanedCtaLabel}
         </Text>
       </Pressable>
     </CardRoot>

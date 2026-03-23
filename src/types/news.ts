@@ -29,4 +29,5 @@ export interface Actor {
   type: 'user' | 'community';
   id: string;
   name: string;
+  avatarUrl?: string | null;
 }

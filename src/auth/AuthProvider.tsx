@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Alert } from 'react-native';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Crypto from 'expo-crypto';
+import { removeCurrentPushToken } from '../lib/notifications';
 import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
 import { isSystemAdmin } from '../services/rbac';
@@ -216,6 +217,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     setLoading(true);
     try {
+      if (user?.id) {
+        await removeCurrentPushToken(user.id);
+      }
       await supabase.auth.signOut();
     } catch (e: any) {
       logger.warn('Sign out error', e);

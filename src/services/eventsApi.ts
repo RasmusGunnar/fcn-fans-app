@@ -82,6 +82,8 @@ export interface Fixture {
   round: string | null;
   home_team_provider_id?: string | null;
   away_team_provider_id?: string | null;
+  home_team_id?: string | null;
+  away_team_id?: string | null;
   // Location/geocoding fields
   lat?: number | null;
   lng?: number | null;
@@ -254,7 +256,7 @@ export async function fetchBusTripsUpcoming(limit = 20): Promise<BusTrip[]> {
     const { data, error } = await supabase
       .from('bus_trips')
       .select(
-        'id, title, start_at, departure_place, total_seats, seats_taken, price_dkk, fixture_id, organizer_group_id, fixtures:fixtures(lat,lng,venue,venue_city,place_name)',
+        'id, title, description, start_at, expected_return_at, departure_place, departure_address, total_seats, seats_taken, price_dkk, fixture_id, organizer_group_id, created_at, fixtures:fixtures(lat,lng,venue,venue_city,place_name)',
       )
       .gte('start_at', new Date().toISOString())
       .order('start_at', { ascending: true })

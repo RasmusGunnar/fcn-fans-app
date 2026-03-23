@@ -1,7 +1,14 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
+import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
+import { navigateFromNotificationData } from '../navigation/navigationRef';
+import { getNotificationDeepLink } from './deeplink';
+import { logger } from './logger';
 import { supabase } from './supabase';
+
+const PUSH_TOKEN_STORAGE_KEY = 'push.currentToken';
 
 export type PushUiStatus = 'enabled' | 'denied' | 'not_setup' | 'error';
 
@@ -29,28 +36,51 @@ function getProjectId(): string | undefined {
 
 function previewToken(token: string | null | undefined): string | null {
   if (!token) return null;
-  return `${token.slice(0, 10)}…${token.slice(-6)}`;
+  return `${token.slice(0, 10)}...${token.slice(-6)}`;
 }
 
-export async function registerForPushNotificationsAsync(): Promise<PushRegistrationResult> {
-  console.log('[Push] registerForPushNotificationsAsync: start');
+async function getStoredPushToken(): Promise<string | null> {
+  try {
+    return await AsyncStorage.getItem(PUSH_TOKEN_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+async function setStoredPushToken(token: string) {
+  try {
+    await AsyncStorage.setItem(PUSH_TOKEN_STORAGE_KEY, token);
+  } catch {
+    // Ignore local storage errors. Remote token registration is the source of truth.
+  }
+}
+
+async function clearStoredPushToken() {
+  try {
+    await AsyncStorage.removeItem(PUSH_TOKEN_STORAGE_KEY);
+  } catch {
+    // Ignore local storage errors.
+  }
+}
+
+export async function registerForPushNotificationsAsync(options?: {
+  promptIfNeeded?: boolean;
+}): Promise<PushRegistrationResult> {
   try {
     let token: string | null = null;
+    const promptIfNeeded = options?.promptIfNeeded ?? true;
 
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    console.log('[Push] existing permission status:', existingStatus);
-
     let finalStatus = existingStatus;
-    if (existingStatus !== 'granted') {
+
+    if (promptIfNeeded && existingStatus !== 'granted') {
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
-      console.log('[Push] requested permission status:', finalStatus);
     }
 
     if (finalStatus !== 'granted') {
-      console.warn('[Push] permission not granted');
       return {
-        status: 'denied',
+        status: finalStatus === 'denied' ? 'denied' : 'not_setup',
         permissionStatus: finalStatus,
         token: null,
         saved: false,
@@ -62,14 +92,12 @@ export async function registerForPushNotificationsAsync(): Promise<PushRegistrat
       ? await Notifications.getExpoPushTokenAsync({ projectId })
       : await Notifications.getExpoPushTokenAsync();
     token = tokenResponse.data;
-    console.log('[Push] expo token returned:', previewToken(token));
 
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('default', {
         name: 'default',
         importance: Notifications.AndroidImportance.MAX,
       });
-      console.log('[Push] android notification channel set');
     }
 
     return {
@@ -80,7 +108,7 @@ export async function registerForPushNotificationsAsync(): Promise<PushRegistrat
       errorMessage: token ? undefined : 'Ingen push-token blev returneret',
     };
   } catch (error: any) {
-    console.error('[Push] registerForPushNotificationsAsync failed:', error);
+    logger.warn('[Push] registerForPushNotificationsAsync failed:', error);
     return {
       status: 'error',
       permissionStatus: 'error',
@@ -92,20 +120,61 @@ export async function registerForPushNotificationsAsync(): Promise<PushRegistrat
 }
 
 export async function saveExpoPushToken(userId: string, token: string) {
-  console.log('[Push] saveExpoPushToken: start for user', userId);
-  const { error } = await supabase
-    .from('profiles')
-    .upsert({ id: userId, expo_push_token: token }, { onConflict: 'id' });
+  const previousToken = await getStoredPushToken();
+  const nowIso = new Date().toISOString();
+
+  if (previousToken && previousToken !== token) {
+    await supabase
+      .from('push_tokens')
+      .delete()
+      .eq('user_id', userId)
+      .eq('push_token', previousToken);
+  }
+
+  const { error } = await supabase.from('push_tokens').upsert(
+    {
+      user_id: userId,
+      push_token: token,
+      platform: Platform.OS === 'ios' ? 'ios' : 'android',
+      updated_at: nowIso,
+    },
+    { onConflict: 'push_token' },
+  );
+
   if (error) {
-    console.error('[Push] saveExpoPushToken failed:', error);
+    logger.warn('[Push] saveExpoPushToken failed:', error);
     throw error;
   }
-  console.log('[Push] saveExpoPushToken: success', previewToken(token));
+
+  await setStoredPushToken(token);
 }
 
-export async function syncPushNotifications(userId: string): Promise<PushRegistrationResult> {
-  console.log('[Push] syncPushNotifications: user exists =', !!userId);
-  const registration = await registerForPushNotificationsAsync();
+export async function removeCurrentPushToken(userId: string) {
+  const storedToken = await getStoredPushToken();
+  if (!storedToken) {
+    return;
+  }
+
+  const { error } = await supabase
+    .from('push_tokens')
+    .delete()
+    .eq('user_id', userId)
+    .eq('push_token', storedToken);
+
+  if (error) {
+    logger.warn('[Push] removeCurrentPushToken failed:', error);
+  }
+
+  await clearStoredPushToken();
+}
+
+export async function syncPushNotifications(
+  userId: string,
+  options?: { promptIfNeeded?: boolean },
+): Promise<PushRegistrationResult> {
+  const registration = await registerForPushNotificationsAsync({
+    promptIfNeeded: options?.promptIfNeeded ?? true,
+  });
 
   if (!registration.token) {
     return registration;
@@ -129,13 +198,15 @@ export async function getPushStatusSnapshot(userId: string): Promise<PushStatusS
   const permissionStatus = permission.status;
 
   const { data, error } = await supabase
-    .from('profiles')
-    .select('expo_push_token')
-    .eq('id', userId)
+    .from('push_tokens')
+    .select('push_token, updated_at')
+    .eq('user_id', userId)
+    .order('updated_at', { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (error) {
-    console.error('[Push] getPushStatusSnapshot failed:', error);
+    logger.warn('[Push] getPushStatusSnapshot failed:', error);
     return {
       status: 'error',
       permissionStatus,
@@ -144,7 +215,7 @@ export async function getPushStatusSnapshot(userId: string): Promise<PushStatusS
     };
   }
 
-  const savedToken = data?.expo_push_token ?? null;
+  const savedToken = data?.push_token ?? null;
 
   if (permissionStatus === 'denied') {
     return {
@@ -170,4 +241,15 @@ export async function getPushStatusSnapshot(userId: string): Promise<PushStatusS
     tokenSaved: false,
     savedTokenPreview: null,
   };
+}
+
+export async function openNotificationTarget(data: Record<string, unknown> | null | undefined) {
+  if (navigateFromNotificationData(data)) {
+    return;
+  }
+
+  const url = getNotificationDeepLink(data);
+  if (url) {
+    await Linking.openURL(url);
+  }
 }

@@ -6,6 +6,22 @@ import type { FanLevelKey } from './fan';
 import { NewsItem } from './news';
 import { Post } from './post';
 
+export type FeedRankingSignals = {
+  sortDate?: string | null;
+  eventStartAt?: string | null;
+  eventEndAt?: string | null;
+  expiresAt?: string | null;
+  isActivePoll?: boolean;
+  isSystemCard?: boolean;
+  likeCount?: number | null;
+  commentCount?: number | null;
+  engagementCount?: number | null;
+};
+
+export type FeedPostData = Post & FeedRankingSignals;
+
+export type FeedNewsData = NewsItem & FeedRankingSignals;
+
 export type FeedEventData = {
   id: string;
   title: string;
@@ -22,7 +38,7 @@ export type FeedEventData = {
   eventType?: 'event' | 'bus_trip' | string | null;
   coverBucket?: string | null;
   coverPath?: string | null;
-};
+} & FeedRankingSignals;
 
 export type FeedBusTripData = {
   id: string;
@@ -36,7 +52,7 @@ export type FeedBusTripData = {
   organizerId?: string | null;
   createdAt?: string | null;
   eventType?: 'bus_trip' | string | null;
-};
+} & FeedRankingSignals;
 
 export type FeedMatchData = {
   id: string;
@@ -51,7 +67,19 @@ export type FeedMatchData = {
   round?: string | null;
   homeTeamProviderId?: string | null;
   heroUrl?: string | null;
-};
+} & FeedRankingSignals;
+
+export type FeedCommunityData = {
+  id: string;
+  communityId: string;
+  name: string;
+  description?: string | null;
+  createdAt: string;
+  creatorId?: string | null;
+  avatarUrl?: string | null;
+  coverUrl?: string | null;
+  debugSource?: 'local' | 'persisted' | 'local+persisted' | null;
+} & FeedRankingSignals;
 
 export type WeeklyTopFanReasonType = 'post' | 'comment' | 'activity' | 'checkin';
 
@@ -78,28 +106,29 @@ export type FeedWeeklyTopFanData = {
   likesCount?: number | null;
   commentsCount?: number | null;
   votesCount?: number | null;
-};
+} & FeedRankingSignals;
 
 /**
  * Union type for all feed items
  * Each item has a discriminator 'kind' and a unique 'id'
  */
 export type FeedItem =
-  | { kind: 'post'; id: string; data: Post }
-  | { kind: 'news'; id: string; data: NewsItem }
+  | { kind: 'post'; id: string; data: FeedPostData }
+  | { kind: 'news'; id: string; data: FeedNewsData }
   | { kind: 'event'; id: string; data: FeedEventData }
   | { kind: 'bus_trip'; id: string; data: FeedBusTripData }
   | { kind: 'match'; id: string; data: FeedMatchData }
+  | { kind: 'community'; id: string; data: FeedCommunityData }
   | { kind: 'weekly_top_fan'; id: string; data: FeedWeeklyTopFanData };
 
 /**
  * Type guard functions
  */
-export function isPostItem(item: FeedItem): item is { kind: 'post'; id: string; data: Post } {
+export function isPostItem(item: FeedItem): item is { kind: 'post'; id: string; data: FeedPostData } {
   return item.kind === 'post';
 }
 
-export function isNewsItem(item: FeedItem): item is { kind: 'news'; id: string; data: NewsItem } {
+export function isNewsItem(item: FeedItem): item is { kind: 'news'; id: string; data: FeedNewsData } {
   return item.kind === 'news';
 }
 

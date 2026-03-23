@@ -1,4 +1,11 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { decodeHtml } from "../_shared/decodeHtml.ts";
+import {
+  extractArticleMedia,
+  fetchArticleMedia,
+  sanitizeNewsHeroImageUrl,
+} from "../_shared/newsMedia.ts";
+import { fixEncoding } from "../_shared/textEncoding.ts";
 
 type IngestPayload = {
   url?: string;
@@ -12,12 +19,13 @@ type IngestPayload = {
 type ScrapedMetadata = {
   title: string;
   description: string;
-  image_url: string;
+  image_url: string | null;
   site_name: string;
 };
 
 const FETCH_TIMEOUT_MS = 12000;
 const USER_AGENT = "fcn-fans-news-ingest/1.0";
+const DEBUG_LOGS = Deno.env.get("NEWS_INGEST_DEBUG") === "true";
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") {
@@ -57,7 +65,7 @@ Deno.serve(async (req) => {
   }
 
   // DEV logging: Never log the token itself
-  if (__DEV__) {
+  if (DEBUG_LOGS) {
     console.log("[news-ingest] DEV: Auth info:", {
       tokenLength: token.length,
       hasBearerPrefix: authHeader.trim().toLowerCase().startsWith("bearer "),
@@ -78,7 +86,7 @@ Deno.serve(async (req) => {
     token,
   );
   
-  if (__DEV__) {
+  if (DEBUG_LOGS) {
     console.log("[news-ingest] DEV: Auth result:", {
       userFound: !!authData?.user,
       authError: authError?.message,
@@ -117,11 +125,11 @@ Deno.serve(async (req) => {
   }
 
   // User-provided values take priority
-  const userDescription = payload.description?.trim() || null;
-  const userTitle = payload.title?.trim() || null;
+  const userDescription = decodeHtml(fixEncoding(payload.description?.trim())) || null;
+  const userTitle = decodeHtml(fixEncoding(payload.title?.trim())) || null;
   const userImageUrl = payload.image_url?.trim() || null;
-  const userSiteName = payload.site_name?.trim() || null;
-  const userNote = payload.note?.trim() || null;
+  const userSiteName = decodeHtml(fixEncoding(payload.site_name?.trim())) || null;
+  const userNote = decodeHtml(fixEncoding(payload.note?.trim())) || null;
 
   // Validate note length (max 280 chars, same as UI)
   if (userNote && userNote.length > 280) {
@@ -132,23 +140,28 @@ Deno.serve(async (req) => {
   }
 
   let html: string;
+  let resolvedUrl = url;
   try {
-    html = await fetchHtml(url);
+    const article = await fetchArticleMedia(url, FETCH_TIMEOUT_MS, USER_AGENT);
+    html = article.html;
+    resolvedUrl = article.resolvedUrl;
   } catch (err) {
     const message = err instanceof Error ? err.message : "Fetch failed";
     return jsonResponse({ ok: false, error: message }, 502);
   }
 
   const metadata = scrapeMetadata(html, {
+    baseUrl: resolvedUrl,
     siteNameHint: userSiteName || "",
     defaultSiteName,
   });
 
   // Priority: user-provided > scraped
-  const finalTitle = userTitle || metadata.title;
-  const finalDescription = userDescription || metadata.description || null;
-  const finalImageUrl = userImageUrl || metadata.image_url || null;
-  const finalSiteName = userSiteName || metadata.site_name || null;
+  const finalTitle = decodeHtml(userTitle || metadata.title);
+  const finalDescription = decodeHtml(userDescription || metadata.description) || null;
+  const finalImageUrl =
+    sanitizeNewsHeroImageUrl(userImageUrl, resolvedUrl) || metadata.image_url || null;
+  const finalSiteName = decodeHtml(userSiteName || metadata.site_name) || null;
 
   if (!finalTitle) {
     return jsonResponse({ ok: false, error: "Missing title" }, 422);
@@ -174,7 +187,7 @@ Deno.serve(async (req) => {
     .select("id,url,title")
     .single();
 
-  if (__DEV__) {
+  if (DEBUG_LOGS) {
     console.log("[news-ingest] DEV: Insert result:", {
       success: !!data && !error,
       hasError: !!error,
@@ -192,33 +205,13 @@ Deno.serve(async (req) => {
   );
 });
 
-async function fetchHtml(url: string): Promise<string> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
-  try {
-    const response = await fetch(url, {
-      signal: controller.signal,
-      redirect: "follow",
-      headers: {
-        "User-Agent": USER_AGENT,
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Fetch failed with status ${response.status}`);
-    }
-
-    return await response.text();
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
 function scrapeMetadata(
   html: string,
-  { siteNameHint, defaultSiteName }: { siteNameHint: string; defaultSiteName: string },
+  {
+    baseUrl,
+    siteNameHint,
+    defaultSiteName,
+  }: { baseUrl: string; siteNameHint: string; defaultSiteName: string },
 ): ScrapedMetadata {
   const title =
     pickFirst(
@@ -234,11 +227,7 @@ function scrapeMetadata(
       extractMetaName(html, "description"),
     ) || "";
 
-  const imageUrl =
-    pickFirst(
-      extractMetaProperty(html, "og:image"),
-      extractMetaProperty(html, "twitter:image"),
-    ) || "";
+  const media = extractArticleMedia(html, baseUrl);
 
   const siteName =
     pickFirst(
@@ -249,10 +238,10 @@ function scrapeMetadata(
     ) || "";
 
   return {
-    title: limitText(title, 200),
-    description: limitText(description, 500),
-    image_url: limitText(imageUrl, 500),
-    site_name: limitText(siteName, 80),
+    title: limitText(decodeHtml(fixEncoding(title)), 200),
+    description: limitText(decodeHtml(fixEncoding(description)), 500),
+    image_url: media.imageUrl ? limitText(media.imageUrl, 500) : null,
+    site_name: limitText(decodeHtml(fixEncoding(siteName)), 80),
   };
 }
 

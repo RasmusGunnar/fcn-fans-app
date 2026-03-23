@@ -2,7 +2,7 @@ alter table public.profiles
   add column if not exists fan_level_key text;
 
 update public.profiles
-set fan_level_key = 'community_member'
+set fan_level_key = 'new_fan'
 where fan_level_key is null
    or fan_level_key not in (
      'new_fan',
@@ -14,7 +14,7 @@ where fan_level_key is null
    );
 
 alter table public.profiles
-  alter column fan_level_key set default 'community_member';
+  alter column fan_level_key set default 'new_fan';
 
 alter table public.profiles
   alter column fan_level_key set not null;

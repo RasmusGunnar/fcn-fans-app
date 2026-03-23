@@ -700,6 +700,7 @@ export async function updateCommunity(
     cover_path?: string | null;
     avatar_path?: string | null;
     avatar_url?: string | null;
+    avatar_kind?: 'logo' | 'image' | null;
   },
 ): Promise<boolean> {
   try {
@@ -718,6 +719,7 @@ export async function updateCommunity(
       ...(updates.cover_path !== undefined && { cover_path: updates.cover_path }),
       ...(updates.avatar_path !== undefined && { avatar_path: updates.avatar_path }),
       ...(updates.avatar_url !== undefined && { avatar_url: updates.avatar_url }),
+      ...(updates.avatar_kind !== undefined && { avatar_kind: updates.avatar_kind }),
     };
 
     logger.log('[communities] updateCommunity payload:', {
