@@ -94,6 +94,7 @@ export const lightColors = {
   overlay: {
     light: 'rgba(0, 0, 0, 0.3)',
     medium: 'rgba(0, 0, 0, 0.4)',
+    fullscreen: 'rgba(10, 10, 10, 0.98)',
     heroScrim: 'rgba(0, 0, 0, 0.45)',
     heavy: 'rgba(0, 0, 0, 0.5)',
     textShadow: 'rgba(0, 0, 0, 0.6)',
@@ -196,6 +197,7 @@ export const darkColors = {
   overlay: {
     light: 'rgba(0, 0, 0, 0.3)',
     medium: 'rgba(0, 0, 0, 0.4)',
+    fullscreen: 'rgba(10, 10, 10, 0.98)',
     heroScrim: 'rgba(0, 0, 0, 0.45)',
     heavy: 'rgba(0, 0, 0, 0.5)',
     textShadow: 'rgba(0, 0, 0, 0.6)',

@@ -19,7 +19,7 @@ import NextMatchBadge from '../components/home/NextMatchBadge';
 import { Card } from '../components/ui/Card';
 import { useAttendance } from '../hooks/useAttendance';
 import { useMatchCheckIn } from '../hooks/useMatchCheckIn';
-import { fetchNextFixture, formatShortDateDa, type Fixture } from '../services/fixtures';
+import { fetchPrimaryFixture, formatShortDateDa, type Fixture } from '../services/fixtures';
 import { getMatchHeroUrl, getTeamHeroImage } from '../services/sportsdb';
 import { useFeed } from '../state/FeedContext';
 import { colors, spacing } from '../theme';
@@ -133,7 +133,7 @@ export default function HomeScreen() {
 
   const loadNextFixture = async () => {
     setLoadingFixture(true);
-    const fixture = await fetchNextFixture();
+    const fixture = await fetchPrimaryFixture();
     setNextFixture(fixture);
     // Resolve hero: try raw first, then team API
     let hero = getMatchHeroUrl(fixture as any);

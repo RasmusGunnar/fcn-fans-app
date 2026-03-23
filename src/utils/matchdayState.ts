@@ -25,7 +25,7 @@ export function getMatchdayTiming(kickoffAt: string, now: Date): MatchdayTimingS
 
 export function getMatchViewState({
   isMatchday,
-  isGoing,
+  isGoing: _isGoing,
   isCheckedIn,
 }: {
   isMatchday: boolean;
@@ -33,7 +33,8 @@ export function getMatchViewState({
   isCheckedIn: boolean;
 }): MatchViewState {
   if (isMatchday && isCheckedIn) return 'checked_in_confirmed';
-  if (isMatchday && isGoing) return 'matchday_action';
+  // Matchday check-in is a separate action from RSVP state.
+  if (isMatchday) return 'matchday_action';
   return 'pre_match';
 }
 

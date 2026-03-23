@@ -1,5 +1,6 @@
 import { cleanText } from './text';
 
+const IMAGE_HINT_REGEX = /\.(avif|bmp|gif|jpe?g|png|webp)(?:$|[?#])/i;
 const VIDEO_HINT_REGEX =
   /(?:\.(?:m3u8|m4v|mov|mp4|webm)(?:$|[?#])|youtube\.com|youtu\.be|player\.vimeo|vimeo\.com\/video|\/embed\/|\/player\/|twitter\.com\/i\/cards)/i;
 const BAD_ASSET_HINT_REGEX = /(favicon|sprite|avatar|badge)(?!.*(?:hero|cover|poster|thumbnail))/i;
@@ -24,8 +25,14 @@ export function sanitizeNewsHeroImageUrl(
   if (VIDEO_HINT_REGEX.test(absolute)) return null;
 
   const lower = absolute.toLowerCase();
-  if (BAD_ASSET_HINT_REGEX.test(lower)) return null;
-  if (WEAK_LOGO_HINT_REGEX.test(lower) && !STRONG_IMAGE_HINT_REGEX.test(lower)) return null;
+  if (BAD_ASSET_HINT_REGEX.test(lower) && !IMAGE_HINT_REGEX.test(lower)) return null;
+  if (
+    WEAK_LOGO_HINT_REGEX.test(lower) &&
+    !STRONG_IMAGE_HINT_REGEX.test(lower) &&
+    !IMAGE_HINT_REGEX.test(lower)
+  ) {
+    return null;
+  }
 
   return absolute;
 }

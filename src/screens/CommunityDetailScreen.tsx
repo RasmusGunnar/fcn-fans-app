@@ -50,7 +50,7 @@ import {
   uploadCommunityCover,
 } from '../services/communities';
 import { Event as CommunityEvent, fetchEventsUpcoming } from '../services/eventsApi';
-import { fetchUpcomingFixtures, Fixture, formatDateDa } from '../services/fixtures';
+import { fetchPrimaryFixture, Fixture, formatDateDa } from '../services/fixtures';
 import { useCreateSheet } from '../state/CreateSheetContext';
 import { useFeed } from '../state/FeedContext';
 import { useTheme } from '../theme';
@@ -98,7 +98,7 @@ export default function CommunityDetailScreen() {
   const [showMembers, setShowMembers] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
-  const [fixtures, setFixtures] = useState<Fixture[]>([]);
+  const [nextFixture, setNextFixture] = useState<Fixture | null>(null);
   const [events, setEvents] = useState<CommunityEvent[]>([]);
   const [showEditSheet, setShowEditSheet] = useState(false);
   const [showMessageModal, setShowMessageModal] = useState(false);
@@ -177,9 +177,9 @@ export default function CommunityDetailScreen() {
       setMembers([]);
     }
 
-    // Load upcoming fixtures (next 3)
-    const upcomingFixtures = await fetchUpcomingFixtures(3);
-    setFixtures(upcomingFixtures);
+    // Load the same primary fixture logic used by Home.
+    const primaryFixture = await fetchPrimaryFixture();
+    setNextFixture(primaryFixture);
 
     // Load community events using existing service
     const communityEvents = await fetchEventsUpcoming(5, id);
@@ -648,8 +648,6 @@ export default function CommunityDetailScreen() {
   const avatarUrl = resolveAvatarUrl(community?.avatar_url);
 
   const locationLabel = community?.location_label?.trim() || null;
-
-  const nextFixture = fixtures[0];
 
   const renderEventCard = (params: {
     type: 'match' | 'event' | 'bus_trip';

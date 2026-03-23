@@ -1,12 +1,9 @@
 import { Platform } from 'react-native';
+import { isFcnHomeFixture, type FcnHomeFixtureTarget } from '../services/fixtures';
 
 export const FCN_TICKET_URL = 'https://billet.fcn.dk';
-const FCN_TEAM_PROVIDER_ID = '133890';
-const FCN_HOME_TEAM_MATCHERS = ['nordsjalland', 'nordsjaelland'];
 
-interface MatchLinkTarget {
-  home_team: string;
-  home_team_provider_id?: string | null;
+interface MatchLinkTarget extends FcnHomeFixtureTarget {
   lat?: number | null;
   lng?: number | null;
   venue?: string | null;
@@ -14,23 +11,9 @@ interface MatchLinkTarget {
 }
 
 export function isFcnHomeMatch(
-  fixture: Pick<MatchLinkTarget, 'home_team' | 'home_team_provider_id'>,
+  fixture: Pick<MatchLinkTarget, 'home_team' | 'home_team_provider_id' | 'home_team_id'>,
 ): boolean {
-  const homeTeamProviderId = String(fixture.home_team_provider_id ?? '').trim();
-  if (homeTeamProviderId === FCN_TEAM_PROVIDER_ID) {
-    return true;
-  }
-
-  const normalizedHomeTeam = fixture.home_team
-    .toLowerCase()
-    .trim()
-    .replace(/æ/g, 'ae')
-    .replace(/ø/g, 'o')
-    .replace(/å/g, 'a')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
-
-  return FCN_HOME_TEAM_MATCHERS.some((matcher) => normalizedHomeTeam.includes(matcher));
+  return isFcnHomeFixture(fixture);
 }
 
 export function buildMatchMapsUrl(

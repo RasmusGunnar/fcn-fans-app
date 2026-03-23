@@ -7,6 +7,7 @@ export interface Fixture {
   provider: string;
   provider_fixture_id: string;
   kickoff_at: string;
+  end_time?: string | null;
   competition: string | null;
   round: string | null;
   venue: string | null;
@@ -33,6 +34,10 @@ const FCN_TEAM_FILTER = '%nordsjælland%';
 const FCN_TEAM_PROVIDER_ID = '133890';
 const NEXT_FIXTURE_LOOKAHEAD_LIMIT = 50;
 const FCN_TEAM_NAME_MATCHERS = ['nordsjalland', 'nordsjaelland'];
+const PRIMARY_FIXTURE_LOOKBACK_HOURS = 12;
+const DEFAULT_FIXTURE_DURATION_HOURS = 2;
+const FIXTURE_END_GRACE_HOURS = 1;
+const MS_PER_HOUR = 1000 * 60 * 60;
 
 type FixtureRow = Record<string, unknown>;
 
@@ -100,6 +105,16 @@ function toKickoffTimestamp(kickoffAt: string | null | undefined): number {
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
+function toValidDate(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isFinite(parsed.getTime()) ? parsed : null;
+}
+
+function addHours(date: Date, hours: number): Date {
+  return new Date(date.getTime() + hours * MS_PER_HOUR);
+}
+
 function compareFixturesByKickoffAsc(a: Fixture, b: Fixture): number {
   const kickoffDiff = toKickoffTimestamp(a.kickoff_at) - toKickoffTimestamp(b.kickoff_at);
   if (kickoffDiff !== 0) return kickoffDiff;
@@ -132,7 +147,12 @@ function fixtureIncludesFcn(fixture: Fixture): boolean {
   );
 }
 
-function isFcnHomeFixture(fixture: Fixture): boolean {
+export type FcnHomeFixtureTarget = Pick<
+  Fixture,
+  'home_team' | 'home_team_provider_id' | 'home_team_id'
+>;
+
+export function isFcnHomeFixture(fixture: FcnHomeFixtureTarget): boolean {
   const homeTeamId = readString(fixture.home_team_provider_id ?? fixture.home_team_id);
   if (homeTeamId === FCN_TEAM_PROVIDER_ID) {
     return true;
@@ -140,6 +160,33 @@ function isFcnHomeFixture(fixture: Fixture): boolean {
 
   const homeName = normalizeText(fixture.home_team);
   return FCN_TEAM_NAME_MATCHERS.some((matcher) => homeName.includes(matcher));
+}
+
+export function getFixtureEffectiveEndTime(
+  fixture: Pick<Fixture, 'kickoff_at' | 'end_time'>,
+): Date | null {
+  const kickoff = toValidDate(fixture.kickoff_at);
+  if (!kickoff) return null;
+
+  const explicitEnd = toValidDate(fixture.end_time ?? null);
+  if (explicitEnd && explicitEnd.getTime() >= kickoff.getTime()) {
+    return explicitEnd;
+  }
+
+  return addHours(kickoff, DEFAULT_FIXTURE_DURATION_HOURS);
+}
+
+export function isFixtureActive(
+  fixture: Pick<Fixture, 'kickoff_at' | 'end_time'>,
+  now: Date = new Date(),
+): boolean {
+  const kickoff = toValidDate(fixture.kickoff_at);
+  const effectiveEnd = getFixtureEffectiveEndTime(fixture);
+  if (!kickoff || !effectiveEnd) return false;
+
+  const graceEnd = addHours(effectiveEnd, FIXTURE_END_GRACE_HOURS);
+  const nowTimestamp = now.getTime();
+  return nowTimestamp >= kickoff.getTime() && nowTimestamp <= graceEnd.getTime();
 }
 
 function normalizeFixture(row: FixtureRow): Fixture | null {
@@ -159,6 +206,7 @@ function normalizeFixture(row: FixtureRow): Fixture | null {
     provider_fixture_id:
       readString(row.provider_fixture_id) ?? readString(row.external_id) ?? id,
     kickoff_at: kickoffAt,
+    end_time: readString(row.end_time) ?? readString(raw?.end_time) ?? readString(raw?.endTime),
     competition: readString(row.competition),
     round: readString(row.round),
     venue: readString(row.venue) ?? readString(row.venue_name),
@@ -197,6 +245,28 @@ function normalizeUpcomingFixtures(rows: unknown[] | null | undefined): Fixture[
     });
 
   return Array.from(deduped.values());
+}
+
+async function fetchRelevantFixturesFromTable(table: string, limit: number): Promise<Fixture[]> {
+  const cutoffIso = new Date(
+    Date.now() - PRIMARY_FIXTURE_LOOKBACK_HOURS * MS_PER_HOUR,
+  ).toISOString();
+  let query = supabase.from(table).select('*');
+
+  if (table === 'fixtures') {
+    query = applyFcnFilter(query);
+  }
+
+  const { data, error } = await query
+    .gte('kickoff_at', cutoffIso)
+    .order('kickoff_at', { ascending: true })
+    .limit(limit);
+
+  if (error) {
+    throw error;
+  }
+
+  return normalizeUpcomingFixtures(data);
 }
 
 async function fetchUpcomingFixturesFromTable(table: string, limit: number): Promise<Fixture[]> {
@@ -239,12 +309,66 @@ async function fetchBestUpcomingFixtures(limit: number): Promise<Fixture[]> {
   }
 }
 
+async function fetchBestRelevantFixtures(limit: number): Promise<Fixture[]> {
+  try {
+    const viewFixtures = await fetchRelevantFixturesFromTable(FCN_FIXTURES_VIEW, limit);
+    if (viewFixtures.length > 0) {
+      return viewFixtures;
+    }
+  } catch (error) {
+    if (!shouldFallbackView(error)) {
+      logger.warn('[fixtures] Relevant view query failed, trying fixtures fallback:', error);
+    }
+  }
+
+  try {
+    return await fetchRelevantFixturesFromTable('fixtures', limit);
+  } catch (error) {
+    logger.error('[fixtures] Error fetching primary fixture candidates (fallback):', error);
+    return [];
+  }
+}
+
 function selectNextFixture(fixtures: Fixture[], now = new Date()): Fixture | null {
   const nowTimestamp = now.getTime();
   const upcomingFixtures = fixtures
     .filter((fixture) => toKickoffTimestamp(fixture.kickoff_at) > nowTimestamp)
     .sort(compareFixturesByKickoffAsc);
 
+  if (upcomingFixtures.length === 0) {
+    return null;
+  }
+
+  const nextHomeFixture = upcomingFixtures.find(isFcnHomeFixture);
+  return nextHomeFixture ?? upcomingFixtures[0] ?? null;
+}
+
+function compareActiveFixtures(a: Fixture, b: Fixture, now: Date): number {
+  const homeDiff = Number(isFcnHomeFixture(b)) - Number(isFcnHomeFixture(a));
+  if (homeDiff !== 0) return homeDiff;
+
+  const distanceA = Math.abs(now.getTime() - toKickoffTimestamp(a.kickoff_at));
+  const distanceB = Math.abs(now.getTime() - toKickoffTimestamp(b.kickoff_at));
+  if (distanceA !== distanceB) return distanceA - distanceB;
+
+  return toKickoffTimestamp(b.kickoff_at) - toKickoffTimestamp(a.kickoff_at);
+}
+
+export function selectPrimaryFixture(fixtures: Fixture[], now = new Date()): Fixture | null {
+  const nowTimestamp = now.getTime();
+  const candidates = [...fixtures]
+    .filter(isFixtureDataComplete)
+    .filter(fixtureIncludesFcn)
+    .sort(compareFixturesByKickoffAsc);
+
+  const activeFixtures = candidates.filter((fixture) => isFixtureActive(fixture, now));
+  if (activeFixtures.length > 0) {
+    return [...activeFixtures].sort((a, b) => compareActiveFixtures(a, b, now))[0] ?? null;
+  }
+
+  const upcomingFixtures = candidates.filter(
+    (fixture) => toKickoffTimestamp(fixture.kickoff_at) > nowTimestamp,
+  );
   if (upcomingFixtures.length === 0) {
     return null;
   }
@@ -268,6 +392,16 @@ export async function fetchUpcomingFixtures(limitCount = 50): Promise<Fixture[]>
   } catch (err) {
     logger.error('[fixtures] Unexpected error:', err);
     return [];
+  }
+}
+
+export async function fetchPrimaryFixture(): Promise<Fixture | null> {
+  try {
+    const fixtures = await fetchBestRelevantFixtures(NEXT_FIXTURE_LOOKAHEAD_LIMIT);
+    return selectPrimaryFixture(fixtures);
+  } catch (err) {
+    logger.error('[fixtures] Unexpected error fetching primary fixture:', err);
+    return null;
   }
 }
 

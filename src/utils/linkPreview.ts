@@ -1,13 +1,10 @@
 import type { LinkPreview } from '../types/news';
-import { fetchLinkPreview } from '../services/newsApi';
 import type { PostLinkPreview, PostLinkProvider } from '../types/post';
 import { cleanText } from './text';
 
 const FIRST_URL_REGEX =
   /(?:https?:\/\/[^\s<>()]+|www\.[^\s<>()]+|(?:instagram\.com|facebook\.com|fb\.watch|youtube\.com|youtu\.be)(?:\/[^\s<>()]*)?)/i;
 const TRAILING_URL_PUNCTUATION_REGEX = /[),.!?:;"'\]]+$/;
-const hydratedPreviewCache = new Map<string, PostLinkPreview>();
-const hydratedPreviewPromises = new Map<string, Promise<PostLinkPreview>>();
 const YOUTUBE_VIDEO_ID_REGEX = /^[A-Za-z0-9_-]{11}$/;
 let linkPreviewColumnAvailable: boolean | null = null;
 
@@ -262,76 +259,6 @@ export function resolvePostLinkPreview(
 
   const detectedUrl = extractFirstUrl(text ?? '');
   return detectedUrl ? buildPostLinkPreview(detectedUrl) : null;
-}
-
-export function mergePostLinkPreview(
-  base: PostLinkPreview,
-  incoming: PostLinkPreview,
-): PostLinkPreview {
-  return {
-    url: normalizeHttpUrl(incoming.url) ?? normalizeHttpUrl(base.url) ?? incoming.url ?? base.url,
-    provider: incoming.provider ?? base.provider,
-    domain: incoming.domain || base.domain,
-    title: incoming.title ?? base.title ?? null,
-    description: incoming.description ?? base.description ?? null,
-    imageUrl: incoming.imageUrl ?? base.imageUrl ?? null,
-    siteName: incoming.siteName ?? base.siteName ?? null,
-    hasVideo:
-      typeof incoming.hasVideo === 'boolean'
-        ? incoming.hasVideo
-        : typeof base.hasVideo === 'boolean'
-          ? base.hasVideo
-          : null,
-    dismissed:
-      typeof incoming.dismissed === 'boolean'
-        ? incoming.dismissed
-        : typeof base.dismissed === 'boolean'
-          ? base.dismissed
-          : null,
-  };
-}
-
-export function shouldHydratePostLinkPreview(
-  preview: PostLinkPreview | null | undefined,
-): boolean {
-  if (!preview) {
-    return false;
-  }
-
-  return !preview.imageUrl || !preview.title || preview.siteName === preview.domain;
-}
-
-export async function hydratePostLinkPreview(
-  preview: PostLinkPreview,
-): Promise<PostLinkPreview> {
-  const normalizedUrl = normalizeHttpUrl(preview.url);
-  if (!normalizedUrl) {
-    return preview;
-  }
-
-  const cachedPreview = hydratedPreviewCache.get(normalizedUrl);
-  if (cachedPreview) {
-    return mergePostLinkPreview(preview, cachedPreview);
-  }
-
-  const pendingPreview = hydratedPreviewPromises.get(normalizedUrl);
-  if (pendingPreview) {
-    return pendingPreview.then((result) => mergePostLinkPreview(preview, result));
-  }
-
-  const promise = fetchLinkPreview(normalizedUrl)
-    .then((result) => {
-      const hydratedPreview = buildPostLinkPreview(result.url || normalizedUrl, result);
-      hydratedPreviewCache.set(normalizedUrl, hydratedPreview);
-      return hydratedPreview;
-    })
-    .catch(() => preview)
-    .finally(() => {
-      hydratedPreviewPromises.delete(normalizedUrl);
-    });
-
-  hydratedPreviewPromises.set(normalizedUrl, promise);
-  return promise.then((result) => mergePostLinkPreview(preview, result));
 }
 
 export function isInstagramLinkPreviewWithImage(

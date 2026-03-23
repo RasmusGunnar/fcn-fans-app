@@ -38,8 +38,32 @@ interface PostComposerProps {
   feedTargets?: string[];
 }
 
+type CachedComposerPreview = {
+  preview: Post['linkPreview'];
+  error: string | null;
+  expiresAt: number;
+};
+
+const PREVIEW_SUCCESS_CACHE_TTL_MS = 5 * 60 * 1000;
+const PREVIEW_ERROR_CACHE_TTL_MS = 30 * 1000;
+const composerPreviewCache = new Map<string, CachedComposerPreview>();
+
+function getCachedComposerPreview(url: string): CachedComposerPreview | null {
+  const cached = composerPreviewCache.get(url);
+
+  if (!cached) {
+    return null;
+  }
+
+  if (cached.expiresAt <= Date.now()) {
+    composerPreviewCache.delete(url);
+    return null;
+  }
+
+  return cached;
+}
+
 export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProps) {
-  logger.log('[PostComposer] Component mounted');
   const theme = useTheme();
   const styles = createStyles(theme);
   const { user } = useAuth();
@@ -52,6 +76,7 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [dismissedUrl, setDismissedUrl] = useState<string | null>(null);
   const previewRequestIdRef = useRef(0);
+  const lastRequestedUrlRef = useRef<string | null>(null);
   const detectedUrl = useMemo(() => extractFirstUrl(text), [text]);
   const activePreviewUrl = useMemo(() => {
     if (!detectedUrl || detectedUrl === dismissedUrl) {
@@ -71,6 +96,10 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
   );
 
   useEffect(() => {
+    logger.log('[PostComposer] Component mounted');
+  }, []);
+
+  useEffect(() => {
     if (!detectedUrl) {
       setDismissedUrl(null);
       return;
@@ -86,13 +115,28 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
     let cancelled = false;
 
     if (!activePreviewUrl) {
+      lastRequestedUrlRef.current = null;
       setLinkPreview(null);
       setPreviewError(null);
       setLoadingPreview(false);
       return;
     }
 
+    const cachedPreview = getCachedComposerPreview(activePreviewUrl);
+    if (cachedPreview) {
+      lastRequestedUrlRef.current = activePreviewUrl;
+      setLinkPreview(cachedPreview.preview);
+      setPreviewError(cachedPreview.error);
+      setLoadingPreview(false);
+      return;
+    }
+
+    if (lastRequestedUrlRef.current === activePreviewUrl) {
+      return;
+    }
+
     const fallbackPreview = buildPostLinkPreview(activePreviewUrl);
+    lastRequestedUrlRef.current = activePreviewUrl;
     setLinkPreview(fallbackPreview);
     setPreviewError(null);
     setLoadingPreview(true);
@@ -104,7 +148,17 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
           return;
         }
 
-        setLinkPreview(buildPostLinkPreview(preview.url || activePreviewUrl, preview));
+        const nextPreview = buildPostLinkPreview(activePreviewUrl, {
+          ...preview,
+          url: activePreviewUrl,
+        });
+        composerPreviewCache.set(activePreviewUrl, {
+          preview: nextPreview,
+          error: null,
+          expiresAt: Date.now() + PREVIEW_SUCCESS_CACHE_TTL_MS,
+        });
+        setLinkPreview(nextPreview);
+        setPreviewError(null);
       } catch (error: any) {
         if (cancelled || previewRequestIdRef.current !== requestId) {
           return;
@@ -113,6 +167,11 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
         logger.warn('[PostComposer] Link preview fetch failed', {
           url: activePreviewUrl,
           message: error?.message || error,
+        });
+        composerPreviewCache.set(activePreviewUrl, {
+          preview: fallbackPreview,
+          error: 'Kunne ikke hente metadata',
+          expiresAt: Date.now() + PREVIEW_ERROR_CACHE_TTL_MS,
         });
         setLinkPreview(fallbackPreview);
         setPreviewError('Kunne ikke hente metadata');
@@ -401,6 +460,8 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
       }
     });
   };
+  const isSubmitting = loading;
+  const isSubmitDisabled = !text.trim() || isSubmitting;
 
   return (
     <View style={styles.container}>
@@ -478,17 +539,17 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
         </Card>
       )}
 
-      <View style={[styles.submitButtonWrap, !text.trim() || loading ? styles.submitButtonWrapDisabled : null]}>
+      <View style={[styles.submitButtonWrap, isSubmitDisabled ? styles.submitButtonWrapDisabled : null]}>
         <View style={styles.submitButtonInner}>
           <PrimaryButton
-            title={loading ? 'Deler...' : 'Del opslag'}
+            title={isSubmitting ? 'Deler...' : 'Del opslag'}
             onPress={handlePublish}
-            disabled={!text.trim() || loading}
+            disabled={isSubmitDisabled}
           />
         </View>
       </View>
 
-      {loading && (
+      {isSubmitting && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="small" color={theme.colors.primary} />
         </View>

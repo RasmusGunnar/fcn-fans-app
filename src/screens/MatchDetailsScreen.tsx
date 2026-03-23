@@ -245,6 +245,16 @@ export default function MatchDetailsScreen() {
     isCheckedIn: matchCheckIn.isCheckedIn,
   });
   const isGoingToMatch = baseIsGoingToMatch || matchViewState === 'checked_in_confirmed';
+  const matchInfoStatusText =
+    matchViewState === 'matchday_action'
+      ? baseIsGoingToMatch
+        ? 'Du har sagt, at du kommer - klar til at tjekke ind?'
+        : participationChoice === 'not_going'
+          ? 'Har du alligevel taget turen? Tjek ind her.'
+          : 'Er du på stadion? Tjek ind her.'
+      : isGoingToMatch
+        ? 'Du kommer til kampen'
+        : 'Vælg hvordan du følger kampen';
   const handleOpenRoute = async () => {
     if (!mapsUrl) return;
     try {
@@ -305,7 +315,7 @@ export default function MatchDetailsScreen() {
   };
 
   const renderParticipationCard = () => {
-    if (isGoingToMatch) {
+    if (matchViewState !== 'pre_match' || isGoingToMatch) {
       return null;
     }
 

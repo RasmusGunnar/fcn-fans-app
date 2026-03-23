@@ -41,6 +41,11 @@ export type RootStackParamList = {
     initialIndex?: number;
     postId?: string;
   };
+  YouTubePlayer: {
+    videoId: string;
+    url: string;
+    title?: string | null;
+  };
 
   MatchDetails: { fixtureId: string };
   EventAttendees: EventAttendeesParams;

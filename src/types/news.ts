@@ -23,6 +23,7 @@ export interface LinkPreview {
   description?: string;
   imageUrl?: string;
   siteName?: string;
+  hasVideo?: boolean;
 }
 
 export interface Actor {

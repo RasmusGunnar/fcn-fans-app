@@ -10,7 +10,7 @@ export interface PollData {
   expires_at: string;
 }
 
-export type PostLinkProvider = 'instagram' | 'facebook' | 'generic';
+export type PostLinkProvider = 'instagram' | 'facebook' | 'youtube' | 'generic';
 
 export interface PostLinkPreview {
   url: string;
@@ -20,6 +20,8 @@ export interface PostLinkPreview {
   description?: string | null;
   imageUrl?: string | null;
   siteName?: string | null;
+  hasVideo?: boolean | null;
+  dismissed?: boolean | null;
 }
 
 export interface Post {

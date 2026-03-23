@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  AccessibilityRole,
   ActivityIndicator,
   GestureResponderEvent,
   Image,
@@ -21,6 +22,9 @@ interface LinkPreviewCardProps {
   loading?: boolean;
   error?: string | null;
   onPress?: (event?: GestureResponderEvent) => void;
+  actionIconName?: keyof typeof Ionicons.glyphMap;
+  accessibilityRole?: AccessibilityRole;
+  accessibilityLabel?: string;
   onRemove?: () => void;
   style?: StyleProp<ViewStyle>;
 }
@@ -32,6 +36,10 @@ function getLinkIconName(preview: PostLinkPreview): keyof typeof Ionicons.glyphM
 
   if (preview.provider === 'facebook') {
     return 'logo-facebook';
+  }
+
+  if (preview.provider === 'youtube') {
+    return 'logo-youtube';
   }
 
   if (preview.domain.includes('youtube.com') || preview.domain.includes('youtu.be')) {
@@ -50,6 +58,10 @@ function getFallbackTitle(preview: PostLinkPreview): string {
     return 'Facebook-link';
   }
 
+  if (preview.provider === 'youtube') {
+    return 'YouTube-link';
+  }
+
   return 'Link-preview';
 }
 
@@ -59,6 +71,9 @@ export function LinkPreviewCard({
   loading = false,
   error = null,
   onPress,
+  actionIconName,
+  accessibilityRole,
+  accessibilityLabel,
   onRemove,
   style,
 }: LinkPreviewCardProps) {
@@ -165,7 +180,7 @@ export function LinkPreviewCard({
       ) : onPress ? (
         <View style={styles.actionIconWrap}>
           <Ionicons
-            name="open-outline"
+            name={actionIconName ?? 'open-outline'}
             size={theme.components.icon.size.sm}
             color={theme.colors.text.secondary}
           />
@@ -182,8 +197,8 @@ export function LinkPreviewCard({
     <Pressable
       style={({ pressed }) => [pressed ? styles.cardPressed : null]}
       onPress={(event) => onPress(event)}
-      accessibilityRole="link"
-      accessibilityLabel={`Åbn ${providerLabel}-link eksternt`}
+      accessibilityRole={accessibilityRole ?? 'link'}
+      accessibilityLabel={accessibilityLabel ?? `Åbn ${providerLabel}-link eksternt`}
     >
       {content}
     </Pressable>

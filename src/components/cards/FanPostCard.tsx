@@ -27,10 +27,8 @@ import type { CategoryKey } from '../../theme/categories';
 import { Post } from '../../types/post';
 import { resolveActorLine, type ProfileMap } from '../../utils/actor';
 import {
+  extractYouTubeVideoId,
   getPromotedInstagramLinkPreview,
-  hydratePostLinkPreview,
-  mergePostLinkPreview,
-  shouldHydratePostLinkPreview,
   stripFirstUrlFromDisplayText,
 } from '../../utils/linkPreview';
 import { resolveRenderableMedia } from '../../utils/media';
@@ -249,8 +247,6 @@ export function FanPostCard({
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(cleanedPostText);
   const [imageLoadError, setImageLoadError] = useState(false);
-  const [hydratedLinkPreview, setHydratedLinkPreview] = useState(post.linkPreview ?? null);
-  const sourceLinkPreview = post.linkPreview ?? null;
 
   const { user, isAppAdmin } = useAuth();
   const viewerUserId = currentUserId ?? user?.id;
@@ -271,17 +267,7 @@ export function FanPostCard({
   const mediaKind = primaryMedia?.type ?? null;
   const hasUploadedMedia = mediaArray.length > 0;
   const hasMultipleMedia = resolvedMedia.length > 1;
-  const postLinkPreview = useMemo(() => {
-    if (!post.linkPreview) {
-      return hydratedLinkPreview;
-    }
-
-    if (!hydratedLinkPreview) {
-      return post.linkPreview;
-    }
-
-    return mergePostLinkPreview(post.linkPreview, hydratedLinkPreview);
-  }, [hydratedLinkPreview, post.linkPreview]);
+  const postLinkPreview = post.linkPreview ?? null;
   const promotedInstagramPreview = useMemo(
     () =>
       getPromotedInstagramLinkPreview({
@@ -311,38 +297,15 @@ export function FanPostCard({
   const showPromotedInstagramPreview = Boolean(
     promotedInstagramPreview && promotedInstagramImageUri && !imageLoadError,
   );
-  const shouldHydrateLinkPreview = useMemo(
-    () => shouldHydratePostLinkPreview(postLinkPreview),
-    [postLinkPreview],
+  const youtubeVideoId = useMemo(
+    () => extractYouTubeVideoId(postLinkPreview?.url),
+    [postLinkPreview?.url],
   );
+  const opensYouTubeInApp = Boolean(youtubeVideoId);
 
   useEffect(() => {
     setImageLoadError(false);
   }, [mediaUri, promotedInstagramImageUri]);
-
-  useEffect(() => {
-    setHydratedLinkPreview(sourceLinkPreview);
-  }, [post.id, sourceLinkPreview]);
-
-  useEffect(() => {
-    if (!postLinkPreview || !shouldHydrateLinkPreview) {
-      return;
-    }
-
-    let cancelled = false;
-
-    void hydratePostLinkPreview(postLinkPreview).then((nextPreview) => {
-      if (!cancelled) {
-        setHydratedLinkPreview((currentPreview) =>
-          currentPreview ? mergePostLinkPreview(currentPreview, nextPreview) : nextPreview,
-        );
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [postLinkPreview, shouldHydrateLinkPreview]);
 
   // BASELINE: Remove complex video state management - keep only essential edit handlers
 
@@ -354,6 +317,22 @@ export function FanPostCard({
     event?.stopPropagation();
 
     if (!postLinkPreview?.url) {
+      return;
+    }
+
+    if (youtubeVideoId) {
+      const params = {
+        videoId: youtubeVideoId,
+        url: postLinkPreview.url,
+        title: postLinkPreview.title ?? null,
+      };
+
+      if (navigationRef.isReady()) {
+        navigationRef.navigate('YouTubePlayer', params);
+        return;
+      }
+
+      navigation.navigate('YouTubePlayer', params);
       return;
     }
 
@@ -697,6 +676,11 @@ export function FanPostCard({
         <LinkPreviewCard
           preview={postLinkPreview}
           onPress={handleOpenPostLink}
+          actionIconName={opensYouTubeInApp ? 'play-circle-outline' : undefined}
+          accessibilityRole={opensYouTubeInApp ? 'button' : undefined}
+          accessibilityLabel={
+            opensYouTubeInApp ? 'Afspil YouTube-video i appen' : undefined
+          }
           style={styles.linkPreview}
         />
       ) : null}

@@ -63,6 +63,14 @@ function getDefaultPrimaryLabel(panelState: MatchdayStatusPanelState): string {
   }
 }
 
+function getResolvedTitle(panelState: MatchdayStatusPanelState, isGoing: boolean): string {
+  if (panelState === 'matchday_action') {
+    return isGoing ? 'Klar til at tjekke ind?' : 'Er du på stadion?';
+  }
+
+  return getTitle(panelState);
+}
+
 function getSocialCopy(panelState: MatchdayStatusPanelState, count: number) {
   if (count <= 0) {
     switch (panelState) {
@@ -207,7 +215,7 @@ export function MatchdayStatusPanel({
             </View>
           ) : null}
           <Text variant="h3" color="primary" style={styles.title} numberOfLines={2}>
-            {getTitle(panelState)}
+            {getResolvedTitle(panelState, isGoing)}
           </Text>
         </View>
       </View>
