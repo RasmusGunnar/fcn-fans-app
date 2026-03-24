@@ -1,8 +1,9 @@
 // deno-lint-ignore-file no-explicit-any
 import {
+  buildNotificationDedupeKey,
   createAdminClient,
   dispatchNotifications,
-  fetchAllPushTokens,
+  fetchExistingNotificationDedupeKeys,
   fetchPushTokensForUsers,
   json,
   requireSyncSecret,
@@ -20,13 +21,23 @@ type MatchReminderRequest = {
   dryRun?: boolean;
 };
 
+type PushTokenRow = {
+  user_id: string;
+  push_token: string;
+  platform?: string | null;
+  updated_at?: string | null;
+};
+
 function normalizeText(value: unknown): string {
   return String(value ?? '')
     .trim()
     .toLowerCase()
-    .replace(/æ/g, 'ae')
-    .replace(/ø/g, 'o')
-    .replace(/å/g, 'a')
+    .replace(/\u00E6/g, 'ae')
+    .replace(/\u00F8/g, 'o')
+    .replace(/\u00E5/g, 'a')
+    .replace(/\u00C3\u00A6/g, 'ae')
+    .replace(/\u00C3\u00B8/g, 'o')
+    .replace(/\u00C3\u00A5/g, 'a')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
 }
@@ -101,6 +112,71 @@ function buildOpponentLabel(row: Record<string, unknown>): string {
   return `${homeTeam} - ${awayTeam}`;
 }
 
+function getIsoTime(value: string | null | undefined): number {
+  if (!value) return Number.NEGATIVE_INFINITY;
+
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : Number.NEGATIVE_INFINITY;
+}
+
+function pickLatestTokenPerUser(rows: PushTokenRow[]): PushTokenRow[] {
+  const latestByUser = new Map<string, PushTokenRow>();
+
+  for (const row of rows) {
+    const userId = readString(row.user_id);
+    const pushToken = readString(row.push_token);
+    if (!userId || !pushToken) continue;
+
+    const normalizedRow: PushTokenRow = {
+      user_id: userId,
+      push_token: pushToken,
+      platform: row.platform ?? null,
+      updated_at: row.updated_at ?? null,
+    };
+
+    const existing = latestByUser.get(userId);
+    if (!existing || getIsoTime(normalizedRow.updated_at) >= getIsoTime(existing.updated_at)) {
+      latestByUser.set(userId, normalizedRow);
+    }
+  }
+
+  return Array.from(latestByUser.values());
+}
+
+async function fetchGoingRsvpUserIds(supabase: any, fixtureId: string) {
+  const { data, error } = await supabase
+    .from('rsvps')
+    .select('user_id')
+    .eq('entity_type', 'match')
+    .eq('entity_id', fixtureId)
+    .eq('status', 'going');
+
+  if (error) throw error;
+
+  return Array.from(
+    new Set(
+      ((data as { user_id?: string | null }[] | null) ?? [])
+        .map((row) => readString(row.user_id))
+        .filter((userId): userId is string => Boolean(userId)),
+    ),
+  );
+}
+
+async function fetchCheckedInUserIds(supabase: any, fixtureId: string) {
+  const { data, error } = await supabase
+    .from('match_checkins')
+    .select('user_id')
+    .eq('match_id', fixtureId);
+
+  if (error) throw error;
+
+  return new Set(
+    ((data as { user_id?: string | null }[] | null) ?? [])
+      .map((row) => readString(row.user_id))
+      .filter((userId): userId is string => Boolean(userId)),
+  );
+}
+
 async function readRequestBody(req: Request): Promise<MatchReminderRequest> {
   try {
     const raw = await req.text();
@@ -125,6 +201,7 @@ Deno.serve(async (req) => {
     const body = await readRequestBody(req);
     const fixtureId = readString(body.fixtureId);
     const targetUserIds = readStringArray(body.targetUserIds);
+    const targetUserIdSet = new Set(targetUserIds);
     const dryRun = body.dryRun === true;
     const manualOverride =
       dryRun || Boolean(fixtureId) || targetUserIds.length > 0 || Boolean(readString(body.nowIso));
@@ -147,11 +224,7 @@ Deno.serve(async (req) => {
 
     let fixtures: any[] = [];
     if (fixtureId) {
-      const { data, error } = await supabase
-        .from('fixtures')
-        .select('*')
-        .eq('id', fixtureId)
-        .limit(1);
+      const { data, error } = await supabase.from('fixtures').select('*').eq('id', fixtureId).limit(1);
 
       if (error) throw error;
       fixtures = Array.isArray(data) ? data : [];
@@ -171,31 +244,83 @@ Deno.serve(async (req) => {
       .filter((fixture) => hasRequiredFixtureFields(fixture as Record<string, unknown>))
       .filter((fixture) => isFcnFixture(fixture as Record<string, unknown>));
 
-    const tokens =
-      targetUserIds.length > 0
-        ? await fetchPushTokensForUsers(supabase, targetUserIds)
-        : await fetchAllPushTokens(supabase);
+    const candidateRequests: {
+      userId: string;
+      pushToken: string;
+      notificationType: string;
+      dedupeKey: string;
+      title: string;
+      body: string;
+      data: Record<string, unknown>;
+    }[] = [];
+    let rsvpUsersMatched = 0;
+    let recipientsTargeted = 0;
+    let recipientsSkippedCheckedIn = 0;
+    let recipientsSkippedMissingToken = 0;
 
-    const requests = eligibleFixtures.flatMap((fixture: any) => {
+    for (const fixture of eligibleFixtures) {
       const kickoffAt = readString(fixture.kickoff_at);
       const fixtureUuid = readString(fixture.id);
-      if (!kickoffAt || !fixtureUuid) return [];
+      if (!kickoffAt || !fixtureUuid) continue;
+
+      const goingUserIds = await fetchGoingRsvpUserIds(supabase, fixtureUuid);
+      const scopedUserIds =
+        targetUserIdSet.size > 0
+          ? goingUserIds.filter((userId) => targetUserIdSet.has(userId))
+          : goingUserIds;
+
+      rsvpUsersMatched += scopedUserIds.length;
+      if (scopedUserIds.length === 0) continue;
+
+      const checkedInUserIds = await fetchCheckedInUserIds(supabase, fixtureUuid);
+      const notCheckedInUserIds = scopedUserIds.filter((userId) => !checkedInUserIds.has(userId));
+
+      recipientsSkippedCheckedIn += scopedUserIds.length - notCheckedInUserIds.length;
+      if (notCheckedInUserIds.length === 0) continue;
+
+      const tokens = pickLatestTokenPerUser(
+        (await fetchPushTokensForUsers(supabase, notCheckedInUserIds)) as PushTokenRow[],
+      );
+      const tokenUserIds = new Set(tokens.map((tokenRow) => tokenRow.user_id));
+
+      recipientsSkippedMissingToken += notCheckedInUserIds.filter(
+        (userId) => !tokenUserIds.has(userId),
+      ).length;
+      recipientsTargeted += tokens.length;
 
       const opponent = buildOpponentLabel(fixture as Record<string, unknown>);
-      return tokens.map((tokenRow: any) => ({
-        userId: tokenRow.user_id as string,
-        pushToken: tokenRow.push_token as string,
-        notificationType: 'match_reminder',
-        dedupeKey: `match_reminder:${fixtureUuid}:${tokenRow.push_token}`,
-        title: 'Kamp i dag',
-        body: `FCN møder ${opponent} kl. ${formatTimeDa(kickoffAt)}.`,
-        data: {
-          type: 'match',
-          fixtureId: fixtureUuid,
-          url: `fcnfans://match/${fixtureUuid}`,
-        },
-      }));
-    });
+
+      for (const tokenRow of tokens) {
+        candidateRequests.push({
+          userId: tokenRow.user_id,
+          pushToken: tokenRow.push_token,
+          notificationType: 'match_checkin_reminder',
+          dedupeKey: buildNotificationDedupeKey(
+            'match_checkin_reminder',
+            fixtureUuid,
+            tokenRow.user_id,
+          ),
+          title: 'Er du p\u00E5 stadion?',
+          body: `FCN m\u00F8der ${opponent} kl. ${formatTimeDa(kickoffAt)}. Husk at tjekke ind til kampen i appen.`,
+          data: {
+            type: 'match',
+            fixtureId: fixtureUuid,
+            url: `fcnfans://match/${fixtureUuid}`,
+          },
+        });
+      }
+    }
+
+    const existingDedupeKeys = await fetchExistingNotificationDedupeKeys(
+      supabase,
+      candidateRequests.map((request) => request.dedupeKey),
+    );
+
+    const requests = candidateRequests.filter(
+      (request) => !existingDedupeKeys.has(request.dedupeKey),
+    );
+
+    const recipientsSkippedExistingDedupe = candidateRequests.length - requests.length;
 
     const summary = {
       mode: fixtureId ? 'fixture_id' : 'window',
@@ -204,10 +329,14 @@ Deno.serve(async (req) => {
       windowEnd: windowEnd.toISOString(),
       fixturesFetched: fixtures.length,
       fixturesMatched: eligibleFixtures.length,
-      tokensTargeted: tokens.length,
+      rsvpUsersMatched,
+      recipientsTargeted,
+      recipientsSkippedCheckedIn,
+      recipientsSkippedMissingToken,
+      recipientsSkippedExistingDedupe,
       requestsPrepared: requests.length,
       dryRun,
-      targetedUsers: targetUserIds.length,
+      targetedUsers: targetUserIdSet.size,
     };
 
     if (dryRun) {
@@ -221,6 +350,7 @@ Deno.serve(async (req) => {
           title: request.title,
           body: request.body,
           data: request.data,
+          dedupeKey: request.dedupeKey,
         })),
       });
     }

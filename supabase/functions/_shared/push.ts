@@ -23,6 +23,7 @@ type ExpoPushTicket = {
 };
 
 const EXPO_PUSH_API_URL = 'https://exp.host/--/api/v2/push/send';
+const ACTIVE_NOTIFICATION_STATUSES = ['queued', 'sent'] as const;
 
 export function json(status: number, payload: unknown) {
   return new Response(JSON.stringify(payload), {
@@ -55,6 +56,17 @@ export function createAdminClient() {
   return createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+}
+
+export function buildNotificationDedupeKey(
+  notificationType: string,
+  ...parts: (string | number | null | undefined)[]
+): string {
+  const normalizedParts = parts
+    .map((part) => (part === null || part === undefined ? null : String(part).trim()))
+    .filter((part): part is string => Boolean(part));
+
+  return [notificationType.trim(), ...normalizedParts].join(':');
 }
 
 function readBearerToken(req: Request): string | null {
@@ -192,7 +204,7 @@ async function sendExpoBatch(messages: ReservedNotification[]): Promise<ExpoPush
 export async function fetchAllPushTokens(supabase: any) {
   const { data, error } = await supabase
     .from('push_tokens')
-    .select('user_id, push_token, platform');
+    .select('user_id, push_token, platform, updated_at');
 
   if (error) throw error;
   return Array.isArray(data) ? data : [];
@@ -203,11 +215,86 @@ export async function fetchPushTokensForUsers(supabase: any, userIds: string[]) 
 
   const { data, error } = await supabase
     .from('push_tokens')
-    .select('user_id, push_token, platform')
+    .select('user_id, push_token, platform, updated_at')
     .in('user_id', userIds);
 
   if (error) throw error;
   return Array.isArray(data) ? data : [];
+}
+
+export async function fetchExistingNotificationDedupeKeys(
+  supabase: any,
+  dedupeKeys: string[],
+  options?: {
+    statuses?: string[];
+  },
+) {
+  const uniqueKeys = Array.from(
+    new Set(dedupeKeys.map((key) => key.trim()).filter((key) => key.length > 0)),
+  );
+
+  if (uniqueKeys.length === 0) {
+    return new Set<string>();
+  }
+
+  let query = supabase.from('notifications_log').select('dedupe_key').in('dedupe_key', uniqueKeys);
+
+  const statuses = Array.from(
+    new Set(
+      (options?.statuses ?? [])
+        .map((status) => status.trim())
+        .filter((status) => status.length > 0),
+    ),
+  );
+
+  if (statuses.length > 0) {
+    query = query.in('status', statuses);
+  }
+
+  const { data, error } = await query;
+
+  if (error) throw error;
+
+  return new Set(
+    ((data as { dedupe_key?: string | null }[] | null) ?? [])
+      .map((row) => row.dedupe_key?.trim() ?? '')
+      .filter((key) => key.length > 0),
+  );
+}
+
+export async function hasRecentNotificationOfTypes(
+  supabase: any,
+  {
+    userId,
+    notificationTypes,
+    sinceIso,
+  }: {
+    userId: string;
+    notificationTypes: string[];
+    sinceIso: string;
+  },
+) {
+  const normalizedTypes = Array.from(
+    new Set(notificationTypes.map((value) => value.trim()).filter((value) => value.length > 0)),
+  );
+
+  if (!userId || normalizedTypes.length === 0 || !sinceIso) {
+    return false;
+  }
+
+  const { data, error } = await supabase
+    .from('notifications_log')
+    .select('id')
+    .eq('user_id', userId)
+    .in('notification_type', normalizedTypes)
+    .in('status', [...ACTIVE_NOTIFICATION_STATUSES])
+    .gte('created_at', sinceIso)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  return Boolean(data?.id);
 }
 
 export async function dispatchNotifications(
