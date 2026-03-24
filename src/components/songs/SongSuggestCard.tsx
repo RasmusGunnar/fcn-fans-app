@@ -8,9 +8,9 @@ interface SongSuggestCardProps {
   onPressSuggest: () => void;
 }
 
-export function SongSuggestCard({ onPressSuggest }: SongSuggestCardProps) {
-  const theme = defaultTheme;
+const theme = defaultTheme;
 
+export function SongSuggestCard({ onPressSuggest }: SongSuggestCardProps) {
   return (
     <View style={styles.card}>
       <View style={styles.iconContainer}>
@@ -27,8 +27,6 @@ export function SongSuggestCard({ onPressSuggest }: SongSuggestCardProps) {
   );
 }
 
-const theme = defaultTheme;
-
 const styles = StyleSheet.create({
   card: {
     backgroundColor: theme.colors.ctaBg,
@@ -36,10 +34,9 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.primary,
     borderStyle: 'dashed',
     borderRadius: theme.radius.md,
-    padding: theme.spacing[6],
+    padding: theme.spacing[5],
     alignItems: 'center',
-    marginHorizontal: theme.spacing[4],
-    marginBottom: theme.spacing[3],
+    marginBottom: theme.spacing[2],
   },
   iconContainer: {
     width: theme.spacing[12],
@@ -60,6 +57,6 @@ const styles = StyleSheet.create({
     ...theme.typography.small,
     color: theme.colors.text.secondary,
     textAlign: 'center',
-    marginBottom: theme.spacing[6],
+    marginBottom: theme.spacing[5],
   },
 });

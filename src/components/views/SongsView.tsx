@@ -1,15 +1,21 @@
 import { useNavigation } from '@react-navigation/native';
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../../auth/AuthProvider';
+import { deleteSong, fetchSongs, updateSong } from '../../services/songsApi';
+import { defaultTheme } from '../../theme';
+import { SONG_CATEGORY_LABELS, type Song } from '../../types/song';
 import { SongAccordionCard } from '../songs/SongAccordionCard';
 import { SongEditModal } from '../songs/SongEditModal';
 import { SongSuggestCard } from '../songs/SongSuggestCard';
-import { fetchSongs, updateSong } from '../../services/songsApi';
-import { defaultTheme } from '../../theme';
-import { SONG_CATEGORY_LABELS, type Song } from '../../types/song';
 
 const theme = defaultTheme;
+
+function isValidSpotifyUrl(value: string | null): boolean {
+  if (!value) return true;
+  const trimmed = value.trim();
+  return /^(https?:\/\/(open\.)?spotify\.com\/|spotify:)/i.test(trimmed);
+}
 
 export interface SongsViewProps {
   paddingBottom?: number;
@@ -22,6 +28,7 @@ function SongSection({
   onToggle,
   canEdit,
   onEdit,
+  onDelete,
 }: {
   title: string;
   songs: Song[];
@@ -29,6 +36,7 @@ function SongSection({
   onToggle: (songId: string) => void;
   canEdit: boolean;
   onEdit: (song: Song) => void;
+  onDelete: (song: Song) => void;
 }) {
   if (songs.length === 0) {
     return (
@@ -54,6 +62,7 @@ function SongSection({
             onToggle={() => onToggle(song.id)}
             canEdit={canEdit}
             onPressEdit={() => onEdit(song)}
+            onPressDelete={() => onDelete(song)}
           />
         </View>
       ))}
@@ -69,7 +78,9 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
   const [source, setSource] = useState<'remote' | 'fallback'>('remote');
   const [expandedSongId, setExpandedSongId] = useState<string | null>(null);
   const [editingSong, setEditingSong] = useState<Song | null>(null);
+  const [activeFilter, setActiveFilter] = useState<Song['category']>('slagsang');
   const [saving, setSaving] = useState(false);
+  const [deletingSongId, setDeletingSongId] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -100,6 +111,7 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
   );
 
   const canEditSongs = isAppAdmin && source === 'remote';
+  const activeSongs = activeFilter === 'slagsang' ? chants : playerSongs;
 
   const toggleSong = (songId: string) => {
     setExpandedSongId((current) => (current === songId ? null : songId));
@@ -113,8 +125,13 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
     title: string;
     lyrics: string;
     category: Song['category'];
+    spotifyUrl: string | null;
   }) => {
     if (!editingSong) return;
+    if (!isValidSpotifyUrl(values.spotifyUrl)) {
+      Alert.alert('Fejl', 'Indtast et gyldigt Spotify-link.');
+      return;
+    }
 
     try {
       setSaving(true);
@@ -132,6 +149,35 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
     }
   };
 
+  const performDeleteSong = async (song: Song) => {
+    try {
+      setDeletingSongId(song.id);
+      await deleteSong(song.id);
+      setSongs((current) => current.filter((item) => item.id !== song.id));
+      setExpandedSongId((current) => (current === song.id ? null : current));
+      setEditingSong((current) => (current?.id === song.id ? null : current));
+    } catch (error: any) {
+      Alert.alert('Fejl', error?.message ?? 'Kunne ikke slette sangen.');
+    } finally {
+      setDeletingSongId(null);
+    }
+  };
+
+  const handleDeleteSong = (song: Song) => {
+    if (!canEditSongs || deletingSongId) return;
+
+    Alert.alert('Slet sang', `Vil du slette "${song.title}"?`, [
+      { text: 'Annuller', style: 'cancel' },
+      {
+        text: 'Slet',
+        style: 'destructive',
+        onPress: () => {
+          void performDeleteSong(song);
+        },
+      },
+    ]);
+  };
+
   if (loading) {
     return (
       <View style={[styles.loadingState, paddingBottom > 0 && { paddingBottom }]}>
@@ -143,22 +189,31 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
 
   return (
     <View style={[styles.container, paddingBottom > 0 && { paddingBottom }]}>
-      <SongSection
-        title={SONG_CATEGORY_LABELS.slagsang}
-        songs={chants}
-        expandedSongId={expandedSongId}
-        onToggle={toggleSong}
-        canEdit={canEditSongs}
-        onEdit={setEditingSong}
-      />
+      <View style={styles.filterRow}>
+        {(['slagsang', 'spillersang'] as const).map((category) => {
+          const isActive = activeFilter === category;
+          return (
+            <Pressable
+              key={category}
+              onPress={() => setActiveFilter(category)}
+              style={[styles.filterPill, isActive && styles.filterPillActive]}
+            >
+              <Text style={[styles.filterText, isActive && styles.filterTextActive]}>
+                {SONG_CATEGORY_LABELS[category]}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
 
       <SongSection
-        title={SONG_CATEGORY_LABELS.spillersang}
-        songs={playerSongs}
+        title={SONG_CATEGORY_LABELS[activeFilter]}
+        songs={activeSongs}
         expandedSongId={expandedSongId}
         onToggle={toggleSong}
         canEdit={canEditSongs}
         onEdit={setEditingSong}
+        onDelete={handleDeleteSong}
       />
 
       <View style={styles.card}>
@@ -168,9 +223,9 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
       <SongEditModal
         visible={!!editingSong}
         song={editingSong}
-        saving={saving}
+        saving={saving || deletingSongId !== null}
         onClose={() => {
-          if (!saving) setEditingSong(null);
+          if (!saving && deletingSongId === null) setEditingSong(null);
         }}
         onSave={handleSaveSong}
       />
@@ -181,8 +236,32 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
 const styles = StyleSheet.create({
   container: {
     paddingTop: theme.spacing[4],
-    paddingHorizontal: theme.spacing[4],
+    paddingHorizontal: theme.spacing[3],
     gap: theme.spacing[5],
+  },
+  filterRow: {
+    flexDirection: 'row',
+    gap: theme.spacing[2],
+    marginBottom: theme.spacing[1],
+  },
+  filterPill: {
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[2],
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.pill.red.bg,
+    borderWidth: theme.layout.borderHairline,
+    borderColor: theme.colors.pill.red.text,
+  },
+  filterPillActive: {
+    backgroundColor: theme.colors.brand.accent,
+    borderColor: theme.colors.brand.accent,
+  },
+  filterText: {
+    ...theme.typography.small,
+    color: theme.colors.pill.red.text,
+  },
+  filterTextActive: {
+    color: theme.colors.text.inverse,
   },
   loadingState: {
     paddingTop: theme.spacing[6],

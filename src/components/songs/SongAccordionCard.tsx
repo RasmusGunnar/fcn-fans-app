@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { defaultTheme } from '../../theme';
-import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
 import { SpotifyButton } from '../ui/SpotifyButton';
 
 interface SongAccordionCardProps {
@@ -14,7 +14,17 @@ interface SongAccordionCardProps {
   onToggle: () => void;
   canEdit?: boolean;
   onPressEdit?: () => void;
+  onPressDelete?: () => void;
 }
+
+function normalizeLyricsForDisplay(value: string): string[] {
+  return value
+    .replace(/\r\n?/g, '\n')
+    .replace(/[\u2028\u2029]/g, '\n')
+    .split('\n');
+}
+
+const theme = defaultTheme;
 
 export function SongAccordionCard({
   title,
@@ -24,8 +34,9 @@ export function SongAccordionCard({
   onToggle,
   canEdit = false,
   onPressEdit,
+  onPressDelete,
 }: SongAccordionCardProps) {
-  const theme = defaultTheme;
+  const lyricLines = useMemo(() => normalizeLyricsForDisplay(lyrics), [lyrics]);
 
   return (
     <Card style={styles.card}>
@@ -43,35 +54,43 @@ export function SongAccordionCard({
         />
       </Pressable>
 
-      {isExpanded && (
+      {isExpanded ? (
         <View style={styles.expandedContent}>
           <View style={styles.lyricsContainer}>
-            <Text style={styles.lyrics}>{lyrics}</Text>
+            <View style={styles.lyricsBlock}>
+              {lyricLines.map((line, index) => (
+                <Text key={`${title}-line-${index}`} style={styles.lyrics}>
+                  {line.length > 0 ? line : ' '}
+                </Text>
+              ))}
+            </View>
           </View>
-          {canEdit && onPressEdit ? (
+          {canEdit && (onPressEdit || onPressDelete) ? (
             <View style={styles.actions}>
-              <Button title="Rediger" variant="outline" size="sm" onPress={onPressEdit} />
+              {onPressEdit ? (
+                <Button title="Rediger" variant="outline" size="sm" onPress={onPressEdit} />
+              ) : null}
+              {onPressDelete ? (
+                <Button title="Slet" variant="ghost" size="sm" onPress={onPressDelete} />
+              ) : null}
             </View>
           ) : null}
-          {spotifyUrl && <SpotifyButton spotifyUrl={spotifyUrl} />}
+          {spotifyUrl ? <SpotifyButton spotifyUrl={spotifyUrl} /> : null}
         </View>
-      )}
+      ) : null}
     </Card>
   );
 }
 
-const theme = defaultTheme;
-
 const styles = StyleSheet.create({
   card: {
-    marginHorizontal: theme.spacing[4],
     marginBottom: theme.spacing[2],
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
   },
   headerLeft: {
     flexDirection: 'row',
@@ -79,8 +98,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   iconContainer: {
-    width: theme.spacing[10],
-    height: theme.spacing[10],
+    width: theme.spacing[9],
+    height: theme.spacing[9],
     borderRadius: theme.radius.pill,
     backgroundColor: theme.colors.pill.yellow.bg,
     alignItems: 'center',
@@ -93,20 +112,24 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   expandedContent: {
-    marginTop: theme.spacing[2],
+    marginTop: theme.spacing[1],
     gap: theme.spacing[2],
   },
   lyricsContainer: {
     backgroundColor: theme.colors.bg.default,
     borderRadius: theme.radius.sm,
-    padding: theme.spacing[4],
-    marginBottom: theme.spacing[2],
+    padding: theme.spacing[3],
+  },
+  lyricsBlock: {
+    gap: 0,
   },
   lyrics: {
-    ...theme.typography.small,
+    ...theme.typography.caption,
     color: theme.colors.text.primary,
   },
   actions: {
     alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: theme.spacing[2],
   },
 });

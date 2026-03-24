@@ -130,12 +130,13 @@ export async function fetchSongs(): Promise<{ songs: Song[]; source: 'remote' | 
 
 export async function updateSong(
   songId: string,
-  updates: { title: string; lyrics: string; category: SongCategory },
+  updates: { title: string; lyrics: string; category: SongCategory; spotifyUrl: string | null },
 ): Promise<Song> {
   const payload = {
     title: updates.title.trim(),
     lyrics: updates.lyrics.trim(),
     category: updates.category,
+    spotify_url: updates.spotifyUrl?.trim() ? updates.spotifyUrl.trim() : null,
     is_manually_edited: true,
     updated_at: new Date().toISOString(),
   };
@@ -152,4 +153,12 @@ export async function updateSong(
   }
 
   return mapSongRow(data as SongRow);
+}
+
+export async function deleteSong(songId: string): Promise<void> {
+  const { error } = await supabase.from('songs').delete().eq('id', songId);
+
+  if (error) {
+    throw error;
+  }
 }

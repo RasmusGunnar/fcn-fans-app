@@ -27,7 +27,7 @@ const EXPO_PUSH_API_URL = 'https://exp.host/--/api/v2/push/send';
 export function json(status: number, payload: unknown) {
   return new Response(JSON.stringify(payload), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
   });
 }
 

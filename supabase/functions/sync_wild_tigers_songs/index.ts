@@ -54,18 +54,43 @@ const HTML_ENTITY_MAP: Record<string, string> = {
   lt: '<',
   nbsp: ' ',
   quot: '"',
-  ndash: '–',
-  mdash: '—',
-  hellip: '…',
-  oslash: 'ø',
-  Oslash: 'Ø',
-  aelig: 'æ',
-  AElig: 'Æ',
-  aring: 'å',
-  Aring: 'Å',
-  eacute: 'é',
-  Eacute: 'É',
+  ndash: '\u2013',
+  mdash: '\u2014',
+  hellip: '\u2026',
+  oslash: '\u00f8',
+  Oslash: '\u00d8',
+  aelig: '\u00e6',
+  AElig: '\u00c6',
+  aring: '\u00e5',
+  Aring: '\u00c5',
+  eacute: '\u00e9',
+  Eacute: '\u00c9',
 };
+
+async function readHtmlAsUtf8(response: Response): Promise<string> {
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  const utf8Text = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+
+  // Wild Tigers declares UTF-8 in the document. Prefer raw UTF-8 decoding
+  // over response.text(), which may respect an incorrect upstream charset.
+  if (!utf8Text.includes('\uFFFD')) {
+    return utf8Text;
+  }
+
+  const contentType = response.headers.get('content-type') ?? '';
+  const charsetMatch = contentType.match(/charset=([^;]+)/i);
+  const charset = charsetMatch?.[1]?.trim().toLowerCase() ?? '';
+
+  if (charset && charset !== 'utf-8' && charset !== 'utf8') {
+    try {
+      return new TextDecoder(charset).decode(bytes);
+    } catch {
+      return utf8Text;
+    }
+  }
+
+  return utf8Text;
+}
 
 function normalizeWhitespace(text: string): string {
   return text
@@ -108,8 +133,8 @@ function htmlToText(html: string): string {
 function cleanSongText(text: string): string {
   return normalizeWhitespace(
     text
-      .replace(/^[“”"'`]+\s*/, '')
-      .replace(/\s*[“”"'`]+$/, ''),
+      .replace(/^[\u201c\u201d"'`]+\s*/, '')
+      .replace(/\s*[\u201c\u201d"'`]+$/, ''),
   );
 }
 
@@ -330,7 +355,7 @@ serve(async (req) => {
       });
     }
 
-    const html = await response.text();
+    const html = await readHtmlAsUtf8(response);
     const parsedSongs = await parseSongs(html);
 
     if (parsedSongs.length === 0) {
@@ -426,10 +451,10 @@ serve(async (req) => {
         }
 
         if (!dryRun) {
-          const { error: updateError } = await supabase.from('songs').update(manualPatch).eq(
-            'id',
-            existing.id,
-          );
+          const { error: updateError } = await supabase
+            .from('songs')
+            .update(manualPatch)
+            .eq('id', existing.id);
 
           if (updateError) throw updateError;
         }

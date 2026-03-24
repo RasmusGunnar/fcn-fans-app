@@ -27,19 +27,26 @@ type SongEditModalProps = {
   song: Song | null;
   saving: boolean;
   onClose: () => void;
-  onSave: (values: { title: string; lyrics: string; category: SongCategory }) => void;
+  onSave: (values: {
+    title: string;
+    lyrics: string;
+    category: SongCategory;
+    spotifyUrl: string | null;
+  }) => void;
 };
 
 export function SongEditModal({ visible, song, saving, onClose, onSave }: SongEditModalProps) {
   const [title, setTitle] = useState('');
   const [lyrics, setLyrics] = useState('');
   const [category, setCategory] = useState<SongCategory>('slagsang');
+  const [spotifyUrl, setSpotifyUrl] = useState('');
 
   useEffect(() => {
     if (!song) return;
     setTitle(song.title);
     setLyrics(song.lyrics);
     setCategory(song.category);
+    setSpotifyUrl(song.spotifyUrl ?? '');
   }, [song]);
 
   const disabled = useMemo(() => {
@@ -92,13 +99,35 @@ export function SongEditModal({ visible, song, saving, onClose, onSave }: SongEd
                 textAlignVertical="top"
               />
             </View>
+
+            <View style={styles.field}>
+              <Text style={styles.label}>Spotify-link (valgfrit)</Text>
+              <TextInput
+                style={styles.input}
+                value={spotifyUrl}
+                onChangeText={setSpotifyUrl}
+                placeholder="https://open.spotify.com/..."
+                placeholderTextColor={theme.colors.text.secondary}
+                editable={!saving}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+              />
+            </View>
           </ScrollView>
 
           <View style={styles.actions}>
             <Button title="Annuller" variant="ghost" onPress={onClose} disabled={saving} />
             <Button
               title={saving ? 'Gemmer...' : 'Gem'}
-              onPress={() => onSave({ title, lyrics, category })}
+              onPress={() =>
+                onSave({
+                  title,
+                  lyrics,
+                  category,
+                  spotifyUrl: spotifyUrl.trim() ? spotifyUrl.trim() : null,
+                })
+              }
               disabled={disabled}
             />
           </View>
