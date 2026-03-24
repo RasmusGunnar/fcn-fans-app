@@ -7,6 +7,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 const SPORTSDB_API_KEY = Deno.env.get('SPORTSDB_API_KEY');
 const SPORTSDB_LEAGUE_ID = Deno.env.get('SPORTSDB_LEAGUE_ID');
 const SPORTSDB_SEASON = Deno.env.get('SPORTSDB_SEASON');
+const SYNC_SECRET = Deno.env.get('SYNC_SECRET');
 const EXPECTED_SUPERLIGA_TEAM_COUNT = 12;
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
@@ -40,20 +41,82 @@ function normalizeRow(row: any) {
   };
 }
 
-function hasCompleteStandings(rows: ReturnType<typeof normalizeRow>[]) {
+function validateStandings(rows: ReturnType<typeof normalizeRow>[]) {
   if (rows.length !== EXPECTED_SUPERLIGA_TEAM_COUNT) {
-    return false;
+    return {
+      ok: false,
+      reason: 'unexpected_row_count',
+      details: {
+        expectedRows: EXPECTED_SUPERLIGA_TEAM_COUNT,
+        actualRows: rows.length,
+      },
+    };
   }
 
-  return rows.every((row, index) => {
+  const hasStableRanks = rows.every((row, index) => {
     if (!row) return false;
     return row.rank === index + 1 && !!row.teamName;
   });
+
+  if (!hasStableRanks) {
+    return {
+      ok: false,
+      reason: 'invalid_rank_or_team_name',
+      details: {
+        ranks: rows.map((row) => row?.rank ?? null),
+        teams: rows.map((row) => row?.teamName ?? null),
+      },
+    };
+  }
+
+  const playedValues = rows
+    .map((row) => row?.played)
+    .filter((played): played is number => Number.isFinite(played));
+
+  if (playedValues.length !== EXPECTED_SUPERLIGA_TEAM_COUNT) {
+    return {
+      ok: false,
+      reason: 'missing_played_values',
+      details: {
+        expectedRows: EXPECTED_SUPERLIGA_TEAM_COUNT,
+        actualPlayedValues: playedValues.length,
+      },
+    };
+  }
+
+  const minPlayed = Math.min(...playedValues);
+  const maxPlayed = Math.max(...playedValues);
+  const playedDelta = maxPlayed - minPlayed;
+  if (playedDelta > 1) {
+    return {
+      ok: true as const,
+      warning: {
+        reason: 'inconsistent_played_values',
+        details: {
+          minPlayed,
+          maxPlayed,
+          playedDelta,
+          playedByRank: rows.map((row) => ({
+            rank: row?.rank ?? null,
+            teamName: row?.teamName ?? null,
+            played: row?.played ?? null,
+          })),
+        },
+      },
+    };
+  }
+
+  return { ok: true as const, warning: null };
 }
 
 serve(async (req) => {
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
+  }
+
+  const providedSecret = req.headers.get('x-sync-secret');
+  if (!SYNC_SECRET || !providedSecret || providedSecret !== SYNC_SECRET) {
+    return new Response('Unauthorized', { status: 401 });
   }
 
   if (!SPORTSDB_API_KEY || !SPORTSDB_LEAGUE_ID || !SPORTSDB_SEASON) {
@@ -81,16 +144,27 @@ serve(async (req) => {
 
   const table = Array.isArray(json?.table) ? json.table : [];
   const rows = table.map(normalizeRow).filter(Boolean);
+  const standingsValidation = validateStandings(rows);
 
-  if (!hasCompleteStandings(rows)) {
+  if (!standingsValidation.ok) {
     console.error('[sync_superliga_standings] Incomplete or invalid standings payload', {
-      expectedRows: EXPECTED_SUPERLIGA_TEAM_COUNT,
-      actualRows: rows.length,
+      reason: standingsValidation.reason,
+      ...standingsValidation.details,
       sample: rows.slice(0, 5),
       leagueId: SPORTSDB_LEAGUE_ID,
       season: SPORTSDB_SEASON,
     });
     return new Response('Incomplete standings payload from SportsDB', { status: 502 });
+  }
+
+  if (standingsValidation.warning) {
+    console.warn('[sync_superliga_standings] Accepting standings payload with warning', {
+      reason: standingsValidation.warning.reason,
+      ...standingsValidation.warning.details,
+      sample: rows.slice(0, 5),
+      leagueId: SPORTSDB_LEAGUE_ID,
+      season: SPORTSDB_SEASON,
+    });
   }
 
   const { error } = await supabase.from('standings_cache').upsert(

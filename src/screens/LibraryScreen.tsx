@@ -1,7 +1,9 @@
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
 import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppHeader } from '../components/AppHeader';
+import { Badge } from '../components/ui/Badge';
 import { Card } from '../components/ui/Card';
 import { SegmentedControl } from '../components/ui/SegmentedControl';
 import { LinksView as LinksViewComponent } from '../components/views/LinksView';
@@ -32,8 +34,22 @@ const segments = [
   { key: 'videos', label: 'Videoer' },
 ] as const satisfies readonly { key: LibrarySegmentKey; label: string }[];
 
+function normalizeTeamName(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/æ/g, 'ae')
+    .replace(/ø/g, 'o')
+    .replace(/å/g, 'a')
+    .replace(/Ã¦/g, 'ae')
+    .replace(/Ã¸/g, 'o')
+    .replace(/Ã¥/g, 'a')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
 function isFcnTeam(name: string): boolean {
-  return name.toLowerCase().includes('nordsjælland');
+  return normalizeTeamName(name).includes('nordsjaelland');
 }
 
 function StandingsTableSection({
@@ -45,11 +61,7 @@ function StandingsTableSection({
 }) {
   return (
     <View style={styles.standingsSection}>
-      {title ? (
-        <View style={styles.standingsSectionHeader}>
-          <Text style={styles.standingsSectionTitle}>{title}</Text>
-        </View>
-      ) : null}
+      {title ? <Text style={styles.standingsSectionTitle}>{title}</Text> : null}
 
       <View style={styles.standingsTable}>
         <View style={[styles.standingsRow, styles.standingsRowHeader]}>
@@ -59,8 +71,8 @@ function StandingsTableSection({
           <Text style={[styles.standingsCell, styles.cellStat]}>V</Text>
           <Text style={[styles.standingsCell, styles.cellStat]}>U</Text>
           <Text style={[styles.standingsCell, styles.cellStat]}>T</Text>
-          <Text style={[styles.standingsCell, styles.cellStat]}>Mål</Text>
-          <Text style={[styles.standingsCell, styles.cellStat]}>P</Text>
+          <Text style={[styles.standingsCell, styles.cellGoals]}>Mål</Text>
+          <Text style={[styles.standingsCell, styles.cellPoints]}>P</Text>
         </View>
 
         {rows.map((row, index) => {
@@ -72,11 +84,14 @@ function StandingsTableSection({
               key={`${row.teamId ?? name}-${index}`}
               style={[styles.standingsRow, isFcn && styles.standingsRowHighlight]}
             >
+              {isFcn ? <View style={styles.standingsRowAccent} /> : null}
+
               <Text
                 style={[
                   styles.standingsCell,
                   styles.cellRank,
                   isFcn && styles.standingsCellHighlight,
+                  isFcn && styles.standingsHighlightStat,
                 ]}
               >
                 {row.rank ?? '-'}
@@ -91,6 +106,7 @@ function StandingsTableSection({
                     styles.standingsCell,
                     styles.cellTeam,
                     isFcn && styles.standingsCellHighlight,
+                    isFcn && styles.standingsHighlightTeam,
                   ]}
                   numberOfLines={1}
                 >
@@ -103,6 +119,7 @@ function StandingsTableSection({
                   styles.standingsCell,
                   styles.cellStat,
                   isFcn && styles.standingsCellHighlight,
+                  isFcn && styles.standingsHighlightStat,
                 ]}
               >
                 {row.played ?? '-'}
@@ -112,6 +129,7 @@ function StandingsTableSection({
                   styles.standingsCell,
                   styles.cellStat,
                   isFcn && styles.standingsCellHighlight,
+                  isFcn && styles.standingsHighlightStat,
                 ]}
               >
                 {row.wins ?? '-'}
@@ -121,6 +139,7 @@ function StandingsTableSection({
                   styles.standingsCell,
                   styles.cellStat,
                   isFcn && styles.standingsCellHighlight,
+                  isFcn && styles.standingsHighlightStat,
                 ]}
               >
                 {row.draws ?? '-'}
@@ -130,6 +149,7 @@ function StandingsTableSection({
                   styles.standingsCell,
                   styles.cellStat,
                   isFcn && styles.standingsCellHighlight,
+                  isFcn && styles.standingsHighlightStat,
                 ]}
               >
                 {row.losses ?? '-'}
@@ -137,17 +157,22 @@ function StandingsTableSection({
               <Text
                 style={[
                   styles.standingsCell,
-                  styles.cellStat,
+                  styles.cellGoals,
                   isFcn && styles.standingsCellHighlight,
+                  isFcn && styles.standingsHighlightStat,
                 ]}
+                numberOfLines={1}
+                ellipsizeMode="clip"
               >
                 {row.gf != null && row.ga != null ? `${row.gf}-${row.ga}` : '-'}
               </Text>
               <Text
                 style={[
                   styles.standingsCell,
-                  styles.cellStat,
+                  styles.cellPoints,
+                  styles.standingsPointsCell,
                   isFcn && styles.standingsCellHighlight,
+                  isFcn && styles.standingsHighlightPoints,
                 ]}
               >
                 {row.points ?? '-'}
@@ -200,9 +225,17 @@ function StandingsView() {
     return (
       <Card style={styles.comingSoonCard}>
         <View style={styles.comingSoonContent}>
-          <Text style={styles.comingSoonTitle}>Superligaen</Text>
-          <Text style={styles.comingSoonSubtitle}>Stillingen kommer snart</Text>
-          <Text style={styles.comingSoonSecondary}>Vi arbejder på at hente live-data.</Text>
+          <View style={styles.comingSoonIconWrap}>
+            <Ionicons
+              name="trophy-outline"
+              size={theme.components.icon.size.lg}
+              color={theme.colors.brand.accent}
+            />
+          </View>
+          <Badge label="Superligaen" variant="brandSoft" size="sm" />
+          <Text style={styles.comingSoonTitle}>Stillingen opdateres</Text>
+          <Text style={styles.comingSoonSubtitle}>Vi henter de nyeste tal fra ligaen.</Text>
+          <Text style={styles.comingSoonSecondary}>Prøv igen senere.</Text>
         </View>
       </Card>
     );
@@ -222,14 +255,8 @@ function StandingsView() {
           <StandingsTableSection rows={sections.singleRows} />
         ) : (
           <>
-            <StandingsTableSection
-              title="Mesterskabsspil"
-              rows={sections.championshipRows}
-            />
-            <StandingsTableSection
-              title="Nedrykningsspil"
-              rows={sections.relegationRows}
-            />
+            <StandingsTableSection title="Mesterskabsspil" rows={sections.championshipRows} />
+            <StandingsTableSection title="Nedrykningsspil" rows={sections.relegationRows} />
           </>
         )}
       </View>
@@ -282,6 +309,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: theme.spacing[3],
   },
+  comingSoonIconWrap: {
+    width: theme.spacing[12],
+    height: theme.spacing[12],
+    borderRadius: theme.radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.bg.subtle,
+    borderWidth: theme.layout.borderWidth,
+    borderColor: theme.colors.border.default,
+  },
   comingSoonTitle: {
     color: theme.colors.text.primary,
     ...theme.typography.h3,
@@ -316,33 +353,42 @@ const styles = StyleSheet.create({
   },
   standingsSections: {
     padding: theme.components.card.padding,
-    gap: theme.spacing[4],
+    gap: theme.spacing[3],
   },
   standingsSection: {
     gap: theme.spacing[2],
   },
-  standingsSectionHeader: {
-    paddingHorizontal: theme.spacing[2],
-  },
   standingsSectionTitle: {
     color: theme.colors.text.primary,
     ...theme.typography.bodyBold,
+    paddingHorizontal: theme.spacing[1],
   },
   standingsTable: {
-    gap: theme.spacing[2],
+    gap: theme.spacing[1],
   },
   standingsRow: {
+    position: 'relative',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: theme.spacing[1],
+    paddingVertical: theme.spacing[1] - theme.layout.borderHairline,
     paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.radius.md,
+    borderRadius: theme.radius.sm,
+    backgroundColor: theme.colors.bg.surface,
   },
   standingsRowHeader: {
     backgroundColor: theme.colors.bg.subtle,
   },
   standingsRowHighlight: {
-    backgroundColor: theme.colors.brand.muted,
+    backgroundColor: theme.colors.pill.red.bg,
+  },
+  standingsRowAccent: {
+    position: 'absolute',
+    left: theme.spacing[2],
+    top: theme.spacing[1],
+    bottom: theme.spacing[1],
+    width: theme.spacing[1],
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.brand.accent,
   },
   standingsCell: {
     color: theme.colors.text.secondary,
@@ -351,27 +397,52 @@ const styles = StyleSheet.create({
   standingsCellHighlight: {
     color: theme.colors.text.primary,
   },
+  standingsHighlightTeam: {
+    ...theme.typography.bodyBold,
+  },
+  standingsHighlightStat: {
+    ...theme.typography.small,
+  },
+  standingsHighlightPoints: {
+    ...theme.typography.caption,
+    fontWeight: '700',
+  },
+  standingsPointsCell: {
+    ...theme.typography.caption,
+    fontWeight: '600',
+  },
   teamCell: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing[2],
+    minWidth: 0,
   },
   teamBadge: {
-    width: theme.spacing[6],
-    height: theme.spacing[6],
+    width: theme.spacing[5],
+    height: theme.spacing[5],
     borderRadius: theme.radius.sm,
     backgroundColor: theme.colors.bg.subtle,
   },
   cellRank: {
     width: theme.spacing[6],
-    textAlign: 'center',
+    marginRight: theme.spacing[1],
+    textAlign: 'right',
   },
   cellTeam: {
     flex: 1,
+    textAlign: 'left',
   },
   cellStat: {
+    width: theme.spacing[5],
+    textAlign: 'right',
+  },
+  cellGoals: {
+    width: theme.spacing[10],
+    textAlign: 'right',
+  },
+  cellPoints: {
     width: theme.spacing[6],
-    textAlign: 'center',
+    textAlign: 'right',
   },
 });
