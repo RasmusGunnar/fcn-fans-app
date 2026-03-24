@@ -241,7 +241,7 @@ export async function fetchExistingNotificationDedupeKeys(
 
   const statuses = Array.from(
     new Set(
-      (options?.statuses ?? [])
+      (options?.statuses ?? [...ACTIVE_NOTIFICATION_STATUSES])
         .map((status) => status.trim())
         .filter((status) => status.length > 0),
     ),
@@ -295,6 +295,96 @@ export async function hasRecentNotificationOfTypes(
   if (error) throw error;
 
   return Boolean(data?.id);
+}
+
+export async function fetchUserIdsWithRecentNotificationTypes(
+  supabase: any,
+  {
+    userIds,
+    notificationTypes,
+    sinceIso,
+  }: {
+    userIds: string[];
+    notificationTypes: string[];
+    sinceIso: string;
+  },
+) {
+  const normalizedUserIds = Array.from(
+    new Set(userIds.map((value) => value.trim()).filter((value) => value.length > 0)),
+  );
+  const normalizedTypes = Array.from(
+    new Set(notificationTypes.map((value) => value.trim()).filter((value) => value.length > 0)),
+  );
+
+  if (normalizedUserIds.length === 0 || normalizedTypes.length === 0 || !sinceIso) {
+    return new Set<string>();
+  }
+
+  const { data, error } = await supabase
+    .from('notifications_log')
+    .select('user_id')
+    .in('user_id', normalizedUserIds)
+    .in('notification_type', normalizedTypes)
+    .in('status', [...ACTIVE_NOTIFICATION_STATUSES])
+    .gte('created_at', sinceIso);
+
+  if (error) throw error;
+
+  return new Set(
+    ((data as { user_id?: string | null }[] | null) ?? [])
+      .map((row) => row.user_id?.trim() ?? '')
+      .filter((userId) => userId.length > 0),
+  );
+}
+
+function getTimeZoneParts(date: Date, timeZone: string) {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+
+  const values = Object.fromEntries(
+    formatter
+      .formatToParts(date)
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value]),
+  ) as Record<string, string>;
+
+  return {
+    year: Number(values.year),
+    month: Number(values.month),
+    day: Number(values.day),
+    hour: Number(values.hour),
+    minute: Number(values.minute),
+    second: Number(values.second),
+  };
+}
+
+function getTimeZoneOffsetMs(date: Date, timeZone: string) {
+  const parts = getTimeZoneParts(date, timeZone);
+  const asUtc = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second,
+  );
+
+  return asUtc - date.getTime();
+}
+
+export function getStartOfLocalDayIso(date: Date, timeZone = 'Europe/Copenhagen') {
+  const parts = getTimeZoneParts(date, timeZone);
+  const midnightGuess = new Date(Date.UTC(parts.year, parts.month - 1, parts.day, 0, 0, 0));
+  const offsetMs = getTimeZoneOffsetMs(midnightGuess, timeZone);
+  return new Date(midnightGuess.getTime() - offsetMs).toISOString();
 }
 
 export async function dispatchNotifications(

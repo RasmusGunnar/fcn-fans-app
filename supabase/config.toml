@@ -53,3 +53,11 @@ verify_jwt = false
 # Keep JWT verification ON and let the function enforce self-targeting.
 [functions.send-push]
 verify_jwt = true
+
+# push_comment_replies: authenticated route triggered after a successful comment insert.
+[functions.push_comment_replies]
+verify_jwt = true
+
+# push_community_posts: authenticated route triggered after a successful community post/poll insert.
+[functions.push_community_posts]
+verify_jwt = true

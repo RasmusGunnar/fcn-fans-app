@@ -26,6 +26,32 @@ export interface AddCommentReplyInput {
   authorAvatarUrl?: string | null;
 }
 
+export async function triggerCommentReplyPush(commentId: string): Promise<boolean> {
+  const normalizedCommentId = commentId.trim();
+  if (!normalizedCommentId) return false;
+
+  try {
+    const { data, error } = await supabase.functions.invoke('push_comment_replies', {
+      body: { commentId: normalizedCommentId },
+    });
+
+    if (error) {
+      logger.warn('[commentsApi] triggerCommentReplyPush failed:', error);
+      return false;
+    }
+
+    if (data?.ok !== true) {
+      logger.warn('[commentsApi] triggerCommentReplyPush returned non-ok payload:', data);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    logger.warn('[commentsApi] triggerCommentReplyPush threw:', error);
+    return false;
+  }
+}
+
 // TODO: Replace stubs with real API calls once backend supports comment likes/replies.
 export async function toggleCommentLike(input: CommentLikeToggleInput): Promise<boolean> {
   if (__DEV__) {

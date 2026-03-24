@@ -7,6 +7,7 @@ import { PrimaryButton } from './PrimaryButton';
 import { Card } from './ui/Card';
 import { Theme, useTheme } from '../theme';
 import type { Actor } from '../types/news';
+import { triggerCommunityPostPush } from '../services/postPushApi';
 
 interface PollComposerProps {
   actor?: Actor;
@@ -99,18 +100,26 @@ export function PollComposer({ actor, feedTargets, onSuccess }: PollComposerProp
             ? [`community:${actor.id}`]
             : ['home'];
 
-      const { error } = await supabase.from('posts').insert({
-        author_id: user.id,
-        actor_type: resolvedActorType,
-        actor_id: resolvedActorId,
-        text: normalizedQuestion,
-        poll_data: pollData,
-        feed_targets: resolvedFeedTargets,
-        ...(actor?.type === 'community' ? { community_id: actor.id } : {}),
-      });
+      const { data, error } = await supabase
+        .from('posts')
+        .insert({
+          author_id: user.id,
+          actor_type: resolvedActorType,
+          actor_id: resolvedActorId,
+          text: normalizedQuestion,
+          poll_data: pollData,
+          feed_targets: resolvedFeedTargets,
+          ...(actor?.type === 'community' ? { community_id: actor.id } : {}),
+        })
+        .select('id')
+        .single();
 
       if (error) {
         throw error;
+      }
+
+      if (actor?.type === 'community' && data?.id) {
+        void triggerCommunityPostPush(data.id);
       }
 
       resetForm();

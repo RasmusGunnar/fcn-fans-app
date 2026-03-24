@@ -20,6 +20,7 @@ import { supabase } from '../lib/supabase';
 import { useFeed } from '../state/FeedContext';
 import { Post } from '../types/post';
 import type { Actor } from '../types/news';
+import { triggerCommunityPostPush } from '../services/postPushApi';
 
 interface PostComposerProps {
   onSuccess?: () => void;
@@ -185,6 +186,10 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
             postId: dbPost.id,
             media: dbPost.media,
           });
+
+          if (actor?.type === 'community') {
+            void triggerCommunityPostPush(dbRecord.id);
+          }
         }
       }
     } catch (e) {

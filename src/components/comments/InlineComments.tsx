@@ -19,7 +19,11 @@ import { defaultTheme } from '../../theme';
 import { Avatar } from '../Avatar';
 import { Text } from '../ui';
 import { resolveActorLine, type ProfileMap } from '../../utils/actor';
-import { toggleCommentLike, type CommentReplyRecord } from '../../services/commentsApi';
+import {
+  toggleCommentLike,
+  triggerCommentReplyPush,
+  type CommentReplyRecord,
+} from '../../services/commentsApi';
 import type { CommentPreview } from '../../services/likesApi';
 
 export type CommentTargetType = 'post' | 'news' | 'event' | 'match' | 'bus_trip';
@@ -283,6 +287,8 @@ export function InlineComments({
       if (onNewComment) {
         onNewComment(newComment);
       }
+
+      void triggerCommentReplyPush(data.id);
       return true;
     } catch (err: any) {
       console.error('[InlineComments] Submit error:', err);
@@ -459,6 +465,8 @@ export function InlineComments({
           return { ...comment, replies: nextReplies };
         }),
       );
+
+      void triggerCommentReplyPush(savedReply.id);
     } catch (err) {
       console.error('[InlineComments] Reply submit error:', err);
     } finally {
