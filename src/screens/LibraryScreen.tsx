@@ -7,8 +7,9 @@ import { SegmentedControl } from '../components/ui/SegmentedControl';
 import { LinksView as LinksViewComponent } from '../components/views/LinksView';
 import { SongsView } from '../components/views/SongsView';
 import { VideosView as VideosViewComponent } from '../components/views/VideosView';
-import { supabase, supabaseUrl } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 import { defaultTheme } from '../theme';
+import { buildStandingsSections, type StandingsRow } from '../utils/standings';
 
 const theme = defaultTheme;
 
@@ -31,77 +32,24 @@ const segments = [
   { key: 'videos', label: 'Videoer' },
 ] as const satisfies readonly { key: LibrarySegmentKey; label: string }[];
 
-type StandingsRow = {
-  rank?: number | null;
-  teamName?: string | null;
-  played?: number | null;
-  wins?: number | null;
-  draws?: number | null;
-  losses?: number | null;
-  gf?: number | null;
-  ga?: number | null;
-  gd?: number | null;
-  points?: number | null;
-  teamId?: string | null;
-  teamBadge?: string | null;
-};
+function isFcnTeam(name: string): boolean {
+  return name.toLowerCase().includes('nordsjælland');
+}
 
-function StandingsView() {
-  const [rows, setRows] = useState<StandingsRow[]>([]);
-  const [hasData, setHasData] = useState(false);
-
-  useEffect(() => {
-    let isActive = true;
-
-    const loadStandings = async () => {
-      const { data, error } = await supabase
-        .from('standings_cache')
-        .select('rows, updated_at, league_id, season')
-        .eq('league_id', STANDINGS_LEAGUE_ID)
-        .eq('season', STANDINGS_SEASON)
-        .order('updated_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      console.log('[StandingsView] query', { error, hasData: !!data, data });
-      console.log('[StandingsView] firstRow', data?.rows?.[0]);
-      console.log('[StandingsView] rows.length', data?.rows?.length);
-
-      if (!isActive) return;
-      if (error || !data?.rows || data.rows.length === 0) {
-        setRows([]);
-        setHasData(false);
-        return;
-      }
-
-      setRows(data.rows as StandingsRow[]);
-      setHasData(true);
-    };
-
-    loadStandings();
-    return () => {
-      isActive = false;
-    };
-  }, []);
-
-  if (!hasData) {
-    return (
-      <Card style={styles.comingSoonCard}>
-        <View style={styles.comingSoonContent}>
-          <Text style={styles.comingSoonTitle}>Superligaen</Text>
-          <Text style={styles.comingSoonSubtitle}>Stillingen kommer snart</Text>
-          <Text style={styles.comingSoonSecondary}>Vi arbejder på at hente live-data.</Text>
-        </View>
-      </Card>
-    );
-  }
-
+function StandingsTableSection({
+  rows,
+  title,
+}: {
+  rows: StandingsRow[];
+  title?: string;
+}) {
   return (
-    <Card style={styles.standingsCard}>
-      <View style={styles.standingsHeader}>
-        <Text style={styles.standingsTitle}>Superligaen</Text>
-        <Text style={styles.standingsSubtitle}>Stillingen</Text>
-      </View>
+    <View style={styles.standingsSection}>
+      {title ? (
+        <View style={styles.standingsSectionHeader}>
+          <Text style={styles.standingsSectionTitle}>{title}</Text>
+        </View>
+      ) : null}
 
       <View style={styles.standingsTable}>
         <View style={[styles.standingsRow, styles.standingsRowHeader]}>
@@ -117,7 +65,8 @@ function StandingsView() {
 
         {rows.map((row, index) => {
           const name = row.teamName ?? '';
-          const isFcn = name.toLowerCase().includes('nordsjælland');
+          const isFcn = isFcnTeam(name);
+
           return (
             <View
               key={`${row.teamId ?? name}-${index}`}
@@ -132,6 +81,7 @@ function StandingsView() {
               >
                 {row.rank ?? '-'}
               </Text>
+
               <View style={styles.teamCell}>
                 {row.teamBadge ? (
                   <Image source={{ uri: row.teamBadge }} style={styles.teamBadge} />
@@ -147,6 +97,7 @@ function StandingsView() {
                   {name || '-'}
                 </Text>
               </View>
+
               <Text
                 style={[
                   styles.standingsCell,
@@ -205,6 +156,83 @@ function StandingsView() {
           );
         })}
       </View>
+    </View>
+  );
+}
+
+function StandingsView() {
+  const [rows, setRows] = useState<StandingsRow[]>([]);
+  const [hasData, setHasData] = useState(false);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadStandings = async () => {
+      const { data, error } = await supabase
+        .from('standings_cache')
+        .select('rows, updated_at, league_id, season')
+        .eq('league_id', STANDINGS_LEAGUE_ID)
+        .eq('season', STANDINGS_SEASON)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!isActive) return;
+
+      if (error || !data?.rows || data.rows.length === 0) {
+        setRows([]);
+        setHasData(false);
+        return;
+      }
+
+      setRows(data.rows as StandingsRow[]);
+      setHasData(true);
+    };
+
+    void loadStandings();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  if (!hasData) {
+    return (
+      <Card style={styles.comingSoonCard}>
+        <View style={styles.comingSoonContent}>
+          <Text style={styles.comingSoonTitle}>Superligaen</Text>
+          <Text style={styles.comingSoonSubtitle}>Stillingen kommer snart</Text>
+          <Text style={styles.comingSoonSecondary}>Vi arbejder på at hente live-data.</Text>
+        </View>
+      </Card>
+    );
+  }
+
+  const sections = buildStandingsSections(rows);
+
+  return (
+    <Card style={styles.standingsCard}>
+      <View style={styles.standingsHeader}>
+        <Text style={styles.standingsTitle}>Superligaen</Text>
+        <Text style={styles.standingsSubtitle}>Stillingen</Text>
+      </View>
+
+      <View style={styles.standingsSections}>
+        {sections.mode === 'single' ? (
+          <StandingsTableSection rows={sections.singleRows} />
+        ) : (
+          <>
+            <StandingsTableSection
+              title="Mesterskabsspil"
+              rows={sections.championshipRows}
+            />
+            <StandingsTableSection
+              title="Nedrykningsspil"
+              rows={sections.relegationRows}
+            />
+          </>
+        )}
+      </View>
     </Card>
   );
 }
@@ -212,10 +240,6 @@ function StandingsView() {
 export default function LibraryScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const [activeSegment, setActiveSegment] = useState<LibrarySegmentKey>('songs');
-
-  useEffect(() => {
-    console.log('[LibraryScreen] Supabase Project URL:', supabaseUrl);
-  }, []);
 
   const handleSegmentPress = (segment: LibrarySegmentKey) => {
     setActiveSegment(segment);
@@ -290,8 +314,21 @@ const styles = StyleSheet.create({
     color: theme.colors.text.secondary,
     ...theme.typography.small,
   },
-  standingsTable: {
+  standingsSections: {
     padding: theme.components.card.padding,
+    gap: theme.spacing[4],
+  },
+  standingsSection: {
+    gap: theme.spacing[2],
+  },
+  standingsSectionHeader: {
+    paddingHorizontal: theme.spacing[2],
+  },
+  standingsSectionTitle: {
+    color: theme.colors.text.primary,
+    ...theme.typography.bodyBold,
+  },
+  standingsTable: {
     gap: theme.spacing[2],
   },
   standingsRow: {

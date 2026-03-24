@@ -27,6 +27,14 @@ export interface PushStatusSnapshot {
   savedTokenPreview: string | null;
 }
 
+export interface PushTestResult {
+  status: 'sent' | 'not_ready' | 'error';
+  sentCount: number;
+  queuedCount: number;
+  failedCount: number;
+  errorMessage?: string;
+}
+
 function getProjectId(): string | undefined {
   return (
     Constants?.easConfig?.projectId ??
@@ -189,6 +197,94 @@ export async function syncPushNotifications(
       status: 'error',
       saved: false,
       errorMessage: error?.message ?? 'Kunne ikke gemme push-token',
+    };
+  }
+}
+
+export async function sendManualTestPush(userId: string): Promise<PushTestResult> {
+  // Hosted requirements:
+  // - push_tokens migration applied
+  // - authenticated send-push edge function deployed
+  // - working Expo projectId / physical device push setup
+  const registration = await syncPushNotifications(userId, { promptIfNeeded: false });
+  const targetToken = registration.token ?? (await getStoredPushToken());
+
+  if (!targetToken || registration.status !== 'enabled') {
+    return {
+      status: 'not_ready',
+      sentCount: 0,
+      queuedCount: 0,
+      failedCount: 0,
+      errorMessage:
+        registration.errorMessage ??
+        'Push er ikke aktivt på denne enhed endnu. Aktivér push først.',
+    };
+  }
+
+  try {
+    const { data, error } = await supabase.functions.invoke('send-push', {
+      body: {
+        toUserId: userId,
+        pushToken: targetToken,
+        title: 'FCN Fans test-push',
+        body: 'Hvis du ser denne besked, virker push på denne enhed.',
+        notificationType: 'manual_test',
+        dedupeKey: `manual_test:${userId}:${targetToken}:${Date.now()}`,
+        data: {
+          url: Linking.createURL('/'),
+        },
+      },
+    });
+
+    if (error) {
+      logger.warn('[Push] sendManualTestPush failed:', error);
+      return {
+        status: 'error',
+        sentCount: 0,
+        queuedCount: 0,
+        failedCount: 0,
+        errorMessage: error.message ?? 'Kunne ikke sende test-push',
+      };
+    }
+
+    const queuedCount = typeof data?.queued === 'number' ? data.queued : 0;
+    const sentCount = typeof data?.sent === 'number' ? data.sent : 0;
+    const failedCount = typeof data?.failed === 'number' ? data.failed : 0;
+
+    if (data?.skipped === 'no token') {
+      return {
+        status: 'not_ready',
+        sentCount,
+        queuedCount,
+        failedCount,
+        errorMessage: 'Ingen registreret push-token blev fundet for denne enhed.',
+      };
+    }
+
+    if (sentCount > 0) {
+      return {
+        status: 'sent',
+        sentCount,
+        queuedCount,
+        failedCount,
+      };
+    }
+
+    return {
+      status: 'error',
+      sentCount,
+      queuedCount,
+      failedCount,
+      errorMessage: 'Test-push blev ikke sendt.',
+    };
+  } catch (error: any) {
+    logger.warn('[Push] sendManualTestPush threw:', error);
+    return {
+      status: 'error',
+      sentCount: 0,
+      queuedCount: 0,
+      failedCount: 0,
+      errorMessage: error?.message ?? 'Kunne ikke sende test-push',
     };
   }
 }

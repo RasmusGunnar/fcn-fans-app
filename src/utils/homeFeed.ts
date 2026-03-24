@@ -47,6 +47,7 @@ export const HOME_RANKING_V1 = {
     validWeekBoost: 10,
   },
   community: {
+    recencyMultiplier: 0.55,
     freshBoostHours: 48,
     freshBoost: 8,
     maxAgeHours: 24 * 14,
@@ -265,6 +266,10 @@ function getRecencyScore(item: FeedItem, now: Date): number {
 
   if (item.kind === 'post' && ageHours <= HOME_RANKING_V1.recency.freshnessFloorHours) {
     return Math.max(recencyScore, HOME_RANKING_V1.recency.freshnessFloorPoints);
+  }
+
+  if (item.kind === 'community') {
+    return recencyScore * HOME_RANKING_V1.community.recencyMultiplier;
   }
 
   return recencyScore;
@@ -756,7 +761,7 @@ function toBusTripFeedItem(busTrip: BusTrip): FeedItem {
 export function toCommunityFeedItem(
   community: CommunityFeedSource,
 ): FeedItem {
-  const createdAt = toIsoOrNull(community.created_at) ?? new Date().toISOString();
+  const createdAt = toIsoOrNull(community.created_at) ?? '';
 
   return {
     kind: 'community',
@@ -771,8 +776,10 @@ export function toCommunityFeedItem(
       avatarUrl: community.avatar_url ?? null,
       coverUrl: community.cover_url ?? null,
       debugSource: community.debug_source ?? null,
-      sortDate: createdAt,
-      isSystemCard: false,
+      sortDate: createdAt || null,
+      // Community discovery cards should participate in home ranking,
+      // but they should still respect the system-card guardrails near the top.
+      isSystemCard: true,
       likeCount: 0,
       commentCount: 0,
       engagementCount: 0,

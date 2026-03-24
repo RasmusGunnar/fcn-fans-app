@@ -57,6 +57,52 @@ export function createAdminClient() {
   });
 }
 
+function readBearerToken(req: Request): string | null {
+  const authHeader = req.headers.get('authorization') || req.headers.get('Authorization') || '';
+  if (!authHeader) return null;
+
+  const trimmed = authHeader.trim();
+  if (!trimmed) return null;
+
+  return trimmed.toLowerCase().startsWith('bearer ') ? trimmed.slice(7).trim() : trimmed;
+}
+
+export async function requireAuthenticatedUser(req: Request) {
+  const url = Deno.env.get('SUPABASE_URL') ?? '';
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+  if (!url || !anonKey) {
+    return {
+      user: null,
+      response: json(500, { error: 'Missing SUPABASE_URL or SUPABASE_ANON_KEY' }),
+    };
+  }
+
+  const token = readBearerToken(req);
+  if (!token) {
+    return {
+      user: null,
+      response: json(401, { error: 'Missing Authorization header' }),
+    };
+  }
+
+  const authClient = createClient(url, anonKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+
+  const { data, error } = await authClient.auth.getUser(token);
+  if (error || !data?.user) {
+    return {
+      user: null,
+      response: json(401, { error: 'Invalid JWT' }),
+    };
+  }
+
+  return {
+    user: data.user,
+    response: null,
+  };
+}
+
 function chunk<T>(items: T[], size: number): T[][];
 function chunk<T>(items: T[], size: number): T[][] {
   const chunks: T[][] = [];

@@ -40,3 +40,8 @@ verify_jwt = false
 
 [functions.push_hot_posts]
 verify_jwt = false
+
+# send-push: authenticated self-test route used from the app profile screen.
+# Keep JWT verification ON and let the function enforce self-targeting.
+[functions.send-push]
+verify_jwt = true

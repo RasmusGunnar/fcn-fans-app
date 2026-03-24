@@ -31,6 +31,7 @@ import { supabase } from '../lib/supabase';
 import { ensureProfile } from '../lib/profile';
 import {
   getPushStatusSnapshot,
+  sendManualTestPush,
   syncPushNotifications,
   type PushUiStatus,
 } from '../lib/notifications';
@@ -138,6 +139,7 @@ export default function ProfileScreen() {
   const [avatarUrlInput, setAvatarUrlInput] = useState<string | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
+  const [pushTestLoading, setPushTestLoading] = useState(false);
   const [pushStatus, setPushStatus] = useState<PushUiStatus>('not_setup');
   const [pushPermissionStatus, setPushPermissionStatus] = useState<string>('undetermined');
   const [pushTokenPreview, setPushTokenPreview] = useState<string | null>(null);
@@ -209,11 +211,11 @@ export default function ProfileScreen() {
       setPushTokenPreview(snapshot.savedTokenPreview);
 
       if (snapshot.status === 'enabled') {
-        setPushMessage('Push er klar til nye opslag, svar og events.');
+        setPushMessage('Push er klar på denne enhed.');
       } else if (snapshot.status === 'denied') {
         setPushMessage('Push er afvist på denne enhed. Åbn indstillinger for at aktivere igen.');
       } else if (snapshot.status === 'not_setup') {
-        setPushMessage('Aktivér push for at få besked om nye opslag, svar og events.');
+        setPushMessage('Aktivér push for at modtage notifikationer på denne enhed.');
       } else {
         setPushMessage('Kunne ikke læse push-status lige nu.');
       }
@@ -245,7 +247,9 @@ export default function ProfileScreen() {
       const result = await syncPushNotifications(user.id);
       setPushStatus(result.status);
       setPushPermissionStatus(result.permissionStatus);
-      setPushTokenPreview(result.token ? `${result.token.slice(0, 10)}…${result.token.slice(-6)}` : null);
+      setPushTokenPreview(
+        result.token ? `${result.token.slice(0, 10)}...${result.token.slice(-6)}` : null,
+      );
 
       if (result.status === 'enabled') {
         setPushMessage('Push-notifikationer er nu aktiveret på denne enhed.');
@@ -262,6 +266,26 @@ export default function ProfileScreen() {
       setPushMessage(e?.message ?? 'Push-opsætning fejlede.');
     } finally {
       setPushLoading(false);
+    }
+  };
+
+  const handleSendPushTest = async () => {
+    if (!user?.id) return;
+
+    setPushTestLoading(true);
+    try {
+      const result = await sendManualTestPush(user.id);
+      if (result.status === 'sent') {
+        setPushMessage('Test-push sendt. Tjek denne enhed for notifikationen.');
+      } else {
+        setPushMessage(result.errorMessage ?? 'Test-push kunne ikke sendes.');
+      }
+      await loadPushStatus();
+    } catch (e: any) {
+      console.warn('[ProfileScreen] Push test failed:', e);
+      setPushMessage(e?.message ?? 'Test-push kunne ikke sendes.');
+    } finally {
+      setPushTestLoading(false);
     }
   };
 
@@ -714,7 +738,7 @@ export default function ProfileScreen() {
               Push-status: {getPushStatusLabel()}
             </Text>
             <Text style={[styles.pushStatusBody, { color: theme.colors.text.secondary }]}>
-              {pushMessage ?? 'Få besked om nye opslag, svar og kommende events.'}
+              {pushMessage ?? 'Aktivér push og send en test til denne enhed.'}
             </Text>
             <Text style={[styles.pushMeta, { color: theme.colors.text.secondary }]}>
               Tilladelse: {pushPermissionStatus}
@@ -730,11 +754,20 @@ export default function ProfileScreen() {
         <View style={styles.pushActionRow}>
           <View style={styles.pushActionButton}>
             <OutlineButton
-              title={pushLoading ? 'Tjekker...' : 'Aktivér / test push'}
+              title={pushLoading ? 'Tjekker...' : 'Aktivér push'}
               onPress={handlePushSetup}
-              disabled={pushLoading}
+              disabled={pushLoading || pushTestLoading}
             />
           </View>
+          {pushStatus === 'enabled' ? (
+            <View style={styles.pushActionButton}>
+              <OutlineButton
+                title={pushTestLoading ? 'Sender test...' : 'Send test-push'}
+                onPress={handleSendPushTest}
+                disabled={pushLoading || pushTestLoading}
+              />
+            </View>
+          ) : null}
           {pushStatus === 'denied' ? (
             <View style={styles.pushActionButton}>
               <OutlineButton title="Åbn indstillinger" onPress={handleOpenDeviceSettings} />
@@ -747,7 +780,7 @@ export default function ProfileScreen() {
         <ProfileRow
           icon="notifications"
           title="Notifikationer"
-          subtitle="Status og opsætning vises ovenfor"
+          subtitle="Status, aktivering og test vises ovenfor"
           onPress={handlePushSetup}
           styles={styles}
         />

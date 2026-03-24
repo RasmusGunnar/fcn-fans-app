@@ -7,6 +7,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 const SPORTSDB_API_KEY = Deno.env.get('SPORTSDB_API_KEY');
 const SPORTSDB_LEAGUE_ID = Deno.env.get('SPORTSDB_LEAGUE_ID');
 const SPORTSDB_SEASON = Deno.env.get('SPORTSDB_SEASON');
+const EXPECTED_SUPERLIGA_TEAM_COUNT = 12;
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   console.error('[sync_superliga_standings] Missing Supabase env vars');
@@ -39,6 +40,17 @@ function normalizeRow(row: any) {
   };
 }
 
+function hasCompleteStandings(rows: ReturnType<typeof normalizeRow>[]) {
+  if (rows.length !== EXPECTED_SUPERLIGA_TEAM_COUNT) {
+    return false;
+  }
+
+  return rows.every((row, index) => {
+    if (!row) return false;
+    return row.rank === index + 1 && !!row.teamName;
+  });
+}
+
 serve(async (req) => {
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
@@ -69,6 +81,17 @@ serve(async (req) => {
 
   const table = Array.isArray(json?.table) ? json.table : [];
   const rows = table.map(normalizeRow).filter(Boolean);
+
+  if (!hasCompleteStandings(rows)) {
+    console.error('[sync_superliga_standings] Incomplete or invalid standings payload', {
+      expectedRows: EXPECTED_SUPERLIGA_TEAM_COUNT,
+      actualRows: rows.length,
+      sample: rows.slice(0, 5),
+      leagueId: SPORTSDB_LEAGUE_ID,
+      season: SPORTSDB_SEASON,
+    });
+    return new Response('Incomplete standings payload from SportsDB', { status: 502 });
+  }
 
   const { error } = await supabase.from('standings_cache').upsert(
     {
