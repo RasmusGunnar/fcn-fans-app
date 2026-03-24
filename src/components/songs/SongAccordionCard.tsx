@@ -3,6 +3,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { defaultTheme } from '../../theme';
 import { Card } from '../ui/Card';
+import { Button } from '../ui/Button';
 import { SpotifyButton } from '../ui/SpotifyButton';
 
 interface SongAccordionCardProps {
@@ -11,6 +12,8 @@ interface SongAccordionCardProps {
   spotifyUrl?: string;
   isExpanded: boolean;
   onToggle: () => void;
+  canEdit?: boolean;
+  onPressEdit?: () => void;
 }
 
 export function SongAccordionCard({
@@ -19,6 +22,8 @@ export function SongAccordionCard({
   spotifyUrl,
   isExpanded,
   onToggle,
+  canEdit = false,
+  onPressEdit,
 }: SongAccordionCardProps) {
   const theme = defaultTheme;
 
@@ -43,6 +48,11 @@ export function SongAccordionCard({
           <View style={styles.lyricsContainer}>
             <Text style={styles.lyrics}>{lyrics}</Text>
           </View>
+          {canEdit && onPressEdit ? (
+            <View style={styles.actions}>
+              <Button title="Rediger" variant="outline" size="sm" onPress={onPressEdit} />
+            </View>
+          ) : null}
           {spotifyUrl && <SpotifyButton spotifyUrl={spotifyUrl} />}
         </View>
       )}
@@ -84,6 +94,7 @@ const styles = StyleSheet.create({
   },
   expandedContent: {
     marginTop: theme.spacing[2],
+    gap: theme.spacing[2],
   },
   lyricsContainer: {
     backgroundColor: theme.colors.bg.default,
@@ -94,5 +105,8 @@ const styles = StyleSheet.create({
   lyrics: {
     ...theme.typography.small,
     color: theme.colors.text.primary,
+  },
+  actions: {
+    alignItems: 'flex-start',
   },
 });

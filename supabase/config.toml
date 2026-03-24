@@ -11,6 +11,10 @@ verify_jwt = false
 [functions.sync_superliga_standings]
 verify_jwt = false
 
+# sync_wild_tigers_songs: internal song import/sync via x-sync-secret.
+[functions.sync_wild_tigers_songs]
+verify_jwt = false
+
 # sync-fixtures: also uses secret-header auth, no JWT needed.
 [functions.sync-fixtures]
 verify_jwt = false
