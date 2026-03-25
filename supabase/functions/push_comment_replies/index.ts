@@ -4,7 +4,9 @@ import {
   createAdminClient,
   dispatchNotifications,
   fetchExistingNotificationDedupeKeys,
+  fetchPushPreferencesByUserIds,
   fetchPushTokensForUsers,
+  isPushPreferenceEnabled,
   json,
   requireAuthenticatedUser,
 } from '../_shared/push.ts';
@@ -175,6 +177,16 @@ Deno.serve(async (req) => {
         notificationType,
       });
       return json(200, { ok: true, skipped: 'self_notify' });
+    }
+
+    const preferencesByUserId = await fetchPushPreferencesByUserIds(supabase, [recipientUserId]);
+    if (!isPushPreferenceEnabled(preferencesByUserId, recipientUserId, 'replies')) {
+      console.log('[push_comment_replies] skipped preference disabled', {
+        commentId,
+        recipientUserId,
+        notificationType,
+      });
+      return json(200, { ok: true, skipped: 'preferences_disabled', recipientUserId });
     }
 
     const { data: authorProfile } = await supabase

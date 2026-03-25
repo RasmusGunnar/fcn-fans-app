@@ -22,8 +22,28 @@ type ExpoPushTicket = {
   details?: { error?: string };
 };
 
+export type PushPreferenceKey = 'community_activity' | 'matchday_checkin' | 'replies';
+
+type PushPreferenceRow = {
+  user_id: string;
+  replies_enabled: boolean;
+  matchday_checkin_enabled: boolean;
+  community_activity_enabled: boolean;
+};
+
 const EXPO_PUSH_API_URL = 'https://exp.host/--/api/v2/push/send';
 const ACTIVE_NOTIFICATION_STATUSES = ['queued', 'sent'] as const;
+const DEFAULT_PUSH_PREFERENCES: Omit<PushPreferenceRow, 'user_id'> = {
+  replies_enabled: true,
+  matchday_checkin_enabled: true,
+  community_activity_enabled: true,
+};
+const PUSH_PREFERENCE_COLUMN_BY_KEY: Record<PushPreferenceKey, keyof Omit<PushPreferenceRow, 'user_id'>> =
+  {
+    replies: 'replies_enabled',
+    matchday_checkin: 'matchday_checkin_enabled',
+    community_activity: 'community_activity_enabled',
+  };
 
 export function json(status: number, payload: unknown) {
   return new Response(JSON.stringify(payload), {
@@ -220,6 +240,57 @@ export async function fetchPushTokensForUsers(supabase: any, userIds: string[]) 
 
   if (error) throw error;
   return Array.isArray(data) ? data : [];
+}
+
+export async function fetchPushPreferencesByUserIds(supabase: any, userIds: string[]) {
+  const normalizedUserIds = Array.from(
+    new Set(userIds.map((value) => value.trim()).filter((value) => value.length > 0)),
+  );
+
+  if (normalizedUserIds.length === 0) {
+    return new Map<string, PushPreferenceRow>();
+  }
+
+  const { data, error } = await supabase
+    .from('push_preferences')
+    .select('user_id, replies_enabled, matchday_checkin_enabled, community_activity_enabled')
+    .in('user_id', normalizedUserIds);
+
+  if (error) {
+    if (error.code === '42P01' || error.message?.toLowerCase().includes('push_preferences')) {
+      return new Map<string, PushPreferenceRow>();
+    }
+    throw error;
+  }
+
+  return new Map(
+    (((data as PushPreferenceRow[] | null) ?? []).map((row) => [
+      row.user_id,
+      {
+        user_id: row.user_id,
+        replies_enabled: row.replies_enabled ?? DEFAULT_PUSH_PREFERENCES.replies_enabled,
+        matchday_checkin_enabled:
+          row.matchday_checkin_enabled ?? DEFAULT_PUSH_PREFERENCES.matchday_checkin_enabled,
+        community_activity_enabled:
+          row.community_activity_enabled ?? DEFAULT_PUSH_PREFERENCES.community_activity_enabled,
+      },
+    ]) as [string, PushPreferenceRow][]),
+  );
+}
+
+export function isPushPreferenceEnabled(
+  preferencesByUserId: Map<string, PushPreferenceRow>,
+  userId: string,
+  key: PushPreferenceKey,
+) {
+  const preferenceColumn = PUSH_PREFERENCE_COLUMN_BY_KEY[key];
+  const preferences = preferencesByUserId.get(userId);
+
+  if (!preferences) {
+    return DEFAULT_PUSH_PREFERENCES[preferenceColumn];
+  }
+
+  return preferences[preferenceColumn] !== false;
 }
 
 export async function fetchExistingNotificationDedupeKeys(

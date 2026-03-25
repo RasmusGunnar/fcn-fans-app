@@ -4,9 +4,11 @@ import {
   createAdminClient,
   dispatchNotifications,
   fetchExistingNotificationDedupeKeys,
+  fetchPushPreferencesByUserIds,
   fetchPushTokensForUsers,
   fetchUserIdsWithRecentNotificationTypes,
   getStartOfLocalDayIso,
+  isPushPreferenceEnabled,
   json,
   requireAuthenticatedUser,
 } from '../_shared/push.ts';
@@ -185,11 +187,33 @@ Deno.serve(async (req) => {
       });
     }
 
+    const preferencesByUserId = await fetchPushPreferencesByUserIds(supabase, recipientsAfterSelf);
+    const usersWithPreferenceEnabled = recipientsAfterSelf.filter((userId) =>
+      isPushPreferenceEnabled(preferencesByUserId, userId, 'community_activity'),
+    );
+    const recipientsSkippedPreference =
+      recipientsAfterSelf.length - usersWithPreferenceEnabled.length;
+
+    if (usersWithPreferenceEnabled.length === 0) {
+      console.log('[push_community_posts] skipped preferences disabled', {
+        postId,
+        communityId,
+        recipientsSkippedSelf,
+        recipientsSkippedPreference,
+      });
+      return json(200, {
+        ok: true,
+        skipped: 'preferences_disabled',
+        recipientsSkippedSelf,
+        recipientsSkippedPreference,
+      });
+    }
+
     const tokens = pickLatestTokenPerUser(
-      (await fetchPushTokensForUsers(supabase, recipientsAfterSelf)) as PushTokenRow[],
+      (await fetchPushTokensForUsers(supabase, usersWithPreferenceEnabled)) as PushTokenRow[],
     );
     const tokenUserIds = new Set(tokens.map((tokenRow) => tokenRow.user_id));
-    const recipientsSkippedNoToken = recipientsAfterSelf.filter(
+    const recipientsSkippedNoToken = usersWithPreferenceEnabled.filter(
       (userId) => !tokenUserIds.has(userId),
     ).length;
 
@@ -251,6 +275,7 @@ Deno.serve(async (req) => {
       recipientsTargeted: tokens.length,
       recipientsSkippedSelf,
       recipientsSkippedNonMembers: 0,
+      recipientsSkippedPreference,
       recipientsSkippedNoToken,
       recipientsSkippedCap,
       recipientsSkippedExistingDedupe,

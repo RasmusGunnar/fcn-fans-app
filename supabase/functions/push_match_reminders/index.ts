@@ -4,7 +4,9 @@ import {
   createAdminClient,
   dispatchNotifications,
   fetchExistingNotificationDedupeKeys,
+  fetchPushPreferencesByUserIds,
   fetchPushTokensForUsers,
+  isPushPreferenceEnabled,
   json,
   requireSyncSecret,
 } from '../_shared/push.ts';
@@ -257,6 +259,7 @@ Deno.serve(async (req) => {
     let recipientsTargeted = 0;
     let recipientsSkippedCheckedIn = 0;
     let recipientsSkippedMissingToken = 0;
+    let recipientsSkippedPreference = 0;
 
     for (const fixture of eligibleFixtures) {
       const kickoffAt = readString(fixture.kickoff_at);
@@ -278,12 +281,20 @@ Deno.serve(async (req) => {
       recipientsSkippedCheckedIn += scopedUserIds.length - notCheckedInUserIds.length;
       if (notCheckedInUserIds.length === 0) continue;
 
+      const preferencesByUserId = await fetchPushPreferencesByUserIds(supabase, notCheckedInUserIds);
+      const usersWithPreferenceEnabled = notCheckedInUserIds.filter((userId) =>
+        isPushPreferenceEnabled(preferencesByUserId, userId, 'matchday_checkin'),
+      );
+
+      recipientsSkippedPreference += notCheckedInUserIds.length - usersWithPreferenceEnabled.length;
+      if (usersWithPreferenceEnabled.length === 0) continue;
+
       const tokens = pickLatestTokenPerUser(
-        (await fetchPushTokensForUsers(supabase, notCheckedInUserIds)) as PushTokenRow[],
+        (await fetchPushTokensForUsers(supabase, usersWithPreferenceEnabled)) as PushTokenRow[],
       );
       const tokenUserIds = new Set(tokens.map((tokenRow) => tokenRow.user_id));
 
-      recipientsSkippedMissingToken += notCheckedInUserIds.filter(
+      recipientsSkippedMissingToken += usersWithPreferenceEnabled.filter(
         (userId) => !tokenUserIds.has(userId),
       ).length;
       recipientsTargeted += tokens.length;
@@ -332,6 +343,7 @@ Deno.serve(async (req) => {
       rsvpUsersMatched,
       recipientsTargeted,
       recipientsSkippedCheckedIn,
+      recipientsSkippedPreference,
       recipientsSkippedMissingToken,
       recipientsSkippedExistingDedupe,
       requestsPrepared: requests.length,

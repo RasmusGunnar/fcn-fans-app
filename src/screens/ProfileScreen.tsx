@@ -9,6 +9,7 @@ import {
   Alert,
   TextInput,
   Linking,
+  Switch,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -35,6 +36,12 @@ import {
   syncPushNotifications,
   type PushUiStatus,
 } from '../lib/notifications';
+import {
+  DEFAULT_PUSH_PREFERENCES,
+  getPushPreferences,
+  savePushPreferences,
+  type PushPreferences,
+} from '../services/pushPreferencesApi';
 import {
   fetchMyProfile,
   fetchMyCommunities,
@@ -144,6 +151,12 @@ export default function ProfileScreen() {
   const [pushPermissionStatus, setPushPermissionStatus] = useState<string>('undetermined');
   const [pushTokenPreview, setPushTokenPreview] = useState<string | null>(null);
   const [pushMessage, setPushMessage] = useState<string | null>(null);
+  const [pushPreferences, setPushPreferences] = useState<PushPreferences>(DEFAULT_PUSH_PREFERENCES);
+  const [pushPreferencesLoading, setPushPreferencesLoading] = useState(false);
+  const [pushPreferenceSavingKey, setPushPreferenceSavingKey] = useState<keyof Pick<
+    PushPreferences,
+    'communityActivityEnabled' | 'matchdayCheckinEnabled' | 'repliesEnabled'
+  > | null>(null);
   const fanLevel = getSafeFanLevelKey(profile?.fan_level_key);
   const debugScore = 180;
   const debugProgress = 0.53;
@@ -224,6 +237,18 @@ export default function ProfileScreen() {
     }
   }, [user?.id]);
 
+  const loadPushPreferences = useCallback(async () => {
+    if (!user?.id) return;
+
+    setPushPreferencesLoading(true);
+    try {
+      const preferences = await getPushPreferences(user.id);
+      setPushPreferences(preferences);
+    } finally {
+      setPushPreferencesLoading(false);
+    }
+  }, [user?.id]);
+
   useEffect(() => {
     loadData();
   }, [loadData]);
@@ -232,11 +257,16 @@ export default function ProfileScreen() {
     loadPushStatus();
   }, [loadPushStatus]);
 
+  useEffect(() => {
+    loadPushPreferences();
+  }, [loadPushPreferences]);
+
   useFocusEffect(
     React.useCallback(() => {
       loadData();
       loadPushStatus();
-    }, [loadData, loadPushStatus]),
+      loadPushPreferences();
+    }, [loadData, loadPushStatus, loadPushPreferences]),
   );
 
   const handlePushSetup = async () => {
@@ -295,6 +325,31 @@ export default function ProfileScreen() {
     } catch (e) {
       console.warn('[ProfileScreen] Could not open settings:', e);
       Alert.alert('Fejl', 'Kunne ikke åbne enhedens indstillinger.');
+    }
+  };
+
+  const handleTogglePushPreference = async (
+    key: keyof Pick<
+      PushPreferences,
+      'communityActivityEnabled' | 'matchdayCheckinEnabled' | 'repliesEnabled'
+    >,
+    value: boolean,
+  ) => {
+    if (!user?.id) return;
+
+    const previous = pushPreferences;
+    setPushPreferenceSavingKey(key);
+    setPushPreferences((current) => ({ ...current, [key]: value }));
+
+    try {
+      const updated = await savePushPreferences(user.id, { [key]: value });
+      setPushPreferences(updated);
+    } catch (error) {
+      console.warn('[ProfileScreen] savePushPreferences failed:', error);
+      setPushPreferences(previous);
+      Alert.alert('Fejl', 'Kunne ikke gemme push-indstillingen. Prøv igen.');
+    } finally {
+      setPushPreferenceSavingKey(null);
     }
   };
 
@@ -774,6 +829,83 @@ export default function ProfileScreen() {
             </View>
           ) : null}
         </View>
+        <View
+          style={[
+            styles.pushPreferencesList,
+            { borderTopColor: theme.colors.border.default },
+          ]}
+        >
+          <View style={styles.pushPreferenceRow}>
+            <View style={styles.pushPreferenceCopy}>
+              <Text style={[styles.pushPreferenceTitle, { color: theme.colors.text.primary }]}>
+                {'Svar p\u00E5 mit indhold'}
+              </Text>
+              <Text style={[styles.pushPreferenceBody, { color: theme.colors.text.secondary }]}>
+                {'N\u00E5r andre kommenterer p\u00E5 dit opslag eller svarer p\u00E5 din kommentar.'}
+              </Text>
+            </View>
+            <Switch
+              value={pushPreferences.repliesEnabled}
+              onValueChange={(value) => handleTogglePushPreference('repliesEnabled', value)}
+              disabled={pushPreferencesLoading || pushPreferenceSavingKey === 'repliesEnabled'}
+              trackColor={{
+                false: theme.colors.border.default,
+                true: theme.colors.primary,
+              }}
+              thumbColor={theme.colors.bg.card}
+            />
+          </View>
+
+          <View style={styles.pushPreferenceRow}>
+            <View style={styles.pushPreferenceCopy}>
+              <Text style={[styles.pushPreferenceTitle, { color: theme.colors.text.primary }]}>
+                {'Kampdag check-in'}
+              </Text>
+              <Text style={[styles.pushPreferenceBody, { color: theme.colors.text.secondary }]}>
+                {'Husk at tjekke ind, hvis du er p\u00E5 stadion til FCN-kampen.'}
+              </Text>
+            </View>
+            <Switch
+              value={pushPreferences.matchdayCheckinEnabled}
+              onValueChange={(value) =>
+                handleTogglePushPreference('matchdayCheckinEnabled', value)
+              }
+              disabled={
+                pushPreferencesLoading || pushPreferenceSavingKey === 'matchdayCheckinEnabled'
+              }
+              trackColor={{
+                false: theme.colors.border.default,
+                true: theme.colors.primary,
+              }}
+              thumbColor={theme.colors.bg.card}
+            />
+          </View>
+
+          <View style={styles.pushPreferenceRow}>
+            <View style={styles.pushPreferenceCopy}>
+              <Text style={[styles.pushPreferenceTitle, { color: theme.colors.text.primary }]}>
+                {'F\u00E6llesskabsaktivitet'}
+              </Text>
+              <Text style={[styles.pushPreferenceBody, { color: theme.colors.text.secondary }]}>
+                {'Nye opslag og afstemninger i f\u00E6llesskaber, du er medlem af.'}
+              </Text>
+            </View>
+            <Switch
+              value={pushPreferences.communityActivityEnabled}
+              onValueChange={(value) =>
+                handleTogglePushPreference('communityActivityEnabled', value)
+              }
+              disabled={
+                pushPreferencesLoading || pushPreferenceSavingKey === 'communityActivityEnabled'
+              }
+              trackColor={{
+                false: theme.colors.border.default,
+                true: theme.colors.primary,
+              }}
+              thumbColor={theme.colors.bg.card}
+            />
+          </View>
+        </View>
       </Card>
 
       <Card style={{ marginBottom: spacing.md }}>
@@ -1078,6 +1210,31 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
     pushActionButton: {
       flex: 1,
+    },
+    pushPreferencesList: {
+      marginTop: spacing.md,
+      paddingTop: spacing.md,
+      borderTopWidth: theme.layout.borderHairline,
+      gap: spacing.sm,
+    },
+    pushPreferenceRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: theme.spacing[3],
+    },
+    pushPreferenceCopy: {
+      flex: 1,
+      paddingRight: theme.spacing[2],
+    },
+    pushPreferenceTitle: {
+      fontSize: theme.typography.body.fontSize,
+      fontWeight: '600',
+      marginBottom: theme.spacing[0],
+    },
+    pushPreferenceBody: {
+      fontSize: theme.typography.small.fontSize,
+      lineHeight: 18,
     },
     emptyText: {
       fontSize: theme.typography.body.fontSize,
