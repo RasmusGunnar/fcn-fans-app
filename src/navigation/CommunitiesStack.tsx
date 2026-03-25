@@ -4,6 +4,7 @@ import CommunitiesScreen from '../screens/CommunitiesScreen';
 import CommunityDetailScreen from '../screens/CommunityDetailScreen';
 import CommunityMembersScreen from '../screens/CommunityMembersScreen';
 import CreateCommunityScreen from '../screens/CreateCommunityScreen';
+import HashtagScreen from '../screens/HashtagScreen';
 import PublicProfileScreen from '../screens/PublicProfileScreen';
 
 const Stack = createNativeStackNavigator();
@@ -16,6 +17,7 @@ export function CommunitiesStack() {
       <Stack.Screen name="CommunityMembers" component={CommunityMembersScreen} />
       <Stack.Screen name="CreateCommunity" component={CreateCommunityScreen} />
       <Stack.Screen name="PublicProfile" component={PublicProfileScreen} />
+      <Stack.Screen name="Hashtag" component={HashtagScreen} />
     </Stack.Navigator>
   );
 }

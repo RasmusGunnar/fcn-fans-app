@@ -74,7 +74,7 @@ function Inner() {
         },
         () => {
           void loadProfile();
-        }
+        },
       )
       .subscribe();
 
@@ -82,7 +82,6 @@ function Inner() {
       void supabase.removeChannel(channel);
     };
   }, [loadProfile, user?.id]);
-
 
   if (loading || profileLoading) {
     logger.log('[RootNavigator] Rendering LoadingScreen', {
@@ -150,6 +149,12 @@ export function RootNavigator() {
                 EventsList: 'events',
                 EventDetails: 'event/:eventId',
                 BusTripDetails: 'bus-trip/:busTripId',
+              },
+            },
+            Profile: {
+              screens: {
+                ProfileMain: 'profile',
+                Notifications: 'notifications',
               },
             },
           },

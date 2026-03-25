@@ -21,6 +21,7 @@ import { logger } from '../../lib/logger';
 import { supabase } from '../../lib/supabase';
 import { navigationRef } from '../../navigation/navigationRef';
 import type { CommentPreview } from '../../services/likesApi';
+import { resolveProfileIdByUsername } from '../../services/postEntities';
 import { defaultTheme } from '../../theme';
 import type { CategoryKey } from '../../theme/categories';
 import { Post } from '../../types/post';
@@ -29,6 +30,7 @@ import { resolveRenderableMedia } from '../../utils/media';
 import { cleanText } from '../../utils/text';
 import { useCommunityRole } from '../../hooks/useCommunityRole';
 import { canDeleteFeedItem, canEditPost } from '../../utils/permissions';
+import { renderTextWithEntities } from '../../utils/renderTextWithEntities';
 import { Avatar } from '../Avatar';
 import { FanLevelBadge } from '../fan/FanLevelBadge';
 import { FeedVideo } from '../feed/FeedVideo';
@@ -373,10 +375,10 @@ export function FanPostCard({
     cleanText(post.actorDisplayName || (isCommunityPost ? communityName : '')) || '';
   const fallbackActorAvatarUrl = post.actorAvatarUrl ?? null;
   const fallbackAuthorDisplayName =
-    cleanText(post.authorDisplayName || authorProfile?.display_name || (post as any).authorName) || '';
+    cleanText(post.authorDisplayName || authorProfile?.display_name || (post as any).authorName) ||
+    '';
   const fallbackAuthorAvatarUrl = authorProfile?.avatar_url ?? post.authorAvatarUrl ?? null;
-  const fallbackAuthorFanLevelKey =
-    authorProfile?.fan_level_key ?? post.authorFanLevelKey ?? null;
+  const fallbackAuthorFanLevelKey = authorProfile?.fan_level_key ?? post.authorFanLevelKey ?? null;
   const actorDisplayName = isCommunityPost
     ? fallbackActorDisplayName || communityName || 'Fællesskab'
     : fallbackAuthorDisplayName || 'Ukendt';
@@ -401,7 +403,7 @@ export function FanPostCard({
   const resolvedCategoryKey = categoryKey ?? 'fan'; // eslint-disable-line @typescript-eslint/no-unused-vars
   const resolvedAuthor = resolveActorLine({
     actorType: isCommunityPost ? 'community' : 'user',
-    authorId: isCommunityPost ? undefined : postAuthorId ?? undefined,
+    authorId: isCommunityPost ? undefined : (postAuthorId ?? undefined),
     authorEmail: isCommunityPost ? actorDisplayName || undefined : authorDisplayName || undefined,
     profileMap,
     communityName: isCommunityPost ? actorDisplayName || undefined : undefined,
@@ -422,6 +424,21 @@ export function FanPostCard({
       </Text>
     </View>
   ) : null;
+  const mentionLabels = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.values(profileMap ?? {})
+          .filter(
+            (profile) =>
+              typeof profile.username === 'string' &&
+              profile.username.trim().length > 0 &&
+              typeof profile.display_name === 'string' &&
+              profile.display_name.trim().length > 0,
+          )
+          .map((profile) => [profile.username!.toLowerCase(), cleanText(profile.display_name!)]),
+      ),
+    [profileMap],
+  );
 
   return (
     <CardRoot
@@ -432,6 +449,7 @@ export function FanPostCard({
       onOpenDetail={computedOnOpenDetail}
       commentPreviews={commentPreviews}
       onNewComment={onNewComment}
+      profileMap={profileMap}
       actions={{
         liked,
         likes,
@@ -443,7 +461,7 @@ export function FanPostCard({
       <CardHeader
         avatarSlot={
           <Avatar
-            userId={isCommunityPost ? undefined : postAuthorId ?? undefined}
+            userId={isCommunityPost ? undefined : (postAuthorId ?? undefined)}
             avatarUrl={actorAvatarUrl}
             size={40}
             label={actorDisplayName || authorDisplayName || 'Fan'}
@@ -486,7 +504,18 @@ export function FanPostCard({
         bodyContent
       ) : (
         <Text variant="body" color="primary" style={styles.text}>
-          {cleanedPostText}
+          {renderTextWithEntities(cleanedPostText, {
+            entityStyle: styles.entityText,
+            mentionLabels,
+            onPressTag: (tag) => navigation.navigate('Hashtag', { tag }),
+            onPressMention: async (username) => {
+              const profileId = await resolveProfileIdByUsername(username);
+
+              if (profileId) {
+                navigation.navigate('PublicProfile', { userId: profileId });
+              }
+            },
+          })}
         </Text>
       )}
       {/* BASELINE: Deterministic media rendering - no silent failures */}
@@ -583,6 +612,9 @@ const theme = defaultTheme;
 const styles = StyleSheet.create({
   text: {
     marginBottom: theme.spacing[3],
+  },
+  entityText: {
+    color: theme.colors.brand.accent,
   },
   imagePlaceholder: {
     height: 120,

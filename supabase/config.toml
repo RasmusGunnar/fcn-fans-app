@@ -61,3 +61,7 @@ verify_jwt = true
 # push_community_posts: authenticated route triggered after a successful community post/poll insert.
 [functions.push_community_posts]
 verify_jwt = true
+
+# push_mentions: authenticated route triggered after successful post/comment/reply writes.
+[functions.push_mentions]
+verify_jwt = true

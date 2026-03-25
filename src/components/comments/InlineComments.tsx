@@ -15,10 +15,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
+import { useEntityAutocomplete } from '../../hooks/useEntityAutocomplete';
+import { EntityAutocompleteList } from '../composer/EntityAutocompleteList';
+import { triggerMentionPush } from '../../services/mentionPushApi';
+import { createMentionNotifications } from '../../services/mentionNotifications';
+import { createNotification } from '../../services/notificationsApi';
+import { resolveMentionedProfiles, resolveProfileIdByUsername } from '../../services/postEntities';
 import { defaultTheme } from '../../theme';
 import { Avatar } from '../Avatar';
 import { Text } from '../ui';
 import { resolveActorLine, type ProfileMap } from '../../utils/actor';
+import { renderTextWithEntities } from '../../utils/renderTextWithEntities';
 import {
   toggleCommentLike,
   triggerCommentReplyPush,
@@ -84,11 +91,14 @@ export function InlineComments({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [commentText, setCommentText] = useState('');
+  const [commentSelection, setCommentSelection] = useState({ start: 0, end: 0 });
+  const [isComposerFocused, setIsComposerFocused] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [quickActionFeedback, setQuickActionFeedback] = useState<string | null>(null);
   const [activeReplyToCommentId, setActiveReplyToCommentId] = useState<string | null>(null);
   const [activeReplyToDisplayName, setActiveReplyToDisplayName] = useState<string | null>(null);
   const [expandedReplyIds, setExpandedReplyIds] = useState<Set<string>>(new Set());
+  const [showAllInlineComments, setShowAllInlineComments] = useState(false);
   const inputRef = useRef<TextInput | null>(null);
   const listRef = useRef<FlatList<Comment> | null>(null);
   const commentPositions = useRef<Record<string, number>>({});
@@ -97,6 +107,82 @@ export function InlineComments({
   const navigation = useNavigation<any>();
   const keyboardVerticalOffset =
     variant === 'screen' ? (keyboardVerticalOffsetOverride ?? insets.top + 44) : 0;
+  const {
+    activeMatch,
+    mentionSuggestions,
+    hashtagSuggestions,
+    visible,
+    handleSelectMention,
+    handleSelectHashtag,
+    clear: clearAutocomplete,
+  } = useEntityAutocomplete({
+    text: commentText,
+    selection: commentSelection,
+    isFocused: isComposerFocused,
+    setText: setCommentText,
+    setSelection: setCommentSelection,
+  });
+
+  const refocusComposer = useCallback(() => {
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+  }, []);
+
+  const handleSelectMentionSuggestion = useCallback(
+    (item: Parameters<typeof handleSelectMention>[0]) => {
+      handleSelectMention(item);
+      refocusComposer();
+    },
+    [handleSelectMention, refocusComposer],
+  );
+
+  const handleSelectHashtagSuggestion = useCallback(
+    (tag: string) => {
+      handleSelectHashtag(tag);
+      refocusComposer();
+    },
+    [handleSelectHashtag, refocusComposer],
+  );
+
+  const handlePressHashtag = useCallback(
+    (tag: string) => {
+      navigation.navigate('Hashtag', { tag });
+    },
+    [navigation],
+  );
+
+  const handlePressMention = useCallback(
+    async (username: string) => {
+      const profileId = await resolveProfileIdByUsername(username);
+
+      if (profileId) {
+        navigation.navigate('PublicProfile', { userId: profileId });
+      }
+    },
+    [navigation],
+  );
+
+  const renderEntityText = useCallback(
+    (text: string) =>
+      renderTextWithEntities(text, {
+        entityStyle: styles.entityText,
+        mentionLabels: Object.fromEntries(
+          Object.values(profileMap ?? {})
+            .filter(
+              (profile) =>
+                typeof profile.username === 'string' &&
+                profile.username.trim().length > 0 &&
+                typeof profile.display_name === 'string' &&
+                profile.display_name.trim().length > 0,
+            )
+            .map((profile) => [profile.username!.toLowerCase(), profile.display_name!.trim()]),
+        ),
+        onPressTag: handlePressHashtag,
+        onPressMention: handlePressMention,
+      }),
+    [handlePressHashtag, handlePressMention, profileMap],
+  );
 
   const resolveActor = useCallback(
     (authorId: string, authorDisplayName?: string | null, authorAvatarUrl?: string | null) => {
@@ -221,6 +307,10 @@ export function InlineComments({
     };
   }, []);
 
+  useEffect(() => {
+    setShowAllInlineComments(false);
+  }, [targetId, targetType, variant]);
+
   const totalCommentCount = comments.reduce(
     (total, comment) => total + 1 + comment.replies.length,
     0,
@@ -281,11 +371,36 @@ export function InlineComments({
       setComments([...comments, newComment]); // Add to bottom (Instagram-style)
       if (!overrideText) {
         setCommentText('');
+        setCommentSelection({ start: 0, end: 0 });
+        clearAutocomplete();
       }
 
       // Notify parent of new comment for preview update
       if (onNewComment) {
         onNewComment(newComment);
+      }
+
+      const mentionedProfiles = await resolveMentionedProfiles(resolvedText);
+
+      if (targetType === 'post' && mentionedProfiles.length > 0) {
+        void createMentionNotifications({
+          mentionedUsernames: mentionedProfiles
+            .map((profile) => profile.username)
+            .filter((username): username is string => Boolean(username)),
+          actorId: currentUserId,
+          postId: targetId,
+          commentId: data.id,
+        });
+
+        void triggerMentionPush({
+          actorUserId: currentUserId,
+          mentionedUserIds: mentionedProfiles.map((profile) => profile.id),
+          entityType: 'comment',
+          entityId: data.id,
+          postId: targetId,
+          commentId: data.id,
+          previewText: resolvedText,
+        });
       }
 
       void triggerCommentReplyPush(data.id);
@@ -431,6 +546,8 @@ export function InlineComments({
     setExpandedReplyIds((prev) => new Set(prev).add(commentId));
 
     setCommentText('');
+    setCommentSelection({ start: 0, end: 0 });
+    clearAutocomplete();
     handleCancelReply();
 
     try {
@@ -466,6 +583,45 @@ export function InlineComments({
         }),
       );
 
+      const parentComment = comments.find((comment) => comment.id === commentId);
+      if (
+        targetType === 'post' &&
+        parentComment?.author_id &&
+        parentComment.author_id !== currentUserId
+      ) {
+        void createNotification({
+          user_id: parentComment.author_id,
+          actor_id: currentUserId,
+          type: 'reply',
+          entity_type: 'comment',
+          entity_id: savedReply.id,
+          post_id: targetId,
+        });
+      }
+
+      const mentionedProfiles = await resolveMentionedProfiles(optimisticReply.text);
+
+      if (targetType === 'post' && mentionedProfiles.length > 0) {
+        void createMentionNotifications({
+          mentionedUsernames: mentionedProfiles
+            .map((profile) => profile.username)
+            .filter((username): username is string => Boolean(username)),
+          actorId: currentUserId,
+          postId: targetId,
+          commentId: savedReply.id,
+        });
+
+        void triggerMentionPush({
+          actorUserId: currentUserId,
+          mentionedUserIds: mentionedProfiles.map((profile) => profile.id),
+          entityType: 'reply',
+          entityId: savedReply.id,
+          postId: targetId,
+          commentId: savedReply.id,
+          previewText: optimisticReply.text,
+        });
+      }
+
       void triggerCommentReplyPush(savedReply.id);
     } catch (err) {
       console.error('[InlineComments] Reply submit error:', err);
@@ -499,6 +655,8 @@ export function InlineComments({
     }
 
     setCommentText(value);
+    setCommentSelection({ start: value.length, end: value.length });
+    clearAutocomplete();
     requestAnimationFrame(() => {
       inputRef.current?.focus();
     });
@@ -587,7 +745,7 @@ export function InlineComments({
             </View>
 
             <Text variant="body" color="primary" style={styles.commentText}>
-              {comment.text}
+              {renderEntityText(comment.text)}
             </Text>
 
             <View style={styles.commentMetaRow}>
@@ -658,7 +816,7 @@ export function InlineComments({
                           </Text>
                         </View>
                         <Text variant="body" color="primary" style={styles.replyText}>
-                          {reply.text}
+                          {renderEntityText(reply.text)}
                         </Text>
                         <View style={styles.replyMetaRow}>
                           <Pressable
@@ -683,7 +841,11 @@ export function InlineComments({
     );
   };
 
-  const commentsToDisplay = variant === 'inline' ? comments.slice(0, maxInlineComments) : comments;
+  const hasHiddenInlineComments = variant === 'inline' && comments.length > maxInlineComments;
+  const commentsToDisplay =
+    variant === 'inline' && !showAllInlineComments
+      ? comments.slice(0, maxInlineComments)
+      : comments;
 
   const renderContent = () => {
     if (loading) {
@@ -744,10 +906,19 @@ export function InlineComments({
         ) : (
           <>
             {commentsToDisplay.map((comment) => renderCommentItem(comment))}
-            {comments.length > maxInlineComments && (
-              <Pressable style={styles.showAllCommentsButton}>
+            {hasHiddenInlineComments && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.showAllCommentsButton,
+                  pressed ? styles.showAllCommentsButtonPressed : null,
+                ]}
+                onPress={() => setShowAllInlineComments((current) => !current)}
+                hitSlop={theme.spacing[1]}
+              >
                 <Text variant="caption" color="primary" style={styles.showAllCommentsText}>
-                  Se alle {totalCommentCount} kommentarer
+                  {showAllInlineComments
+                    ? 'Skjul kommentarer'
+                    : `Se alle ${totalCommentCount} kommentarer`}
                 </Text>
               </Pressable>
             )}
@@ -803,6 +974,15 @@ export function InlineComments({
       ) : null}
 
       <View style={[styles.composerContainer, { paddingBottom: theme.spacing[2] + insets.bottom }]}>
+        <EntityAutocompleteList
+          visible={visible}
+          type={activeMatch?.type ?? null}
+          mentionSuggestions={mentionSuggestions}
+          hashtagSuggestions={hashtagSuggestions}
+          onSelectMention={handleSelectMentionSuggestion}
+          onSelectHashtag={handleSelectHashtagSuggestion}
+          style={styles.autocompleteList}
+        />
         <View style={styles.inputContainer}>
           <TextInput
             ref={inputRef}
@@ -815,6 +995,15 @@ export function InlineComments({
             placeholderTextColor={defaultTheme.colors.text.secondary}
             value={commentText}
             onChangeText={setCommentText}
+            selection={commentSelection}
+            onSelectionChange={({ nativeEvent }) => setCommentSelection(nativeEvent.selection)}
+            onFocus={() => setIsComposerFocused(true)}
+            onBlur={() => {
+              setTimeout(() => {
+                setIsComposerFocused(false);
+                clearAutocomplete();
+              }, 0);
+            }}
             multiline
             maxLength={2000}
             editable={!submitting && !!currentUserId}
@@ -982,6 +1171,9 @@ const styles = StyleSheet.create({
   commentText: {
     marginTop: theme.spacing[1],
   },
+  entityText: {
+    color: theme.colors.brand.accent,
+  },
   commentMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -992,8 +1184,16 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing[1],
   },
   showAllCommentsButton: {
+    marginTop: theme.spacing[1],
+    alignSelf: 'stretch',
     paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
     alignItems: 'center',
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.bg.subtle,
+  },
+  showAllCommentsButtonPressed: {
+    opacity: 0.82,
   },
   showAllCommentsText: {
     fontWeight: theme.typography.caption.fontWeight as any,
@@ -1068,6 +1268,10 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.bg.card,
     borderTopWidth: theme.layout.borderHairline,
     borderTopColor: theme.colors.border.subtle,
+  },
+  autocompleteList: {
+    marginTop: theme.spacing[0],
+    marginBottom: theme.spacing[2],
   },
   quickActionsRow: {
     flexDirection: 'row',

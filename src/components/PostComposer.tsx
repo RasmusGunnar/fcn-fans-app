@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { logger } from '../lib/logger';
 import {
   View,
@@ -17,6 +17,11 @@ import { PickedMedia, pickFromLibrary, pickCameraPhoto, recordVideo } from '../l
 import { uploadMediaToSupabase } from '../lib/upload';
 import { useAuth } from '../auth/AuthProvider';
 import { supabase } from '../lib/supabase';
+import { EntityAutocompleteList } from './composer/EntityAutocompleteList';
+import { createMentionNotifications } from '../services/mentionNotifications';
+import { triggerMentionPush } from '../services/mentionPushApi';
+import { persistPostEntities } from '../services/postEntities';
+import { useEntityAutocomplete } from '../hooks/useEntityAutocomplete';
 import { useFeed } from '../state/FeedContext';
 import { Post } from '../types/post';
 import type { Actor } from '../types/news';
@@ -35,8 +40,48 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
   const { user } = useAuth();
   const { addPost, fetchPosts } = useFeed();
   const [text, setText] = useState('');
+  const [selection, setSelection] = useState({ start: 0, end: 0 });
+  const [isInputFocused, setIsInputFocused] = useState(false);
   const [attachment, setAttachment] = useState<PickedMedia | null>(null);
   const [loading, setLoading] = useState(false);
+  const inputRef = useRef<TextInput | null>(null);
+  const {
+    activeMatch,
+    mentionSuggestions,
+    hashtagSuggestions,
+    visible,
+    handleSelectMention,
+    handleSelectHashtag,
+    clear: clearAutocomplete,
+  } = useEntityAutocomplete({
+    text,
+    selection,
+    isFocused: isInputFocused,
+    setText,
+    setSelection,
+  });
+
+  const refocusInput = useCallback(() => {
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+  }, []);
+
+  const handleSelectMentionSuggestion = useCallback(
+    (item: Parameters<typeof handleSelectMention>[0]) => {
+      handleSelectMention(item);
+      refocusInput();
+    },
+    [handleSelectMention, refocusInput],
+  );
+
+  const handleSelectHashtagSuggestion = useCallback(
+    (tag: string) => {
+      handleSelectHashtag(tag);
+      refocusInput();
+    },
+    [handleSelectHashtag, refocusInput],
+  );
 
   const handlePickLibrary = async () => {
     logger.log('[PostComposer] Pick from library clicked');
@@ -155,14 +200,16 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
             media_type: attachment?.type ?? null,
             ...(actor?.type === 'community' ? { community_id: actor.id } : {}),
           })
-          .select('id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets');
+          .select(
+            'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets',
+          );
         if (error) throw error;
 
         if (data && data[0]) {
           const dbRecord = data[0];
           const actorDisplayName =
-            actor?.type === 'community' ? actor.name : user?.email ?? 'Ukendt';
-          const actorAvatarUrl = actor?.type === 'community' ? actor.avatarUrl ?? null : null;
+            actor?.type === 'community' ? actor.name : (user?.email ?? 'Ukendt');
+          const actorAvatarUrl = actor?.type === 'community' ? (actor.avatarUrl ?? null) : null;
           // DB-returned post is the source of truth
           dbPost = {
             id: dbRecord.id,
@@ -187,6 +234,32 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
             media: dbPost.media,
           });
 
+          const { mentionedProfiles } = await persistPostEntities(
+            dbRecord.id,
+            dbRecord.text ?? text.trim(),
+          );
+
+          if (mentionedProfiles.length > 0) {
+            void createMentionNotifications({
+              mentionedUsernames: mentionedProfiles
+                .map((profile) => profile.username)
+                .filter((username): username is string => Boolean(username)),
+              actorId: user.id,
+              postId: dbRecord.id,
+              entityType: 'post',
+              entityId: dbRecord.id,
+            });
+
+            void triggerMentionPush({
+              actorUserId: user.id,
+              mentionedUserIds: mentionedProfiles.map((profile) => profile.id),
+              entityType: 'post',
+              entityId: dbRecord.id,
+              postId: dbRecord.id,
+              previewText: dbRecord.text ?? text.trim(),
+            });
+          }
+
           if (actor?.type === 'community') {
             void triggerCommunityPostPush(dbRecord.id);
           }
@@ -203,8 +276,8 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
       authorId: user?.id,
       actorType: actor?.type ?? 'user',
       actorId: actor?.type === 'community' ? actor.id : user?.id,
-      actorDisplayName: actor?.type === 'community' ? actor.name : user?.email ?? 'Ukendt',
-      actorAvatarUrl: actor?.type === 'community' ? actor.avatarUrl ?? null : null,
+      actorDisplayName: actor?.type === 'community' ? actor.name : (user?.email ?? 'Ukendt'),
+      actorAvatarUrl: actor?.type === 'community' ? (actor.avatarUrl ?? null) : null,
       communityName: actor?.type === 'community' ? actor.name : undefined,
       communityId: actor?.type === 'community' ? actor.id : null,
       createdAt: new Date().toISOString(),
@@ -234,6 +307,8 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
 
     setLoading(false);
     setText('');
+    setSelection({ start: 0, end: 0 });
+    clearAutocomplete();
     setAttachment(null);
     logger.log('[PostComposer] Post published successfully, calling onSuccess');
     onSuccess?.();
@@ -244,6 +319,7 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
       <Card style={styles.sectionCard}>
         <Text style={styles.label}>Dit opslag</Text>
         <TextInput
+          ref={inputRef}
           style={styles.textInput}
           placeholder="Hvad er på dit hjerte?"
           placeholderTextColor={theme.colors.text.secondary}
@@ -251,7 +327,24 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
           numberOfLines={6}
           value={text}
           onChangeText={setText}
+          selection={selection}
+          onSelectionChange={({ nativeEvent }) => setSelection(nativeEvent.selection)}
+          onFocus={() => setIsInputFocused(true)}
+          onBlur={() => {
+            setTimeout(() => {
+              setIsInputFocused(false);
+              clearAutocomplete();
+            }, 0);
+          }}
           editable={!loading}
+        />
+        <EntityAutocompleteList
+          visible={visible}
+          type={activeMatch?.type ?? null}
+          mentionSuggestions={mentionSuggestions}
+          hashtagSuggestions={hashtagSuggestions}
+          onSelectMention={handleSelectMentionSuggestion}
+          onSelectHashtag={handleSelectHashtagSuggestion}
         />
         {attachment && (
           <View style={styles.previewContainer}>
@@ -301,7 +394,12 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
         </Card>
       )}
 
-      <View style={[styles.submitButtonWrap, !text.trim() || loading ? styles.submitButtonWrapDisabled : null]}>
+      <View
+        style={[
+          styles.submitButtonWrap,
+          !text.trim() || loading ? styles.submitButtonWrapDisabled : null,
+        ]}
+      >
         <View style={styles.submitButtonInner}>
           <PrimaryButton
             title={loading ? 'Deler...' : 'Del opslag'}

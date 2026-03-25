@@ -2,10 +2,12 @@
 // All spacing, colors, and radius values must use theme.spacing[N], theme.colors.*, theme.radius.*
 // NO hardcoded numbers or color strings allowed.
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { CommentPreview } from '../../services/likesApi';
 import { defaultTheme } from '../../theme';
+import type { ProfileMap } from '../../utils/actor';
+import { renderTextWithEntities } from '../../utils/renderTextWithEntities';
 import { Avatar } from '../Avatar';
 import { CardActions } from '../cards/CardActions';
 import { CommentTargetType, InlineComments } from '../comments/InlineComments';
@@ -32,6 +34,7 @@ interface FeedCardShellProps {
   initiallyOpen?: boolean;
   disableInlineComments?: boolean;
   onNewComment?: (comment: CommentPreview) => void;
+  profileMap?: ProfileMap;
 }
 
 /**
@@ -54,8 +57,24 @@ export function FeedCardShell({
   initiallyOpen = false,
   disableInlineComments = false,
   onNewComment,
+  profileMap,
 }: FeedCardShellProps) {
   const [commentsOpen, setCommentsOpen] = useState(initiallyOpen);
+  const mentionLabels = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.values(profileMap ?? {})
+          .filter(
+            (profile) =>
+              typeof profile.username === 'string' &&
+              profile.username.trim().length > 0 &&
+              typeof profile.display_name === 'string' &&
+              profile.display_name.trim().length > 0,
+          )
+          .map((profile) => [profile.username!.toLowerCase(), profile.display_name!.trim()]),
+      ),
+    [profileMap],
+  );
 
   // Use actions.comments directly from commentCountMap (passed from parent)
   const commentsCount = actions.comments ?? 0;
@@ -133,7 +152,10 @@ export function FeedCardShell({
                 />
                 <View style={styles.previewTextContainer}>
                   <Text style={styles.previewAuthor}>{displayName}</Text>
-                  <Text style={styles.previewText}> {comment.text}</Text>
+                  <Text style={styles.previewText}>
+                    {' '}
+                    {renderTextWithEntities(comment.text, { mentionLabels })}
+                  </Text>
                 </View>
               </View>
             );
@@ -147,6 +169,7 @@ export function FeedCardShell({
           targetId={targetId}
           currentUserId={currentUserId}
           isAppAdmin={isAppAdmin}
+          profileMap={profileMap}
           onNewComment={handleNewComment}
         />
       )}

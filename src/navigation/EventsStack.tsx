@@ -5,6 +5,7 @@ import EditEventScreen from '../screens/EditEventScreen';
 import EventAttendeesScreen from '../screens/EventAttendeesScreen';
 import EventDetailsScreen from '../screens/EventDetailsScreen';
 import EventsScreen from '../screens/EventsScreen';
+import HashtagScreen from '../screens/HashtagScreen';
 import MatchDetailsScreen from '../screens/MatchDetailsScreen';
 import PublicProfileScreen from '../screens/PublicProfileScreen';
 
@@ -20,6 +21,7 @@ export function EventsStack() {
       <Stack.Screen name="EventAttendees" component={EventAttendeesScreen} />
       <Stack.Screen name="EditEvent" component={EditEventScreen} />
       <Stack.Screen name="PublicProfile" component={PublicProfileScreen} />
+      <Stack.Screen name="Hashtag" component={HashtagScreen} />
     </Stack.Navigator>
   );
 }

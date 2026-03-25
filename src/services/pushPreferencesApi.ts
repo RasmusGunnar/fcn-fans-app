@@ -3,6 +3,7 @@ import { logger } from '../lib/logger';
 
 export interface PushPreferences {
   repliesEnabled: boolean;
+  mentionsEnabled: boolean;
   matchdayCheckinEnabled: boolean;
   communityActivityEnabled: boolean;
   updatedAt: string | null;
@@ -11,6 +12,7 @@ export interface PushPreferences {
 type PushPreferencesRow = {
   user_id: string;
   replies_enabled: boolean | null;
+  mentions_enabled: boolean | null;
   matchday_checkin_enabled: boolean | null;
   community_activity_enabled: boolean | null;
   updated_at: string | null;
@@ -18,6 +20,7 @@ type PushPreferencesRow = {
 
 export const DEFAULT_PUSH_PREFERENCES: PushPreferences = {
   repliesEnabled: true,
+  mentionsEnabled: true,
   matchdayCheckinEnabled: true,
   communityActivityEnabled: true,
   updatedAt: null,
@@ -30,6 +33,7 @@ function mapRowToPreferences(row: PushPreferencesRow | null | undefined): PushPr
 
   return {
     repliesEnabled: row.replies_enabled ?? DEFAULT_PUSH_PREFERENCES.repliesEnabled,
+    mentionsEnabled: row.mentions_enabled ?? DEFAULT_PUSH_PREFERENCES.mentionsEnabled,
     matchdayCheckinEnabled:
       row.matchday_checkin_enabled ?? DEFAULT_PUSH_PREFERENCES.matchdayCheckinEnabled,
     communityActivityEnabled:
@@ -48,7 +52,9 @@ export async function getPushPreferences(userId: string): Promise<PushPreference
   try {
     const { data, error } = await supabase
       .from('push_preferences')
-      .select('user_id, replies_enabled, matchday_checkin_enabled, community_activity_enabled, updated_at')
+      .select(
+        'user_id, replies_enabled, mentions_enabled, matchday_checkin_enabled, community_activity_enabled, updated_at',
+      )
       .eq('user_id', userId)
       .maybeSingle();
 
@@ -69,11 +75,17 @@ export async function getPushPreferences(userId: string): Promise<PushPreference
 
 export async function savePushPreferences(
   userId: string,
-  updates: Partial<Pick<PushPreferences, 'communityActivityEnabled' | 'matchdayCheckinEnabled' | 'repliesEnabled'>>,
+  updates: Partial<
+    Pick<
+      PushPreferences,
+      'communityActivityEnabled' | 'matchdayCheckinEnabled' | 'mentionsEnabled' | 'repliesEnabled'
+    >
+  >,
 ): Promise<PushPreferences> {
   const payload = {
     user_id: userId,
     ...(updates.repliesEnabled !== undefined ? { replies_enabled: updates.repliesEnabled } : {}),
+    ...(updates.mentionsEnabled !== undefined ? { mentions_enabled: updates.mentionsEnabled } : {}),
     ...(updates.matchdayCheckinEnabled !== undefined
       ? { matchday_checkin_enabled: updates.matchdayCheckinEnabled }
       : {}),
@@ -86,7 +98,9 @@ export async function savePushPreferences(
   const { data, error } = await supabase
     .from('push_preferences')
     .upsert(payload, { onConflict: 'user_id' })
-    .select('user_id, replies_enabled, matchday_checkin_enabled, community_activity_enabled, updated_at')
+    .select(
+      'user_id, replies_enabled, mentions_enabled, matchday_checkin_enabled, community_activity_enabled, updated_at',
+    )
     .maybeSingle();
 
   if (error) {

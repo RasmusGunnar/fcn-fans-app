@@ -8,6 +8,7 @@ import type { FanLevelKey } from '../types/fan';
 export interface UserProfile {
   id: string;
   display_name: string | null;
+  username: string | null;
   avatar_url: string | null;
   member_since: string | null;
   fan_level_key: FanLevelKey | null;
@@ -15,6 +16,10 @@ export interface UserProfile {
 }
 
 const PROFILE_SELECT_ATTEMPTS = [
+  'id, display_name, username, avatar_url, member_since, fan_level_key, onboarding_complete',
+  'id, display_name, username, avatar_url, member_since, fan_level_key',
+  'id, display_name, username, avatar_url, member_since, onboarding_complete',
+  'id, display_name, username, avatar_url, member_since',
   'id, display_name, avatar_url, member_since, fan_level_key, onboarding_complete',
   'id, display_name, avatar_url, member_since, fan_level_key',
   'id, display_name, avatar_url, member_since, onboarding_complete',
@@ -27,6 +32,7 @@ function normalizeUserProfile(
   return {
     id: profile.id,
     display_name: profile.display_name ?? null,
+    username: profile.username ?? null,
     avatar_url: profile.avatar_url ?? null,
     member_since: profile.member_since ?? null,
     fan_level_key: profile.fan_level_key ?? null,

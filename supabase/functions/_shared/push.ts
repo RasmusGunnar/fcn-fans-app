@@ -11,6 +11,19 @@ export type DispatchNotificationRequest = {
   data?: Record<string, unknown>;
 };
 
+export type InAppNotificationType = 'mention' | 'reply';
+
+export type InAppNotificationRequest = {
+  userId: string;
+  actorUserId?: string | null;
+  type: InAppNotificationType;
+  postId?: string | null;
+  commentId?: string | null;
+  title: string;
+  body?: string | null;
+  dedupeKey?: string | null;
+};
+
 type ReservedNotification = DispatchNotificationRequest & {
   logId: string;
 };
@@ -22,11 +35,12 @@ type ExpoPushTicket = {
   details?: { error?: string };
 };
 
-export type PushPreferenceKey = 'community_activity' | 'matchday_checkin' | 'replies';
+export type PushPreferenceKey = 'community_activity' | 'matchday_checkin' | 'replies' | 'mentions';
 
 type PushPreferenceRow = {
   user_id: string;
   replies_enabled: boolean;
+  mentions_enabled: boolean;
   matchday_checkin_enabled: boolean;
   community_activity_enabled: boolean;
 };
@@ -35,15 +49,19 @@ const EXPO_PUSH_API_URL = 'https://exp.host/--/api/v2/push/send';
 const ACTIVE_NOTIFICATION_STATUSES = ['queued', 'sent'] as const;
 const DEFAULT_PUSH_PREFERENCES: Omit<PushPreferenceRow, 'user_id'> = {
   replies_enabled: true,
+  mentions_enabled: true,
   matchday_checkin_enabled: true,
   community_activity_enabled: true,
 };
-const PUSH_PREFERENCE_COLUMN_BY_KEY: Record<PushPreferenceKey, keyof Omit<PushPreferenceRow, 'user_id'>> =
-  {
-    replies: 'replies_enabled',
-    matchday_checkin: 'matchday_checkin_enabled',
-    community_activity: 'community_activity_enabled',
-  };
+const PUSH_PREFERENCE_COLUMN_BY_KEY: Record<
+  PushPreferenceKey,
+  keyof Omit<PushPreferenceRow, 'user_id'>
+> = {
+  replies: 'replies_enabled',
+  mentions: 'mentions_enabled',
+  matchday_checkin: 'matchday_checkin_enabled',
+  community_activity: 'community_activity_enabled',
+};
 
 export function json(status: number, payload: unknown) {
   return new Response(JSON.stringify(payload), {
@@ -181,11 +199,7 @@ async function reserveNotificationLog(supabase: any, request: DispatchNotificati
   return data.id as string;
 }
 
-async function updateNotificationLog(
-  supabase: any,
-  logId: string,
-  patch: Record<string, unknown>,
-) {
+async function updateNotificationLog(supabase: any, logId: string, patch: Record<string, unknown>) {
   await supabase
     .from('notifications_log')
     .update({ ...patch, updated_at: new Date().toISOString() })
@@ -253,7 +267,9 @@ export async function fetchPushPreferencesByUserIds(supabase: any, userIds: stri
 
   const { data, error } = await supabase
     .from('push_preferences')
-    .select('user_id, replies_enabled, matchday_checkin_enabled, community_activity_enabled')
+    .select(
+      'user_id, replies_enabled, mentions_enabled, matchday_checkin_enabled, community_activity_enabled',
+    )
     .in('user_id', normalizedUserIds);
 
   if (error) {
@@ -264,17 +280,18 @@ export async function fetchPushPreferencesByUserIds(supabase: any, userIds: stri
   }
 
   return new Map(
-    (((data as PushPreferenceRow[] | null) ?? []).map((row) => [
+    ((data as PushPreferenceRow[] | null) ?? []).map((row) => [
       row.user_id,
       {
         user_id: row.user_id,
         replies_enabled: row.replies_enabled ?? DEFAULT_PUSH_PREFERENCES.replies_enabled,
+        mentions_enabled: row.mentions_enabled ?? DEFAULT_PUSH_PREFERENCES.mentions_enabled,
         matchday_checkin_enabled:
           row.matchday_checkin_enabled ?? DEFAULT_PUSH_PREFERENCES.matchday_checkin_enabled,
         community_activity_enabled:
           row.community_activity_enabled ?? DEFAULT_PUSH_PREFERENCES.community_activity_enabled,
       },
-    ]) as [string, PushPreferenceRow][]),
+    ]) as [string, PushPreferenceRow][],
   );
 }
 
@@ -331,6 +348,94 @@ export async function fetchExistingNotificationDedupeKeys(
       .map((row) => row.dedupe_key?.trim() ?? '')
       .filter((key) => key.length > 0),
   );
+}
+
+export async function fetchExistingInAppNotificationDedupeKeys(
+  supabase: any,
+  dedupeKeys: string[],
+) {
+  const uniqueKeys = Array.from(
+    new Set(dedupeKeys.map((key) => key.trim()).filter((key) => key.length > 0)),
+  );
+
+  if (uniqueKeys.length === 0) {
+    return new Set<string>();
+  }
+
+  const { data, error } = await supabase
+    .from('in_app_notifications')
+    .select('dedupe_key')
+    .in('dedupe_key', uniqueKeys);
+
+  if (error) throw error;
+
+  return new Set(
+    ((data as { dedupe_key?: string | null }[] | null) ?? [])
+      .map((row) => row.dedupe_key?.trim() ?? '')
+      .filter((key) => key.length > 0),
+  );
+}
+
+export async function createInAppNotifications(
+  supabase: any,
+  requests: InAppNotificationRequest[],
+) {
+  const normalizedRequests = requests.filter(
+    (request) =>
+      request.userId.trim().length > 0 &&
+      request.title.trim().length > 0 &&
+      request.type.trim().length > 0,
+  );
+
+  const existingDedupeKeys = await fetchExistingInAppNotificationDedupeKeys(
+    supabase,
+    normalizedRequests
+      .map((request) => request.dedupeKey?.trim() ?? '')
+      .filter((key) => key.length > 0),
+  );
+
+  let created = 0;
+  let skipped = 0;
+
+  for (const request of normalizedRequests) {
+    const dedupeKey = request.dedupeKey?.trim() || null;
+    if (dedupeKey && existingDedupeKeys.has(dedupeKey)) {
+      skipped += 1;
+      continue;
+    }
+
+    const { error } = await supabase.from('in_app_notifications').insert({
+      user_id: request.userId,
+      actor_user_id: request.actorUserId?.trim() || null,
+      type: request.type,
+      post_id: request.postId?.trim() || null,
+      comment_id: request.commentId?.trim() || null,
+      title: request.title.trim(),
+      body: request.body?.trim() || null,
+      dedupe_key: dedupeKey,
+    });
+
+    if (error) {
+      const isDuplicate = error.code === '23505';
+      if (isDuplicate && dedupeKey) {
+        existingDedupeKeys.add(dedupeKey);
+        skipped += 1;
+        continue;
+      }
+      throw error;
+    }
+
+    if (dedupeKey) {
+      existingDedupeKeys.add(dedupeKey);
+    }
+    created += 1;
+  }
+
+  return {
+    total: normalizedRequests.length,
+    created,
+    skipped,
+  };
 }
 
 export async function hasRecentNotificationOfTypes(

@@ -239,6 +239,7 @@ export function NewsCard({
       }}
       commentPreviews={commentPreviews}
       onNewComment={onNewComment}
+      profileMap={profileMap}
     >
       <CardHeader
         avatarSlot={
@@ -312,12 +313,7 @@ export function NewsCard({
               {compactPrimaryLabel}
             </Text>
             {compactSecondaryLabel ? (
-              <Text
-                variant="small"
-                color="secondary"
-                numberOfLines={1}
-                style={styles.compactMeta}
-              >
+              <Text variant="small" color="secondary" numberOfLines={1} style={styles.compactMeta}>
                 {compactSecondaryLabel}
               </Text>
             ) : null}

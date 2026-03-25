@@ -24,8 +24,22 @@ import type { OnboardingStackParamList } from '../../navigation/OnboardingStack'
 import { fetchMyProfile } from '../../services/profileApi';
 import { useTheme } from '../../theme';
 import { isCompactDevice } from '../../utils/isCompactDevice';
+import { normalizeDisplayNameToUsername } from '../../utils/username';
 
 type Props = NativeStackScreenProps<OnboardingStackParamList, 'OnboardingProfile'>;
+
+function isUsernameConflictError(error: any): boolean {
+  const message = String(error?.message ?? '').toLowerCase();
+  const details = String(error?.details ?? '').toLowerCase();
+
+  return (
+    error?.code === '23505' &&
+    (message.includes('profiles_username_unique_idx') ||
+      details.includes('profiles_username_unique_idx') ||
+      message.includes('username') ||
+      details.includes('username'))
+  );
+}
 
 export default function OnboardingProfileSetupScreen({ navigation, route }: Props) {
   const theme = useTheme();
@@ -68,7 +82,9 @@ export default function OnboardingProfileSetupScreen({ navigation, route }: Prop
       if (!isMounted || !profile) return;
 
       if (profile.display_name?.trim()) {
-        setDisplayNameInput((prev) => (prev.trim().length > 0 ? prev : profile.display_name ?? ''));
+        setDisplayNameInput((prev) =>
+          prev.trim().length > 0 ? prev : (profile.display_name ?? ''),
+        );
       }
 
       if (profile.avatar_url) {
@@ -113,6 +129,7 @@ export default function OnboardingProfileSetupScreen({ navigation, route }: Prop
   const handleContinue = async () => {
     if (!user?.id) return;
     const trimmedName = displayNameInput.trim();
+    const normalizedUsername = normalizeDisplayNameToUsername(trimmedName);
 
     if (!trimmedName) {
       Alert.alert('Mangler kaldenavn', 'Indtast et kaldenavn for at fortsætte.');
@@ -124,12 +141,21 @@ export default function OnboardingProfileSetupScreen({ navigation, route }: Prop
       return;
     }
 
+    if (!normalizedUsername) {
+      Alert.alert(
+        'Ugyldigt kaldenavn',
+        'Kaldenavnet skal indeholde mindst ét bogstav eller tal for at kunne bruges i mentions.',
+      );
+      return;
+    }
+
     setSaving(true);
     try {
       await ensureProfile(user.id);
 
       const basePayload = {
         display_name: trimmedName,
+        username: normalizedUsername,
         avatar_url: avatarUrlInput,
       };
       const payloads = [{ ...basePayload, onboarding_complete: false }, basePayload];
@@ -148,6 +174,11 @@ export default function OnboardingProfileSetupScreen({ navigation, route }: Prop
           break;
         }
 
+        if (isUsernameConflictError(updateError)) {
+          Alert.alert('Kaldenavn optaget', 'Det kaldenavn er allerede i brug.');
+          return;
+        }
+
         if (updateError) {
           logger.warn('[OnboardingProfile] Update failed, trying upsert:', updateError);
         }
@@ -161,6 +192,11 @@ export default function OnboardingProfileSetupScreen({ navigation, route }: Prop
         if (!upsertError && upserted) {
           saved = true;
           break;
+        }
+
+        if (isUsernameConflictError(upsertError)) {
+          Alert.alert('Kaldenavn optaget', 'Det kaldenavn er allerede i brug.');
+          return;
         }
 
         if (upsertError) {
@@ -241,6 +277,7 @@ export default function OnboardingProfileSetupScreen({ navigation, route }: Prop
               returnKeyType="done"
               maxLength={32}
             />
+            <Text style={styles.inputHint}>Dit kaldenavn bruges også til @mentions.</Text>
           </View>
         </View>
 
@@ -379,6 +416,11 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       borderColor: theme.colors.border.default,
       backgroundColor: theme.colors.bg.surface,
       color: theme.colors.text.primary,
+    },
+    inputHint: {
+      marginTop: theme.spacing[2],
+      fontSize: theme.typography.caption.fontSize,
+      color: theme.colors.text.secondary,
     },
     bottomActions: {
       paddingHorizontal: theme.spacing[6],

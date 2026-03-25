@@ -53,6 +53,21 @@ import {
   type MyCommunity,
   type UpcomingItem,
 } from '../services/profileApi';
+import { getUnreadNotificationsCount } from '../services/notificationsApi';
+import { normalizeDisplayNameToUsername } from '../utils/username';
+
+function isUsernameConflictError(error: any): boolean {
+  const message = String(error?.message ?? '').toLowerCase();
+  const details = String(error?.details ?? '').toLowerCase();
+
+  return (
+    error?.code === '23505' &&
+    (message.includes('profiles_username_unique_idx') ||
+      details.includes('profiles_username_unique_idx') ||
+      message.includes('username') ||
+      details.includes('username'))
+  );
+}
 
 function SectionCard({
   title,
@@ -153,10 +168,14 @@ export default function ProfileScreen() {
   const [pushMessage, setPushMessage] = useState<string | null>(null);
   const [pushPreferences, setPushPreferences] = useState<PushPreferences>(DEFAULT_PUSH_PREFERENCES);
   const [pushPreferencesLoading, setPushPreferencesLoading] = useState(false);
-  const [pushPreferenceSavingKey, setPushPreferenceSavingKey] = useState<keyof Pick<
-    PushPreferences,
-    'communityActivityEnabled' | 'matchdayCheckinEnabled' | 'repliesEnabled'
-  > | null>(null);
+  const [pushPreferenceSavingKey, setPushPreferenceSavingKey] = useState<
+    | keyof Pick<
+        PushPreferences,
+        'communityActivityEnabled' | 'matchdayCheckinEnabled' | 'mentionsEnabled' | 'repliesEnabled'
+      >
+    | null
+  >(null);
+  const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
   const fanLevel = getSafeFanLevelKey(profile?.fan_level_key);
   const debugScore = 180;
   const debugProgress = 0.53;
@@ -249,6 +268,16 @@ export default function ProfileScreen() {
     }
   }, [user?.id]);
 
+  const loadNotificationUnreadCount = useCallback(async () => {
+    if (!user?.id) {
+      setNotificationUnreadCount(0);
+      return;
+    }
+
+    const count = await getUnreadNotificationsCount(user.id);
+    setNotificationUnreadCount(count);
+  }, [user?.id]);
+
   useEffect(() => {
     loadData();
   }, [loadData]);
@@ -266,7 +295,8 @@ export default function ProfileScreen() {
       loadData();
       loadPushStatus();
       loadPushPreferences();
-    }, [loadData, loadPushStatus, loadPushPreferences]),
+      loadNotificationUnreadCount();
+    }, [loadData, loadPushStatus, loadPushPreferences, loadNotificationUnreadCount]),
   );
 
   const handlePushSetup = async () => {
@@ -331,7 +361,7 @@ export default function ProfileScreen() {
   const handleTogglePushPreference = async (
     key: keyof Pick<
       PushPreferences,
-      'communityActivityEnabled' | 'matchdayCheckinEnabled' | 'repliesEnabled'
+      'communityActivityEnabled' | 'matchdayCheckinEnabled' | 'mentionsEnabled' | 'repliesEnabled'
     >,
     value: boolean,
   ) => {
@@ -380,6 +410,7 @@ export default function ProfileScreen() {
   const handleSaveProfile = async () => {
     if (!user?.id) return;
     const trimmedName = displayNameInput.trim();
+    const normalizedUsername = normalizeDisplayNameToUsername(trimmedName);
     const avatarUrl = avatarUrlInput;
 
     if (!trimmedName) {
@@ -392,12 +423,21 @@ export default function ProfileScreen() {
       return;
     }
 
+    if (!normalizedUsername) {
+      Alert.alert(
+        'Ugyldigt kaldenavn',
+        'Kaldenavnet skal indeholde mindst ét bogstav eller tal for at kunne bruges i mentions.',
+      );
+      return;
+    }
+
     setSavingProfile(true);
     try {
       await ensureProfile(user.id);
 
       const payload = {
         display_name: trimmedName,
+        username: normalizedUsername,
         avatar_url: avatarUrl,
         onboarding_complete: true,
       };
@@ -410,6 +450,11 @@ export default function ProfileScreen() {
         .maybeSingle();
 
       if (updateError || !updated) {
+        if (isUsernameConflictError(updateError)) {
+          Alert.alert('Kaldenavn optaget', 'Det kaldenavn er allerede i brug.');
+          return;
+        }
+
         if (updateError) {
           console.warn('[ProfileScreen] Profile update failed, trying upsert:', updateError);
         }
@@ -420,6 +465,11 @@ export default function ProfileScreen() {
           .maybeSingle();
 
         if (upsertError || !upserted) {
+          if (isUsernameConflictError(upsertError)) {
+            Alert.alert('Kaldenavn optaget', 'Det kaldenavn er allerede i brug.');
+            return;
+          }
+
           console.warn('[ProfileScreen] Profile upsert failed:', upsertError);
           Alert.alert('Fejl', 'Kunne ikke gemme profilen. Prøv igen.');
           return;
@@ -443,6 +493,7 @@ export default function ProfileScreen() {
             : {
                 id: user.id,
                 display_name: trimmedName,
+                username: normalizedUsername,
                 avatar_url: avatarUrl,
                 member_since: null,
                 fan_level_key: profile?.fan_level_key ?? fanLevel,
@@ -691,6 +742,9 @@ export default function ProfileScreen() {
                 ]}
                 editable={!savingProfile}
               />
+              <Text style={[styles.profileHint, { color: theme.colors.text.secondary }]}>
+                Dit kaldenavn bruges også til @mentions.
+              </Text>
             </View>
           </View>
         </View>
@@ -785,7 +839,11 @@ export default function ProfileScreen() {
           <Text style={[styles.sectionTitle, { color: theme.colors.text.primary }]}>
             NOTIFIKATIONER
           </Text>
-          <Ionicons name="notifications" size={theme.components.icon.size.sm} color={theme.colors.primary} />
+          <Ionicons
+            name="notifications"
+            size={theme.components.icon.size.sm}
+            color={theme.colors.primary}
+          />
         </View>
         <View style={styles.pushStatusRow}>
           <View style={styles.pushStatusCopy}>
@@ -829,19 +887,37 @@ export default function ProfileScreen() {
             </View>
           ) : null}
         </View>
-        <View
-          style={[
-            styles.pushPreferencesList,
-            { borderTopColor: theme.colors.border.default },
-          ]}
-        >
+        <View style={[styles.pushPreferencesList, { borderTopColor: theme.colors.border.default }]}>
+          <View style={styles.pushPreferenceRow}>
+            <View style={styles.pushPreferenceCopy}>
+              <Text style={[styles.pushPreferenceTitle, { color: theme.colors.text.primary }]}>
+                {'Mentions'}
+              </Text>
+              <Text style={[styles.pushPreferenceBody, { color: theme.colors.text.secondary }]}>
+                {'N\u00E5r nogen n\u00E6vner dig i et opslag eller en kommentar.'}
+              </Text>
+            </View>
+            <Switch
+              value={pushPreferences.mentionsEnabled}
+              onValueChange={(value) => handleTogglePushPreference('mentionsEnabled', value)}
+              disabled={pushPreferencesLoading || pushPreferenceSavingKey === 'mentionsEnabled'}
+              trackColor={{
+                false: theme.colors.border.default,
+                true: theme.colors.primary,
+              }}
+              thumbColor={theme.colors.bg.card}
+            />
+          </View>
+
           <View style={styles.pushPreferenceRow}>
             <View style={styles.pushPreferenceCopy}>
               <Text style={[styles.pushPreferenceTitle, { color: theme.colors.text.primary }]}>
                 {'Svar p\u00E5 mit indhold'}
               </Text>
               <Text style={[styles.pushPreferenceBody, { color: theme.colors.text.secondary }]}>
-                {'N\u00E5r andre kommenterer p\u00E5 dit opslag eller svarer p\u00E5 din kommentar.'}
+                {
+                  'N\u00E5r andre kommenterer p\u00E5 dit opslag eller svarer p\u00E5 din kommentar.'
+                }
               </Text>
             </View>
             <Switch
@@ -867,9 +943,7 @@ export default function ProfileScreen() {
             </View>
             <Switch
               value={pushPreferences.matchdayCheckinEnabled}
-              onValueChange={(value) =>
-                handleTogglePushPreference('matchdayCheckinEnabled', value)
-              }
+              onValueChange={(value) => handleTogglePushPreference('matchdayCheckinEnabled', value)}
               disabled={
                 pushPreferencesLoading || pushPreferenceSavingKey === 'matchdayCheckinEnabled'
               }
@@ -912,8 +986,12 @@ export default function ProfileScreen() {
         <ProfileRow
           icon="notifications"
           title="Notifikationer"
-          subtitle="Status, aktivering og test vises ovenfor"
-          onPress={handlePushSetup}
+          subtitle={
+            notificationUnreadCount > 0
+              ? `${notificationUnreadCount} ulæst${notificationUnreadCount === 1 ? '' : 'e'}`
+              : 'Se dine mentions og svar'
+          }
+          onPress={() => (navigation as any).navigate('Notifications')}
           styles={styles}
         />
         <ProfileRow
@@ -1106,6 +1184,10 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       paddingVertical: theme.spacing[1] + theme.layout.borderHairline,
       paddingHorizontal: theme.spacing[3],
       fontSize: 14,
+    },
+    profileHint: {
+      fontSize: theme.typography.caption.fontSize,
+      marginTop: theme.spacing[1],
     },
     profileSubtext: {
       fontSize: theme.typography.caption.fontSize,

@@ -43,19 +43,25 @@ import {
 import { resolveAvatarUrl } from '../utils/avatar';
 import { normalizeMedia } from '../utils/media';
 import { targetKey } from '../utils/targetKey';
+import type { ProfileMap } from '../utils/actor';
 
 type FeedProfileEntry = {
   display_name: string | null;
+  username: string | null;
   avatar_url: string | null;
   fan_level_key: FanLevelKey | null;
 };
 
 const FEED_PROFILE_SELECT_ATTEMPTS = [
+  'id, display_name, username, avatar_url, fan_level_key',
+  'id, display_name, username, avatar_url',
   'id, display_name, avatar_url, fan_level_key',
   'id, display_name, avatar_url',
 ] as const;
 
-async function fetchFeedProfilesByIds(authorIds: string[]): Promise<Record<string, FeedProfileEntry>> {
+async function fetchFeedProfilesByIds(
+  authorIds: string[],
+): Promise<Record<string, FeedProfileEntry>> {
   if (authorIds.length === 0) {
     return {};
   }
@@ -72,8 +78,9 @@ async function fetchFeedProfilesByIds(authorIds: string[]): Promise<Record<strin
     (data || []).forEach((profile: any) => {
       profileMap[profile.id] = {
         display_name: profile.display_name ?? null,
+        username: 'username' in profile ? (profile.username ?? null) : null,
         avatar_url: profile.avatar_url ?? null,
-        fan_level_key: 'fan_level_key' in profile ? profile.fan_level_key ?? null : null,
+        fan_level_key: 'fan_level_key' in profile ? (profile.fan_level_key ?? null) : null,
       };
     });
 
@@ -90,7 +97,12 @@ interface FeedContextType {
   communityMap: Record<string, string>; // Map of community ID -> name
   profileMap: Record<
     string,
-    { display_name: string | null; avatar_url: string | null; fan_level_key: FanLevelKey | null }
+    {
+      display_name: string | null;
+      username?: string | null;
+      avatar_url: string | null;
+      fan_level_key: FanLevelKey | null;
+    }
   >; // Map of user ID -> profile
   likeMap: Record<string, { liked: boolean; likes: number }>; // Like states by "${kind}:${id}"
   commentCountMap: Record<string, number>; // Comment counts by "${kind}:${id}"
@@ -112,7 +124,10 @@ const FeedContext = createContext<FeedContextType | undefined>(undefined);
 
 function withPostAuthorProfile(post: Post, profile?: FeedProfileEntry | null): Post {
   const displayName =
-    profile?.display_name?.trim() || post.authorDisplayName?.trim() || post.authorName?.trim() || null;
+    profile?.display_name?.trim() ||
+    post.authorDisplayName?.trim() ||
+    post.authorName?.trim() ||
+    null;
 
   return {
     ...post,
@@ -140,7 +155,7 @@ function mergeCommunityFeedEntries(
     const existingEntry = communityFeedMap.get(community.community_id);
     communityFeedMap.set(community.community_id, {
       ...community,
-      debug_source: existingEntry ? 'local+persisted' : community.debug_source ?? 'persisted',
+      debug_source: existingEntry ? 'local+persisted' : (community.debug_source ?? 'persisted'),
     });
   });
 
@@ -161,7 +176,7 @@ function logHomeFeedSnapshot(stage: string, items: FeedItem[], baseDate: Date) {
       createdAt: getFeedItemCreatedAt(item),
       sortDate: getHomeSortDate(item),
       rankingScore: getHomeRankingScore(item, baseDate),
-      debugSource: item.kind === 'community' ? item.data.debugSource ?? null : null,
+      debugSource: item.kind === 'community' ? (item.data.debugSource ?? null) : null,
     })),
   );
 }
@@ -171,12 +186,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
   const [homeFeedItems, setHomeFeedItems] = useState<FeedItem[]>([]);
   const [communityMap, setCommunityMap] = useState<Record<string, string>>({});
-  const [profileMap, setProfileMap] = useState<
-    Record<
-      string,
-      { display_name: string | null; avatar_url: string | null; fan_level_key: FanLevelKey | null }
-    >
-  >({});
+  const [profileMap, setProfileMap] = useState<ProfileMap>({});
   const [likeMap, setLikeMap] = useState<Record<string, { liked: boolean; likes: number }>>({});
   const [commentCountMap, setCommentCountMap] = useState<Record<string, number>>({});
   const [commentPreviewMap, setCommentPreviewMap] = useState<Record<string, CommentPreview[]>>({});
@@ -303,7 +313,9 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
     try {
       const { data: postsData, error: fetchError } = await supabase
         .from('posts')
-        .select('id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets, poll_data')
+        .select(
+          'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets, poll_data',
+        )
         .order('created_at', { ascending: false })
         .limit(50);
 
@@ -318,9 +330,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       } = await supabase.auth.getSession();
       const currentUserId = session?.user?.id ?? null;
       const authorIds = [
-        ...new Set(
-          [...(postsData || []).map((p) => p.author_id), currentUserId].filter(Boolean),
-        ),
+        ...new Set([...(postsData || []).map((p) => p.author_id), currentUserId].filter(Boolean)),
       ];
       const newProfileMap: Record<string, FeedProfileEntry> = {};
 
@@ -346,30 +356,33 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
           pollData: dbPost.poll_data,
         });
 
-        return withPostAuthorProfile({
-          id: dbPost.id,
-          authorName: newProfileMap[dbPost.author_id]?.display_name || 'Fan',
-          authorId: dbPost.author_id,
-          actorType: dbPost.actor_type ?? 'user',
-          actorId: dbPost.actor_id ?? dbPost.author_id,
-          actorDisplayName:
-            dbPost.actor_type === 'community'
-              ? null
-              : newProfileMap[dbPost.author_id]?.display_name || 'Fan',
-          actorAvatarUrl:
-            dbPost.actor_type === 'community'
-              ? null
-              : newProfileMap[dbPost.author_id]?.avatar_url ?? null,
-          communityId: dbPost.community_id ?? null,
-          feedTargets: Array.isArray(dbPost.feed_targets) ? dbPost.feed_targets : ['home'],
-          createdAt: dbPost.created_at,
-          text: dbPost.text,
-          poll_data: dbPost.poll_data ?? null,
-          likesCount: 0, // TODO: Add likes support
-          commentsCount: 0, // TODO: Count comments
-          likedByMe: false,
-          media: normalizeMedia(dbPost.media), // Normalize media from DB
-        }, newProfileMap[dbPost.author_id]);
+        return withPostAuthorProfile(
+          {
+            id: dbPost.id,
+            authorName: newProfileMap[dbPost.author_id]?.display_name || 'Fan',
+            authorId: dbPost.author_id,
+            actorType: dbPost.actor_type ?? 'user',
+            actorId: dbPost.actor_id ?? dbPost.author_id,
+            actorDisplayName:
+              dbPost.actor_type === 'community'
+                ? null
+                : newProfileMap[dbPost.author_id]?.display_name || 'Fan',
+            actorAvatarUrl:
+              dbPost.actor_type === 'community'
+                ? null
+                : (newProfileMap[dbPost.author_id]?.avatar_url ?? null),
+            communityId: dbPost.community_id ?? null,
+            feedTargets: Array.isArray(dbPost.feed_targets) ? dbPost.feed_targets : ['home'],
+            createdAt: dbPost.created_at,
+            text: dbPost.text,
+            poll_data: dbPost.poll_data ?? null,
+            likesCount: 0, // TODO: Add likes support
+            commentsCount: 0, // TODO: Count comments
+            likedByMe: false,
+            media: normalizeMedia(dbPost.media), // Normalize media from DB
+          },
+          newProfileMap[dbPost.author_id],
+        );
       });
 
       setPosts(transformedPosts);
@@ -391,7 +404,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
 
       const postCommunityIds = transformedPosts
         .map((post) =>
-          post.actorType === 'community' ? post.actorId ?? post.communityId : post.communityId,
+          post.actorType === 'community' ? (post.actorId ?? post.communityId) : post.communityId,
         )
         .filter(Boolean) as string[];
 
@@ -766,52 +779,58 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
     setLoading(false);
   }, []);
 
-  const addPost = useCallback((post: Post) => {
-    // Dedupe: if post with same ID exists, replace it; otherwise prepend
-    const nextPost = withPostAuthorProfile(post, post.authorId ? profileMap[post.authorId] : null);
+  const addPost = useCallback(
+    (post: Post) => {
+      // Dedupe: if post with same ID exists, replace it; otherwise prepend
+      const nextPost = withPostAuthorProfile(
+        post,
+        post.authorId ? profileMap[post.authorId] : null,
+      );
 
-    setPosts((prev) => {
-      const existingIndex = prev.findIndex((p) => p.id === nextPost.id);
-      if (existingIndex >= 0) {
-        // Replace existing post
-        const updated = [...prev];
-        updated[existingIndex] = nextPost;
-        return updated;
-      }
-      // Prepend new post
-      return [nextPost, ...prev];
-    });
+      setPosts((prev) => {
+        const existingIndex = prev.findIndex((p) => p.id === nextPost.id);
+        if (existingIndex >= 0) {
+          // Replace existing post
+          const updated = [...prev];
+          updated[existingIndex] = nextPost;
+          return updated;
+        }
+        // Prepend new post
+        return [nextPost, ...prev];
+      });
 
-    // Also update feedItems
-    setFeedItems((prev) => {
-      const feedPost = toPostFeedItem(nextPost);
-      const existingIndex = prev.findIndex((item) => item.id === nextPost.id);
-      if (existingIndex >= 0) {
-        const updated = [...prev];
-        updated[existingIndex] = feedPost;
+      // Also update feedItems
+      setFeedItems((prev) => {
+        const feedPost = toPostFeedItem(nextPost);
+        const existingIndex = prev.findIndex((item) => item.id === nextPost.id);
+        if (existingIndex >= 0) {
+          const updated = [...prev];
+          updated[existingIndex] = feedPost;
+          return sortFeedItemsByDate(updated);
+        }
+        // Prepend and re-sort
+        const updated = [feedPost, ...prev];
         return sortFeedItemsByDate(updated);
-      }
-      // Prepend and re-sort
-      const updated = [feedPost, ...prev];
-      return sortFeedItemsByDate(updated);
-    });
+      });
 
-    setHomeFeedItems((prev) => {
-      if (!isHomePost(nextPost)) {
-        return prev.filter((item) => !(item.kind === 'post' && item.id === nextPost.id));
-      }
+      setHomeFeedItems((prev) => {
+        if (!isHomePost(nextPost)) {
+          return prev.filter((item) => !(item.kind === 'post' && item.id === nextPost.id));
+        }
 
-      const feedPost = toPostFeedItem(nextPost);
-      const existingIndex = prev.findIndex((item) => item.id === nextPost.id);
-      if (existingIndex >= 0) {
-        const updated = [...prev];
-        updated[existingIndex] = feedPost;
-        return sortHomeFeedItems(updated);
-      }
+        const feedPost = toPostFeedItem(nextPost);
+        const existingIndex = prev.findIndex((item) => item.id === nextPost.id);
+        if (existingIndex >= 0) {
+          const updated = [...prev];
+          updated[existingIndex] = feedPost;
+          return sortHomeFeedItems(updated);
+        }
 
-      return sortHomeFeedItems([feedPost, ...prev]);
-    });
-  }, [profileMap]);
+        return sortHomeFeedItems([feedPost, ...prev]);
+      });
+    },
+    [profileMap],
+  );
 
   const addCommunityFeedItem = useCallback((community: CommunityFeedSource) => {
     const nextCommunityEntry: CommunityFeedSource = {
@@ -858,7 +877,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
   const removeNews = useCallback((newsId: string) => {
     setFeedItems((prev) => prev.filter((item) => !(item.kind === 'news' && item.id === newsId)));
     setHomeFeedItems((prev) =>
-      prev.filter((item) => !(item.kind === 'news' && item.id === newsId))
+      prev.filter((item) => !(item.kind === 'news' && item.id === newsId)),
     );
   }, []);
 
@@ -877,7 +896,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       }));
       setFeedItems((prev) => patchFeedItemEngagement(prev, kind, id, { likeCount: newLikes }));
       setHomeFeedItems((prev) =>
-        sortHomeFeedItems(patchFeedItemEngagement(prev, kind, id, { likeCount: newLikes }))
+        sortHomeFeedItems(patchFeedItemEngagement(prev, kind, id, { likeCount: newLikes })),
       );
 
       // Persist to DB
@@ -891,12 +910,12 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
             [key]: currentState,
           }));
           setFeedItems((prev) =>
-            patchFeedItemEngagement(prev, kind, id, { likeCount: currentState.likes })
+            patchFeedItemEngagement(prev, kind, id, { likeCount: currentState.likes }),
           );
           setHomeFeedItems((prev) =>
             sortHomeFeedItems(
-              patchFeedItemEngagement(prev, kind, id, { likeCount: currentState.likes })
-            )
+              patchFeedItemEngagement(prev, kind, id, { likeCount: currentState.likes }),
+            ),
           );
           return;
         }
@@ -909,34 +928,37 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
           [key]: currentState,
         }));
         setFeedItems((prev) =>
-          patchFeedItemEngagement(prev, kind, id, { likeCount: currentState.likes })
+          patchFeedItemEngagement(prev, kind, id, { likeCount: currentState.likes }),
         );
         setHomeFeedItems((prev) =>
           sortHomeFeedItems(
-            patchFeedItemEngagement(prev, kind, id, { likeCount: currentState.likes })
-          )
+            patchFeedItemEngagement(prev, kind, id, { likeCount: currentState.likes }),
+          ),
         );
       }
     },
     [likeMap, patchFeedItemEngagement],
   );
 
-  const incrementCommentCount = useCallback((kind: LikeTargetType, id: string) => {
-    const key = targetKey(kind, id);
-    const nextCommentCount = (commentCountMap[key] || 0) + 1;
-    setCommentCountMap((prev) => ({
-      ...prev,
-      [key]: nextCommentCount,
-    }));
-    setFeedItems((prev) =>
-      patchFeedItemEngagement(prev, kind, id, { commentCount: nextCommentCount })
-    );
-    setHomeFeedItems((prev) =>
-      sortHomeFeedItems(
-        patchFeedItemEngagement(prev, kind, id, { commentCount: nextCommentCount })
-      )
-    );
-  }, [commentCountMap, patchFeedItemEngagement]);
+  const incrementCommentCount = useCallback(
+    (kind: LikeTargetType, id: string) => {
+      const key = targetKey(kind, id);
+      const nextCommentCount = (commentCountMap[key] || 0) + 1;
+      setCommentCountMap((prev) => ({
+        ...prev,
+        [key]: nextCommentCount,
+      }));
+      setFeedItems((prev) =>
+        patchFeedItemEngagement(prev, kind, id, { commentCount: nextCommentCount }),
+      );
+      setHomeFeedItems((prev) =>
+        sortHomeFeedItems(
+          patchFeedItemEngagement(prev, kind, id, { commentCount: nextCommentCount }),
+        ),
+      );
+    },
+    [commentCountMap, patchFeedItemEngagement],
+  );
 
   const addCommentPreview = useCallback(
     (kind: LikeTargetType, id: string, comment: CommentPreview) => {

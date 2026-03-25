@@ -1,6 +1,7 @@
 // deno-lint-ignore-file no-explicit-any
 import {
   buildNotificationDedupeKey,
+  createInAppNotifications,
   createAdminClient,
   dispatchNotifications,
   fetchExistingNotificationDedupeKeys,
@@ -129,7 +130,11 @@ Deno.serve(async (req) => {
         commentId,
         targetType: comment.target_type,
       });
-      return json(200, { ok: true, skipped: 'unsupported_target_type', targetType: comment.target_type });
+      return json(200, {
+        ok: true,
+        skipped: 'unsupported_target_type',
+        targetType: comment.target_type,
+      });
     }
 
     let recipientUserId: string | null = null;
@@ -179,16 +184,6 @@ Deno.serve(async (req) => {
       return json(200, { ok: true, skipped: 'self_notify' });
     }
 
-    const preferencesByUserId = await fetchPushPreferencesByUserIds(supabase, [recipientUserId]);
-    if (!isPushPreferenceEnabled(preferencesByUserId, recipientUserId, 'replies')) {
-      console.log('[push_comment_replies] skipped preference disabled', {
-        commentId,
-        recipientUserId,
-        notificationType,
-      });
-      return json(200, { ok: true, skipped: 'preferences_disabled', recipientUserId });
-    }
-
     const { data: authorProfile } = await supabase
       .from('profiles')
       .select('display_name')
@@ -196,6 +191,50 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     const senderName = readString(authorProfile?.display_name ?? null) ?? 'En fan';
+    const bodyPreview = truncatePreview(comment.text);
+    const inAppTitle =
+      notificationType === 'reply_to_comment'
+        ? `${senderName} svarede dig`
+        : `${senderName} kommenterede dit opslag`;
+
+    let inAppResult = { total: 0, created: 0, skipped: 0 };
+    try {
+      inAppResult = await createInAppNotifications(supabase, [
+        {
+          userId: recipientUserId,
+          actorUserId: callerUserId,
+          type: 'reply',
+          postId: comment.target_id,
+          commentId: comment.id,
+          title: inAppTitle,
+          body: bodyPreview,
+          dedupeKey: buildNotificationDedupeKey('in_app_reply', comment.id, recipientUserId),
+        },
+      ]);
+    } catch (error) {
+      console.warn('[push_comment_replies] failed to create in-app notification', {
+        commentId,
+        recipientUserId,
+        notificationType,
+        error: String(error),
+      });
+    }
+
+    const preferencesByUserId = await fetchPushPreferencesByUserIds(supabase, [recipientUserId]);
+    if (!isPushPreferenceEnabled(preferencesByUserId, recipientUserId, 'replies')) {
+      console.log('[push_comment_replies] skipped preference disabled', {
+        commentId,
+        recipientUserId,
+        notificationType,
+      });
+      return json(200, {
+        ok: true,
+        skipped: 'preferences_disabled',
+        recipientUserId,
+        inApp: inAppResult,
+      });
+    }
+
     const tokens = pickLatestTokenPerUser(
       (await fetchPushTokensForUsers(supabase, [recipientUserId])) as PushTokenRow[],
     );
@@ -206,7 +245,7 @@ Deno.serve(async (req) => {
         recipientUserId,
         notificationType,
       });
-      return json(200, { ok: true, skipped: 'no_token', recipientUserId });
+      return json(200, { ok: true, skipped: 'no_token', recipientUserId, inApp: inAppResult });
     }
 
     const dedupeKey = buildNotificationDedupeKey(notificationType, comment.id);
@@ -218,7 +257,13 @@ Deno.serve(async (req) => {
         notificationType,
         dedupeKey,
       });
-      return json(200, { ok: true, skipped: 'duplicate', recipientUserId, dedupeKey });
+      return json(200, {
+        ok: true,
+        skipped: 'duplicate',
+        recipientUserId,
+        dedupeKey,
+        inApp: inAppResult,
+      });
     }
 
     const title =
@@ -226,7 +271,6 @@ Deno.serve(async (req) => {
         ? `${senderName} svarede p\u00E5 din kommentar`
         : `${senderName} kommenterede dit opslag`;
 
-    const bodyPreview = truncatePreview(comment.text);
     const result = await dispatchNotifications(supabase, [
       {
         userId: recipientUserId,
@@ -263,6 +307,7 @@ Deno.serve(async (req) => {
       notificationType,
       recipientUserId,
       dedupeKey,
+      inApp: inAppResult,
       ...result,
     });
   } catch (error) {

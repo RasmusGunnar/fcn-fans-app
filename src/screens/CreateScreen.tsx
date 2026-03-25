@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -6,12 +6,17 @@ import { useRoute } from '@react-navigation/native';
 import { useFeed } from '../state/FeedContext';
 import { Post } from '../types/post';
 import { Card } from '../components/ui/Card';
+import { EntityAutocompleteList } from '../components/composer/EntityAutocompleteList';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { colors, spacing, radius } from '../theme';
 import { PickedMedia, pickFromLibrary } from '../lib/mediaPicker';
 import { uploadMediaToSupabase } from '../lib/upload';
 import { useAuth } from '../auth/AuthProvider';
 import { supabase } from '../lib/supabase';
+import { useEntityAutocomplete } from '../hooks/useEntityAutocomplete';
+import { triggerMentionPush } from '../services/mentionPushApi';
+import { createMentionNotifications } from '../services/mentionNotifications';
+import { persistPostEntities } from '../services/postEntities';
 
 export default function CreateScreen() {
   const insets = useSafeAreaInsets();
@@ -19,13 +24,53 @@ export default function CreateScreen() {
   const { user } = useAuth();
   const route = useRoute() as any;
   const [text, setText] = useState('');
+  const [selection, setSelection] = useState({ start: 0, end: 0 });
+  const [isInputFocused, setIsInputFocused] = useState(false);
   const [audienceType, setAudienceType] = useState<'all' | 'community' | 'faction'>('all');
-  const [selectedCommunity, setSelectedCommunity] = useState('Farum Fans');
-  const [selectedFaction, setSelectedFaction] = useState('Farum Fighters');
+  const [selectedCommunity] = useState('Farum Fans');
+  const [selectedFaction] = useState('Farum Fighters');
   const [attachment, setAttachment] = useState<PickedMedia | null>(
     route?.params?.initialAttachment ?? null,
   );
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
+  const inputRef = useRef<TextInput | null>(null);
+  const {
+    activeMatch,
+    mentionSuggestions,
+    hashtagSuggestions,
+    visible,
+    handleSelectMention,
+    handleSelectHashtag,
+    clear: clearAutocomplete,
+  } = useEntityAutocomplete({
+    text,
+    selection,
+    isFocused: isInputFocused,
+    setText,
+    setSelection,
+  });
+
+  const refocusInput = useCallback(() => {
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+  }, []);
+
+  const handleSelectMentionSuggestion = useCallback(
+    (item: Parameters<typeof handleSelectMention>[0]) => {
+      handleSelectMention(item);
+      refocusInput();
+    },
+    [handleSelectMention, refocusInput],
+  );
+
+  const handleSelectHashtagSuggestion = useCallback(
+    (tag: string) => {
+      handleSelectHashtag(tag);
+      refocusInput();
+    },
+    [handleSelectHashtag, refocusInput],
+  );
 
   const handlePublish = async () => {
     if (!text.trim()) {
@@ -52,7 +97,10 @@ export default function CreateScreen() {
             width: uploaded.width,
             height: uploaded.height,
             ...(uploaded.thumbnail_path && uploaded.thumbnail_bucket
-              ? { thumbnail_path: uploaded.thumbnail_path, thumbnail_bucket: uploaded.thumbnail_bucket }
+              ? {
+                  thumbnail_path: uploaded.thumbnail_path,
+                  thumbnail_bucket: uploaded.thumbnail_bucket,
+                }
               : {}),
           },
         ];
@@ -104,6 +152,29 @@ export default function CreateScreen() {
           throw new Error('Insert succeeded but no data returned from database');
         }
 
+        const { mentionedProfiles } = await persistPostEntities(data.id, data.text ?? text.trim());
+
+        if (mentionedProfiles.length > 0) {
+          void createMentionNotifications({
+            mentionedUsernames: mentionedProfiles
+              .map((profile) => profile.username)
+              .filter((username): username is string => Boolean(username)),
+            actorId: user.id,
+            postId: data.id,
+            entityType: 'post',
+            entityId: data.id,
+          });
+
+          void triggerMentionPush({
+            actorUserId: user.id,
+            mentionedUserIds: mentionedProfiles.map((profile) => profile.id),
+            entityType: 'post',
+            entityId: data.id,
+            postId: data.id,
+            previewText: data.text ?? text.trim(),
+          });
+        }
+
         // DB-returned post is the source of truth
         dbPost = {
           id: data.id,
@@ -127,7 +198,11 @@ export default function CreateScreen() {
     } catch (e: any) {
       const errorMsg = e?.message || String(e);
       console.error('[CreateScreen] INSERT FAILED:', errorMsg);
-      alert('Post fejlede: ' + errorMsg + '\n\nTjek: (1) Logget ind (2) Database forbinder (3) Policies tillader insert');
+      alert(
+        'Post fejlede: ' +
+          errorMsg +
+          '\n\nTjek: (1) Logget ind (2) Database forbinder (3) Policies tillader insert',
+      );
       setLoading(false);
       return;
     }
@@ -165,19 +240,10 @@ export default function CreateScreen() {
     }
 
     setText('');
+    setSelection({ start: 0, end: 0 });
+    clearAutocomplete();
     setAudienceType('all');
     setAttachment(null);
-  };
-
-  const getAudienceDisplay = () => {
-    switch (audienceType) {
-      case 'community':
-        return selectedCommunity;
-      case 'faction':
-        return selectedFaction;
-      default:
-        return 'Alle fans';
-    }
   };
 
   return (
@@ -186,7 +252,7 @@ export default function CreateScreen() {
         <Text style={styles.title}>Nyt opslag</Text>
       </View>
 
-      <ScrollView style={styles.content}>
+      <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
         <Card style={{ marginBottom: spacing.md }}>
           <Text style={styles.label}>Publikum</Text>
           <View style={styles.audienceButtonsContainer}>
@@ -243,6 +309,7 @@ export default function CreateScreen() {
         <Card style={{ marginBottom: spacing.md }}>
           <Text style={styles.label}>Dit opslag</Text>
           <TextInput
+            ref={inputRef}
             style={styles.textInput}
             placeholder="Hvad er på dit hjerte?"
             placeholderTextColor={colors.subtext}
@@ -250,6 +317,23 @@ export default function CreateScreen() {
             numberOfLines={6}
             value={text}
             onChangeText={setText}
+            selection={selection}
+            onSelectionChange={({ nativeEvent }) => setSelection(nativeEvent.selection)}
+            onFocus={() => setIsInputFocused(true)}
+            onBlur={() => {
+              setTimeout(() => {
+                setIsInputFocused(false);
+                clearAutocomplete();
+              }, 0);
+            }}
+          />
+          <EntityAutocompleteList
+            visible={visible}
+            type={activeMatch?.type ?? null}
+            mentionSuggestions={mentionSuggestions}
+            hashtagSuggestions={hashtagSuggestions}
+            onSelectMention={handleSelectMentionSuggestion}
+            onSelectHashtag={handleSelectHashtagSuggestion}
           />
           {attachment && (
             <View style={styles.previewContainer}>
@@ -385,5 +469,3 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 });
-
-

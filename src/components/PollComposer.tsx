@@ -1,9 +1,14 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../auth/AuthProvider';
 import { supabase } from '../lib/supabase';
+import { triggerMentionPush } from '../services/mentionPushApi';
+import { createMentionNotifications } from '../services/mentionNotifications';
+import { persistPostEntities } from '../services/postEntities';
+import { useEntityAutocomplete } from '../hooks/useEntityAutocomplete';
 import { PrimaryButton } from './PrimaryButton';
+import { EntityAutocompleteList } from './composer/EntityAutocompleteList';
 import { Card } from './ui/Card';
 import { Theme, useTheme } from '../theme';
 import type { Actor } from '../types/news';
@@ -25,16 +30,59 @@ export function PollComposer({ actor, feedTargets, onSuccess }: PollComposerProp
   const pollAccent = theme.colors.state.info;
   const styles = createStyles(theme, pollAccent);
   const [question, setQuestion] = useState('');
+  const [questionSelection, setQuestionSelection] = useState({ start: 0, end: 0 });
+  const [isQuestionFocused, setIsQuestionFocused] = useState(false);
   const [options, setOptions] = useState(['', '']);
   const [durationDays, setDurationDays] = useState<(typeof DURATION_OPTIONS)[number]>(3);
   const [submitting, setSubmitting] = useState(false);
+  const questionInputRef = useRef<TextInput | null>(null);
+  const {
+    activeMatch,
+    mentionSuggestions,
+    hashtagSuggestions,
+    visible,
+    handleSelectMention,
+    handleSelectHashtag,
+    clear: clearAutocomplete,
+  } = useEntityAutocomplete({
+    text: question,
+    selection: questionSelection,
+    isFocused: isQuestionFocused,
+    setText: setQuestion,
+    setSelection: setQuestionSelection,
+  });
+
+  const refocusQuestionInput = useCallback(() => {
+    requestAnimationFrame(() => {
+      questionInputRef.current?.focus();
+    });
+  }, []);
+
+  const handleSelectMentionSuggestion = useCallback(
+    (item: Parameters<typeof handleSelectMention>[0]) => {
+      handleSelectMention(item);
+      refocusQuestionInput();
+    },
+    [handleSelectMention, refocusQuestionInput],
+  );
+
+  const handleSelectHashtagSuggestion = useCallback(
+    (tag: string) => {
+      handleSelectHashtag(tag);
+      refocusQuestionInput();
+    },
+    [handleSelectHashtag, refocusQuestionInput],
+  );
 
   const trimmedOptions = useMemo(() => options.map((option) => option.trim()), [options]);
   const filledOptions = trimmedOptions.filter(Boolean);
-  const canSubmit = question.trim().length > 0 && filledOptions.length >= MIN_OPTIONS && !submitting;
+  const canSubmit =
+    question.trim().length > 0 && filledOptions.length >= MIN_OPTIONS && !submitting;
 
   const handleOptionChange = (index: number, value: string) => {
-    setOptions((current) => current.map((option, optionIndex) => (optionIndex === index ? value : option)));
+    setOptions((current) =>
+      current.map((option, optionIndex) => (optionIndex === index ? value : option)),
+    );
   };
 
   const handleAddOption = () => {
@@ -52,6 +100,8 @@ export function PollComposer({ actor, feedTargets, onSuccess }: PollComposerProp
 
   const resetForm = () => {
     setQuestion('');
+    setQuestionSelection({ start: 0, end: 0 });
+    clearAutocomplete();
     setOptions(['', '']);
     setDurationDays(3);
   };
@@ -118,6 +168,31 @@ export function PollComposer({ actor, feedTargets, onSuccess }: PollComposerProp
         throw error;
       }
 
+      if (data?.id) {
+        const { mentionedProfiles } = await persistPostEntities(data.id, normalizedQuestion);
+
+        if (mentionedProfiles.length > 0) {
+          void createMentionNotifications({
+            mentionedUsernames: mentionedProfiles
+              .map((profile) => profile.username)
+              .filter((username): username is string => Boolean(username)),
+            actorId: user.id,
+            postId: data.id,
+            entityType: 'post',
+            entityId: data.id,
+          });
+
+          void triggerMentionPush({
+            actorUserId: user.id,
+            mentionedUserIds: mentionedProfiles.map((profile) => profile.id),
+            entityType: 'post',
+            entityId: data.id,
+            postId: data.id,
+            previewText: normalizedQuestion,
+          });
+        }
+      }
+
       if (actor?.type === 'community' && data?.id) {
         void triggerCommunityPostPush(data.id);
       }
@@ -137,22 +212,42 @@ export function PollComposer({ actor, feedTargets, onSuccess }: PollComposerProp
       <Card style={styles.sectionCard}>
         <Text style={styles.label}>Spørgsmål</Text>
         <TextInput
+          ref={questionInputRef}
           style={styles.questionInput}
           placeholder="Hvad vil du spørge om?"
           placeholderTextColor={theme.colors.text.secondary}
           value={question}
           onChangeText={setQuestion}
+          selection={questionSelection}
+          onSelectionChange={({ nativeEvent }) => setQuestionSelection(nativeEvent.selection)}
+          onFocus={() => setIsQuestionFocused(true)}
+          onBlur={() => {
+            setTimeout(() => {
+              setIsQuestionFocused(false);
+              clearAutocomplete();
+            }, 0);
+          }}
           editable={!submitting}
           multiline
           numberOfLines={4}
           textAlignVertical="top"
+        />
+        <EntityAutocompleteList
+          visible={visible}
+          type={activeMatch?.type ?? null}
+          mentionSuggestions={mentionSuggestions}
+          hashtagSuggestions={hashtagSuggestions}
+          onSelectMention={handleSelectMentionSuggestion}
+          onSelectHashtag={handleSelectHashtagSuggestion}
         />
       </Card>
 
       <Card style={styles.sectionCard}>
         <View style={styles.sectionHeader}>
           <Text style={styles.label}>Svarmuligheder</Text>
-          <Text style={styles.sectionMeta}>{filledOptions.length}/{MAX_OPTIONS}</Text>
+          <Text style={styles.sectionMeta}>
+            {filledOptions.length}/{MAX_OPTIONS}
+          </Text>
         </View>
 
         <View style={styles.optionsList}>
@@ -174,7 +269,10 @@ export function PollComposer({ actor, feedTargets, onSuccess }: PollComposerProp
                 />
                 {canRemove ? (
                   <Pressable
-                    style={({ pressed }) => [styles.removeOptionButton, pressed && styles.optionButtonPressed]}
+                    style={({ pressed }) => [
+                      styles.removeOptionButton,
+                      pressed && styles.optionButtonPressed,
+                    ]}
                     onPress={() => handleRemoveOption(index)}
                     disabled={submitting}
                   >

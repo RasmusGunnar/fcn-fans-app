@@ -4,6 +4,7 @@ export type ProfileMap = Record<
   string,
   {
     display_name: string | null;
+    username?: string | null;
     avatar_url: string | null;
     fan_level_key?: FanLevelKey | null;
   }

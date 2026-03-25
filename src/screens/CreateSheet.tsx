@@ -142,7 +142,9 @@ export default function CreateSheet({
   };
 
   const includesHome = feedTargets.includes('home');
-  const communityTargetCount = feedTargets.filter((target) => target.startsWith('community:')).length;
+  const communityTargetCount = feedTargets.filter((target) =>
+    target.startsWith('community:'),
+  ).length;
   const singleCommunityTarget =
     !includesHome && communityTargetCount === 1
       ? feedTargets.find((target) => target.startsWith('community:'))
@@ -152,15 +154,16 @@ export default function CreateSheet({
     : null;
   const newsAccent = theme.colors.state.success;
   const pollAccent = theme.colors.state?.info ?? theme.colors.primary;
-  const feedTargetsSummary = includesHome && communityTargetCount > 0
-    ? `Vises i Home + ${communityTargetCount} mere`
-    : includesHome
-      ? 'Vises i Home'
-      : communityTargetCount === 1
-        ? singleCommunityName
-          ? `Vises i ${singleCommunityName}`
-          : 'Vises i valgt fællesskab'
-        : `Vises i ${communityTargetCount} fællesskaber`;
+  const feedTargetsSummary =
+    includesHome && communityTargetCount > 0
+      ? `Vises i Home + ${communityTargetCount} mere`
+      : includesHome
+        ? 'Vises i Home'
+        : communityTargetCount === 1
+          ? singleCommunityName
+            ? `Vises i ${singleCommunityName}`
+            : 'Vises i valgt fællesskab'
+          : `Vises i ${communityTargetCount} fællesskaber`;
 
   const styles = makeStyles(theme);
 
@@ -172,26 +175,22 @@ export default function CreateSheet({
             style={({ pressed }) => [styles.choiceCard, pressed && styles.choiceCardPressed]}
             onPress={() => setContentType('post')}
           >
-            <View style={[styles.choiceIcon, { backgroundColor: theme.colors.pill.red.bg }]}> 
+            <View style={[styles.choiceIcon, { backgroundColor: theme.colors.pill.red.bg }]}>
               <Ionicons name="create" size={26} color={theme.colors.primary} />
             </View>
             <Text style={styles.choiceTitle}>Opret opslag</Text>
-            <Text style={styles.choiceDescription}>
-              Del tanker og billeder med fællesskabet.
-            </Text>
+            <Text style={styles.choiceDescription}>Del tanker og billeder med fællesskabet.</Text>
           </Pressable>
 
           <Pressable
             style={({ pressed }) => [styles.choiceCard, pressed && styles.choiceCardPressed]}
             onPress={() => setContentType('news')}
           >
-            <View style={[styles.choiceIcon, { backgroundColor: theme.colors.pill.green.bg }]}> 
+            <View style={[styles.choiceIcon, { backgroundColor: theme.colors.pill.green.bg }]}>
               <Ionicons name="link" size={26} color={theme.colors.state.success} />
             </View>
             <Text style={styles.choiceTitle}>Del nyhed</Text>
-            <Text style={styles.choiceDescription}>
-              Del en artikel via link med preview.
-            </Text>
+            <Text style={styles.choiceDescription}>Del en artikel via link med preview.</Text>
           </Pressable>
 
           {canCreateAdminContent && (
@@ -372,7 +371,9 @@ export default function CreateSheet({
 
     return (
       <View style={styles.placeholderSection}>
-        <View style={[styles.placeholderIcon, { backgroundColor: theme.colors.badges.eventSoftBg }]}>
+        <View
+          style={[styles.placeholderIcon, { backgroundColor: theme.colors.badges.eventSoftBg }]}
+        >
           <Ionicons name="calendar" size={28} color={theme.colors.badges.event} />
         </View>
         <Text style={styles.placeholderTitle}>Event-oprettelse kommer snart</Text>
@@ -411,7 +412,9 @@ export default function CreateSheet({
           <View style={{ width: 28 }} />
         </View>
 
-        <ScrollView style={styles.content}>{renderContent()}</ScrollView>
+        <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
+          {renderContent()}
+        </ScrollView>
       </View>
     </Modal>
   );
