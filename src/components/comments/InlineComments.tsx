@@ -928,40 +928,8 @@ export function InlineComments({
     );
   };
 
-  const rootContent = (
+  const composerSection = (
     <>
-      <View style={styles.header}>
-        <Text variant="caption" color="primary" style={styles.headerText}>
-          {titleOverride ?? 'Kommentarer'} ({totalCommentCount})
-        </Text>
-      </View>
-
-      {quickActionChips.length > 0 ? (
-        <View style={styles.quickActionsRow}>
-          {quickActionChips.map((chip) => (
-            <Pressable
-              key={chip}
-              style={styles.quickActionChip}
-              onPress={() => handleQuickAction(chip)}
-            >
-              <Text variant="caption" color="primary" style={styles.quickActionChipText}>
-                {chip}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
-
-      {quickActionFeedback ? (
-        <View style={styles.quickActionFeedback}>
-          <Text variant="caption" color="primary" style={styles.quickActionFeedbackText}>
-            {quickActionFeedback}
-          </Text>
-        </View>
-      ) : null}
-
-      {renderContent()}
-
       {activeReplyToCommentId ? (
         <View style={styles.slimReplyBar}>
           <Text variant="caption" color="secondary" style={styles.slimReplyText}>
@@ -1005,6 +973,7 @@ export function InlineComments({
               }, 0);
             }}
             multiline
+            scrollEnabled
             maxLength={2000}
             editable={!submitting && !!currentUserId}
             returnKeyType="send"
@@ -1040,6 +1009,53 @@ export function InlineComments({
     </>
   );
 
+  const rootContent = (
+    <>
+      <View style={styles.header}>
+        <Text variant="caption" color="primary" style={styles.headerText}>
+          {titleOverride ?? 'Kommentarer'} ({totalCommentCount})
+        </Text>
+      </View>
+
+      {quickActionChips.length > 0 ? (
+        <View style={styles.quickActionsRow}>
+          {quickActionChips.map((chip) => (
+            <Pressable
+              key={chip}
+              style={styles.quickActionChip}
+              onPress={() => handleQuickAction(chip)}
+            >
+              <Text variant="caption" color="primary" style={styles.quickActionChipText}>
+                {chip}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+
+      {quickActionFeedback ? (
+        <View style={styles.quickActionFeedback}>
+          <Text variant="caption" color="primary" style={styles.quickActionFeedbackText}>
+            {quickActionFeedback}
+          </Text>
+        </View>
+      ) : null}
+
+      {renderContent()}
+
+      {variant === 'inline' ? (
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'position' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? -theme.spacing[2] : 0}
+        >
+          {composerSection}
+        </KeyboardAvoidingView>
+      ) : (
+        composerSection
+      )}
+    </>
+  );
+
   if (variant === 'screen') {
     return (
       <KeyboardAvoidingView
@@ -1056,7 +1072,7 @@ export function InlineComments({
     );
   }
 
-  // Inline mode - no KeyboardAvoidingView to avoid nesting warnings
+  // Inline mode keeps root layout unchanged; only the composer uses local keyboard avoidance
   return (
     <View style={styles.root}>
       <Pressable style={styles.pressableArea} onPress={Keyboard.dismiss}>
@@ -1303,9 +1319,11 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    maxHeight: theme.spacing[12],
-    paddingVertical: theme.spacing[1],
+    minHeight: theme.spacing[10],
+    maxHeight: theme.spacing[16],
+    paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[2],
+    textAlignVertical: 'top',
   },
   sendButton: {
     width: theme.spacing[10],

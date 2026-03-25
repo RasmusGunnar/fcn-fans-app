@@ -406,6 +406,7 @@ export default function HomeScreen() {
       keyExtractor={(item) => getFeedItemKey(item)}
       renderItem={renderFeedItem}
       style={styles.container}
+      automaticallyAdjustKeyboardInsets
       contentContainerStyle={{ paddingBottom: tabBarHeight + spacing.lg }}
       refreshControl={
         <RefreshControl

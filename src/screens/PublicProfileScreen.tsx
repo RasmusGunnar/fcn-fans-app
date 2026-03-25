@@ -3,7 +3,7 @@
 // NO hardcoded numbers or color strings allowed.
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { FlatList, StyleSheet, View } from 'react-native';
+import { FlatList, Platform, StyleSheet, View } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import { useAuth } from '../auth/AuthProvider';
 import { Avatar } from '../components/Avatar';
@@ -221,6 +221,9 @@ export default function PublicProfileScreen() {
         keyExtractor={(item) => item.key}
         renderItem={renderItem}
         ListHeaderComponent={ListHeader}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        automaticallyAdjustKeyboardInsets
         contentContainerStyle={styles.list}
       />
     </View>

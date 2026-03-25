@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { colors, spacing } from '../theme';
 import { AppHeader } from '../components/AppHeader';
@@ -20,7 +20,12 @@ export default function PostDetailScreen() {
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+      automaticallyAdjustKeyboardInsets
+    >
       <AppHeader title="Opslag" subtitle="" />
       <View style={styles.content}>
         {post && (

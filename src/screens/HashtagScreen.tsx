@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, FlatList, Platform, StyleSheet, View } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import { useAuth } from '../auth/AuthProvider';
 import { AppHeader } from '../components/AppHeader';
@@ -301,6 +301,9 @@ export default function HashtagScreen() {
           data={taggedPosts}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          automaticallyAdjustKeyboardInsets
           contentContainerStyle={[
             styles.listContent,
             taggedPosts.length === 0 ? styles.listContentEmpty : null,
