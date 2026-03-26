@@ -3,7 +3,7 @@
 // NO hardcoded numbers or color strings allowed.
 
 import * as Linking from 'expo-linking';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   GestureResponderEvent,
@@ -58,6 +58,7 @@ function pickImageRatio(w: number, h: number): number {
 }
 
 const IMAGE_RATIO_FALLBACK = 4 / 5; // Instagram default while loading
+const SAFE_NATIVE_VIDEO_URI_REGEX = /^https?:\/\/.+\.(mp4|m4v|mov|webm|m3u8)(?:$|[?#])/i;
 
 /**
  * Hook: resolve the best aspectRatio for a given image URI.
@@ -105,6 +106,10 @@ function useImageRatio(uri: string | null, metaWidth?: number, metaHeight?: numb
   }, [uri, metaRatio]);
 
   return metaRatio ?? detected ?? IMAGE_RATIO_FALLBACK;
+}
+
+function isSafeNativeVideoUri(uri: string | null | undefined): uri is string {
+  return typeof uri === 'string' && SAFE_NATIVE_VIDEO_URI_REGEX.test(uri);
 }
 
 function getTimeAgo(isoDate: string): string {
@@ -207,6 +212,8 @@ interface FanPostCardProps {
   onDeleted?: (postId: string) => void;
   onOpenDetail?: () => void; // Optional navigation to post detail
   onNewComment?: (comment: CommentPreview) => void;
+  initiallyOpenComments?: boolean;
+  maxInlineComments?: number;
   isActiveVideo?: boolean;
   isAppActive?: boolean;
   onActivateVideo?: () => void;
@@ -230,6 +237,8 @@ export function FanPostCard({
   onDeleted = () => {},
   onOpenDetail,
   onNewComment,
+  initiallyOpenComments = false,
+  maxInlineComments = 2,
   isActiveVideo = false,
   isAppActive = true,
   onActivateVideo,
@@ -242,6 +251,8 @@ export function FanPostCard({
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(cleanedPostText);
   const [imageLoadError, setImageLoadError] = useState(false);
+  const [videoLoadError, setVideoLoadError] = useState(false);
+  const loggedVideoMountRef = useRef<string | null>(null);
 
   const { user, isAppAdmin } = useAuth();
   const viewerUserId = currentUserId ?? user?.id;
@@ -263,6 +274,8 @@ export function FanPostCard({
   const hasMultipleMedia = resolvedMedia.length > 1;
 
   const mediaUri = primaryMedia?.uri ?? null;
+  const shouldRenderNativeVideo =
+    mediaKind === 'video' && isSafeNativeVideoUri(mediaUri) && !videoLoadError;
 
   // Instagram-style aspect ratio for images (portrait→4:5, square→1:1, landscape→16:9)
   const imageAspectRatio = useImageRatio(
@@ -273,7 +286,19 @@ export function FanPostCard({
 
   useEffect(() => {
     setImageLoadError(false);
+    setVideoLoadError(false);
+    loggedVideoMountRef.current = null;
   }, [mediaUri]);
+
+  useEffect(() => {
+    if (!shouldRenderNativeVideo || !mediaUri) return;
+
+    const signature = `${post.id}:${mediaUri}`;
+    if (loggedVideoMountRef.current === signature) return;
+
+    loggedVideoMountRef.current = signature;
+    console.log('[HOME][VIDEO] mount', { postId: post.id, uri: mediaUri });
+  }, [mediaUri, post.id, shouldRenderNativeVideo]);
 
   // BASELINE: Remove complex video state management - keep only essential edit handlers
 
@@ -448,6 +473,8 @@ export function FanPostCard({
       isAppAdmin={viewerIsAppAdmin}
       onOpenDetail={computedOnOpenDetail}
       commentPreviews={commentPreviews}
+      initiallyOpen={initiallyOpenComments}
+      maxInlineComments={maxInlineComments}
       onNewComment={onNewComment}
       profileMap={profileMap}
       actions={{
@@ -546,7 +573,7 @@ export function FanPostCard({
                 </Text>
               )}
             </View>
-          ) : mediaKind === 'video' ? (
+          ) : shouldRenderNativeVideo ? (
             <Pressable style={styles.mediaPressable} onPress={handleOpenMediaViewer(0)}>
               <View style={styles.mediaContainer}>
                 <FeedVideo
@@ -556,12 +583,29 @@ export function FanPostCard({
                   naturalWidth={primaryMedia?.width}
                   naturalHeight={primaryMedia?.height}
                   onError={(e) => {
+                    console.error('[HOME][VIDEO] error', {
+                      postId: post.id,
+                      uri: mediaUri,
+                      error: e,
+                    });
+                    setVideoLoadError(true);
                     logger.error('[VideoError]', { postId: post.id, error: e });
                   }}
                 />
                 {mediaCountBadge}
               </View>
             </Pressable>
+          ) : mediaKind === 'video' ? (
+            <View style={styles.mediaFallback}>
+              <Text variant="caption" color="secondary">
+                Video kunne ikke afspilles
+              </Text>
+              {__DEV__ && mediaUri ? (
+                <Text variant="caption" color="secondary" style={{ marginTop: theme.spacing[1] }}>
+                  {mediaUri}
+                </Text>
+              ) : null}
+            </View>
           ) : mediaKind === 'image' ? (
             imageLoadError ? (
               <View style={styles.mediaFallback}>

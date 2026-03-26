@@ -114,6 +114,10 @@ export default function HomeScreen() {
   );
 
   useEffect(() => {
+    console.log('[HOME] mounted');
+  }, []);
+
+  useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
       setIsAppActive(state === 'active');
       if (state !== 'active') {
@@ -146,9 +150,14 @@ export default function HomeScreen() {
     setLoadingFixture(false);
   };
 
-  useEffect(() => {
-    fetchPosts();
-  }, [fetchPosts]);
+  const triggerFeedFetch = useCallback(
+    async (source: 'focus' | 'refresh') => {
+      console.log('[HOME] feed fetch trigger', { source });
+      await fetchPosts();
+      console.log('[HOME] feed fetch success', { source });
+    },
+    [fetchPosts],
+  );
 
   useFocusEffect(
     React.useCallback(() => {
@@ -164,14 +173,14 @@ export default function HomeScreen() {
       const elapsed = now - lastFocusFetchRef.current;
       if (elapsed >= 2000) {
         lastFocusFetchRef.current = now;
-        fetchPosts();
+        void triggerFeedFetch('focus');
       }
 
       // Pause video when screen loses focus (navigation blur)
       return () => {
         setCurrentPlayingVideoPostId(null);
       };
-    }, [fetchPosts, nextFixture?.id, nextMatchAttendanceRefresh, nextMatchCheckInRefresh]),
+    }, [nextFixture?.id, nextMatchAttendanceRefresh, nextMatchCheckInRefresh, triggerFeedFetch]),
   );
 
   useEffect(() => {
@@ -180,8 +189,19 @@ export default function HomeScreen() {
     void nextMatchCheckInRefresh();
   }, [nextFixture?.id, nextMatchAttendanceRefresh, nextMatchCheckInRefresh]);
 
-  const renderFeedItem = ({ item }: { item: any }) => {
+  const renderFeedItem = ({ item, index }: { item: any; index: number }) => {
+    if (!item?.kind || !item?.id || !item?.data) {
+      console.warn('[HOME] invalid item skipped', {
+        index,
+        hasKind: Boolean(item?.kind),
+        hasId: Boolean(item?.id),
+        hasData: Boolean(item?.data),
+      });
+      return null;
+    }
+
     const key = getFeedItemKey(item);
+    console.log('[HOME] rendering item', { index, key, kind: item.kind, id: item.id });
     const likeState = safeLikeMap[key] || { liked: false, likes: 0 };
     const commentCount = safeCommentCountMap[key] || 0;
     const commentPreviews = safeCommentPreviewMap[key] || [];
@@ -233,22 +253,36 @@ export default function HomeScreen() {
   };
 
   // Map nextFixture to matchForBadge for NextMatchBadge
-  const matchForBadge =
-    nextFixture && nextFixtureHeroUrl
-      ? {
-          id: nextFixture.id,
-          coverUrl: nextFixtureHeroUrl,
-          homeTeam: nextFixture.home_team,
-          awayTeam: nextFixture.away_team,
-          homeLogo: nextFixture.home_logo_url ?? null,
-          awayLogo: nextFixture.away_logo_url ?? null,
-          kickoff: nextFixture.kickoff_at ?? '',
-          venue: nextFixture.venue ?? null,
-          venueCity: nextFixture.venue_city ?? null,
-          title: `${nextFixture.home_team} vs ${nextFixture.away_team}`,
-          subtitle: nextFixture.kickoff_at ? formatShortDateDa(nextFixture.kickoff_at) : '',
-        }
-      : null;
+  const matchForBadge = useMemo(
+    () =>
+      nextFixture && nextFixtureHeroUrl
+        ? {
+            id: nextFixture.id,
+            coverUrl: nextFixtureHeroUrl,
+            homeTeam: nextFixture.home_team,
+            awayTeam: nextFixture.away_team,
+            homeLogo: nextFixture.home_logo_url ?? null,
+            awayLogo: nextFixture.away_logo_url ?? null,
+            kickoff: nextFixture.kickoff_at ?? '',
+            venue: nextFixture.venue ?? null,
+            venueCity: nextFixture.venue_city ?? null,
+            title: `${nextFixture.home_team} vs ${nextFixture.away_team}`,
+            subtitle: nextFixture.kickoff_at ? formatShortDateDa(nextFixture.kickoff_at) : '',
+          }
+        : null,
+    [nextFixture, nextFixtureHeroUrl],
+  );
+
+  useEffect(() => {
+    if (!matchForBadge) return;
+
+    console.log('[HOME][MATCH] badge render', {
+      fixtureId: matchForBadge.id,
+      hasHero: Boolean(matchForBadge.coverUrl),
+      hasHomeLogo: Boolean(matchForBadge.homeLogo),
+      hasAwayLogo: Boolean(matchForBadge.awayLogo),
+    });
+  }, [matchForBadge]);
 
   const nextMatchCountdownLabel = useMemo(() => {
     if (!nextFixture?.kickoff_at) return null;
@@ -411,7 +445,9 @@ export default function HomeScreen() {
       refreshControl={
         <RefreshControl
           refreshing={loading}
-          onRefresh={fetchPosts}
+          onRefresh={() => {
+            void triggerFeedFetch('refresh');
+          }}
           tintColor={colors.fcnRed}
           colors={[colors.fcnRed]}
         />
