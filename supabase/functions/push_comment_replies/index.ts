@@ -270,6 +270,7 @@ Deno.serve(async (req) => {
       notificationType === 'reply_to_comment'
         ? `${senderName} svarede p\u00E5 din kommentar`
         : `${senderName} kommenterede dit opslag`;
+    const targetType = notificationType === 'reply_to_comment' ? 'comment_reply' : 'post_comment';
 
     const result = await dispatchNotifications(supabase, [
       {
@@ -280,6 +281,8 @@ Deno.serve(async (req) => {
         title,
         body: bodyPreview,
         data: {
+          notificationType,
+          targetType,
           type: 'post',
           postId: comment.target_id,
           commentId: comment.id,

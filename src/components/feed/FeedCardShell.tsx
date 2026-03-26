@@ -33,6 +33,7 @@ interface FeedCardShellProps {
   children: React.ReactNode;
   initiallyOpen?: boolean;
   disableInlineComments?: boolean;
+  maxInlineComments?: number;
   onNewComment?: (comment: CommentPreview) => void;
   profileMap?: ProfileMap;
 }
@@ -56,6 +57,7 @@ export function FeedCardShell({
   children,
   initiallyOpen = false,
   disableInlineComments = false,
+  maxInlineComments = 2,
   onNewComment,
   profileMap,
 }: FeedCardShellProps) {
@@ -170,6 +172,7 @@ export function FeedCardShell({
           currentUserId={currentUserId}
           isAppAdmin={isAppAdmin}
           profileMap={profileMap}
+          maxInlineComments={maxInlineComments}
           onNewComment={handleNewComment}
         />
       )}

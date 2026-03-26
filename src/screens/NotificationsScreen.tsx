@@ -45,6 +45,38 @@ function getNotificationLabel(item: NotificationItem): string {
   return 'Nogen svarede på din kommentar';
 }
 
+function buildNotificationTarget(item: NotificationItem): Record<string, unknown> {
+  if (item.type === 'mention' && item.entity_type === 'comment') {
+    return {
+      notificationType: 'mention_comment',
+      targetType: 'post_comment',
+      postId: item.post_id,
+      commentId: item.entity_id,
+      entityId: item.entity_id,
+      entityType: item.entity_type,
+    };
+  }
+
+  if (item.type === 'mention') {
+    return {
+      notificationType: 'mention_post',
+      targetType: 'post',
+      postId: item.post_id,
+      entityId: item.entity_id,
+      entityType: item.entity_type,
+    };
+  }
+
+  return {
+    notificationType: 'reply_to_comment',
+    targetType: 'comment_reply',
+    postId: item.post_id,
+    commentId: item.entity_id,
+    entityId: item.entity_id,
+    entityType: item.entity_type,
+  };
+}
+
 export default function NotificationsScreen() {
   const navigation = useNavigation<any>();
   const { user } = useAuth();
@@ -85,10 +117,7 @@ export default function NotificationsScreen() {
       }
     }
 
-    const didNavigate = navigateFromNotificationData({
-      type: 'post',
-      postId: item.post_id,
-    });
+    const didNavigate = navigateFromNotificationData(buildNotificationTarget(item));
 
     if (!didNavigate) {
       Alert.alert('Fejl', 'Kunne ikke åbne opslaget.');

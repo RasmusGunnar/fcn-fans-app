@@ -3,8 +3,8 @@ import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
-import { navigateFromNotificationData } from '../navigation/navigationRef';
-import { getNotificationDeepLink } from './deeplink';
+import { navigateFromNotificationData, navigateToHomeFeed, navigationRef } from '../navigation/navigationRef';
+import { createHomeDeepLink, getNotificationDeepLinkWithOptions } from './deeplink';
 import { logger } from './logger';
 import { supabase } from './supabase';
 
@@ -340,12 +340,36 @@ export async function getPushStatusSnapshot(userId: string): Promise<PushStatusS
 }
 
 export async function openNotificationTarget(data: Record<string, unknown> | null | undefined) {
-  if (navigateFromNotificationData(data)) {
+  if (navigateFromNotificationData(data, { allowHomeFallback: false })) {
     return;
   }
 
-  const url = getNotificationDeepLink(data);
+  const url = getNotificationDeepLinkWithOptions(data, { includeHomeFallback: false });
   if (url) {
-    await Linking.openURL(url);
+    try {
+      logger.log('[NotificationOpen] deep-link fallback', {
+        payload: data ?? null,
+        url,
+      });
+      await Linking.openURL(url);
+      return;
+    } catch (error) {
+      logger.warn('[NotificationOpen] deep-link fallback failed', {
+        payload: data ?? null,
+        url,
+        error,
+      });
+    }
   }
+
+  logger.log('[NotificationOpen] home fallback', {
+    payload: data ?? null,
+  });
+
+  if (navigationRef.isReady()) {
+    navigateToHomeFeed();
+    return;
+  }
+
+  await Linking.openURL(createHomeDeepLink());
 }

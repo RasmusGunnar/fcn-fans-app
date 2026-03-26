@@ -226,6 +226,7 @@ Deno.serve(async (req) => {
 
     const isPoll = Boolean(readPollQuestion(post.poll_data));
     const notificationType = isPoll ? 'community_poll' : 'community_post';
+    const targetType = isPoll ? 'community_poll' : 'community_post';
     const dedupeKeys = tokens.map((tokenRow) =>
       buildNotificationDedupeKey(notificationType, post.id, tokenRow.user_id),
     );
@@ -258,6 +259,8 @@ Deno.serve(async (req) => {
             ? truncatePreview(readPollQuestion(post.poll_data))
             : truncatePreview(post.text),
           data: {
+            notificationType,
+            targetType,
             type: 'post',
             postId: post.id,
             communityId,

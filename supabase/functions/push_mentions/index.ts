@@ -88,6 +88,10 @@ function getNotificationType(entityType: MentionEntityType): MentionNotification
   return 'mention_comment';
 }
 
+function getTargetType(entityType: MentionEntityType): 'post' | 'post_comment' {
+  return entityType === 'post' ? 'post' : 'post_comment';
+}
+
 function getBodyText(entityType: MentionEntityType): string {
   return entityType === 'post' ? 'n\u00E6vnte dig i et opslag' : 'n\u00E6vnte dig i en kommentar';
 }
@@ -155,6 +159,7 @@ Deno.serve(async (req) => {
 
     let resolvedPostId = entityType === 'post' ? (postId ?? entityId) : postId;
     let resolvedCommentId = commentId;
+    let resolvedParentCommentId: string | null = null;
     if (!resolvedPostId) {
       return json(400, { error: 'Missing postId for mention notification' });
     }
@@ -218,6 +223,7 @@ Deno.serve(async (req) => {
 
       resolvedPostId = readString(entity.target_id);
       resolvedCommentId = entity.id;
+      resolvedParentCommentId = readString(entity.parent_id);
     }
 
     if (!resolvedPostId) {
@@ -281,6 +287,7 @@ Deno.serve(async (req) => {
     }
 
     const notificationType = getNotificationType(entityType);
+    const targetType = getTargetType(entityType);
     const dedupeKeys = tokens.map((tokenRow) =>
       buildNotificationDedupeKey(notificationType, entityId, tokenRow.user_id),
     );
@@ -301,9 +308,12 @@ Deno.serve(async (req) => {
           title: `${actorName} n\u00E6vnte dig`,
           body: getBodyText(entityType),
           data: {
+            notificationType,
+            targetType,
             type: 'post',
             postId: resolvedPostId,
             commentId: resolvedCommentId,
+            parentCommentId: resolvedParentCommentId,
             entityType,
             entityId,
             previewText,

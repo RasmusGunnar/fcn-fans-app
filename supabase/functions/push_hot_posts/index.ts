@@ -90,9 +90,10 @@ Deno.serve(async (req) => {
         title: 'Der er gang i snakken 🔥',
         body: 'Se hvad fans snakker om lige nu',
         data: {
-          type: 'post',
+          targetType: 'home_feed',
+          notificationType: 'hot_post',
           postId: post.id,
-          url: `fcnfans://post/${post.id}`,
+          url: 'fcnfans://home',
         },
       })),
     );

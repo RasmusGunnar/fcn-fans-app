@@ -113,6 +113,13 @@ interface FeedContextType {
   removePost: (postId: string) => void;
   removeNews: (newsId: string) => void;
   fetchPosts: () => Promise<void>;
+  hydratePostEngagement: (input: {
+    postId: string;
+    liked: boolean;
+    likes: number;
+    commentsCount: number;
+    commentPreviews: CommentPreview[];
+  }) => void;
   toggleLike: (kind: LikeTargetType, id: string, userId: string) => Promise<void>;
   incrementCommentCount: (kind: LikeTargetType, id: string) => void;
   addCommentPreview: (kind: LikeTargetType, id: string, comment: CommentPreview) => void;
@@ -881,6 +888,58 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
+  const hydratePostEngagement = useCallback(
+    ({
+      postId,
+      liked,
+      likes,
+      commentsCount,
+      commentPreviews,
+    }: {
+      postId: string;
+      liked: boolean;
+      likes: number;
+      commentsCount: number;
+      commentPreviews: CommentPreview[];
+    }) => {
+      const key = targetKey('post', postId);
+
+      setLikeMap((prev) => {
+        if (prev[key]) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          [key]: { liked, likes },
+        };
+      });
+
+      setCommentCountMap((prev) => {
+        if (typeof prev[key] === 'number') {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          [key]: commentsCount,
+        };
+      });
+
+      setCommentPreviewMap((prev) => {
+        if (prev[key]) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          [key]: commentPreviews,
+        };
+      });
+    },
+    [],
+  );
+
   const toggleLike = useCallback(
     async (kind: LikeTargetType, id: string, userId: string) => {
       const key = targetKey(kind, id);
@@ -993,6 +1052,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         removePost,
         removeNews,
         fetchPosts,
+        hydratePostEngagement,
         toggleLike,
         incrementCommentCount,
         addCommentPreview,
