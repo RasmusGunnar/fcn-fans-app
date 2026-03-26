@@ -2,9 +2,11 @@ import { useNavigation } from '@react-navigation/native';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../../auth/AuthProvider';
+import { getMyCommunityRoleByName, WILD_TIGERS_COMMUNITY_NAME } from '../../services/rbac';
 import { deleteSong, fetchSongs, updateSong } from '../../services/songsApi';
 import { defaultTheme } from '../../theme';
 import { SONG_CATEGORY_LABELS, type Song } from '../../types/song';
+import { canEditSongs as canEditSongsPermission } from '../../utils/permissions';
 import { SongAccordionCard } from '../songs/SongAccordionCard';
 import { SongEditModal } from '../songs/SongEditModal';
 import { SongSuggestCard } from '../songs/SongSuggestCard';
@@ -72,7 +74,7 @@ function SongSection({
 
 export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
   const navigation = useNavigation();
-  const { isAppAdmin } = useAuth();
+  const { isAppAdmin, user } = useAuth();
   const [songs, setSongs] = useState<Song[]>([]);
   const [loading, setLoading] = useState(true);
   const [source, setSource] = useState<'remote' | 'fallback'>('remote');
@@ -81,6 +83,7 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
   const [activeFilter, setActiveFilter] = useState<Song['category']>('slagsang');
   const [saving, setSaving] = useState(false);
   const [deletingSongId, setDeletingSongId] = useState<string | null>(null);
+  const [wildTigersRole, setWildTigersRole] = useState<'owner' | 'admin' | 'member' | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -101,6 +104,34 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
     };
   }, []);
 
+  useEffect(() => {
+    let mounted = true;
+
+    const loadWildTigersRole = async () => {
+      if (loading) {
+        return;
+      }
+
+      if (!user?.id || source !== 'remote' || isAppAdmin) {
+        if (mounted) {
+          setWildTigersRole(null);
+        }
+        return;
+      }
+
+      const role = await getMyCommunityRoleByName(WILD_TIGERS_COMMUNITY_NAME);
+      if (mounted) {
+        setWildTigersRole(role);
+      }
+    };
+
+    void loadWildTigersRole();
+
+    return () => {
+      mounted = false;
+    };
+  }, [isAppAdmin, loading, source, user?.id]);
+
   const chants = useMemo(
     () => songs.filter((song) => song.category === 'slagsang'),
     [songs],
@@ -110,7 +141,8 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
     [songs],
   );
 
-  const canEditSongs = isAppAdmin && source === 'remote';
+  const canEditSongs =
+    source === 'remote' && canEditSongsPermission(isAppAdmin, wildTigersRole);
   const activeSongs = activeFilter === 'slagsang' ? chants : playerSongs;
 
   const toggleSong = (songId: string) => {

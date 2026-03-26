@@ -11,6 +11,12 @@
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 
+export const WILD_TIGERS_COMMUNITY_NAME = 'Wild Tigers';
+
+function normalizeCommunityName(name: string | null | undefined): string {
+  return name?.trim().toLowerCase() ?? '';
+}
+
 /**
  * Check if current user is a system administrator
  * System admins have full access to all resources
@@ -76,6 +82,43 @@ export async function getMyCommunityRoles(): Promise<Record<string, 'owner' | 'a
   } catch (err) {
     logger.error('Error in getMyCommunityRoles:', err);
     return {};
+  }
+}
+
+/**
+ * Get current user's role in a community identified by name.
+ * Reuses the existing membership lookup and resolves the community name with a narrow query.
+ */
+export async function getMyCommunityRoleByName(
+  communityName: string,
+): Promise<'owner' | 'admin' | 'member' | null> {
+  try {
+    const roleMap = await getMyCommunityRoles();
+    const communityIds = Object.keys(roleMap);
+
+    if (communityIds.length === 0) {
+      return null;
+    }
+
+    const normalizedTargetName = normalizeCommunityName(communityName);
+    const { data, error } = await supabase
+      .from('communities')
+      .select('id, name')
+      .in('id', communityIds);
+
+    if (error) {
+      logger.error('Error fetching community names for role lookup:', error);
+      return null;
+    }
+
+    const matchedCommunity = data?.find(
+      (community) => normalizeCommunityName(community.name) === normalizedTargetName,
+    );
+
+    return matchedCommunity ? roleMap[matchedCommunity.id] ?? null : null;
+  } catch (err) {
+    logger.error('Error in getMyCommunityRoleByName:', err);
+    return null;
   }
 }
 

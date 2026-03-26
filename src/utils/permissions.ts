@@ -35,6 +35,18 @@ export interface EventPermissionObject {
 export type FeedItemActorType = 'user' | 'community';
 
 /**
+ * Check if user can edit songs.
+ * Rules: System admin OR owner/admin of Wild Tigers
+ */
+export function canEditSongs(
+  isAppAdmin: boolean,
+  communityRole?: CommunityRole | null,
+): boolean {
+  if (isAppAdmin) return true;
+  return communityRole === 'owner' || communityRole === 'admin';
+}
+
+/**
  * Check if user can edit a post.
  * Rules: System admin OR post author
  * TODO: Add community admin check when posts have community_id
