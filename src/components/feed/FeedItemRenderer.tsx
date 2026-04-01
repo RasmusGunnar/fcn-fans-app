@@ -2,10 +2,11 @@ import React from 'react';
 import { Alert } from 'react-native';
 import type { CommentPreview } from '../../services/likesApi';
 import type { CategoryKey } from '../../theme/categories';
-import type { FeedItem } from '../../types/feed';
+import type { FeedFanActivityData, FeedItem } from '../../types/feed';
 import type { FanLevelKey } from '../../types/fan';
 import { toEventCardVM } from '../../utils/eventCardVM';
 import { PollCard } from '../PollCard';
+import { FanActivityFeedCard } from '../fan/FanActivityFeedCard';
 import { CommunityCard, FanPostCard, NewsCard, WeeklyTopFanCard } from '../cards';
 import { EventCard } from '../cards/EventCard';
 
@@ -34,6 +35,7 @@ export type FeedItemRendererProps = {
   onPressEvent?: (eventId: string) => void;
   onPressBusTrip?: (busTripId: string) => void;
   onPressMatch?: (matchId: string) => void;
+  onPressFanActivity?: (item: FeedFanActivityData) => void;
   onPressCommunity?: (communityId: string, title: string) => void;
   onPressProfile?: (userId: string) => void;
   onPressPost?: (postId: string) => void;
@@ -62,6 +64,7 @@ export function FeedItemRenderer(props: FeedItemRendererProps): React.ReactEleme
     onPressEvent,
     onPressBusTrip,
     onPressMatch,
+    onPressFanActivity,
     onPressCommunity,
     onPressProfile,
     onPressPost,
@@ -178,6 +181,15 @@ export function FeedItemRenderer(props: FeedItemRendererProps): React.ReactEleme
           avatarUrl={item.data.avatarUrl}
           coverUrl={item.data.coverUrl}
           onPressJoin={() => onPressCommunity?.(item.data.communityId, item.data.name)}
+        />
+      );
+    }
+
+    case 'fan_activity': {
+      return (
+        <FanActivityFeedCard
+          item={item.data}
+          onPress={onPressFanActivity ? () => onPressFanActivity(item.data) : undefined}
         />
       );
     }

@@ -25,6 +25,11 @@ export type EventAttendeesParams =
       mode?: 'attendance' | 'checkin';
     };
 
+export type EventDetailsParams = {
+  eventId: string;
+  fanActivityId?: string;
+};
+
 export type LibraryStackParamList = {
   LibraryMain: undefined;
   // Future: add detail screens here (e.g., SongDetails, LinkDetails, VideoDetails)
@@ -35,6 +40,12 @@ export type RootStackParamList = {
   Main: undefined;
 
   CreateNewEvent: undefined;
+  CreateFanActivity: {
+    parentType: 'match' | 'event';
+    parentId: string;
+    communityId?: string;
+    lockCommunity?: boolean;
+  };
   Create: undefined;
   MediaViewer: {
     items: ResolvedMediaItem[];
@@ -42,7 +53,7 @@ export type RootStackParamList = {
     postId?: string;
   };
 
-  MatchDetails: { fixtureId: string };
+  MatchDetails: { fixtureId: string; fanActivityId?: string };
   EventAttendees: EventAttendeesParams;
 
   // Existing routes are declared in stack navigators

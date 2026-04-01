@@ -328,7 +328,13 @@ export default function EventsScreen() {
 
   const renderFeedItem = (item: FeedItem) => {
     const homeFeedItem = toHomeFeedItem(item);
-    const key = targetKey(homeFeedItem.kind, homeFeedItem.id);
+    const targetKind =
+      homeFeedItem.kind === 'match'
+        ? 'match'
+        : homeFeedItem.kind === 'bus_trip'
+          ? 'bus_trip'
+          : 'event';
+    const key = targetKey(targetKind, homeFeedItem.id);
     const likeState = likeMap[key] || { liked: false, likes: 0 };
     const commentCount = commentCountMap[key] || 0;
     const commentPreviews = commentPreviewMap[key] || [];

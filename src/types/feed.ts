@@ -81,6 +81,26 @@ export type FeedCommunityData = {
   debugSource?: 'local' | 'persisted' | 'local+persisted' | null;
 } & FeedRankingSignals;
 
+export type FeedFanActivityData = {
+  id: string;
+  parentType: 'match' | 'event';
+  parentId: string;
+  parentIsUpcoming?: boolean;
+  type: string;
+  title: string;
+  body?: string | null;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  locationName?: string | null;
+  locationAddress?: string | null;
+  communityId?: string | null;
+  communityName?: string | null;
+  coverUrl?: string | null;
+  ctaLabel?: string | null;
+  ctaUrl?: string | null;
+  createdAt?: string | null;
+} & FeedRankingSignals;
+
 export type WeeklyTopFanReasonType = 'post' | 'comment' | 'activity' | 'checkin';
 
 export type FeedWeeklyTopFanData = {
@@ -119,6 +139,7 @@ export type FeedItem =
   | { kind: 'bus_trip'; id: string; data: FeedBusTripData }
   | { kind: 'match'; id: string; data: FeedMatchData }
   | { kind: 'community'; id: string; data: FeedCommunityData }
+  | { kind: 'fan_activity'; id: string; data: FeedFanActivityData }
   | { kind: 'weekly_top_fan'; id: string; data: FeedWeeklyTopFanData };
 
 /**

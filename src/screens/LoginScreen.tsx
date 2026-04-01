@@ -35,7 +35,7 @@ export default function LoginScreen({ route, navigation }: Props) {
   const screenHeight = Dimensions.get('window').height;
   const isCompactHeight = screenHeight < 780;
   const useScrollFallback = screenHeight < 760;
-  const { signInWithPassword, signUp, signInWithApple, loading } = useAuth();
+  const { signInWithPassword, signUp, signInWithApple, signInWithFacebook, loading } = useAuth();
   const theme = useTheme();
   const styles = createStyles(theme);
 
@@ -59,14 +59,12 @@ export default function LoginScreen({ route, navigation }: Props) {
       if (mode === 'signup') {
         const result = await signUp(e, password);
 
-        if (result?.session && result?.user) {
-          return;
-        }
-
-        if (result?.user && !result?.session) {
+        if (result?.user) {
+          setMode('login');
+          setPassword('');
           Alert.alert(
-            'Bekræft din email',
-            'Vi har sendt dig en email. Bekræft din konto for at fortsætte.'
+            'Tjek din mail',
+            'Vi har sendt dig en mail for at bekræfte din konto. Når du har bekræftet, skal du vende tilbage til appen og logge ind.',
           );
           return;
         }
@@ -84,6 +82,15 @@ export default function LoginScreen({ route, navigation }: Props) {
   const onApple = async () => {
     try {
       await signInWithApple();
+    } catch (err: any) {
+      const msg = err?.message || String(err) || 'Ukendt fejl';
+      Alert.alert('Fejl', msg);
+    }
+  };
+
+  const onFacebook = async () => {
+    try {
+      await signInWithFacebook();
     } catch (err: any) {
       const msg = err?.message || String(err) || 'Ukendt fejl';
       Alert.alert('Fejl', msg);
@@ -130,15 +137,11 @@ export default function LoginScreen({ route, navigation }: Props) {
 
         <View style={styles.modeTabs}>
           <Pressable onPress={() => setMode('signup')}>
-            <Text style={isSignup ? styles.activeTab : styles.inactiveTab}>
-              Opret profil
-            </Text>
+            <Text style={isSignup ? styles.activeTab : styles.inactiveTab}>Opret profil</Text>
           </Pressable>
 
           <Pressable onPress={() => setMode('login')}>
-            <Text style={!isSignup ? styles.activeTab : styles.inactiveTab}>
-              Log ind
-            </Text>
+            <Text style={!isSignup ? styles.activeTab : styles.inactiveTab}>Log ind</Text>
           </Pressable>
         </View>
       </View>
@@ -162,6 +165,25 @@ export default function LoginScreen({ route, navigation }: Props) {
             ) : null}
           </View>
         ) : null}
+
+        <View
+          style={[
+            styles.socialAuthSection,
+            Platform.OS === 'ios' && styles.secondarySocialAuthSection,
+          ]}
+        >
+          <Pressable
+            style={({ pressed }) => [
+              styles.facebookButton,
+              loading && styles.buttonDisabled,
+              pressed && !loading && styles.buttonPressed,
+            ]}
+            onPress={onFacebook}
+            disabled={loading}
+          >
+            <Text style={styles.facebookButtonText}>FortsÃ¦t med Facebook</Text>
+          </Pressable>
+        </View>
 
         <View style={styles.dividerContainer}>
           <View style={styles.dividerLine} />
@@ -252,7 +274,10 @@ export default function LoginScreen({ route, navigation }: Props) {
         />
       </View>
 
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.flex}
+      >
         {useScrollFallback ? (
           <ScrollView
             style={styles.flex}
@@ -368,6 +393,9 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     socialAuthSection: {
       marginTop: theme.spacing[3],
     },
+    secondarySocialAuthSection: {
+      marginTop: theme.spacing[2],
+    },
     appleButton: {
       width: '100%',
       borderRadius: theme.radius.pill,
@@ -378,10 +406,23 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       borderWidth: 1,
       borderColor: theme.colors.border.default,
     },
+    facebookButton: {
+      width: '100%',
+      borderRadius: theme.radius.pill,
+      paddingVertical: theme.spacing[4],
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.colors.primary,
+    },
     appleButtonText: {
       fontSize: 18,
       fontWeight: '600',
       color: theme.colors.text.primary,
+    },
+    facebookButtonText: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: theme.colors.text.inverse,
     },
     helperText: {
       fontSize: 14,

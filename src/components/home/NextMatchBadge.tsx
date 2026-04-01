@@ -27,7 +27,7 @@ interface NextMatchBadgeProps {
     count: number;
     primaryLabel?: string;
     primaryDisabled?: boolean;
-    secondaryActions: MatchdayStatusPanelAction[];
+    secondaryActions?: MatchdayStatusPanelAction[];
   };
   countdownLabel?: string;
   onPressPrimaryAction?: () => void;

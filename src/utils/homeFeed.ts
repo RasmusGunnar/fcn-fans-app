@@ -1,8 +1,9 @@
 import type { CommunityFeedSource } from '../services/communityFeedApi';
 import type { BusTrip, Event } from '../services/eventsApi';
+import type { FanActivity } from '../services/fanActivities';
 import { logger } from '../lib/logger';
 import { targetKey } from './targetKey';
-import type { FeedItem, FeedWeeklyTopFanData } from '../types/feed';
+import type { FeedFanActivityData, FeedItem, FeedWeeklyTopFanData } from '../types/feed';
 import type { NewsItem } from '../types/news';
 import type { Post } from '../types/post';
 
@@ -52,6 +53,28 @@ export const HOME_RANKING_V1 = {
     freshBoost: 8,
     maxAgeHours: 24 * 14,
   },
+  fanActivities: {
+    recencyMultiplier: 0.68,
+    parentUpcomingBoost: 10,
+    likelyUpcomingMatchParentBoost: 7,
+    verySoonHours: 6,
+    soonHours: 24,
+    upcomingHours: 72,
+    verySoonBoost: 16,
+    soonBoost: 10,
+    upcomingBoost: 5,
+    liveWindowHours: 2,
+    liveBoost: 4,
+    ctaBoost: 4,
+    startedDecayHours: 6,
+    startedDecayMultiplier: 0.32,
+    endedDecayMultiplier: 0.12,
+    maxAgeAfterCompletionHours: 18,
+    topWindow: 8,
+    maxInTopWindow: 2,
+    sameParentTopWindow: 6,
+    thinFeedThreshold: 4,
+  },
   stability: {
     scoreBucketSize: 1,
   },
@@ -73,6 +96,7 @@ type FeedSourceParams = {
   newsItems: NewsItem[];
   events: Event[];
   busTrips: BusTrip[];
+  fanActivities?: FanActivity[];
   communityFeedEntries?: CommunityFeedSource[];
   weeklyTopFanItem?: FeedWeeklyTopFanData | null;
   baseDate?: Date;
@@ -93,6 +117,39 @@ type HomeFeedAuditContext = {
   events: HomeFeedAuditEvent[];
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isValidFeedItem(item: unknown): item is FeedItem {
+  if (!isRecord(item)) {
+    return false;
+  }
+
+  return (
+    typeof item.kind === 'string' &&
+    typeof item.id === 'string' &&
+    isRecord(item.data)
+  );
+}
+
+function sanitizeFeedItems(
+  items: readonly unknown[],
+  stage: string,
+): FeedItem[] {
+  const validItems = items.filter(isValidFeedItem);
+
+  if (__DEV__ && validItems.length !== items.length) {
+    logger.warn('[homeFeed] Dropped invalid feed items.', {
+      stage,
+      received: items.length,
+      kept: validItems.length,
+    });
+  }
+
+  return validItems;
+}
+
 function toIsoOrNull(value?: string | null): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value : null;
 }
@@ -103,8 +160,8 @@ function toTimestamp(value?: string | null): number {
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
-function countFeedKinds(items: FeedItem[]): Record<string, number> {
-  return items.reduce<Record<string, number>>((acc, item) => {
+function countFeedKinds(items: readonly unknown[]): Record<string, number> {
+  return sanitizeFeedItems(items, 'countFeedKinds').reduce<Record<string, number>>((acc, item) => {
     acc[item.kind] = (acc[item.kind] || 0) + 1;
     return acc;
   }, {});
@@ -188,11 +245,23 @@ export function getHomeSortDate(item: FeedItem): string | null {
       return item.data.sortDate ?? item.data.eventStartAt ?? item.data.kickoffAt ?? null;
     case 'community':
       return item.data.sortDate ?? item.data.createdAt ?? null;
+    case 'fan_activity':
+      return item.data.sortDate ?? item.data.startsAt ?? item.data.createdAt ?? null;
     case 'weekly_top_fan':
       return item.data.sortDate ?? item.data.generatedAt ?? item.data.createdAt ?? null;
     default:
       return null;
   }
+}
+
+function isFanActivityItem(
+  item: FeedItem | null | undefined,
+): item is Extract<FeedItem, { kind: 'fan_activity' }> {
+  return isValidFeedItem(item) && item.kind === 'fan_activity';
+}
+
+function getFanActivityParentKey(item: Extract<FeedItem, { kind: 'fan_activity' }>): string {
+  return `${item.data.parentType}:${item.data.parentId}`;
 }
 
 export function getFeedItemCreatedAt(item: FeedItem): string | null {
@@ -203,6 +272,7 @@ export function getFeedItemCreatedAt(item: FeedItem): string | null {
       return item.data.createdAt ?? null;
     case 'event':
     case 'bus_trip':
+    case 'fan_activity':
       return item.data.createdAt ?? null;
     case 'weekly_top_fan':
       return item.data.createdAt ?? null;
@@ -225,12 +295,12 @@ function compareFeedItemsByDate(a: FeedItem, b: FeedItem): number {
 }
 
 export function sortFeedItemsByDate(items: FeedItem[]): FeedItem[] {
-  return [...items].sort(compareFeedItemsByDate);
+  return [...sanitizeFeedItems(items, 'sortFeedItemsByDate')].sort(compareFeedItemsByDate);
 }
 
 function dedupeFeedItems(items: FeedItem[]): FeedItem[] {
   const map = new Map<string, FeedItem>();
-  items.forEach((item) => {
+  sanitizeFeedItems(items, 'dedupeFeedItems').forEach((item) => {
     map.set(`${item.kind}:${item.id}`, item);
   });
   return Array.from(map.values());
@@ -250,6 +320,8 @@ function getHomeRecencyDate(item: FeedItem): string | null {
       return item.data.sortDate ?? item.data.kickoffAt ?? null;
     case 'community':
       return item.data.createdAt ?? item.data.sortDate ?? null;
+    case 'fan_activity':
+      return item.data.createdAt ?? item.data.startsAt ?? item.data.sortDate ?? null;
     default:
       return null;
   }
@@ -270,6 +342,25 @@ function getRecencyScore(item: FeedItem, now: Date): number {
 
   if (item.kind === 'community') {
     return recencyScore * HOME_RANKING_V1.community.recencyMultiplier;
+  }
+
+  if (item.kind === 'fan_activity') {
+    const startsAt = toTimestamp(item.data.startsAt ?? null);
+    const endsAt = toTimestamp(item.data.endsAt ?? null);
+
+    if (endsAt && endsAt <= now.getTime()) {
+      return recencyScore * HOME_RANKING_V1.fanActivities.endedDecayMultiplier;
+    }
+
+    if (
+      startsAt &&
+      startsAt <= now.getTime() &&
+      (now.getTime() - startsAt) / MS_PER_HOUR > HOME_RANKING_V1.fanActivities.startedDecayHours
+    ) {
+      return recencyScore * HOME_RANKING_V1.fanActivities.startedDecayMultiplier;
+    }
+
+    return recencyScore * HOME_RANKING_V1.fanActivities.recencyMultiplier;
   }
 
   return recencyScore;
@@ -365,6 +456,48 @@ function getCommunityBoost(item: FeedItem, now: Date): number {
     : 0;
 }
 
+function getFanActivityBoost(item: FeedItem, now: Date): number {
+  if (!isFanActivityItem(item)) return 0;
+
+  const startAt = toTimestamp(item.data.startsAt ?? null);
+  const endAt = toTimestamp(item.data.endsAt ?? null);
+  const hasCta = Boolean(item.data.ctaLabel?.trim() && item.data.ctaUrl?.trim());
+  let boost = 0;
+
+  if (item.data.parentIsUpcoming) {
+    boost += HOME_RANKING_V1.fanActivities.parentUpcomingBoost;
+  } else if (
+    item.data.parentType === 'match' &&
+    startAt &&
+    startAt > now.getTime() &&
+    (startAt - now.getTime()) / MS_PER_HOUR <= HOME_RANKING_V1.events.thisWeekHours
+  ) {
+    // Match parents are not part of the shared Home source set, so we proxy "upcoming"
+    // through an activity that is clearly tied to the next few matchday windows.
+    boost += HOME_RANKING_V1.fanActivities.likelyUpcomingMatchParentBoost;
+  }
+
+  if (startAt) {
+    const hoursToStart = (startAt - now.getTime()) / MS_PER_HOUR;
+
+    if (endAt && endAt > now.getTime() && hoursToStart < 0) {
+      boost += HOME_RANKING_V1.fanActivities.liveBoost;
+    } else if (hoursToStart >= 0 && hoursToStart <= HOME_RANKING_V1.fanActivities.verySoonHours) {
+      boost += HOME_RANKING_V1.fanActivities.verySoonBoost;
+    } else if (hoursToStart <= HOME_RANKING_V1.fanActivities.soonHours) {
+      boost += HOME_RANKING_V1.fanActivities.soonBoost;
+    } else if (hoursToStart <= HOME_RANKING_V1.fanActivities.upcomingHours) {
+      boost += HOME_RANKING_V1.fanActivities.upcomingBoost;
+    }
+  }
+
+  if (hasCta) {
+    boost += HOME_RANKING_V1.fanActivities.ctaBoost;
+  }
+
+  return boost;
+}
+
 function isRelevantCommunityItem(item: FeedItem, now: Date): boolean {
   if (item.kind !== 'community') return true;
 
@@ -375,6 +508,21 @@ function isRelevantCommunityItem(item: FeedItem, now: Date): boolean {
   return ageHours <= HOME_RANKING_V1.community.maxAgeHours;
 }
 
+function isRelevantFanActivityItem(item: FeedItem, now: Date): boolean {
+  if (!isFanActivityItem(item)) return true;
+
+  const endsAt = toTimestamp(item.data.endsAt ?? null);
+  const startsAt = toTimestamp(item.data.startsAt ?? null);
+  const completedAt = endsAt || startsAt;
+
+  if (!completedAt || completedAt > now.getTime()) {
+    return true;
+  }
+
+  const ageHours = Math.max(0, (now.getTime() - completedAt) / MS_PER_HOUR);
+  return ageHours <= HOME_RANKING_V1.fanActivities.maxAgeAfterCompletionHours;
+}
+
 export type HomeRankingScoreBreakdown = {
   recency: number;
   engagement: number;
@@ -382,6 +530,7 @@ export type HomeRankingScoreBreakdown = {
   timeWindowBoost: number;
   weeklyTopFanBoost: number;
   communityBoost: number;
+  fanActivityBoost: number;
   rawScore: number;
   finalScore: number;
 };
@@ -402,8 +551,15 @@ export function getHomeRankingBreakdown(
   const timeWindowBoost = getEventTimeWindowBoost(item, now);
   const weeklyTopFanBoost = getWeeklyTopFanBoost(item, now);
   const communityBoost = getCommunityBoost(item, now);
+  const fanActivityBoost = getFanActivityBoost(item, now);
   const rawScore =
-    recency + engagement + pollBoost + timeWindowBoost + weeklyTopFanBoost + communityBoost;
+    recency +
+    engagement +
+    pollBoost +
+    timeWindowBoost +
+    weeklyTopFanBoost +
+    communityBoost +
+    fanActivityBoost;
 
   return {
     recency,
@@ -412,6 +568,7 @@ export function getHomeRankingBreakdown(
     timeWindowBoost,
     weeklyTopFanBoost,
     communityBoost,
+    fanActivityBoost,
     rawScore,
     finalScore: bucketHomeRankingScore(rawScore),
   };
@@ -539,6 +696,78 @@ function applyHomeCommunityGuardrails(
   return finalEntries;
 }
 
+function canPlaceFanActivityEntry(
+  entry: RankedHomeFeedEntry,
+  finalEntries: RankedHomeFeedEntry[],
+  totalEntries: number,
+): boolean {
+  if (!isFanActivityItem(entry.item)) {
+    return true;
+  }
+
+  const isThinFeed = totalEntries <= HOME_RANKING_V1.fanActivities.thinFeedThreshold;
+  const currentIndex = finalEntries.length;
+  const previousEntry = finalEntries[finalEntries.length - 1];
+
+  if (!isThinFeed && previousEntry && isFanActivityItem(previousEntry.item)) {
+    return false;
+  }
+
+  if (currentIndex < HOME_RANKING_V1.fanActivities.topWindow) {
+    const topFanActivityCount = finalEntries
+      .slice(0, HOME_RANKING_V1.fanActivities.topWindow)
+      .filter((candidate) => isFanActivityItem(candidate.item)).length;
+
+    if (topFanActivityCount >= HOME_RANKING_V1.fanActivities.maxInTopWindow) {
+      return false;
+    }
+  }
+
+  if (currentIndex < HOME_RANKING_V1.fanActivities.sameParentTopWindow) {
+    const candidateParentKey = getFanActivityParentKey(entry.item);
+    const hasSiblingFromSameParentInTopWindow = finalEntries
+      .slice(0, HOME_RANKING_V1.fanActivities.sameParentTopWindow)
+      .some(
+        (candidate) =>
+          isFanActivityItem(candidate.item) &&
+          getFanActivityParentKey(candidate.item) === candidateParentKey,
+      );
+
+    if (hasSiblingFromSameParentInTopWindow) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function applyHomeFanActivityGuardrails(entries: RankedHomeFeedEntry[]): RankedHomeFeedEntry[] {
+  if (entries.length <= 1) {
+    return entries;
+  }
+
+  const remaining = [...entries];
+  const finalEntries: RankedHomeFeedEntry[] = [];
+
+  while (remaining.length > 0) {
+    const candidateIndex = remaining.findIndex((entry) =>
+      canPlaceFanActivityEntry(entry, finalEntries, entries.length),
+    );
+
+    const [nextEntry] = remaining.splice(candidateIndex >= 0 ? candidateIndex : 0, 1);
+    if (!nextEntry) {
+      if (__DEV__) {
+        logger.warn('[homeFeed] Skipped empty entry during fan_activity guardrail pass.');
+      }
+      continue;
+    }
+
+    finalEntries.push(nextEntry);
+  }
+
+  return finalEntries;
+}
+
 function logHomeFeedAudit(
   entries: RankedHomeFeedEntry[],
   auditContext: HomeFeedAuditContext | undefined,
@@ -586,6 +815,7 @@ function logHomeRankingDebug(entries: RankedHomeFeedEntry[]) {
       timeWindowBoost: entry.breakdown.timeWindowBoost,
       weeklyTopFanBoost: entry.breakdown.weeklyTopFanBoost,
       communityBoost: entry.breakdown.communityBoost,
+      fanActivityBoost: entry.breakdown.fanActivityBoost,
       rawScore: entry.breakdown.rawScore,
       sortDate: getHomeSortDate(entry.item),
       isSystemCard: Boolean(entry.item.data.isSystemCard),
@@ -596,33 +826,36 @@ function logHomeRankingDebug(entries: RankedHomeFeedEntry[]) {
 
 export function sortHomeFeedItems(items: FeedItem[], baseDate = new Date()): FeedItem[] {
   const auditContext = HOME_FEED_AUDIT_DEBUG_ENABLED ? { events: [] as HomeFeedAuditEvent[] } : undefined;
-  const relevantItems = items.filter((item) => {
-    if (item.kind !== 'community') {
-      return true;
+  const safeItems = sanitizeFeedItems(items, 'sortHomeFeedItems:input');
+  const relevantItems = safeItems.filter((item) => {
+    if (item.kind === 'community') {
+      const createdAt = item.data.createdAt ?? null;
+      if (!createdAt || !toTimestamp(createdAt)) {
+        pushHomeFeedAuditEvent(auditContext, {
+          stage: 'filtered',
+          communityId: item.data.communityId,
+          reason: 'community_missing_created_at',
+          createdAt,
+          sortDate: getHomeSortDate(item),
+          debugSource: item.data.debugSource ?? null,
+        });
+        return false;
+      }
+
+      if (!isRelevantCommunityItem(item, baseDate)) {
+        pushHomeFeedAuditEvent(auditContext, {
+          stage: 'filtered',
+          communityId: item.data.communityId,
+          reason: 'community_stale',
+          createdAt,
+          sortDate: getHomeSortDate(item),
+          debugSource: item.data.debugSource ?? null,
+        });
+        return false;
+      }
     }
 
-    const createdAt = item.data.createdAt ?? null;
-    if (!createdAt || !toTimestamp(createdAt)) {
-      pushHomeFeedAuditEvent(auditContext, {
-        stage: 'filtered',
-        communityId: item.data.communityId,
-        reason: 'community_missing_created_at',
-        createdAt,
-        sortDate: getHomeSortDate(item),
-        debugSource: item.data.debugSource ?? null,
-      });
-      return false;
-    }
-
-    if (!isRelevantCommunityItem(item, baseDate)) {
-      pushHomeFeedAuditEvent(auditContext, {
-        stage: 'filtered',
-        communityId: item.data.communityId,
-        reason: 'community_stale',
-        createdAt,
-        sortDate: getHomeSortDate(item),
-        debugSource: item.data.debugSource ?? null,
-      });
+    if (item.kind === 'fan_activity' && !isRelevantFanActivityItem(item, baseDate)) {
       return false;
     }
 
@@ -642,12 +875,11 @@ export function sortHomeFeedItems(items: FeedItem[], baseDate = new Date()): Fee
     })
     .sort(compareRankedHomeFeedEntries);
 
-  const guardedEntries = applyHomeCommunityGuardrails(
-    applyHomeRankingGuardrails(rankedEntries),
-    auditContext,
+  const guardedEntries = applyHomeFanActivityGuardrails(
+    applyHomeCommunityGuardrails(applyHomeRankingGuardrails(rankedEntries), auditContext),
   );
   logHomeRankingDebug(guardedEntries);
-  logHomeFeedAudit(guardedEntries, auditContext, items, relevantItems);
+  logHomeFeedAudit(guardedEntries, auditContext, safeItems, relevantItems);
 
   return guardedEntries.map((entry) => entry.item);
 }
@@ -758,6 +990,45 @@ function toBusTripFeedItem(busTrip: BusTrip): FeedItem {
   };
 }
 
+function toFanActivityFeedItem(
+  activity: FanActivity,
+  upcomingEventIds: ReadonlySet<string>,
+): FeedItem {
+  const startsAt = toIsoOrNull(activity.starts_at ?? null);
+  const endsAt = toIsoOrNull(activity.ends_at ?? null);
+  const createdAt = toIsoOrNull(activity.created_at ?? null);
+
+  return {
+    kind: 'fan_activity',
+    id: activity.id,
+    data: {
+      id: activity.id,
+      parentType: activity.parent_type,
+      parentId: activity.parent_id,
+      parentIsUpcoming:
+        activity.parent_type === 'event' ? upcomingEventIds.has(activity.parent_id) : undefined,
+      type: activity.type,
+      title: activity.title,
+      body: activity.body ?? null,
+      startsAt,
+      endsAt,
+      locationName: activity.location_name ?? null,
+      locationAddress: activity.location_address ?? null,
+      communityId: activity.community_id ?? null,
+      communityName: activity.community?.name ?? null,
+      coverUrl: activity.cover_url ?? null,
+      ctaLabel: activity.cta_label ?? null,
+      ctaUrl: activity.cta_url ?? null,
+      createdAt,
+      sortDate: startsAt ?? createdAt,
+      likeCount: 0,
+      commentCount: 0,
+      engagementCount: 0,
+      isSystemCard: false,
+    } satisfies FeedFanActivityData,
+  };
+}
+
 export function toCommunityFeedItem(
   community: CommunityFeedSource,
 ): FeedItem {
@@ -816,13 +1087,16 @@ export function buildFeedItemsFromSources({
   baseDate = new Date(),
 }: FeedSourceParams): FeedItem[] {
   return sortFeedItemsByDate(
-    [
+    sanitizeFeedItems(
+      [
       ...(weeklyTopFanItem ? [toWeeklyTopFanFeedItem(weeklyTopFanItem)] : []),
       ...posts.map((post) => toPostFeedItem(post, baseDate)),
       ...newsItems.map((newsItem) => toNewsFeedItem(newsItem)),
       ...events.map((event) => toEventFeedItem(event)),
       ...busTrips.map((busTrip) => toBusTripFeedItem(busTrip)),
-    ],
+      ],
+      'buildFeedItemsFromSources',
+    ),
   );
 }
 
@@ -831,11 +1105,13 @@ export function buildHomeFeedItemsFromSources({
   newsItems,
   events,
   busTrips,
+  fanActivities = [],
   communityFeedEntries = [],
   weeklyTopFanItem,
   baseDate = new Date(),
 }: FeedSourceParams): FeedItem[] {
-  const rawHomeFeedItems = [
+  const upcomingEventIds = new Set(events.map((event) => event.id));
+  const mappedHomeFeedItems = [
     ...buildFeedItemsFromSources({
       posts: posts.filter(isHomePost),
       newsItems,
@@ -844,8 +1120,10 @@ export function buildHomeFeedItemsFromSources({
       weeklyTopFanItem,
       baseDate,
     }),
+    ...fanActivities.map((activity) => toFanActivityFeedItem(activity, upcomingEventIds)),
     ...communityFeedEntries.map((community) => toCommunityFeedItem(community)),
   ];
+  const rawHomeFeedItems = sanitizeFeedItems(mappedHomeFeedItems, 'buildHomeFeedItemsFromSources');
   const dedupedHomeFeedItems = dedupeFeedItems(rawHomeFeedItems);
 
   if (HOME_FEED_AUDIT_DEBUG_ENABLED) {
@@ -899,7 +1177,9 @@ export function withFeedEngagementSummary(
   likeMap: LikeMap,
   commentCountMap: CommentCountMap,
 ): FeedItem[] {
-  return items.map((item) => {
+  const safeItems = sanitizeFeedItems(items, 'withFeedEngagementSummary');
+
+  return safeItems.map((item) => {
     switch (item.kind) {
       case 'weekly_top_fan': {
         const likeCount = item.data.likesCount ?? item.data.likeCount ?? 0;
@@ -1002,6 +1282,17 @@ export function withFeedEngagementSummary(
           },
         };
       }
+
+      case 'fan_activity':
+        return {
+          ...item,
+          data: {
+            ...item.data,
+            likeCount: item.data.likeCount ?? 0,
+            commentCount: item.data.commentCount ?? 0,
+            engagementCount: item.data.engagementCount ?? 0,
+          },
+        };
 
       default:
         return item;

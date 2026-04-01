@@ -11,6 +11,7 @@ import {
   type BusTrip,
   type Event,
 } from '../services/eventsApi';
+import { fetchHomeFanActivities, type FanActivity } from '../services/fanActivities';
 import {
   fetchCommentCounts,
   fetchCommentPreviews,
@@ -174,9 +175,26 @@ function logHomeFeedSnapshot(stage: string, items: FeedItem[], baseDate: Date) {
     return;
   }
 
+  const safeItems = items.filter(
+    (item): item is FeedItem =>
+      Boolean(item) &&
+      typeof item.id === 'string' &&
+      typeof item.kind === 'string' &&
+      typeof item.data === 'object' &&
+      item.data !== null,
+  );
+
+  if (__DEV__ && safeItems.length !== items.length) {
+    logger.warn('[FeedProvider][homeFeed] Dropped invalid items before snapshot logging.', {
+      stage,
+      received: items.length,
+      kept: safeItems.length,
+    });
+  }
+
   logger.log(
     `[FeedProvider][homeFeed][${stage}]`,
-    items.slice(0, 20).map((item, index) => ({
+    safeItems.slice(0, 20).map((item, index) => ({
       rank: index + 1,
       id: item.id,
       kind: item.kind,
@@ -313,6 +331,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
     let newsItems: NewsItem[] = [];
     let upcomingEvents: Event[] = [];
     let upcomingBusTrips: BusTrip[] = [];
+    let homeFanActivities: FanActivity[] = [];
     let communityFeedEntries: CommunityFeedSource[] = [];
     let weeklyTopFanItem: Awaited<ReturnType<typeof fetchLatestPublishedWeeklyTopFan>> = null;
 
@@ -499,18 +518,21 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       setCommunityMap((prev) => ({ ...prev, ...recentCommunityMap }));
     }
 
-    // Fetch events + bus trips in separate try/catch
+    // Fetch event-like Home sources separately from posts/news.
     try {
       const results = await Promise.allSettled([
         fetchEventsUpcoming(20),
         fetchBusTripsUpcoming(20),
+        fetchHomeFanActivities(16),
       ]);
       upcomingEvents = results[0].status === 'fulfilled' ? results[0].value : [];
       upcomingBusTrips = results[1].status === 'fulfilled' ? results[1].value : [];
+      homeFanActivities = results[2].status === 'fulfilled' ? results[2].value : [];
     } catch (e: any) {
-      logger.warn('[FeedProvider] fetchEventsUpcoming/busTrips failed:', e?.message || e);
+      logger.warn('[FeedProvider] fetchEventsUpcoming/busTrips/fanActivities failed:', e?.message || e);
       upcomingEvents = [];
       upcomingBusTrips = [];
+      homeFanActivities = [];
     }
 
     try {
@@ -536,6 +558,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       const safeNewsArray = newsItems ?? [];
       const safeEventsArray = upcomingEvents ?? [];
       const safeBusTripsArray = upcomingBusTrips ?? [];
+      const safeFanActivitiesArray = homeFanActivities ?? [];
       const safeCommunityFeedEntries = communityFeedEntries ?? [];
       const safeWeeklyTopFanItem = weeklyTopFanItem ?? null;
       const baseDate = new Date();
@@ -553,6 +576,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         events: safeEventsArray,
         busTrips: safeBusTripsArray,
         communityFeedEntries: safeCommunityFeedEntries,
+        fanActivities: safeFanActivitiesArray,
         weeklyTopFanItem: safeWeeklyTopFanItem,
         baseDate,
       });

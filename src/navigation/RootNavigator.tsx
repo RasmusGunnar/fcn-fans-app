@@ -7,6 +7,7 @@ import { AuthStack } from './AuthStack';
 import { OnboardingStack } from './OnboardingStack';
 import { AppTabs } from './AppTabs';
 import { useAuth } from '../auth/AuthProvider';
+import CreateFanActivityScreen from '../screens/CreateFanActivityScreen';
 import CreateNewEventScreen from '../screens/CreateNewEventScreen';
 import LoadingScreen from '../screens/LoadingScreen';
 import MediaViewerScreen from '../screens/MediaViewerScreen';
@@ -170,6 +171,11 @@ export function RootNavigator() {
         <Stack.Screen
           name="CreateNewEvent"
           component={CreateNewEventScreen}
+          options={{ presentation: 'modal' }}
+        />
+        <Stack.Screen
+          name="CreateFanActivity"
+          component={CreateFanActivityScreen}
           options={{ presentation: 'modal' }}
         />
         <Stack.Screen

@@ -4,7 +4,7 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -23,6 +23,8 @@ import { useAuth } from '../auth/AuthProvider';
 import { Avatar } from '../components/Avatar';
 import { OptionsMenu, OptionsMenuOption } from '../components/OptionsMenu';
 import { InlineComments } from '../components/comments/InlineComments';
+import { FanActivityDetailSheet } from '../components/fan/FanActivityDetailSheet';
+import { FanActivitiesShowcase } from '../components/fan/FanActivitiesShowcase';
 import { AttendanceBubbles } from '../components/social/AttendanceBubbles';
 import { Text } from '../components/ui';
 import { Card } from '../components/ui/Card';
@@ -32,11 +34,13 @@ import { useCommunityRole } from '../hooks/useCommunityRole';
 import { logger } from '../lib/logger';
 import { getPublicUrl } from '../lib/storageUrl';
 import { supabase } from '../lib/supabase';
+import type { EventDetailsParams } from '../navigation/types';
 import { fetchEventById, type Event } from '../services/eventsApi';
+import { fetchFanActivitiesForEvent, type FanActivity } from '../services/fanActivities';
 import { defaultTheme as theme } from '../theme';
 import { canDeleteEvent, canEditEvent } from '../utils/permissions';
 
-type EventDetailsRouteProp = RouteProp<{ EventDetails: { eventId: string } }, 'EventDetails'>;
+type EventDetailsRouteProp = RouteProp<{ EventDetails: EventDetailsParams }, 'EventDetails'>;
 
 function formatDateDa(iso: string): string {
   const d = new Date(iso);
@@ -109,10 +113,14 @@ function formatAttendeeCount(count: number): string {
 export default function EventDetailsScreen() {
   const navigation = useNavigation();
   const route = useRoute<EventDetailsRouteProp>();
-  const { eventId } = route.params;
+  const { eventId, fanActivityId } = route.params;
+  const requestedFanActivityId = fanActivityId?.trim() || null;
   const insets = useSafeAreaInsets();
   const [event, setEvent] = useState<Event | null>(null);
+  const [fanActivities, setFanActivities] = useState<FanActivity[]>([]);
+  const [selectedFanActivity, setSelectedFanActivity] = useState<FanActivity | null>(null);
   const [loading, setLoading] = useState(true);
+  const autoOpenedFanActivityIdRef = useRef<string | null>(null);
   const { user, isAppAdmin } = useAuth();
 
   const { role: communityRole } = useCommunityRole(event?.organizer_group_id);
@@ -125,9 +133,19 @@ export default function EventDetailsScreen() {
     setLoading(false);
   }, [eventId]);
 
+  const loadFanActivities = useCallback(async () => {
+    const data = await fetchFanActivitiesForEvent(eventId);
+    setFanActivities(data);
+  }, [eventId]);
+
   useEffect(() => {
     loadEvent();
   }, [loadEvent]);
+
+  useEffect(() => {
+    setFanActivities([]);
+    void loadFanActivities();
+  }, [loadFanActivities]);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
@@ -135,6 +153,36 @@ export default function EventDetailsScreen() {
     });
     return unsubscribe;
   }, [navigation, loadEvent, event]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      void loadFanActivities();
+    });
+
+    return unsubscribe;
+  }, [loadFanActivities, navigation]);
+
+  useEffect(() => {
+    autoOpenedFanActivityIdRef.current = null;
+  }, [eventId, requestedFanActivityId]);
+
+  useEffect(() => {
+    if (!requestedFanActivityId || fanActivities.length === 0) {
+      return;
+    }
+
+    if (autoOpenedFanActivityIdRef.current === requestedFanActivityId) {
+      return;
+    }
+
+    const matchedActivity = fanActivities.find((activity) => activity.id === requestedFanActivityId);
+    if (!matchedActivity) {
+      return;
+    }
+
+    autoOpenedFanActivityIdRef.current = requestedFanActivityId;
+    setSelectedFanActivity(matchedActivity);
+  }, [fanActivities, requestedFanActivityId]);
 
   const handleShare = async () => {
     if (!event) return;
@@ -162,6 +210,25 @@ export default function EventDetailsScreen() {
 
   const handleEditEvent = () => {
     (navigation as any).navigate('EditEvent', { eventId });
+  };
+
+  const handleCreateFanActivity = () => {
+    if (!event?.organizer_group_id) return;
+
+    (navigation as any).navigate('CreateFanActivity', {
+      parentType: 'event',
+      parentId: eventId,
+      communityId: event.organizer_group_id,
+      lockCommunity: true,
+    });
+  };
+
+  const handleOpenFanActivity = (activity: FanActivity) => {
+    setSelectedFanActivity(activity);
+  };
+
+  const handleCloseFanActivity = () => {
+    setSelectedFanActivity(null);
   };
 
   const handleDeleteEvent = async () => {
@@ -242,6 +309,8 @@ export default function EventDetailsScreen() {
   const endStr = event.end_at ? formatTimeDa(event.end_at) : null;
   const addressDisplay = buildAddressDisplay(event);
   const attendeeCountLabel = formatAttendeeCount(attendance.countGoing);
+  const canCreateFanActivities = Boolean(event.organizer_group_id && communityRole === 'owner');
+  const showFanActivitiesSection = fanActivities.length > 0 || canCreateFanActivities;
 
   const showEditOption = canEditEvent(
     user?.id,
@@ -506,6 +575,41 @@ export default function EventDetailsScreen() {
             </Card>
           ) : null}
 
+          {showFanActivitiesSection ? (
+            <Card style={styles.card}>
+              <View style={styles.fanActivitiesHeader}>
+                <View style={styles.fanActivitiesHeaderCopy}>
+                  <Text variant="caption" color="secondary" style={styles.fanActivitiesEyebrow}>
+                    KAMPDAGSLAG
+                  </Text>
+                  <Text
+                    variant="h3"
+                    color="primary"
+                    style={[styles.sectionTitle, styles.sectionTitleCompact]}
+                  >
+                    Fanaktiviteter
+                  </Text>
+                </View>
+                {canCreateFanActivities ? (
+                  <Pressable style={styles.fanActivitiesCta} onPress={handleCreateFanActivity}>
+                    <Ionicons
+                      name="add"
+                      size={theme.components.icon.size.sm}
+                      color={theme.colors.text.secondary}
+                    />
+                    <Text variant="caption" color="secondary" style={styles.fanActivitiesCtaText}>
+                      Tilføj fanaktivitet
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+              <FanActivitiesShowcase
+                activities={fanActivities}
+                onPressActivity={handleOpenFanActivity}
+              />
+            </Card>
+          ) : null}
+
           {event.organizer && (
             <Card style={styles.card}>
               <Text variant="h3" color="primary" style={styles.sectionTitle}>
@@ -543,6 +647,11 @@ export default function EventDetailsScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      <FanActivityDetailSheet
+        visible={Boolean(selectedFanActivity)}
+        activity={selectedFanActivity}
+        onClose={handleCloseFanActivity}
+      />
     </SafeAreaView>
   );
 }
@@ -617,6 +726,9 @@ const styles = StyleSheet.create({
   sectionTitle: {
     marginBottom: theme.spacing[3],
     fontWeight: '700',
+  },
+  sectionTitleCompact: {
+    marginBottom: theme.spacing[0],
   },
   title: {
     marginBottom: theme.spacing[1],
@@ -698,6 +810,37 @@ const styles = StyleSheet.create({
   },
   organizerName: {
     fontWeight: '600',
+  },
+  fanActivitiesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing[2],
+    marginBottom: theme.spacing[3],
+  },
+  fanActivitiesHeaderCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  fanActivitiesEyebrow: {
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginBottom: theme.spacing[1],
+  },
+  fanActivitiesCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[1],
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[1],
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.bg.subtle,
+    borderWidth: theme.layout.borderHairline,
+    borderColor: theme.colors.border.subtle,
+  },
+  fanActivitiesCtaText: {
+    fontWeight: '600',
+    color: theme.colors.text.secondary,
   },
   attendanceActions: {
     width: '100%',

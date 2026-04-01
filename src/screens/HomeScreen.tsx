@@ -2,10 +2,8 @@ import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
   AppState,
   FlatList,
-  Linking,
   RefreshControl,
   StyleSheet,
   Text,
@@ -22,9 +20,9 @@ import { useMatchCheckIn } from '../hooks/useMatchCheckIn';
 import { fetchPrimaryFixture, formatShortDateDa, type Fixture } from '../services/fixtures';
 import { getMatchHeroUrl, getTeamHeroImage } from '../services/sportsdb';
 import { useFeed } from '../state/FeedContext';
-import { colors, spacing } from '../theme';
+import { colors, defaultTheme, spacing } from '../theme';
+import type { FeedFanActivityData, FeedItem } from '../types/feed';
 import { getFeedItemKey } from '../types/feed';
-import { buildMatchMapsUrl, FCN_TICKET_URL, isFcnHomeMatch } from '../utils/matchLinks';
 import { getMatchdayTiming, getMatchViewState } from '../utils/matchdayState';
 import { applyMatchdayPreview } from '../utils/matchdayPreview';
 import { getPrimaryMediaKind } from '../utils/media';
@@ -37,6 +35,23 @@ function formatKickoffCountdown(kickoffAt: string, now: Date): string {
   if (diffHours < 2) return 'Starter snart';
   if (diffHours < 48) return `Afspark om ${Math.ceil(diffHours)} timer`;
   return `Afspark om ${Math.ceil(diffHours / 24)} dage`;
+}
+
+function getHomeFeedItemSpacingCompensation(kind: FeedItem['kind']): number {
+  switch (kind) {
+    case 'weekly_top_fan':
+      return defaultTheme.layout.listGap + defaultTheme.spacing[1];
+    case 'post':
+    case 'news':
+    case 'event':
+    case 'bus_trip':
+    case 'match':
+    case 'community':
+      return defaultTheme.layout.listGap;
+    case 'fan_activity':
+    default:
+      return 0;
+  }
 }
 
 export default function HomeScreen() {
@@ -189,6 +204,39 @@ export default function HomeScreen() {
     void nextMatchCheckInRefresh();
   }, [nextFixture?.id, nextMatchAttendanceRefresh, nextMatchCheckInRefresh]);
 
+  const handlePressFanActivity = useCallback(
+    (item: FeedFanActivityData) => {
+      if (item.parentType === 'match') {
+        (navigation as any).navigate('MatchDetails', {
+          fixtureId: item.parentId,
+          fanActivityId: item.id,
+        });
+        return;
+      }
+
+      const parentNavigation = navigation.getParent?.();
+      if (parentNavigation) {
+        (parentNavigation as any).navigate('Events', {
+          screen: 'EventDetails',
+          params: {
+            eventId: item.parentId,
+            fanActivityId: item.id,
+          },
+        });
+        return;
+      }
+
+      (navigation as any).navigate('Events', {
+        screen: 'EventDetails',
+        params: {
+          eventId: item.parentId,
+          fanActivityId: item.id,
+        },
+      });
+    },
+    [navigation],
+  );
+
   const renderFeedItem = ({ item, index }: { item: any; index: number }) => {
     if (!item?.kind || !item?.id || !item?.data) {
       console.warn('[HOME] invalid item skipped', {
@@ -206,49 +254,53 @@ export default function HomeScreen() {
     const commentCount = safeCommentCountMap[key] || 0;
     const commentPreviews = safeCommentPreviewMap[key] || [];
     const isActiveVideo = key === currentPlayingVideoPostId;
+    const spacingCompensation = getHomeFeedItemSpacingCompensation(item.kind);
 
     return (
-      <FeedItemRenderer
-        key={key}
-        item={item}
-        itemKey={key}
-        user={user}
-        isAppAdmin={isAppAdmin}
-        likeState={likeState}
-        commentCount={commentCount}
-        commentPreviews={commentPreviews}
-        safeProfileMap={safeProfileMap}
-        communityMap={communityMap || {}}
-        // @ts-ignore
-        attendanceMap={attendanceMap}
-        toggleLike={toggleLike}
-        removePost={removePost}
-        removeNews={removeNews}
-        incrementCommentCount={incrementCommentCount}
-        addCommentPreview={addCommentPreview}
-        isActiveVideo={isActiveVideo}
-        isAppActive={isAppActive}
-        onActivateVideo={() => setCurrentPlayingVideoPostId(key)}
-        onPressEvent={(eventId) => (navigation as any).navigate('EventDetails', { eventId })}
-        onPressBusTrip={(busTripId) =>
-          (navigation as any).navigate('BusTripDetails', { busTripId })
-        }
-        onPressMatch={(matchId) =>
-          (navigation as any).navigate('MatchDetails', { fixtureId: matchId })
-        }
-        onPressCommunity={(communityId, title) =>
-          (navigation as any).navigate('Communities', {
-            screen: 'CommunityDetail',
-            params: { id: communityId, title },
-          })
-        }
-        onPressProfile={(userId) =>
-          userId === user?.id
-            ? (navigation as any).navigate('Profile')
-            : (navigation as any).navigate('PublicProfile', { userId })
-        }
-        onPressPost={(postId) => (navigation as any).navigate('PostDetail', { postId })}
-      />
+      <View style={spacingCompensation ? { marginBottom: -spacingCompensation } : undefined}>
+        <FeedItemRenderer
+          key={key}
+          item={item}
+          itemKey={key}
+          user={user}
+          isAppAdmin={isAppAdmin}
+          likeState={likeState}
+          commentCount={commentCount}
+          commentPreviews={commentPreviews}
+          safeProfileMap={safeProfileMap}
+          communityMap={communityMap || {}}
+          // @ts-ignore
+          attendanceMap={attendanceMap}
+          toggleLike={toggleLike}
+          removePost={removePost}
+          removeNews={removeNews}
+          incrementCommentCount={incrementCommentCount}
+          addCommentPreview={addCommentPreview}
+          isActiveVideo={isActiveVideo}
+          isAppActive={isAppActive}
+          onActivateVideo={() => setCurrentPlayingVideoPostId(key)}
+          onPressEvent={(eventId) => (navigation as any).navigate('EventDetails', { eventId })}
+          onPressBusTrip={(busTripId) =>
+            (navigation as any).navigate('BusTripDetails', { busTripId })
+          }
+          onPressMatch={(matchId) =>
+            (navigation as any).navigate('MatchDetails', { fixtureId: matchId })
+          }
+          onPressFanActivity={handlePressFanActivity}
+          onPressCommunity={(communityId, title) =>
+            (navigation as any).navigate('Communities', {
+              screen: 'CommunityDetail',
+              params: { id: communityId, title },
+            })
+          }
+          onPressProfile={(userId) =>
+            userId === user?.id
+              ? (navigation as any).navigate('Profile')
+              : (navigation as any).navigate('PublicProfile', { userId })
+          }
+          onPressPost={(postId) => (navigation as any).navigate('PostDetail', { postId })}
+        />
+      </View>
     );
   };
 
@@ -326,12 +378,6 @@ export default function HomeScreen() {
       : nextMatchViewState === 'matchday_action'
         ? nextMatchCheckIn.loading
         : nextMatchAttendance.isGoing || nextMatchAttendance.loading;
-  const nextMatchMapsUrl = useMemo(
-    () => (nextFixture ? buildMatchMapsUrl(nextFixture) : null),
-    [nextFixture],
-  );
-  const canBuyNextMatchTicket = Boolean(nextFixture && isFcnHomeMatch(nextFixture));
-
   const handleOpenNextMatch = useCallback(() => {
     if (!matchForBadge) return;
     (navigation as any).navigate('MatchDetails', { fixtureId: matchForBadge.id });
@@ -355,26 +401,6 @@ export default function HomeScreen() {
       mode: 'checkin',
     });
   }, [navigation, nextFixture?.id]);
-
-  const handleOpenNextMatchTickets = useCallback(async () => {
-    if (!canBuyNextMatchTicket) return;
-
-    try {
-      await Linking.openURL(FCN_TICKET_URL);
-    } catch {
-      Alert.alert('Fejl', 'Kunne ikke åbne billetsiden.');
-    }
-  }, [canBuyNextMatchTicket]);
-
-  const handleOpenNextMatchRoute = useCallback(async () => {
-    if (!nextMatchMapsUrl) return;
-
-    try {
-      await Linking.openURL(nextMatchMapsUrl);
-    } catch {
-      Alert.alert('Fejl', 'Kunne ikke åbne kortet.');
-    }
-  }, [nextMatchMapsUrl]);
 
   const handleNextMatchPrimaryAction = useCallback(async () => {
     if (!nextFixture?.id) return;
@@ -403,42 +429,12 @@ export default function HomeScreen() {
     nextMatchViewState,
   ]);
 
-  const nextMatchSecondaryActions =
-    nextMatchViewState === 'matchday_action' || nextMatchViewState === 'checked_in_confirmed'
-      ? [
-          {
-            label: 'Se kampdetaljer',
-            icon: 'arrow-forward-circle-outline' as const,
-            onPress: handleOpenNextMatch,
-            disabled: false,
-          },
-          {
-            label: 'Vejvisning',
-            icon: 'navigate-outline' as const,
-            onPress: handleOpenNextMatchRoute,
-            disabled: !nextMatchMapsUrl,
-          },
-        ]
-      : [
-          {
-            label: 'Køb billet',
-            icon: 'ticket-outline' as const,
-            onPress: handleOpenNextMatchTickets,
-            disabled: !canBuyNextMatchTicket,
-          },
-          {
-            label: 'Vejvisning',
-            icon: 'navigate-outline' as const,
-            onPress: handleOpenNextMatchRoute,
-            disabled: !nextMatchMapsUrl,
-          },
-        ];
-
   return (
     <FlatList
       data={safeHomeFeedItems}
       keyExtractor={(item) => getFeedItemKey(item)}
       renderItem={renderFeedItem}
+      ItemSeparatorComponent={() => <View style={styles.feedSeparator} />}
       style={styles.container}
       automaticallyAdjustKeyboardInsets
       contentContainerStyle={{ paddingBottom: tabBarHeight + spacing.lg }}
@@ -475,7 +471,6 @@ export default function HomeScreen() {
                 count: nextMatchPanelCount,
                 primaryLabel: nextMatchPrimaryLabel,
                 primaryDisabled: nextMatchPrimaryDisabled,
-                secondaryActions: nextMatchSecondaryActions
               }}
               onPress={handleOpenNextMatch}
               onPressPrimaryAction={handleNextMatchPrimaryAction}
@@ -514,6 +509,7 @@ export default function HomeScreen() {
 const createStyles = () =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.bg },
+    feedSeparator: { height: defaultTheme.layout.listGap },
     content: { paddingHorizontal: spacing[0], paddingVertical: spacing.md },
     card: { marginBottom: spacing.md },
     loadingContainer: { paddingVertical: spacing.xl, alignItems: 'center' },
