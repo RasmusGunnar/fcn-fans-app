@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -18,7 +18,10 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '../auth/AuthProvider';
 import { InlineComments } from '../components/comments/InlineComments';
 import { FanActivityDetailSheet } from '../components/fan/FanActivityDetailSheet';
-import { MatchdayStatusPanel } from '../components/match/MatchdayStatusPanel';
+import {
+  MatchdayStatusPanel,
+  type MatchdaySimpleParticipationMode,
+} from '../components/match/MatchdayStatusPanel';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { FanActivitiesShowcase } from '../components/fan/FanActivitiesShowcase';
 import { Card } from '../components/ui/Card';
@@ -35,11 +38,11 @@ import { useAttendance } from '../hooks/useAttendance';
 import { useMatchCheckIn } from '../hooks/useMatchCheckIn';
 import { spacing, useTheme } from '../theme';
 import { buildMatchMapsUrl, FCN_TICKET_URL, isFcnHomeMatch } from '../utils/matchLinks';
-import { getMatchdayTiming, getMatchViewState } from '../utils/matchdayState';
-import { applyMatchdayPreview } from '../utils/matchdayPreview';
+import { buildMatchdayUiModel } from '../utils/matchdayUiModel';
 
 type MatchDetailsRouteProp = RouteProp<RootStackParamList, 'MatchDetails'>;
 type MatchParticipationChoice = 'going' | 'not_going' | null;
+const MATCH_CHECKIN_FANPOINTS = 5;
 
 function formatCountdownLabel(kickoffAt: string, now: Date): string {
   const diffMs = new Date(kickoffAt).getTime() - now.getTime();
@@ -49,6 +52,25 @@ function formatCountdownLabel(kickoffAt: string, now: Date): string {
   if (diffHours < 2) return 'Starter snart 🔥';
   if (diffHours < 48) return `Starter om ${Math.ceil(diffHours)} timer`;
   return `Starter om ${Math.ceil(diffHours / 24)} dage`;
+}
+
+function buildCheckInSocialProof(
+  checkedInCount: number,
+): { countLabel?: string | null; text: string } {
+  if (checkedInCount <= 0) {
+    return {
+      countLabel: null,
+      text: 'Ingen er på stadion endnu',
+    };
+  }
+
+  return {
+    countLabel: null,
+    text:
+      checkedInCount === 1
+        ? '1 er på stadion'
+        : `${checkedInCount.toLocaleString('da-DK')} er på stadion`,
+  };
 }
 
 function MatchStatusChip({ label }: { label: string }) {
@@ -244,6 +266,179 @@ export default function MatchDetailsScreen() {
     ]).start();
   }, [checkInPulse, matchCheckIn.isCheckedIn]);
 
+  const matchdayUiModel = useMemo(() => {
+    if (!fixture?.kickoff_at) {
+      return null;
+    }
+
+    return buildMatchdayUiModel({
+      kickoffAt: fixture.kickoff_at,
+      now,
+      attendance: {
+        isGoing: attendance.isGoing,
+        countGoing: attendance.countGoing,
+        avatars: attendance.avatars,
+      },
+      checkIn: {
+        isCheckedIn: matchCheckIn.isCheckedIn,
+        countCheckedIn: matchCheckIn.countCheckedIn,
+        avatars: matchCheckIn.avatars,
+      },
+      participationChoice,
+    });
+  }, [
+    attendance.avatars,
+    attendance.countGoing,
+    attendance.isGoing,
+    fixture?.kickoff_at,
+    matchCheckIn.avatars,
+    matchCheckIn.countCheckedIn,
+    matchCheckIn.isCheckedIn,
+    now,
+    participationChoice,
+  ]);
+  const effectiveIsMatchday = matchdayUiModel?.timing.isMatchday ?? false;
+  const participationUiMode = useMemo<MatchdaySimpleParticipationMode>(() => {
+    if (!effectiveIsMatchday) {
+      return 'rsvp';
+    }
+
+    if (matchdayUiModel?.effectiveIsCheckedIn) {
+      return 'checked_in';
+    }
+    return 'check_in';
+  }, [
+    effectiveIsMatchday,
+    matchdayUiModel?.effectiveIsCheckedIn,
+  ]);
+  const matchdayPanelText = useMemo(() => {
+    if (!effectiveIsMatchday) {
+      return {
+        title: undefined,
+        body: undefined,
+      };
+    }
+
+    if (matchdayUiModel?.effectiveIsCheckedIn) {
+      return {
+        title: 'Du er tjekket ind',
+        body:
+          matchdayUiModel.previewMode === 'off'
+            ? `Fans kan nu se, at du er på stadion.\n+${MATCH_CHECKIN_FANPOINTS} fanpoint`
+            : 'Fans kan nu se, at du er på stadion.',
+      };
+    }
+
+    if (matchdayUiModel?.effectiveIsGoing) {
+      return {
+        title: 'Du har sagt, at du kommer – klar til at tjekke ind?',
+        body: 'Tjek ind, når du er på stadion, så andre fans kan se stemningen live.',
+      };
+    }
+
+    return {
+      title: 'Er du på stadion i dag?',
+      body: 'Tjek ind og vis, at du er med.',
+    };
+  }, [
+    effectiveIsMatchday,
+    matchdayUiModel?.effectiveIsCheckedIn,
+    matchdayUiModel?.effectiveIsGoing,
+    matchdayUiModel?.previewMode,
+  ]);
+  const matchdayRewardLabel =
+    effectiveIsMatchday &&
+    matchdayUiModel?.effectiveIsCheckedIn &&
+    matchdayUiModel.previewMode === 'off'
+      ? `+${MATCH_CHECKIN_FANPOINTS} fanpoint`
+      : undefined;
+  const matchdaySocialProofOverride = useMemo(() => {
+    if (!effectiveIsMatchday) {
+      return undefined;
+    }
+
+    return buildCheckInSocialProof(matchCheckIn.countCheckedIn);
+  }, [
+    effectiveIsMatchday,
+    matchCheckIn.countCheckedIn,
+  ]);
+  const matchFansOverview = useMemo(() => {
+    const profileById = new Map<string, { displayName: string | null; avatarUrl: string | null }>();
+
+    attendance.profiles.forEach((profile) => {
+      profileById.set(profile.user_id, {
+        displayName: profile.display_name,
+        avatarUrl: profile.avatar_url,
+      });
+    });
+
+    matchCheckIn.profiles.forEach((profile) => {
+      profileById.set(profile.user_id, {
+        displayName: profile.display_name,
+        avatarUrl: profile.avatar_url,
+      });
+    });
+
+    const merged = new Map<
+      string,
+      {
+        item: {
+          userId: string;
+          displayName: string | null;
+          avatarUrl: string | null;
+          status: 'checkin' | 'attendance';
+        };
+        order: number;
+      }
+    >();
+    let nextOrder = 0;
+
+    attendance.userIds.forEach((userId) => {
+      const profile = profileById.get(userId);
+      merged.set(userId, {
+        item: {
+          userId,
+          displayName: profile?.displayName ?? null,
+          avatarUrl: profile?.avatarUrl ?? null,
+          status: 'attendance',
+        },
+        order: nextOrder++,
+      });
+    });
+
+    matchCheckIn.userIds.forEach((userId) => {
+      const profile = profileById.get(userId);
+      const existing = merged.get(userId);
+
+      merged.set(userId, {
+        item: {
+          userId,
+          displayName: profile?.displayName ?? existing?.item.displayName ?? null,
+          avatarUrl: profile?.avatarUrl ?? existing?.item.avatarUrl ?? null,
+          status: 'checkin',
+        },
+        order: existing?.order ?? nextOrder++,
+      });
+    });
+
+    const items = Array.from(merged.values())
+      .sort((left, right) => {
+        if (left.item.status !== right.item.status) {
+          return left.item.status === 'checkin' ? -1 : 1;
+        }
+
+        return left.order - right.order;
+      })
+      .map((entry) => entry.item);
+
+    return items;
+  }, [
+    attendance.profiles,
+    attendance.userIds,
+    matchCheckIn.profiles,
+    matchCheckIn.userIds,
+  ]);
+
   const loadFixture = async () => {
     if (!fixtureId) return;
     setLoading(true);
@@ -308,28 +503,11 @@ export default function MatchDetailsScreen() {
   const mapsUrl = buildMatchMapsUrl(fixture);
   const competitionLabel = [fixture.competition, fixture.round].filter(Boolean).join(' · ');
   const countdownLabel = formatCountdownLabel(fixture.kickoff_at, now);
-  const liveMatchdayState = getMatchdayTiming(fixture.kickoff_at, now);
-  const matchdayState = applyMatchdayPreview(liveMatchdayState);
-  const baseIsGoingToMatch = participationChoice === 'going' || attendance.isGoing;
-  const matchViewState = getMatchViewState({
-    isMatchday: matchdayState.isMatchday,
-    isGoing: baseIsGoingToMatch,
-    isCheckedIn: matchCheckIn.isCheckedIn,
-  });
-  const isGoingToMatch = baseIsGoingToMatch || matchViewState === 'checked_in_confirmed';
-  const matchInfoStatusText =
-    matchViewState === 'matchday_action'
-      ? baseIsGoingToMatch
-        ? 'Du har sagt, at du kommer - klar til at tjekke ind?'
-        : participationChoice === 'not_going'
-          ? 'Har du alligevel taget turen? Tjek ind her.'
-          : 'Er du på stadion? Tjek ind her.'
-      : isGoingToMatch
-        ? 'Du kommer til kampen'
-        : participationChoice === 'not_going'
-          ? 'Du deltager ikke i kampen'
-          : 'Vælg om du deltager';
+  const resolvedMatchdayUiModel = matchdayUiModel!;
+  const matchViewState = resolvedMatchdayUiModel.viewState;
+  const isGoingToMatch = resolvedMatchdayUiModel.effectiveIsGoing;
   const showFanActivitiesSection = fanActivities.length > 0 || canCreateFanActivities;
+  const matchLocationLabel = [fixture.venue, fixture.venue_city].filter(Boolean).join(' · ') || null;
 
   const handleOpenRoute = async () => {
     if (!mapsUrl) return;
@@ -351,20 +529,13 @@ export default function MatchDetailsScreen() {
     }
   };
 
-  const handleOpenAttendees = () => {
+  const handleOpenMatchFans = () => {
     (navigation as any).navigate('EventAttendees', {
       entityId: fixture.id,
       entityType: 'match',
-      title: 'Fans der kommer',
-    });
-  };
-
-  const handleOpenCheckedInFans = () => {
-    (navigation as any).navigate('EventAttendees', {
-      entityId: fixture.id,
-      entityType: 'match',
-      title: 'Tjekket ind på stadion',
-      mode: 'checkin',
+      title: 'Fans til kampen',
+      subtitle: 'Se hvem der kommer, og hvem der er tjekket ind',
+      prefilledFans: matchFansOverview,
     });
   };
 
@@ -423,31 +594,34 @@ export default function MatchDetailsScreen() {
         },
       ],
     };
-    const usesAttendanceSocial =
-      matchViewState !== 'matchday_action' && matchViewState !== 'checked_in_confirmed';
-    const panelCount = usesAttendanceSocial ? attendance.countGoing : matchCheckIn.countCheckedIn;
-    const panelAvatars = usesAttendanceSocial ? attendance.avatars : matchCheckIn.avatars;
+    const usesAttendanceSocial = resolvedMatchdayUiModel.socialSource === 'attendance';
+    const panelCount = resolvedMatchdayUiModel.socialCount;
+    const panelAvatars = resolvedMatchdayUiModel.socialAvatars;
     const panelSecondarySelected = usesAttendanceSocial && participationChoice === 'not_going';
     const panelPrimaryLabel =
-      matchViewState === 'checked_in_confirmed'
+      participationUiMode === 'checked_in' || participationUiMode === 'not_going_matchday'
         ? undefined
-        : matchViewState === 'matchday_action'
+        : participationUiMode === 'check_in'
           ? matchCheckIn.loading
             ? 'Tjekker ind...'
-            : 'Tjek ind'
+            : resolvedMatchdayUiModel.effectiveIsGoing
+              ? 'Check ind på stadion'
+              : 'Check ind'
           : panelSecondarySelected
             ? 'Jeg kommer'
             : isGoingToMatch
               ? 'Du kommer'
               : 'Jeg kommer';
     const panelPrimaryDisabled =
-      matchViewState === 'checked_in_confirmed'
+      participationUiMode === 'checked_in'
           ? true
-        : matchViewState === 'matchday_action'
+        : participationUiMode === 'check_in'
           ? matchCheckIn.loading
           : attendance.loading;
-    const panelSecondaryLabel = usesAttendanceSocial ? 'Kan ikke komme' : undefined;
-    const panelSecondaryDisabled = usesAttendanceSocial ? attendance.loading : true;
+    const panelSecondaryLabel =
+      participationUiMode === 'rsvp' && usesAttendanceSocial ? 'Kan ikke komme' : undefined;
+    const panelSecondaryDisabled =
+      participationUiMode === 'rsvp' && usesAttendanceSocial ? attendance.loading : true;
     const panel = (
       <MatchdayStatusPanel
         viewState={matchViewState}
@@ -460,8 +634,17 @@ export default function MatchDetailsScreen() {
         secondaryDisabled={panelSecondaryDisabled}
         secondarySelected={panelSecondarySelected}
         simpleParticipationModel
+        simpleParticipationModeType={participationUiMode}
+        titleOverride={matchdayPanelText.title}
+        bodyOverride={
+          participationUiMode === 'checked_in'
+            ? 'Fans kan nu se, at du er på stadion.'
+            : matchdayPanelText.body
+        }
+        socialCopyOverride={matchdaySocialProofOverride}
+        rewardLabelOverride={matchdayRewardLabel}
         onPressPrimary={
-          matchViewState === 'matchday_action'
+          participationUiMode === 'check_in'
             ? handleCheckIn
             : () => handleSelectParticipation('going')
         }
@@ -470,9 +653,7 @@ export default function MatchDetailsScreen() {
             ? () => handleSelectParticipation('not_going')
             : undefined
         }
-        onPressSocial={
-          usesAttendanceSocial ? handleOpenAttendees : handleOpenCheckedInFans
-        }
+        onPressSocial={handleOpenMatchFans}
         style={styles.statusPanel}
       />
     );
@@ -516,13 +697,6 @@ export default function MatchDetailsScreen() {
           ) : (
             <View style={[styles.heroFallback, { backgroundColor: theme.colors.primary }]} />
           )}
-          <View
-            style={[
-              styles.heroDarkOverlay,
-              matchdayState.isMatchday ? styles.heroDarkOverlayMatchday : null,
-            ]}
-          />
-
           <View style={styles.heroTopRow}>
             <MatchChipRow>
               <MatchStatusChip label={isHomeMatch ? 'Hjemmekamp' : 'Udekamp'} />
@@ -535,8 +709,8 @@ export default function MatchDetailsScreen() {
               {fixture.home_logo_url ? (
                 <Image
                   source={{ uri: fixture.home_logo_url }}
-                  style={styles.h2hLogoImg}
-                  resizeMode="cover"
+                  style={[styles.h2hLogoImg, styles.h2hLogoImgHome]}
+                  resizeMode="contain"
                 />
               ) : (
                 <Text style={[styles.teamText, { color: theme.colors.primary }]}>
@@ -549,8 +723,8 @@ export default function MatchDetailsScreen() {
               {fixture.away_logo_url ? (
                 <Image
                   source={{ uri: fixture.away_logo_url }}
-                  style={styles.h2hLogoImg}
-                  resizeMode="cover"
+                  style={[styles.h2hLogoImg, styles.h2hLogoImgAway]}
+                  resizeMode="contain"
                 />
               ) : (
                 <Text style={[styles.teamText, { color: theme.colors.primary }]}>
@@ -563,87 +737,88 @@ export default function MatchDetailsScreen() {
           <View style={styles.countdownWrap}>
             <Text style={styles.countdownText}>{countdownLabel}</Text>
           </View>
-
-          <View style={styles.heroBottomGradient} />
         </View>
 
         <View style={styles.contentBlock}>
-          <Card style={styles.matchInfoCard}>
-            <Text style={styles.matchInfoEyebrow}>Næste kamp</Text>
-            <Text style={styles.matchInfoTitle}>
-              {fixture.home_team} vs {fixture.away_team}
-            </Text>
-            <View style={styles.matchInfoDetails}>
-              <View style={styles.matchInfoIconBlock}>
-                <Ionicons
-                  name="location-outline"
-                  size={theme.components.icon.size.md}
-                  color={theme.colors.primary}
-                />
-              </View>
-              <View style={styles.matchInfoContent}>
-                {fixture.venue ? (
-                  <Text style={styles.matchInfoVenue}>
-                    {fixture.venue}
-                    {fixture.venue_city ? ` · ${fixture.venue_city}` : ''}
-                  </Text>
-                ) : null}
-                <Text style={styles.matchInfoMeta}>{formatDateDa(fixture.kickoff_at)}</Text>
-                <Text style={styles.matchInfoStatus}>{matchInfoStatusText}</Text>
+          <View style={styles.topExperienceShell}>
+            <View style={styles.matchInfoBlock}>
+              <Text style={styles.matchInfoEyebrow}>Næste kamp</Text>
+              <Text style={styles.matchInfoTitle}>
+                {fixture.home_team} vs {fixture.away_team}
+              </Text>
+
+              <View style={styles.matchInfoDetails}>
+                <View style={styles.matchInfoIconBlock}>
+                  <Ionicons
+                    name="calendar-outline"
+                    size={theme.components.icon.size.md}
+                    color={theme.colors.primary}
+                  />
+                </View>
+
+                <View style={styles.matchInfoContent}>
+                  <Text style={styles.matchInfoMeta}>{formatDateDa(fixture.kickoff_at)}</Text>
+                  {matchLocationLabel ? (
+                    <Text style={styles.matchInfoVenue}>{matchLocationLabel}</Text>
+                  ) : null}
+                </View>
               </View>
             </View>
-          </Card>
 
-          <View style={styles.participationModule}>
-            {renderStatusPanel()}
-            <View style={styles.utilityActionsRow}>
-              <Pressable
-                onPress={handleOpenTickets}
-                disabled={!isHomeMatch}
-                style={({ pressed }) => [
-                  styles.utilityActionButton,
-                  !isHomeMatch ? styles.utilityActionButtonDisabled : null,
-                  pressed && isHomeMatch ? styles.utilityActionPressed : null,
-                ]}
-              >
-              <Ionicons
-                name="ticket-outline"
-                size={theme.components.icon.size.sm}
-                color={isHomeMatch ? theme.colors.text.primary : theme.colors.text.muted}
-              />
-              <Text
-                style={[
-                  styles.utilityActionText,
-                  !isHomeMatch ? styles.utilityActionTextDisabled : null,
-                ]}
-              >
-                Køb billet
-              </Text>
-              </Pressable>
+            <View style={styles.participationModule}>
+              {renderStatusPanel()}
 
-              <Pressable
-                onPress={handleOpenRoute}
-                disabled={!mapsUrl}
-                style={({ pressed }) => [
-                  styles.utilityActionButton,
-                  !mapsUrl ? styles.utilityActionButtonDisabled : null,
-                  pressed && mapsUrl ? styles.utilityActionPressed : null,
-                ]}
-              >
-              <Ionicons
-                name="navigate-outline"
-                size={theme.components.icon.size.sm}
-                color={mapsUrl ? theme.colors.text.primary : theme.colors.text.muted}
-              />
-              <Text
-                style={[
-                  styles.utilityActionText,
-                  !mapsUrl ? styles.utilityActionTextDisabled : null,
-                ]}
-              >
-                Vejvisning
-              </Text>
-              </Pressable>
+              <View style={styles.utilityActionsWrap}>
+                <View style={styles.utilityActionsRow}>
+                  <Pressable
+                    onPress={handleOpenTickets}
+                    disabled={!isHomeMatch}
+                    style={({ pressed }) => [
+                      styles.utilityActionButton,
+                      !isHomeMatch ? styles.utilityActionButtonDisabled : null,
+                      pressed && isHomeMatch ? styles.utilityActionPressed : null,
+                    ]}
+                  >
+                    <Ionicons
+                      name="ticket-outline"
+                      size={theme.components.icon.size.sm}
+                      color={isHomeMatch ? theme.colors.text.primary : theme.colors.text.muted}
+                    />
+                    <Text
+                      style={[
+                        styles.utilityActionText,
+                        !isHomeMatch ? styles.utilityActionTextDisabled : null,
+                      ]}
+                    >
+                      Køb billet
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={handleOpenRoute}
+                    disabled={!mapsUrl}
+                    style={({ pressed }) => [
+                      styles.utilityActionButton,
+                      !mapsUrl ? styles.utilityActionButtonDisabled : null,
+                      pressed && mapsUrl ? styles.utilityActionPressed : null,
+                    ]}
+                  >
+                    <Ionicons
+                      name="navigate-outline"
+                      size={theme.components.icon.size.sm}
+                      color={mapsUrl ? theme.colors.text.primary : theme.colors.text.muted}
+                    />
+                    <Text
+                      style={[
+                        styles.utilityActionText,
+                        !mapsUrl ? styles.utilityActionTextDisabled : null,
+                      ]}
+                    >
+                      Vejvisning
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
             </View>
           </View>
 
@@ -742,7 +917,7 @@ const stylesFactory = (theme: ReturnType<typeof useTheme>) =>
     },
     heroContainer: {
       width: '100%',
-      height: theme.spacing[16] + theme.spacing[16] + theme.spacing[10],
+      height: theme.spacing[16] + theme.spacing[16] + theme.spacing[10] + theme.spacing[2],
       position: 'relative',
       overflow: 'hidden',
     },
@@ -755,48 +930,47 @@ const stylesFactory = (theme: ReturnType<typeof useTheme>) =>
       ...StyleSheet.absoluteFillObject,
       opacity: 0.85,
     },
-    heroDarkOverlay: {
-      ...StyleSheet.absoluteFillObject,
-      backgroundColor: theme.colors.overlay.heroScrim,
-    },
-    heroDarkOverlayMatchday: {
-      backgroundColor: theme.colors.overlay.heroScrim,
-      opacity: 0.92,
-    },
     heroTopRow: {
       position: 'absolute',
-      top: spacing.md,
+      top: theme.spacing[5],
       left: spacing.md,
       right: spacing.md,
-      zIndex: 2,
+      zIndex: 3,
     },
     heroChipRow: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       alignItems: 'center',
-      gap: spacing.xs,
+      gap: theme.spacing[1],
     },
     matchStatusChip: {
-      paddingHorizontal: theme.spacing[3],
-      paddingVertical: theme.spacing[1],
+      paddingHorizontal: theme.spacing[2],
+      paddingVertical: theme.spacing[1] / 2,
       borderRadius: theme.radius.pill,
-      backgroundColor: theme.colors.overlay.medium,
-      borderWidth: theme.layout.borderHairline,
-      borderColor: theme.colors.overlay.light,
+      backgroundColor: 'transparent',
+      borderWidth: 0,
+      borderColor: 'transparent',
     },
     matchStatusChipText: {
       color: theme.colors.text.inverse,
-      fontWeight: '700',
-      fontSize: theme.typography.caption.fontSize,
+      fontWeight: '600',
+      fontSize: theme.typography.caption.fontSize - 1,
+      opacity: 0.82,
+      textShadowColor: theme.colors.overlay.textShadow,
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 2,
     },
     h2hOverlay: {
-      ...StyleSheet.absoluteFillObject,
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      top: theme.spacing[10],
+      bottom: theme.spacing[12],
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: spacing.xl,
-      paddingTop: theme.spacing[16],
-      paddingBottom: theme.spacing[16],
+      gap: spacing.lg,
+      zIndex: 2,
     },
     h2hBadge: {
       width: theme.spacing[16] + theme.spacing[10],
@@ -811,9 +985,21 @@ const stylesFactory = (theme: ReturnType<typeof useTheme>) =>
       width: theme.spacing[16] + theme.spacing[10],
       height: theme.spacing[16] + theme.spacing[10],
     },
+    h2hLogoImgHome: {
+      width: theme.spacing[16] + theme.spacing[10],
+      height: theme.spacing[16] + theme.spacing[10],
+    },
+    h2hLogoImgAway: {
+      width: theme.spacing[16] + theme.spacing[8],
+      height: theme.spacing[16] + theme.spacing[8],
+    },
     h2hVsText: {
-      fontSize: theme.typography.h2.fontSize,
+      fontSize: Math.round(theme.typography.h2.fontSize * 1.16),
       fontWeight: '800',
+      letterSpacing: 1,
+      opacity: 0.92,
+      paddingHorizontal: theme.spacing[1],
+      paddingVertical: theme.spacing[1] / 2,
       textShadowColor: theme.colors.overlay.textShadow,
       textShadowOffset: { width: 0, height: 1 },
       textShadowRadius: 3,
@@ -822,33 +1008,40 @@ const stylesFactory = (theme: ReturnType<typeof useTheme>) =>
       position: 'absolute',
       left: spacing.md,
       right: spacing.md,
-      bottom: theme.spacing[16] - spacing.sm,
+      bottom: theme.spacing[7],
       alignItems: 'center',
-      zIndex: 2,
+      zIndex: 3,
     },
     countdownText: {
-      color: theme.colors.text.inverse,
+      color: theme.colors.text.primary,
       fontSize: theme.typography.caption.fontSize,
-      fontWeight: '700',
-      backgroundColor: theme.colors.overlay.medium,
+      fontWeight: '600',
+      backgroundColor: theme.colors.bg.surface,
+      borderWidth: theme.layout.borderHairline,
+      borderColor: theme.colors.border.subtle,
       paddingHorizontal: theme.spacing[3],
-      paddingVertical: theme.spacing[1],
+      paddingVertical: theme.spacing[1] / 2,
       borderRadius: theme.radius.pill,
       overflow: 'hidden',
     },
-    heroBottomGradient: {
-      position: 'absolute',
-      left: 0,
-      right: 0,
-      bottom: 0,
-      height: theme.spacing[16],
-      backgroundColor: theme.colors.overlay.heroScrim,
-      zIndex: 2,
-    },
     contentBlock: {
       paddingHorizontal: spacing.md,
-      paddingTop: spacing.md,
+      paddingTop: theme.spacing[1],
       gap: spacing.md,
+    },
+    topExperienceShell: {
+      marginTop: -(theme.spacing[8]),
+      zIndex: 2,
+      borderRadius: theme.radius.xl,
+      backgroundColor: theme.colors.bg.surface,
+      borderWidth: theme.layout.borderHairline,
+      borderColor: theme.colors.border.default,
+      padding: theme.layout.cardPadding,
+      gap: theme.spacing[3],
+      overflow: 'hidden',
+    },
+    matchInfoBlock: {
+      gap: theme.spacing[2],
     },
     matchInfoCard: {
       marginBottom: theme.spacing[0],
@@ -858,23 +1051,25 @@ const stylesFactory = (theme: ReturnType<typeof useTheme>) =>
       fontWeight: '700',
       color: theme.colors.text.secondary,
       letterSpacing: 0.5,
-      marginBottom: spacing.xs,
     },
     matchInfoDetails: {
       flexDirection: 'row',
       alignItems: 'flex-start',
-      gap: spacing.sm,
+      gap: theme.spacing[3],
     },
     matchInfoIconBlock: {
-      width: theme.spacing[10],
-      height: theme.spacing[10],
-      borderRadius: theme.radius.md,
-      backgroundColor: theme.colors.bg.subtle,
+      width: theme.spacing[9],
+      height: theme.spacing[9],
+      borderRadius: theme.radius.pill,
+      backgroundColor: theme.colors.bg.default,
+      borderWidth: theme.layout.borderHairline,
+      borderColor: theme.colors.border.subtle,
       alignItems: 'center',
       justifyContent: 'center',
     },
     matchInfoContent: {
       flex: 1,
+      gap: theme.spacing[1],
     },
     statusPanelWrap: {
       gap: spacing.xs,
@@ -883,7 +1078,10 @@ const stylesFactory = (theme: ReturnType<typeof useTheme>) =>
       marginBottom: theme.spacing[0],
     },
     participationModule: {
-      gap: theme.spacing[3],
+      gap: theme.spacing[2] + theme.spacing[1] / 2,
+    },
+    utilityActionsWrap: {
+      paddingTop: theme.spacing[2],
     },
     utilityActionsRow: {
       flexDirection: 'row',
@@ -892,15 +1090,15 @@ const stylesFactory = (theme: ReturnType<typeof useTheme>) =>
       alignItems: 'stretch',
     },
     utilityActionButton: {
-      minHeight: theme.spacing[6] + theme.spacing[1],
+      minHeight: theme.spacing[6],
       flex: 1,
       flexBasis: 0,
       borderRadius: theme.radius.pill,
       borderWidth: theme.layout.borderHairline,
       borderColor: theme.colors.border.default,
-      backgroundColor: theme.colors.bg.card,
+      backgroundColor: theme.colors.bg.default,
       paddingHorizontal: theme.spacing[2] + theme.spacing[1] / 2,
-      paddingVertical: theme.spacing[1],
+      paddingVertical: theme.spacing[1] / 2,
       alignItems: 'center',
       justifyContent: 'center',
       flexDirection: 'row',
@@ -932,24 +1130,16 @@ const stylesFactory = (theme: ReturnType<typeof useTheme>) =>
       fontSize: theme.typography.h3.fontSize,
       fontWeight: '800',
       color: theme.colors.text.primary,
-      marginBottom: spacing.xs,
     },
     matchInfoMeta: {
       fontSize: theme.typography.body.fontSize,
-      fontWeight: '600',
+      fontWeight: '700',
       color: theme.colors.text.primary,
-      marginBottom: theme.spacing[1],
     },
-    matchInfoStatus: {
+    matchInfoVenue: {
       fontSize: theme.typography.caption.fontSize,
       fontWeight: '600',
       color: theme.colors.text.secondary,
-    },
-    matchInfoVenue: {
-      fontSize: theme.typography.body.fontSize,
-      fontWeight: '600',
-      color: theme.colors.text.primary,
-      marginBottom: theme.spacing[1],
     },
     section: {
       marginBottom: spacing.sm,

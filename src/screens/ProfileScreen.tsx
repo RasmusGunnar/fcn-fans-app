@@ -15,13 +15,13 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../auth/AuthProvider';
+import { fetchWeeklyRanking, type WeeklyRankingData } from '../api/weeklyRanking';
 import { FanBarometerCard } from '../components/fan/FanBarometerCard';
 import { FanLevelBadge } from '../components/fan/FanLevelBadge';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Pill } from '../components/ui/Pill';
 import { getSafeFanLevelKey } from '../lib/fanLevel';
-import { getNextFanLevel } from '../lib/fanbarometer';
 import { OutlineButton } from '../components/ui/OutlineButton';
 import { spacing } from '../theme';
 import { useTheme } from '../theme';
@@ -176,11 +176,8 @@ export default function ProfileScreen() {
     | null
   >(null);
   const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
+  const [weeklyRanking, setWeeklyRanking] = useState<WeeklyRankingData | null>(null);
   const fanLevel = getSafeFanLevelKey(profile?.fan_level_key);
-  const debugScore = 180;
-  const debugProgress = 0.53;
-  const debugNextLevel = getNextFanLevel(fanLevel);
-  const debugPointsToNext = debugNextLevel ? 70 : null;
 
   const loadData = useCallback(async () => {
     if (!user?.id) {
@@ -195,6 +192,7 @@ export default function ProfileScreen() {
       fetchMyCommunities(user.id),
       fetchMyUpcomingItems(user.id),
       countOwnedCommunities(user.id),
+      fetchWeeklyRanking(),
     ]);
 
     // Extract profile
@@ -227,6 +225,12 @@ export default function ProfileScreen() {
     // Extract owned count
     if (results[3].status === 'fulfilled') {
       setOwnedCount(results[3].value);
+    }
+
+    if (results[4].status === 'fulfilled') {
+      setWeeklyRanking(results[4].value);
+    } else {
+      setWeeklyRanking(null);
     }
 
     setLoading(false);
@@ -760,11 +764,17 @@ export default function ProfileScreen() {
 
       <FanBarometerCard
         level={fanLevel}
-        score={debugScore}
-        progress={debugProgress}
-        nextLevel={debugNextLevel}
-        pointsToNext={debugPointsToNext}
-        state="ready"
+        score={weeklyRanking?.score ?? 0}
+        progress={0}
+        scoreLabel="UGENS SCORE"
+        scoreValueText={weeklyRanking ? undefined : '—'}
+        showProgressSection={false}
+        footerNote={
+          weeklyRanking?.rank != null && weeklyRanking.totalUsers > 0
+            ? `Nr. ${weeklyRanking.rank} af ${weeklyRanking.totalUsers} denne uge`
+            : 'Fanstatus følger din samlede aktivitet i fællesskabet. Ugescoren kunne ikke hentes lige nu.'
+        }
+        state={profile ? 'ready' : 'empty'}
       />
 
       {/* Owned Communities */}

@@ -6,6 +6,8 @@ import { canCreateMatchCheckIn } from '../utils/matchdayState';
 export interface MatchCheckInSnapshot {
   countCheckedIn: number;
   avatars: string[];
+  profiles: CheckInProfile[];
+  userIds: string[];
   isCheckedIn: boolean;
 }
 
@@ -44,10 +46,12 @@ export async function fetchMatchCheckInSnapshot({
   if (error) throw error;
 
   const userIds = (data || []).map((row: { user_id: string }) => row.user_id);
-  const profiles = await fetchProfiles(userIds.slice(0, 5));
+  const profiles = await fetchProfiles(userIds);
 
   return {
     countCheckedIn: userIds.length,
+    profiles,
+    userIds,
     avatars: profiles
       .map((profile) => resolveAvatarUrl(profile.avatar_url))
       .filter((url): url is string => !!url),

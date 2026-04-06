@@ -1,16 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Avatar } from '../components/Avatar';
+import { MatchFanList, type MatchFanListItem } from '../components/match/MatchFanList';
 import { Card, Text } from '../components/ui';
 import { fetchMatchCheckIns } from '../services/checkins';
 import { logger } from '../lib/logger';
 import type { EventAttendeesParams } from '../navigation/types';
 import { fetchAttendees } from '../services/attendance';
 import { useTheme } from '../theme';
-import { resolveAvatarUrl } from '../utils/avatar';
 
 type EventAttendeesRouteProp = RouteProp<
   {
@@ -39,17 +38,34 @@ export default function EventAttendeesScreen() {
   const entityId = 'entityId' in route.params ? route.params.entityId : route.params.eventId;
   const entityType = route.params.entityType ?? 'event';
   const mode = route.params.mode ?? 'attendance';
-  const screenTitle = route.params.title ?? 'Deltagere';
+  const prefilledFans = route.params.prefilledFans;
+  const isCombinedMatchFans = entityType === 'match' && Array.isArray(prefilledFans);
+  const screenTitle =
+    route.params.title ??
+    (isCombinedMatchFans
+      ? 'Fans til kampen'
+      : mode === 'checkin'
+        ? 'Fans der er tjekket ind til kampen'
+        : 'Deltagere');
   const summarySubtext =
-    mode === 'checkin' ? 'Fans der er tjekket ind til kampen' : 'Fans der deltager i arrangementet';
-  const attendeeSecondaryText =
-    mode === 'checkin' ? 'Klar til kampdag' : 'Deltager i arrangementet';
+    route.params.subtitle ??
+    (isCombinedMatchFans
+      ? 'Se hvem der kommer, og hvem der er tjekket ind'
+      : mode === 'checkin'
+        ? 'Fans der er tjekket ind til kampen'
+        : 'Fans der deltager i arrangementet');
 
   const [attendees, setAttendees] = useState<Attendee[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!isCombinedMatchFans);
   const [error, setError] = useState<string | null>(null);
 
   const loadAttendees = async () => {
+    if (isCombinedMatchFans) {
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -69,45 +85,51 @@ export default function EventAttendeesScreen() {
   useEffect(() => {
     loadAttendees();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entityId, entityType, mode]);
+  }, [entityId, entityType, mode, isCombinedMatchFans]);
+
+  const attendeeItems = useMemo<MatchFanListItem[]>(
+    () =>
+      attendees.map((attendee) => ({
+        userId: attendee.user_id,
+        displayName: attendee.display_name,
+        avatarUrl: attendee.avatar_url,
+        status: mode === 'checkin' ? 'checked_in' : 'going',
+      })),
+    [attendees, mode],
+  );
+  const displayItems = useMemo<MatchFanListItem[]>(
+    () =>
+      isCombinedMatchFans
+        ? (prefilledFans ?? []).map((fan) => ({
+            userId: fan.userId,
+            displayName: fan.displayName,
+            avatarUrl: fan.avatarUrl,
+            status: fan.status === 'checkin' ? 'checked_in' : 'going',
+          }))
+        : attendeeItems,
+    [attendeeItems, isCombinedMatchFans, prefilledFans],
+  );
+  const totalCount = displayItems.length;
 
   const renderSummary = () => (
     <Card variant="raised" style={styles.summaryCard}>
       <Text variant="caption" color="secondary" style={styles.summaryEyebrow}>
-        {mode === 'checkin' ? 'MATCHDAY' : 'DELTAGERE'}
+        {isCombinedMatchFans ? 'FANS' : mode === 'checkin' ? 'MATCHDAY' : 'DELTAGERE'}
       </Text>
       {!loading && !error ? (
         <View style={styles.summaryCountRow}>
           <Ionicons
-            name={mode === 'checkin' ? 'checkmark-circle-outline' : 'people-outline'}
+            name={isCombinedMatchFans || mode !== 'checkin' ? 'people-outline' : 'checkmark-circle-outline'}
             size={theme.components.icon.size.sm}
             color={theme.colors.primary}
           />
           <Text variant="body" color="primary" style={styles.summaryCountText}>
-            {formatAttendeeCount(attendees.length, mode)}
+            {isCombinedMatchFans
+              ? `${totalCount} ${totalCount === 1 ? 'fan' : 'fans'} til kampen`
+              : formatAttendeeCount(attendees.length, mode)}
           </Text>
         </View>
       ) : null}
-    </Card>
-  );
-
-  const renderAttendee = ({ item }: { item: Attendee }) => (
-    <Card style={styles.attendeeCard}>
-      <View style={styles.attendeeRow}>
-        <Avatar
-          avatarUrl={resolveAvatarUrl(item.avatar_url)}
-          size={theme.spacing[11]}
-          label={item.display_name || 'Bruger'}
-        />
-        <View style={styles.attendeeCopy}>
-          <Text variant="bodyBold" color="primary" style={styles.attendeeName}>
-            {item.display_name || 'Bruger'}
-          </Text>
-          <Text variant="caption" color="secondary" style={styles.attendeeMeta}>
-            {attendeeSecondaryText}
-          </Text>
-        </View>
-      </View>
     </Card>
   );
 
@@ -158,26 +180,28 @@ export default function EventAttendeesScreen() {
             {renderSummary()}
             {renderStateCard('alert-circle-outline', error, 'Prøv igen om et øjeblik')}
           </View>
-        ) : attendees.length === 0 ? (
+        ) : displayItems.length === 0 ? (
           <View style={styles.stateWrapper}>
             {renderSummary()}
             {renderStateCard(
               'people-outline',
-              mode === 'checkin' ? 'Ingen fans er tjekket ind endnu' : 'Ingen deltagere endnu',
-              mode === 'checkin'
+              isCombinedMatchFans
+                ? 'Ingen fans til kampen endnu'
+                : mode === 'checkin'
+                  ? 'Ingen fans er tjekket ind endnu'
+                  : 'Ingen deltagere endnu',
+              isCombinedMatchFans
+                ? 'Når nogen melder sig til eller tjekker ind, vises de her.'
+                : mode === 'checkin'
                 ? 'Når de første fans tjekker ind, vises de her.'
                 : 'Når nogen deltager, vises de her.',
             )}
           </View>
         ) : (
-          <FlatList
-            data={attendees}
-            keyExtractor={(item) => item.user_id}
-            renderItem={renderAttendee}
-            contentContainerStyle={styles.listContent}
-            ListHeaderComponent={renderSummary}
-            ItemSeparatorComponent={() => <View style={styles.listGap} />}
-          />
+          <ScrollView contentContainerStyle={styles.listContent}>
+            {renderSummary()}
+            <MatchFanList items={displayItems} variant="full" style={styles.attendeeList} />
+          </ScrollView>
         )}
       </View>
     </SafeAreaView>
@@ -266,25 +290,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       paddingTop: theme.spacing[4],
       paddingBottom: theme.spacing[5],
     },
-    listGap: {
-      height: theme.spacing[3],
-    },
-    attendeeCard: {
-      marginBottom: theme.spacing[0],
-    },
-    attendeeRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: theme.spacing[3],
-    },
-    attendeeCopy: {
-      flex: 1,
-      minWidth: 0,
-    },
-    attendeeName: {
-      marginBottom: theme.spacing[1],
-    },
-    attendeeMeta: {
-      fontWeight: '600',
+    attendeeList: {
+      marginTop: theme.spacing[3],
     },
   });

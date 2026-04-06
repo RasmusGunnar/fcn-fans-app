@@ -16,13 +16,29 @@ export type AppTabsParamList = {
   Profile: undefined;
 };
 
+export type EventAttendeeListItemParam = {
+  userId: string;
+  displayName?: string | null;
+  avatarUrl?: string | null;
+  status: 'attendance' | 'checkin';
+};
+
 export type EventAttendeesParams =
-  | { eventId: string; title?: string; entityType?: 'event'; mode?: 'attendance' | 'checkin' }
+  | {
+      eventId: string;
+      title?: string;
+      subtitle?: string;
+      entityType?: 'event';
+      mode?: 'attendance' | 'checkin';
+      prefilledFans?: EventAttendeeListItemParam[];
+    }
   | {
       entityId: string;
       entityType: 'event' | 'match';
       title?: string;
+      subtitle?: string;
       mode?: 'attendance' | 'checkin';
+      prefilledFans?: EventAttendeeListItemParam[];
     };
 
 export type EventDetailsParams = {

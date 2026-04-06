@@ -14,6 +14,10 @@ export type FanBarometerCardProps = {
   nextLevel?: FanLevelKey | null;
   pointsToNext?: number | null;
   state?: 'ready' | 'loading' | 'empty';
+  scoreLabel?: string;
+  scoreValueText?: string;
+  showProgressSection?: boolean;
+  footerNote?: string;
 };
 
 function clampProgress(progress: number): number {
@@ -33,6 +37,10 @@ export function FanBarometerCard({
   nextLevel,
   pointsToNext,
   state = 'ready',
+  scoreLabel = 'FAN-SCORE',
+  scoreValueText,
+  showProgressSection = true,
+  footerNote,
 }: FanBarometerCardProps) {
   const theme = useTheme();
   const styles = createStyles(theme);
@@ -83,6 +91,7 @@ export function FanBarometerCard({
   const levelLabel = getFanLevelLabel(level, 'full');
   const levelDescription = getFanLevelDescription(level);
   const scoreValue = normalizeScore(score);
+  const scoreDisplayValue = scoreValueText ?? scoreValue.toLocaleString('da-DK');
   const progressValue = clampProgress(progress);
   const nextLevelLabel = nextLevel ? getFanLevelLabel(nextLevel, 'short') : null;
   const pointsRemaining =
@@ -109,10 +118,10 @@ export function FanBarometerCard({
 
         <View style={styles.scoreBlock}>
           <Text variant="small" color="muted" style={styles.scoreLabel}>
-            FAN-SCORE
+            {scoreLabel}
           </Text>
           <Text variant="h2" color="primary" style={styles.scoreValue}>
-            {scoreValue.toLocaleString('da-DK')}
+            {scoreDisplayValue}
           </Text>
         </View>
       </View>
@@ -129,28 +138,36 @@ export function FanBarometerCard({
         </Text>
       </View>
 
-      <View style={styles.progressSection}>
-        <View style={styles.progressTrack}>
-          <View style={[styles.progressFill, { width: `${progressValue * 100}%` }]} />
-        </View>
-
-        {nextLevelLabel ? (
-          <View style={styles.progressCopy}>
-            <Text variant="caption" color="primary">
-              Næste niveau: {nextLevelLabel}
-            </Text>
-            {pointsRemaining != null ? (
-              <Text variant="caption" color="muted">
-                {pointsRemaining.toLocaleString('da-DK')} point til næste niveau
-              </Text>
-            ) : null}
+      {showProgressSection ? (
+        <View style={styles.progressSection}>
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${progressValue * 100}%` }]} />
           </View>
-        ) : (
-          <Text variant="body" color="primary" style={styles.topLevelText}>
-            Du er på højeste niveau i Fanbarometeret
+
+          {nextLevelLabel ? (
+            <View style={styles.progressCopy}>
+              <Text variant="caption" color="primary">
+                Næste niveau: {nextLevelLabel}
+              </Text>
+              {pointsRemaining != null ? (
+                <Text variant="caption" color="muted">
+                  {pointsRemaining.toLocaleString('da-DK')} point til næste niveau
+                </Text>
+              ) : null}
+            </View>
+          ) : (
+            <Text variant="body" color="primary" style={styles.topLevelText}>
+              Du er på højeste niveau i Fanbarometeret
+            </Text>
+          )}
+        </View>
+      ) : footerNote ? (
+        <View style={styles.progressSection}>
+          <Text variant="body" color="secondary" style={styles.topLevelText}>
+            {footerNote}
           </Text>
-        )}
-      </View>
+        </View>
+      ) : null}
     </>,
   );
 }

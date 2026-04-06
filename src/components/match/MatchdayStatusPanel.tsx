@@ -11,11 +11,22 @@ export type MatchdayStatusPanelState =
   | 'matchday_action'
   | 'checked_in_confirmed';
 
+export type MatchdaySimpleParticipationMode =
+  | 'rsvp'
+  | 'not_going_matchday'
+  | 'check_in'
+  | 'checked_in';
+
 export interface MatchdayStatusPanelAction {
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
   onPress: () => void;
   disabled?: boolean;
+}
+
+interface MatchdayStatusPanelSocialCopy {
+  countLabel?: string | null;
+  text: string;
 }
 
 interface MatchdayStatusPanelProps {
@@ -30,6 +41,11 @@ interface MatchdayStatusPanelProps {
   secondarySelected?: boolean;
   secondaryActions?: MatchdayStatusPanelAction[];
   simpleParticipationModel?: boolean;
+  simpleParticipationModeType?: MatchdaySimpleParticipationMode;
+  titleOverride?: string;
+  bodyOverride?: string;
+  socialCopyOverride?: MatchdayStatusPanelSocialCopy;
+  rewardLabelOverride?: string;
   onPressPrimary: () => void;
   onPressSecondary?: () => void;
   onPressSocial?: () => void;
@@ -52,7 +68,7 @@ function getResolvedTitle(
       case 'pre_match_confirmed':
         return 'Du kommer';
       case 'matchday_action':
-        return isGoing ? 'Klar til at tjekke ind?' : 'Er du pa stadion?';
+        return isGoing ? 'Klar til at tjekke ind?' : 'Er du på stadion?';
       case 'checked_in_confirmed':
         return 'Du er tjekket ind';
       case 'pre_match':
@@ -109,9 +125,9 @@ function getSocialCopy(
     if (count <= 0) {
       switch (panelState) {
         case 'matchday_action':
-          return { countLabel: null, text: 'Ingen fans har tjekket ind endnu' };
+          return { countLabel: null, text: 'Vær den første fan på stadion' };
         case 'checked_in_confirmed':
-          return { countLabel: null, text: 'Du er den forste fan pa stadion' };
+          return { countLabel: null, text: 'Du er blandt de første på stadion' };
         case 'pre_match_confirmed':
         case 'pre_match':
         default:
@@ -125,9 +141,9 @@ function getSocialCopy(
 
     switch (panelState) {
       case 'matchday_action':
-        return { countLabel, text: `${fanLabel} har tjekket ind` };
+        return { countLabel, text: `${fanLabel} er på stadion` };
       case 'checked_in_confirmed':
-        return { countLabel, text: `${fanLabel} er her med dig` };
+        return { countLabel, text: `${fanLabel} er her nu` };
       case 'pre_match_confirmed':
       case 'pre_match':
       default:
@@ -138,13 +154,13 @@ function getSocialCopy(
   if (count <= 0) {
     switch (panelState) {
       case 'matchday_action':
-        return { countLabel: null, text: 'Ingen fans har tjekket ind endnu' };
+        return { countLabel: null, text: 'Vær den første fan på stadion' };
       case 'checked_in_confirmed':
-        return { countLabel: null, text: 'Du er den forste fan pa stadion' };
+        return { countLabel: null, text: 'Du er klar til kampdag' };
       case 'pre_match_confirmed':
       case 'pre_match':
       default:
-        return { countLabel: null, text: 'Ingen fans kommer endnu' };
+        return { countLabel: null, text: 'Vær den første fan, der melder sig klar' };
     }
   }
 
@@ -152,13 +168,16 @@ function getSocialCopy(
 
   switch (panelState) {
     case 'matchday_action':
-      return { countLabel: formattedCount, text: 'har tjekket ind' };
+      return { countLabel: formattedCount, text: 'er på stadion nu' };
     case 'checked_in_confirmed':
       return { countLabel: formattedCount, text: 'er her med dig' };
     case 'pre_match_confirmed':
     case 'pre_match':
     default:
-      return { countLabel: formattedCount, text: count === 1 ? 'fan kommer' : 'fans kommer' };
+      return {
+        countLabel: formattedCount,
+        text: count === 1 ? 'fan er med 🔥' : 'fans er med 🔥',
+      };
   }
 }
 
@@ -204,6 +223,11 @@ export function MatchdayStatusPanel({
   secondarySelected = false,
   secondaryActions = [],
   simpleParticipationModel = false,
+  simpleParticipationModeType,
+  titleOverride,
+  bodyOverride,
+  socialCopyOverride,
+  rewardLabelOverride,
   onPressPrimary,
   onPressSecondary,
   onPressSocial,
@@ -213,7 +237,6 @@ export function MatchdayStatusPanel({
   const styles = createStyles(theme);
   const panelState = getPanelState(viewState, isGoing);
   const visibleAvatars = avatars.slice(0, 3);
-  const socialCopy = getSocialCopy(panelState, count, simpleParticipationModel);
   const hasPrimaryAction = panelState !== 'checked_in_confirmed';
   const resolvedPrimaryLabel =
     primaryLabel ?? getDefaultPrimaryLabel(panelState, simpleParticipationModel);
@@ -226,27 +249,69 @@ export function MatchdayStatusPanel({
   const primaryIsAccent = panelState === 'pre_match' || panelState === 'matchday_action';
   const primaryIconColor = primaryIsAccent ? theme.colors.text.inverse : theme.colors.info;
   const legacySecondaryActions = secondaryActions.slice(0, 2);
+  const isCompactMatchday = !simpleParticipationModel && panelState === 'matchday_action';
+  const isCompactCheckedIn = !simpleParticipationModel && panelState === 'checked_in_confirmed';
+  const resolvedTitle = titleOverride ?? getResolvedTitle(panelState, isGoing, simpleParticipationModel);
+  const resolvedSimpleMode: MatchdaySimpleParticipationMode =
+    simpleParticipationModeType ??
+    (panelState === 'checked_in_confirmed'
+      ? 'checked_in'
+      : panelState === 'matchday_action'
+        ? 'check_in'
+        : 'rsvp');
 
-  const isSimplePreMatch =
-    simpleParticipationModel &&
-    (panelState === 'pre_match' || panelState === 'pre_match_confirmed');
-  const isSimpleCheckIn = simpleParticipationModel && panelState === 'matchday_action';
-  const isSimpleCheckedIn = simpleParticipationModel && panelState === 'checked_in_confirmed';
-  const isSimpleDeclined = simpleParticipationModel && panelState === 'pre_match' && secondarySelected;
-  const isSimpleAttending = simpleParticipationModel && panelState === 'pre_match_confirmed';
+  const isSimpleRsvp = simpleParticipationModel && resolvedSimpleMode === 'rsvp';
+  const isSimpleNotGoingMatchday =
+    simpleParticipationModel && resolvedSimpleMode === 'not_going_matchday';
+  const isSimpleCheckIn = simpleParticipationModel && resolvedSimpleMode === 'check_in';
+  const isSimpleCheckedIn = simpleParticipationModel && resolvedSimpleMode === 'checked_in';
+  const isSimplePreMatch = isSimpleRsvp;
+  const isSimpleDeclined = isSimpleRsvp && panelState === 'pre_match' && secondarySelected;
+  const isSimpleAttending = isSimpleRsvp && panelState === 'pre_match_confirmed';
   const isSimpleNeutral = isSimplePreMatch && !isSimpleAttending && !isSimpleDeclined;
   const displayedSimpleStatusText = isSimpleCheckIn
     ? 'Er du på stadion?'
     : isSimpleCheckedIn
       ? 'Du er tjekket ind.'
-      : isSimpleAttending
-        ? 'Du kommer.'
-        : isSimpleDeclined
-          ? 'Kan ikke komme.'
-          : 'Kommer du?';
+      : isSimpleDeclined
+        ? 'Kan ikke komme.'
+        : 'Kommer du?';
+
+  const simpleSupportingText = isSimpleCheckIn
+    ? 'Tjek ind og vis, at du er med på stadion i dag.'
+    : isSimpleCheckedIn
+      ? 'God kamp. Du er registreret blandt fans på stadion.'
+      : isSimpleDeclined
+        ? 'Du kan altid skifte mening inden kickoff.'
+        : isSimpleNeutral
+          ? 'Meld din status for kampen.'
+          : null;
+  const resolvedSocialCopy = isSimpleNotGoingMatchday
+    ? count <= 0
+      ? { countLabel: null, text: 'Ingen fans er på stadion endnu' }
+      : {
+          countLabel: count.toLocaleString('da-DK'),
+          text: count === 1 ? 'fan er på stadion nu' : 'fans er på stadion nu',
+        }
+    : socialCopyOverride ?? getSocialCopy(panelState, count, simpleParticipationModel);
+  const resolvedDisplayedSimpleStatusText =
+    titleOverride ??
+    (isSimpleCheckIn
+    ? 'Klar til check-in?'
+    : isSimpleCheckedIn
+      ? 'Du er tjekket ind'
+      : isSimpleNotGoingMatchday
+        ? 'Du er ikke meldt til i dag'
+        : displayedSimpleStatusText);
+  const resolvedSimpleSupportingText = isSimpleCheckIn
+    ? bodyOverride ?? 'Tjek ind, når du er på stadion, så andre fans kan se stemningen live.'
+    : isSimpleNotGoingMatchday
+      ? bodyOverride ?? 'Du kan stadig følge stemningen fra de andre fans herinde.'
+      : bodyOverride ?? simpleSupportingText;
+  const hasSimplePrimaryAction = hasPrimaryAction && !isSimpleNotGoingMatchday;
 
   const simplePrimaryAction =
-    !simpleParticipationModel || !hasPrimaryAction
+    !simpleParticipationModel || !hasSimplePrimaryAction
       ? null
       : isSimpleCheckIn
         ? {
@@ -282,6 +347,7 @@ export function MatchdayStatusPanel({
     !onPressSecondary ||
     isSimpleCheckIn ||
     isSimpleCheckedIn ||
+    isSimpleNotGoingMatchday ||
     isSimpleDeclined
       ? null
       : {
@@ -295,6 +361,8 @@ export function MatchdayStatusPanel({
       style={[
         styles.socialRow,
         simpleParticipationModel ? styles.socialRowSimple : null,
+        isSimpleCheckIn ? styles.socialRowSimpleMatchday : null,
+        isSimpleCheckedIn ? styles.socialRowSimpleCheckedIn : null,
         panelState === 'checked_in_confirmed' ? styles.socialRowCheckedIn : null,
       ]}
     >
@@ -322,12 +390,16 @@ export function MatchdayStatusPanel({
           <Ionicons
             name={panelState === 'checked_in_confirmed' ? 'people' : 'people-outline'}
             size={theme.components.icon.size.sm}
-            color={theme.colors.info}
+            color={
+              panelState === 'checked_in_confirmed'
+                ? theme.colors.state.success
+                : theme.colors.info
+            }
           />
         </View>
       )}
 
-      {socialCopy.countLabel ? (
+      {resolvedSocialCopy.countLabel ? (
         <View
           style={[
             styles.countPill,
@@ -342,7 +414,7 @@ export function MatchdayStatusPanel({
               panelState === 'checked_in_confirmed' ? styles.countPillTextCheckedIn : null,
             ]}
           >
-            {socialCopy.countLabel}
+            {resolvedSocialCopy.countLabel}
           </Text>
         </View>
       ) : null}
@@ -353,7 +425,7 @@ export function MatchdayStatusPanel({
         style={[styles.socialText, simpleParticipationModel ? styles.socialTextSimple : null]}
         numberOfLines={2}
       >
-        {socialCopy.text}
+        {resolvedSocialCopy.text}
       </Text>
 
       {onPressSocial ? (
@@ -368,13 +440,89 @@ export function MatchdayStatusPanel({
   );
 
   if (simpleParticipationModel) {
+    const simpleStatusContent = isSimpleCheckIn ? (
+      <View style={[styles.simpleHeroBlock, styles.simpleHeroBlockMatchday]}>
+        <View style={styles.simpleHeroEyebrowRow}>
+          <Ionicons
+            name="flash"
+            size={theme.components.icon.size.sm}
+            color={theme.colors.info}
+          />
+          <Text variant="small" color="secondary" style={styles.simpleHeroEyebrow}>
+            KAMPDAG
+          </Text>
+        </View>
+        <Text variant="h3" color="primary" style={styles.simpleHeroTitle}>
+          {resolvedDisplayedSimpleStatusText}
+        </Text>
+        {resolvedSimpleSupportingText ? (
+          <Text variant="body" color="secondary" style={styles.simpleHeroBody}>
+            {resolvedSimpleSupportingText}
+          </Text>
+        ) : null}
+      </View>
+    ) : isSimpleCheckedIn ? (
+      <View style={[styles.simpleHeroBlock, styles.simpleHeroBlockCheckedIn]}>
+        <View style={styles.simpleSuccessBadge}>
+          <Ionicons
+            name="checkmark"
+            size={theme.components.icon.size.sm}
+            color={theme.colors.text.inverse}
+          />
+        </View>
+        <View style={styles.simpleSuccessCopy}>
+          <Text variant="h3" color="success" style={styles.simpleHeroTitle}>
+            {resolvedDisplayedSimpleStatusText}
+          </Text>
+          {resolvedSimpleSupportingText ? (
+            <Text variant="body" color="secondary" style={styles.simpleHeroBody}>
+              {resolvedSimpleSupportingText}
+            </Text>
+          ) : null}
+          {rewardLabelOverride ? (
+            <View style={styles.simpleRewardPill}>
+              <Ionicons
+                name="star"
+                size={theme.components.icon.size.sm - 2}
+                color={theme.colors.state.success}
+              />
+              <Text variant="small" color="success" style={styles.simpleRewardText}>
+                {rewardLabelOverride}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      </View>
+    ) : isSimpleNotGoingMatchday ? (
+      <View style={[styles.simpleStatusBlock, styles.simpleStatusBlockMatchdayInfo]}>
+        <Text variant="bodyBold" color="primary" style={styles.simpleStatusText}>
+          {resolvedDisplayedSimpleStatusText}
+        </Text>
+        {resolvedSimpleSupportingText ? (
+          <Text variant="body" color="secondary" style={styles.simpleStatusBody}>
+            {resolvedSimpleSupportingText}
+          </Text>
+        ) : null}
+      </View>
+    ) : !isSimpleAttending ? (
+      <View style={styles.simpleStatusBlock}>
+        <Text variant="bodyBold" color="primary" style={styles.simpleStatusText}>
+          {resolvedDisplayedSimpleStatusText}
+        </Text>
+        {resolvedSimpleSupportingText ? (
+          <Text variant="body" color="secondary" style={styles.simpleStatusBody}>
+            {resolvedSimpleSupportingText}
+          </Text>
+        ) : null}
+      </View>
+    ) : null;
+
     return (
       <View
         style={[
-          styles.panel,
           styles.panelSimple,
+          isSimpleCheckIn ? styles.panelSimpleMatchday : null,
           panelState === 'checked_in_confirmed' ? styles.panelSimpleCheckedIn : null,
-          getShadowStyle(theme, 'md'),
           style,
         ]}
       >
@@ -393,13 +541,9 @@ export function MatchdayStatusPanel({
           socialContent
         )}
 
-        <View style={styles.simpleStatusBlock}>
-          <Text variant="body" color="secondary" style={styles.simpleStatusText}>
-            {displayedSimpleStatusText}
-          </Text>
-        </View>
+        {simpleStatusContent}
 
-        {isSimpleDeclined || hasPrimaryAction ? (
+        {isSimpleDeclined || hasSimplePrimaryAction ? (
           <View style={styles.simpleDecisionGroup}>
             {isSimpleDeclined ? (
               <View style={styles.simpleSelectedStateChip}>
@@ -414,7 +558,7 @@ export function MatchdayStatusPanel({
               </View>
             ) : null}
 
-            {hasPrimaryAction ? (
+            {hasSimplePrimaryAction ? (
               <View
                 style={[
                   styles.actionRow,
@@ -429,19 +573,33 @@ export function MatchdayStatusPanel({
                     style={({ pressed }) => [
                       styles.primaryButton,
                       isSimpleNeutral ? styles.primaryButtonSimpleSplit : styles.primaryButtonSimple,
+                      isSimpleCheckIn ? styles.primaryButtonSimpleCheckIn : null,
                       styles.primaryButtonSimpleBrand,
                       simplePrimaryAction.disabled ? styles.primaryButtonBusy : null,
-                      pressed && !simplePrimaryAction.disabled ? styles.pressed : null,
+                      pressed && !simplePrimaryAction.disabled
+                        ? isSimpleCheckIn
+                          ? styles.pressedScale
+                          : styles.pressed
+                        : null,
                     ]}
                   >
                     <Ionicons
                       name={simplePrimaryAction.icon}
-                      size={theme.components.icon.size.sm}
+                      size={
+                        isSimpleCheckIn
+                          ? theme.components.icon.size.md
+                          : theme.components.icon.size.sm
+                      }
                       color={theme.colors.text.inverse}
                     />
                     <Text
-                      variant="bodyBold"
-                      style={[styles.primaryText, styles.primaryTextSimple, styles.primaryTextAccent]}
+                      variant={isSimpleCheckIn ? 'h3' : 'bodyBold'}
+                      style={[
+                        styles.primaryText,
+                        styles.primaryTextSimple,
+                        styles.primaryTextAccent,
+                        isSimpleCheckIn ? styles.primaryTextSimpleCheckIn : null,
+                      ]}
                       numberOfLines={1}
                     >
                       {simplePrimaryAction.label}
@@ -484,10 +642,19 @@ export function MatchdayStatusPanel({
   }
 
   return (
-    <View style={[styles.panel, getShadowStyle(theme, 'md'), style]}>
+    <View
+      style={[
+        styles.panel,
+        getShadowStyle(theme, 'md'),
+        isCompactMatchday ? styles.panelMatchday : null,
+        isCompactCheckedIn ? styles.panelCheckedIn : null,
+        style,
+      ]}
+    >
       <View
         style={[
           styles.panelGlow,
+          isCompactMatchday ? styles.panelGlowMatchday : null,
           panelState === 'checked_in_confirmed' ? styles.panelGlowCheckedIn : null,
         ]}
       />
@@ -495,7 +662,7 @@ export function MatchdayStatusPanel({
       <View style={styles.headerBlock}>
         <View style={styles.titleRow}>
           {panelState === 'checked_in_confirmed' ? (
-            <View style={styles.confirmBadge}>
+            <View style={[styles.confirmBadge, styles.confirmBadgeCheckedIn]}>
               <Ionicons
                 name="checkmark"
                 size={theme.components.icon.size.sm}
@@ -504,9 +671,14 @@ export function MatchdayStatusPanel({
             </View>
           ) : null}
           <Text variant="h3" color="primary" style={styles.title} numberOfLines={2}>
-            {getResolvedTitle(panelState, isGoing, false)}
+            {resolvedTitle}
           </Text>
         </View>
+        {bodyOverride ? (
+          <Text variant="body" color="secondary" style={styles.subtitle} numberOfLines={2}>
+            {bodyOverride}
+          </Text>
+        ) : null}
       </View>
 
       {onPressSocial ? (
@@ -526,20 +698,26 @@ export function MatchdayStatusPanel({
           disabled={resolvedPrimaryDisabled}
           style={({ pressed }) => [
             styles.primaryButton,
+            isCompactMatchday ? styles.primaryButtonCompactMatchday : null,
             primaryIsAccent ? styles.primaryButtonAccent : styles.primaryButtonNeutral,
             resolvedPrimaryDisabled ? styles.primaryButtonBusy : null,
-            pressed && !resolvedPrimaryDisabled ? styles.pressed : null,
+            pressed && !resolvedPrimaryDisabled
+              ? isCompactMatchday
+                ? styles.pressedScale
+                : styles.pressed
+              : null,
           ]}
         >
           <Ionicons
             name={getPrimaryIcon(panelState)}
-            size={theme.components.icon.size.sm}
+            size={isCompactMatchday ? theme.components.icon.size.md : theme.components.icon.size.sm}
             color={primaryIconColor}
           />
           <Text
             variant="bodyBold"
             style={[
               styles.primaryText,
+              isCompactMatchday ? styles.primaryTextCompactMatchday : null,
               primaryIsAccent ? styles.primaryTextAccent : styles.primaryTextNeutral,
             ]}
             numberOfLines={1}
@@ -599,21 +777,42 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       gap: theme.spacing[1] + theme.spacing[1] / 2,
     },
     panelSimple: {
-      borderRadius: theme.radius.xl,
-      borderColor: theme.colors.border.default,
-      padding: theme.layout.cardPadding,
-      gap: theme.spacing[1] + theme.spacing[1] / 2,
+      backgroundColor: 'transparent',
+      borderRadius: theme.radius.none,
+      borderWidth: 0,
+      borderColor: 'transparent',
+      padding: theme.spacing[0],
+      gap: theme.spacing[2],
+    },
+    panelSimpleMatchday: {
+      gap: theme.spacing[2] + theme.spacing[1] / 2,
     },
     panelSimpleCheckedIn: {
-      borderColor: theme.colors.info,
+      borderRadius: theme.radius.xl,
+      borderWidth: theme.layout.borderHairline,
+      borderColor: theme.colors.pill.green.border,
+      backgroundColor: theme.colors.pill.green.bg,
+      padding: theme.layout.cardPadding,
+      gap: theme.spacing[2],
     },
     panelGlow: {
       ...StyleSheet.absoluteFillObject,
       backgroundColor: theme.colors.info,
       opacity: theme.mode === 'light' ? 0.08 : 0.12,
     },
-    panelGlowCheckedIn: {
+    panelMatchday: {
+      borderColor: theme.colors.info,
+    },
+    panelCheckedIn: {
+      borderColor: theme.colors.pill.green.border,
+      backgroundColor: theme.colors.pill.green.bg,
+    },
+    panelGlowMatchday: {
       opacity: theme.mode === 'light' ? 0.12 : 0.16,
+    },
+    panelGlowCheckedIn: {
+      backgroundColor: theme.colors.state.success,
+      opacity: theme.mode === 'light' ? 0.12 : 0.18,
     },
     headerBlock: {
       gap: theme.spacing[0],
@@ -630,14 +829,22 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       borderRadius: theme.radius.pill,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: theme.colors.info,
+      backgroundColor: theme.colors.state.success,
       borderWidth: theme.layout.borderHairline,
+      borderColor: theme.colors.pill.green.border,
+    },
+    confirmBadgeCheckedIn: {
+      backgroundColor: theme.colors.state.success,
       borderColor: theme.colors.pill.green.border,
     },
     title: {
       flex: 1,
       fontWeight: '700',
       lineHeight: theme.typography.h3.lineHeight - 1,
+    },
+    subtitle: {
+      lineHeight: theme.typography.body.lineHeight,
+      marginTop: theme.spacing[1] / 2,
     },
     socialPressable: {
       width: '100%',
@@ -658,6 +865,12 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
     socialRowSimple: {
       gap: theme.spacing[2],
+      paddingVertical: theme.spacing[1] + theme.spacing[1] / 2,
+    },
+    socialRowSimpleMatchday: {
+      paddingVertical: theme.spacing[2],
+    },
+    socialRowSimpleCheckedIn: {
       paddingVertical: theme.spacing[1],
     },
     avatarStack: {
@@ -712,14 +925,14 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       paddingHorizontal: theme.spacing[2],
     },
     countPillCheckedIn: {
-      backgroundColor: theme.colors.bg.subtle,
+      backgroundColor: theme.colors.bg.surface,
     },
     countPillText: {
       color: theme.colors.info,
       fontWeight: '700',
     },
     countPillTextCheckedIn: {
-      color: theme.colors.info,
+      color: theme.colors.state.success,
     },
     socialText: {
       flex: 1,
@@ -727,21 +940,86 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       fontWeight: '600',
     },
     socialTextSimple: {
-      fontWeight: '600',
+      fontWeight: '700',
       lineHeight: theme.typography.body.lineHeight,
     },
     socialChevron: {
       marginLeft: theme.spacing[1] / 2,
     },
     simpleStatusBlock: {
-      gap: theme.spacing[0],
+      gap: theme.spacing[1] / 2,
+    },
+    simpleStatusBlockMatchdayInfo: {
+      paddingVertical: theme.spacing[1] / 2,
     },
     simpleStatusText: {
       lineHeight: theme.typography.body.lineHeight,
-      fontWeight: '500',
+      fontWeight: '700',
+    },
+    simpleStatusBody: {
+      lineHeight: theme.typography.body.lineHeight,
+    },
+    simpleHeroBlock: {
+      gap: theme.spacing[1],
+    },
+    simpleHeroBlockMatchday: {
+      gap: theme.spacing[1] + theme.spacing[1] / 2,
+    },
+    simpleHeroBlockCheckedIn: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: theme.spacing[2],
+    },
+    simpleHeroEyebrowRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing[1] / 2,
+    },
+    simpleHeroEyebrow: {
+      fontWeight: '700',
+      letterSpacing: 0.5,
+    },
+    simpleHeroTitle: {
+      fontWeight: '800',
+      lineHeight: theme.typography.h3.lineHeight,
+    },
+    simpleHeroBody: {
+      lineHeight: theme.typography.body.lineHeight,
+    },
+    simpleSuccessBadge: {
+      width: theme.spacing[8],
+      height: theme.spacing[8],
+      borderRadius: theme.radius.pill,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.colors.state.success,
+      borderWidth: theme.layout.borderHairline,
+      borderColor: theme.colors.pill.green.border,
+      marginTop: theme.spacing[1] / 2,
+    },
+    simpleSuccessCopy: {
+      flex: 1,
+      gap: theme.spacing[1] / 2,
+    },
+    simpleRewardPill: {
+      alignSelf: 'flex-start',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing[1] / 2,
+      minHeight: theme.spacing[6],
+      paddingHorizontal: theme.spacing[2],
+      paddingVertical: theme.spacing[1] / 2,
+      borderRadius: theme.radius.pill,
+      borderWidth: theme.layout.borderHairline,
+      borderColor: theme.colors.pill.green.border,
+      backgroundColor: theme.colors.bg.surface,
+      marginTop: theme.spacing[1],
+    },
+    simpleRewardText: {
+      fontWeight: '700',
     },
     simpleDecisionGroup: {
-      gap: theme.spacing[1],
+      gap: theme.spacing[1] + theme.spacing[1] / 2,
       alignItems: 'stretch',
     },
     simpleSelectedStateChip: {
@@ -763,7 +1041,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       gap: theme.spacing[1] + theme.spacing[1] / 2,
     },
     actionRowSimple: {
-      gap: theme.spacing[1],
+      gap: theme.spacing[1] + theme.spacing[1] / 2,
     },
     actionRowSimpleSplit: {
       flexDirection: 'row',
@@ -794,10 +1072,21 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       borderWidth: theme.layout.borderHairline,
       borderColor: theme.colors.info,
     },
+    primaryButtonSimpleCheckIn: {
+      minHeight: theme.spacing[12] + theme.spacing[1],
+      borderRadius: theme.radius.md,
+      paddingVertical: theme.spacing[3],
+      ...getShadowStyle(theme, 'sm'),
+    },
     primaryButtonAccent: {
       backgroundColor: theme.colors.info,
       borderWidth: theme.layout.borderHairline,
       borderColor: theme.colors.info,
+    },
+    primaryButtonCompactMatchday: {
+      minHeight: theme.spacing[10],
+      borderRadius: theme.radius.md,
+      ...getShadowStyle(theme, 'sm'),
     },
     primaryButtonNeutral: {
       backgroundColor: theme.colors.bg.card,
@@ -814,11 +1103,17 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       fontWeight: '700',
       fontSize: theme.typography.body.fontSize - 1,
     },
+    primaryTextSimpleCheckIn: {
+      fontWeight: '800',
+    },
     primaryTextAccent: {
       color: theme.colors.text.inverse,
     },
     primaryTextNeutral: {
       color: theme.colors.info,
+    },
+    primaryTextCompactMatchday: {
+      fontWeight: '800',
     },
     secondaryChoiceButton: {
       minHeight: theme.spacing[11],
@@ -838,9 +1133,10 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       borderRadius: theme.radius.lg,
       borderWidth: theme.layout.borderHairline,
       borderColor: theme.colors.border.default,
-      backgroundColor: theme.colors.bg.surface,
+      backgroundColor: theme.colors.bg.default,
       paddingHorizontal: theme.spacing[3],
       alignItems: 'center',
+      justifyContent: 'center',
     },
     secondaryChoiceButtonSimpleSplit: {
       flex: 1,
@@ -848,7 +1144,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       borderRadius: theme.radius.lg,
       borderWidth: theme.layout.borderHairline,
       borderColor: theme.colors.border.default,
-      backgroundColor: theme.colors.bg.surface,
+      backgroundColor: theme.colors.bg.default,
       paddingHorizontal: theme.spacing[3],
       alignItems: 'center',
       justifyContent: 'center',
@@ -892,5 +1188,9 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
     pressed: {
       opacity: 0.9,
+    },
+    pressedScale: {
+      opacity: 0.92,
+      transform: [{ scale: 0.985 }],
     },
   });

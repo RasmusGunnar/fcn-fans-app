@@ -1,10 +1,17 @@
 import { useAuth } from '../auth/AuthProvider';
 import { useCallback, useEffect, useState } from 'react';
-import { createMatchCheckIn, fetchMatchCheckInSnapshot } from '../services/checkins';
+import {
+  createMatchCheckIn,
+  fetchMatchCheckInSnapshot,
+  type CheckInProfile,
+} from '../services/checkins';
+import { getMatchdayPreviewMode } from '../utils/matchdayPreview';
 
 export interface MatchCheckInResult {
   countCheckedIn: number;
   avatars: string[];
+  profiles: CheckInProfile[];
+  userIds: string[];
   isCheckedIn: boolean;
   loading: boolean;
   error: string | null;
@@ -16,6 +23,8 @@ export function useMatchCheckIn(matchId: string, kickoffAt?: string | null): Mat
   const { user } = useAuth();
   const [countCheckedIn, setCountCheckedIn] = useState(0);
   const [avatars, setAvatars] = useState<string[]>([]);
+  const [profiles, setProfiles] = useState<CheckInProfile[]>([]);
+  const [userIds, setUserIds] = useState<string[]>([]);
   const [isCheckedIn, setIsCheckedIn] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -24,6 +33,8 @@ export function useMatchCheckIn(matchId: string, kickoffAt?: string | null): Mat
     if (!matchId) {
       setCountCheckedIn(0);
       setAvatars([]);
+      setProfiles([]);
+      setUserIds([]);
       setIsCheckedIn(false);
       setError(null);
       setLoading(false);
@@ -39,6 +50,8 @@ export function useMatchCheckIn(matchId: string, kickoffAt?: string | null): Mat
       });
       setCountCheckedIn(snapshot.countCheckedIn);
       setAvatars(snapshot.avatars);
+      setProfiles(snapshot.profiles);
+      setUserIds(snapshot.userIds);
       setIsCheckedIn(snapshot.isCheckedIn);
     } catch (err: any) {
       setError(err?.message || 'Fejl ved check-in');
@@ -56,12 +69,20 @@ export function useMatchCheckIn(matchId: string, kickoffAt?: string | null): Mat
     if (!user?.id) throw new Error('Ikke logget ind');
     if (isCheckedIn) return;
 
+    const previewMode = getMatchdayPreviewMode();
+    const isPreviewCheckIn = previewMode !== 'off';
+
     setLoading(true);
     setError(null);
     setIsCheckedIn(true);
     setCountCheckedIn((current) => current + 1);
+    setUserIds((current) => (user.id && !current.includes(user.id) ? [user.id, ...current] : current));
 
     try {
+      if (isPreviewCheckIn) {
+        return;
+      }
+
       await createMatchCheckIn({ matchId, userId: user.id, kickoffAt });
       await refresh();
     } catch (err: any) {
@@ -77,6 +98,8 @@ export function useMatchCheckIn(matchId: string, kickoffAt?: string | null): Mat
   return {
     countCheckedIn,
     avatars,
+    profiles,
+    userIds,
     isCheckedIn,
     loading,
     error,

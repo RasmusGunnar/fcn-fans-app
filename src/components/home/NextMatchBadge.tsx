@@ -25,6 +25,12 @@ interface NextMatchBadgeProps {
     isGoing: boolean;
     avatars: string[];
     count: number;
+    titleOverride?: string;
+    bodyOverride?: string;
+    socialCopyOverride?: {
+      countLabel?: string | null;
+      text: string;
+    };
     primaryLabel?: string;
     primaryDisabled?: boolean;
     secondaryActions?: MatchdayStatusPanelAction[];
@@ -137,6 +143,9 @@ const NextMatchBadge: React.FC<NextMatchBadgeProps> = ({
           isGoing={matchStatusPanel.isGoing}
           avatars={matchStatusPanel.avatars}
           count={matchStatusPanel.count}
+          titleOverride={matchStatusPanel.titleOverride}
+          bodyOverride={matchStatusPanel.bodyOverride}
+          socialCopyOverride={matchStatusPanel.socialCopyOverride}
           primaryLabel={matchStatusPanel.primaryLabel}
           primaryDisabled={matchStatusPanel.primaryDisabled}
           onPressPrimary={onPressPrimaryAction || onPress}

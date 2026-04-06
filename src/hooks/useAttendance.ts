@@ -2,11 +2,13 @@ import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
 import { useAuth } from '../auth/AuthProvider';
-import { fetchAttendanceSnapshot } from '../services/attendance';
+import { fetchAttendanceSnapshot, type AttendeeProfile } from '../services/attendance';
 
 export interface AttendanceResult {
   countGoing: number;
   avatars: string[];
+  profiles: AttendeeProfile[];
+  userIds: string[];
   isGoing: boolean;
   toggleGoing: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -18,6 +20,8 @@ export function useAttendance({ entityType, entityId }: { entityType: 'event' | 
   const { user } = useAuth();
   const [countGoing, setCountGoing] = useState(0);
   const [avatars, setAvatars] = useState<string[]>([]);
+  const [profiles, setProfiles] = useState<AttendeeProfile[]>([]);
+  const [userIds, setUserIds] = useState<string[]>([]);
   const [isGoing, setIsGoing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -26,6 +30,8 @@ export function useAttendance({ entityType, entityId }: { entityType: 'event' | 
     if (!entityId) {
       setCountGoing(0);
       setAvatars([]);
+      setProfiles([]);
+      setUserIds([]);
       setIsGoing(false);
       setError(null);
       setLoading(false);
@@ -42,6 +48,8 @@ export function useAttendance({ entityType, entityId }: { entityType: 'event' | 
       });
       setCountGoing(snapshot.countGoing);
       setAvatars(snapshot.avatars);
+      setProfiles(snapshot.profiles);
+      setUserIds(snapshot.userIds);
       setIsGoing(snapshot.isGoing);
     } catch (err: any) {
       setError(err.message || 'Fejl ved attendance');
@@ -107,6 +115,8 @@ export function useAttendance({ entityType, entityId }: { entityType: 'event' | 
   return {
     countGoing,
     avatars,
+    profiles,
+    userIds,
     isGoing,
     toggleGoing,
     refresh: fetchAttendance,

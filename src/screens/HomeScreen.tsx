@@ -23,8 +23,7 @@ import { useFeed } from '../state/FeedContext';
 import { colors, defaultTheme, spacing } from '../theme';
 import type { FeedFanActivityData, FeedItem } from '../types/feed';
 import { getFeedItemKey } from '../types/feed';
-import { getMatchdayTiming, getMatchViewState } from '../utils/matchdayState';
-import { applyMatchdayPreview } from '../utils/matchdayPreview';
+import { buildMatchdayUiModel } from '../utils/matchdayUiModel';
 import { getPrimaryMediaKind } from '../utils/media';
 
 function formatKickoffCountdown(kickoffAt: string, now: Date): string {
@@ -35,6 +34,25 @@ function formatKickoffCountdown(kickoffAt: string, now: Date): string {
   if (diffHours < 2) return 'Starter snart';
   if (diffHours < 48) return `Afspark om ${Math.ceil(diffHours)} timer`;
   return `Afspark om ${Math.ceil(diffHours / 24)} dage`;
+}
+
+function buildCheckInSocialProof(
+  checkedInCount: number,
+): { countLabel?: string | null; text: string } {
+  if (checkedInCount <= 0) {
+    return {
+      countLabel: null,
+      text: 'Ingen er på stadion endnu',
+    };
+  }
+
+  return {
+    countLabel: null,
+    text:
+      checkedInCount === 1
+        ? '1 er på stadion'
+        : `${checkedInCount.toLocaleString('da-DK')} er på stadion`,
+  };
 }
 
 function getHomeFeedItemSpacingCompensation(kind: FeedItem['kind']): number {
@@ -341,27 +359,149 @@ export default function HomeScreen() {
     return formatKickoffCountdown(nextFixture.kickoff_at, now);
   }, [nextFixture?.kickoff_at, now]);
 
-  const nextMatchdayState = useMemo(() => {
-    if (!nextFixture?.kickoff_at) return { diffHours: Infinity, isMatchday: false, isLive: false };
-    return applyMatchdayPreview(getMatchdayTiming(nextFixture.kickoff_at, now));
-  }, [nextFixture?.kickoff_at, now]);
+  const nextMatchUiModel = useMemo(() => {
+    if (!nextFixture?.kickoff_at) return null;
 
-  const nextMatchViewState = useMemo(
-    () =>
-      getMatchViewState({
-        isMatchday: nextMatchdayState.isMatchday,
+    return buildMatchdayUiModel({
+      kickoffAt: nextFixture.kickoff_at,
+      now,
+      attendance: {
         isGoing: nextMatchAttendance.isGoing,
+        countGoing: nextMatchAttendance.countGoing,
+        avatars: nextMatchAttendance.avatars,
+      },
+      checkIn: {
         isCheckedIn: nextMatchCheckIn.isCheckedIn,
-      }),
-    [nextMatchAttendance.isGoing, nextMatchCheckIn.isCheckedIn, nextMatchdayState.isMatchday],
-  );
+        countCheckedIn: nextMatchCheckIn.countCheckedIn,
+        avatars: nextMatchCheckIn.avatars,
+      },
+    });
+  }, [
+    nextFixture?.kickoff_at,
+    nextMatchAttendance.avatars,
+    nextMatchAttendance.countGoing,
+    nextMatchAttendance.isGoing,
+    nextMatchCheckIn.avatars,
+    nextMatchCheckIn.countCheckedIn,
+    nextMatchCheckIn.isCheckedIn,
+    now,
+  ]);
+  const nextMatchFansOverview = useMemo(() => {
+    const profileById = new Map<string, { displayName: string | null; avatarUrl: string | null }>();
 
-  const nextMatchPanelCount =
-    nextMatchViewState === 'pre_match'
-      ? nextMatchAttendance.countGoing
-      : nextMatchCheckIn.countCheckedIn;
-  const nextMatchPanelAvatars =
-    nextMatchViewState === 'pre_match' ? nextMatchAttendance.avatars : nextMatchCheckIn.avatars;
+    nextMatchAttendance.profiles.forEach((profile) => {
+      profileById.set(profile.user_id, {
+        displayName: profile.display_name,
+        avatarUrl: profile.avatar_url,
+      });
+    });
+
+    nextMatchCheckIn.profiles.forEach((profile) => {
+      profileById.set(profile.user_id, {
+        displayName: profile.display_name,
+        avatarUrl: profile.avatar_url,
+      });
+    });
+
+    const merged = new Map<
+      string,
+      {
+        item: {
+          userId: string;
+          displayName: string | null;
+          avatarUrl: string | null;
+          status: 'checkin' | 'attendance';
+        };
+        order: number;
+      }
+    >();
+    let nextOrder = 0;
+
+    nextMatchAttendance.userIds.forEach((userId) => {
+      const profile = profileById.get(userId);
+      merged.set(userId, {
+        item: {
+          userId,
+          displayName: profile?.displayName ?? null,
+          avatarUrl: profile?.avatarUrl ?? null,
+          status: 'attendance',
+        },
+        order: nextOrder++,
+      });
+    });
+
+    nextMatchCheckIn.userIds.forEach((userId) => {
+      const profile = profileById.get(userId);
+      const existing = merged.get(userId);
+
+      merged.set(userId, {
+        item: {
+          userId,
+          displayName: profile?.displayName ?? existing?.item.displayName ?? null,
+          avatarUrl: profile?.avatarUrl ?? existing?.item.avatarUrl ?? null,
+          status: 'checkin',
+        },
+        order: existing?.order ?? nextOrder++,
+      });
+    });
+
+    return Array.from(merged.values())
+      .sort((left, right) => {
+        if (left.item.status !== right.item.status) {
+          return left.item.status === 'checkin' ? -1 : 1;
+        }
+
+        return left.order - right.order;
+      })
+      .map((entry) => entry.item);
+  }, [
+    nextMatchAttendance.profiles,
+    nextMatchAttendance.userIds,
+    nextMatchCheckIn.profiles,
+    nextMatchCheckIn.userIds,
+  ]);
+
+  const nextMatchViewState = nextMatchUiModel?.viewState ?? 'pre_match';
+  const nextMatchPanelCount = nextMatchUiModel?.socialCount ?? 0;
+  const nextMatchPanelAvatars = nextMatchUiModel?.socialAvatars ?? [];
+  const nextMatchPanelTitle = useMemo(() => {
+    if (nextMatchViewState === 'matchday_action') {
+      return nextMatchUiModel?.effectiveIsGoing
+        ? 'Du har sagt, at du kommer'
+        : 'Er du på stadion i dag?';
+    }
+
+    if (nextMatchViewState === 'checked_in_confirmed') {
+      return 'Du er tjekket ind';
+    }
+
+    return undefined;
+  }, [nextMatchUiModel?.effectiveIsGoing, nextMatchViewState]);
+  const nextMatchPanelBody = useMemo(() => {
+    if (nextMatchViewState === 'matchday_action') {
+      return nextMatchUiModel?.effectiveIsGoing
+        ? 'Klar til at tjekke ind?'
+        : 'Tjek ind, hvis du er med.';
+    }
+
+    if (nextMatchViewState === 'checked_in_confirmed') {
+      return 'Fans kan nu se, at du er på stadion.';
+    }
+
+    return undefined;
+  }, [nextMatchUiModel?.effectiveIsGoing, nextMatchUiModel?.previewMode, nextMatchViewState]);
+  const nextMatchSocialCopyOverride = useMemo(() => {
+    if (nextMatchViewState === 'matchday_action' || nextMatchViewState === 'checked_in_confirmed') {
+      return buildCheckInSocialProof(
+        nextMatchCheckIn.countCheckedIn,
+      );
+    }
+
+    return undefined;
+  }, [
+    nextMatchCheckIn.countCheckedIn,
+    nextMatchViewState,
+  ]);
   const nextMatchPrimaryLabel =
     nextMatchViewState === 'checked_in_confirmed'
       ? undefined
@@ -369,7 +509,7 @@ export default function HomeScreen() {
         ? nextMatchCheckIn.loading
           ? 'Tjekker ind...'
           : 'Tjek ind'
-        : nextMatchAttendance.isGoing
+        : nextMatchUiModel?.effectiveIsGoing
           ? 'Du kommer'
           : 'Jeg kommer';
   const nextMatchPrimaryDisabled =
@@ -377,20 +517,22 @@ export default function HomeScreen() {
       ? true
       : nextMatchViewState === 'matchday_action'
         ? nextMatchCheckIn.loading
-        : nextMatchAttendance.isGoing || nextMatchAttendance.loading;
+        : Boolean(nextMatchUiModel?.effectiveIsGoing) || nextMatchAttendance.loading;
   const handleOpenNextMatch = useCallback(() => {
     if (!matchForBadge) return;
     (navigation as any).navigate('MatchDetails', { fixtureId: matchForBadge.id });
   }, [matchForBadge, navigation]);
 
-  const handleOpenNextMatchAttendees = useCallback(() => {
+  const handleOpenNextMatchFans = useCallback(() => {
     if (!nextFixture?.id) return;
     (navigation as any).navigate('EventAttendees', {
       entityId: nextFixture.id,
       entityType: 'match',
-      title: 'Fans der kommer',
+      title: 'Fans til kampen',
+      subtitle: 'Se hvem der kommer, og hvem der er tjekket ind',
+      prefilledFans: nextMatchFansOverview,
     });
-  }, [navigation, nextFixture?.id]);
+  }, [navigation, nextFixture?.id, nextMatchFansOverview]);
 
   const handleOpenNextMatchCheckedInFans = useCallback(() => {
     if (!nextFixture?.id) return;
@@ -466,19 +608,18 @@ export default function HomeScreen() {
               countdownLabel={nextMatchCountdownLabel ?? undefined}
               matchStatusPanel={{
                 viewState: nextMatchViewState,
-                isGoing: nextMatchAttendance.isGoing,
+                isGoing: nextMatchUiModel?.effectiveIsGoing ?? nextMatchAttendance.isGoing,
                 avatars: nextMatchPanelAvatars,
                 count: nextMatchPanelCount,
+                titleOverride: nextMatchPanelTitle,
+                bodyOverride: nextMatchPanelBody,
+                socialCopyOverride: nextMatchSocialCopyOverride,
                 primaryLabel: nextMatchPrimaryLabel,
                 primaryDisabled: nextMatchPrimaryDisabled,
               }}
               onPress={handleOpenNextMatch}
               onPressPrimaryAction={handleNextMatchPrimaryAction}
-              onPressSocial={
-                nextMatchViewState === 'pre_match'
-                  ? handleOpenNextMatchAttendees
-                  : handleOpenNextMatchCheckedInFans
-              }
+              onPressSocial={handleOpenNextMatchFans}
             />
           )}
           {loadingFixture && (

@@ -5,6 +5,8 @@ import { resolveAvatarUrl } from '../utils/avatar';
 export interface AttendanceSnapshot {
   countGoing: number;
   avatars: string[];
+  profiles: AttendeeProfile[];
+  userIds: string[];
   isGoing: boolean;
 }
 
@@ -51,10 +53,12 @@ export async function fetchAttendanceSnapshot({
   if (rsvpsError) throw rsvpsError;
 
   const userIds = (rsvps || []).map((rsvp: { user_id: string }) => rsvp.user_id);
-  const attendeeProfiles = await fetchAttendeeProfiles(userIds.slice(0, 5));
+  const attendeeProfiles = await fetchAttendeeProfiles(userIds);
 
   return {
     countGoing: userIds.length,
+    profiles: attendeeProfiles,
+    userIds,
     avatars: attendeeProfiles
       .map((profile) => resolveAvatarUrl(profile.avatar_url))
       .filter((url): url is string => !!url),

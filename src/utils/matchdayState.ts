@@ -1,3 +1,9 @@
+import {
+  applyMatchdayPreview,
+  getMatchdayPreviewMode,
+  type MatchdayPreviewMode,
+} from './matchdayPreview';
+
 const MS_PER_HOUR = 1000 * 60 * 60;
 
 export const MATCHDAY_WINDOW_HOURS = 6;
@@ -23,6 +29,14 @@ export function getMatchdayTiming(kickoffAt: string, now: Date): MatchdayTimingS
   };
 }
 
+export function getResolvedMatchdayTiming(
+  kickoffAt: string,
+  now: Date,
+  previewMode: MatchdayPreviewMode = getMatchdayPreviewMode(),
+): MatchdayTimingState {
+  return applyMatchdayPreview(getMatchdayTiming(kickoffAt, now), previewMode);
+}
+
 export function getMatchViewState({
   isMatchday,
   isGoing: _isGoing,
@@ -38,7 +52,11 @@ export function getMatchViewState({
   return 'pre_match';
 }
 
-export function canCreateMatchCheckIn(kickoffAt?: string | null, now: Date = new Date()): boolean {
+export function canCreateMatchCheckIn(
+  kickoffAt?: string | null,
+  now: Date = new Date(),
+  previewMode: MatchdayPreviewMode = getMatchdayPreviewMode(),
+): boolean {
   if (!kickoffAt) return false;
-  return getMatchdayTiming(kickoffAt, now).isMatchday;
+  return getResolvedMatchdayTiming(kickoffAt, now, previewMode).isMatchday;
 }

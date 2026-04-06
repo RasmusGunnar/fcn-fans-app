@@ -67,6 +67,7 @@ type WinnerProfile = {
 
 const COPENHAGEN_TIMEZONE = 'Europe/Copenhagen';
 const FALLBACK_BODY = 'Har været en af ugens mest aktive fans i fællesskabet.';
+const CHECKIN_SCORE = 5;
 
 function json(status: number, payload: unknown) {
   return new Response(JSON.stringify(payload), {
@@ -550,7 +551,7 @@ serve(async (req) => {
           candidate.commentCount * 3 +
           candidate.postLikesReceived +
           candidate.commentLikesReceived +
-          candidate.checkinCount * 10;
+          candidate.checkinCount * CHECKIN_SCORE;
 
         return {
           ...candidate,

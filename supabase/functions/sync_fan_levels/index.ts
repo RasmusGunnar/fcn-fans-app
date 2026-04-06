@@ -45,7 +45,7 @@ type QueryFailure = {
 const POST_SCORE = 5;
 const COMMENT_SCORE = 3;
 const LIKE_RECEIVED_SCORE = 1;
-const CHECKIN_SCORE = 10;
+const CHECKIN_SCORE = 5;
 
 const FAN_LEVEL_THRESHOLDS: { minScore: number; level: FanLevelKey }[] = [
   { minScore: 1200, level: 'top_fan' },

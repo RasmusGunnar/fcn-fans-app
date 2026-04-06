@@ -34,7 +34,7 @@ type QueryFailure = {
 const COPENHAGEN_TIMEZONE = 'Europe/Copenhagen';
 const POST_SCORE = 5;
 const COMMENT_SCORE = 2;
-const CHECKIN_SCORE = 10;
+const CHECKIN_SCORE = 5;
 
 function json(status: number, payload: unknown) {
   return new Response(JSON.stringify(payload), {

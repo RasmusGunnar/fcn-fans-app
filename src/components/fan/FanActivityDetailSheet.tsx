@@ -334,7 +334,7 @@ function createStyles(theme: ReturnType<typeof useTheme>) {
       borderTopLeftRadius: theme.radius.xl,
       borderTopRightRadius: theme.radius.xl,
       overflow: 'hidden',
-      paddingTop: 0,
+      paddingTop: theme.spacing[0],
     },
     handle: {
       position: 'absolute',
