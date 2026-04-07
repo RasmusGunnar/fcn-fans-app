@@ -54,6 +54,10 @@ verify_jwt = false
 [functions.send-push]
 verify_jwt = true
 
+# claim_push_token: authenticated server-side token claim to avoid client RLS conflicts.
+[functions.claim_push_token]
+verify_jwt = true
+
 # push_comment_replies: authenticated route triggered after a successful comment insert.
 [functions.push_comment_replies]
 verify_jwt = true

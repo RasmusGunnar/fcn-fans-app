@@ -95,18 +95,18 @@ export async function registerForPushNotificationsAsync(options?: {
       };
     }
 
-    const projectId = getProjectId();
-    const tokenResponse = projectId
-      ? await Notifications.getExpoPushTokenAsync({ projectId })
-      : await Notifications.getExpoPushTokenAsync();
-    token = tokenResponse.data;
-
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('default', {
         name: 'default',
         importance: Notifications.AndroidImportance.MAX,
       });
     }
+
+    const projectId = getProjectId();
+    const tokenResponse = projectId
+      ? await Notifications.getExpoPushTokenAsync({ projectId })
+      : await Notifications.getExpoPushTokenAsync();
+    token = tokenResponse.data;
 
     return {
       status: token ? 'enabled' : 'error',
@@ -129,29 +129,31 @@ export async function registerForPushNotificationsAsync(options?: {
 
 export async function saveExpoPushToken(userId: string, token: string) {
   const previousToken = await getStoredPushToken();
-  const nowIso = new Date().toISOString();
-
-  if (previousToken && previousToken !== token) {
-    await supabase
-      .from('push_tokens')
-      .delete()
-      .eq('user_id', userId)
-      .eq('push_token', previousToken);
-  }
-
-  const { error } = await supabase.from('push_tokens').upsert(
-    {
-      user_id: userId,
-      push_token: token,
-      platform: Platform.OS === 'ios' ? 'ios' : 'android',
-      updated_at: nowIso,
+  const platform = Platform.OS === 'ios' ? 'ios' : 'android';
+  const { data, error } = await supabase.functions.invoke('claim_push_token', {
+    body: {
+      pushToken: token,
+      previousToken: previousToken && previousToken !== token ? previousToken : null,
+      platform,
     },
-    { onConflict: 'push_token' },
-  );
+  });
 
   if (error) {
     logger.warn('[Push] saveExpoPushToken failed:', error);
     throw error;
+  }
+
+  if (data?.ok !== true) {
+    logger.warn('[Push] saveExpoPushToken returned non-ok payload:', data);
+    throw new Error(data?.error ?? 'Kunne ikke claime push-token');
+  }
+
+  if (data?.userId && data.userId !== userId) {
+    logger.warn('[Push] saveExpoPushToken claimed token for unexpected user:', {
+      expectedUserId: userId,
+      actualUserId: data.userId,
+    });
+    throw new Error('Push-token blev claimed for forkert bruger');
   }
 
   await setStoredPushToken(token);
