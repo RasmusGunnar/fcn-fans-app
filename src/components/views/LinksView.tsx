@@ -17,24 +17,31 @@ interface Link {
 const links: Link[] = [
   {
     id: 'fcn-official',
-    title: 'FC Nordsjælland Official',
-    description: 'Officiel FCN hjemmeside',
-    url: 'https://fcnordsjælland.dk',
+    title: 'FC Nordsjælland (officiel)',
+    description: 'Officiel hjemmeside',
+    url: 'https://fcn.dk',
     iconKey: 'globe',
   },
   {
     id: 'fcn-facebook',
     title: 'FCN Facebook',
     description: 'Følg FCN på Facebook',
-    url: 'https://facebook.com/fcnordsjælland',
+    url: 'https://facebook.com/fcnordsjaelland',
     iconKey: 'logo-facebook',
   },
   {
     id: 'fcn-instagram',
     title: 'FCN Instagram',
-    description: 'Se FCN billederne',
-    url: 'https://instagram.com/fcnordsjælland',
+    description: 'Følg FCN på Instagram',
+    url: 'https://instagram.com/fcnordsjaelland',
     iconKey: 'logo-instagram',
+  },
+  {
+    id: 'fcn-podcast',
+    title: "Nordsjælland Dreamin' (podcast)",
+    description: 'Podcast om FC Nordsjælland',
+    url: 'https://fcndreamin.libsyn.com/',
+    iconKey: 'mic',
   },
   {
     id: 'superliga',
@@ -46,15 +53,15 @@ const links: Link[] = [
   {
     id: 'dbu',
     title: 'Dansk Boldspil Union',
-    description: 'DBU - Dansk fodboldforbund',
+    description: 'Dansk fodboldforbund',
     url: 'https://dbu.dk',
     iconKey: 'shield',
   },
   {
     id: 'wikipedia',
-    title: 'Mere om FCN',
-    description: 'Wikipedia artikel',
-    url: 'https://wikipedia.org/wiki/FC_Nordsjælland',
+    title: 'FC Nordsjælland (Wikipedia)',
+    description: 'Wikipedia-artikel om FC Nordsjælland',
+    url: 'https://da.wikipedia.org/wiki/FC_Nordsj%C3%A6lland',
     iconKey: 'book',
   },
 ];

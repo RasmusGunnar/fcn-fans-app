@@ -22,7 +22,7 @@ declare const process: {
   };
 };
 
-const STANDINGS_LEAGUE_ID = process.env.EXPO_PUBLIC_SPORTSDB_LEAGUE_ID ?? '4340';
+const STANDINGS_LEAGUE_ID: string = String(process.env.EXPO_PUBLIC_SPORTSDB_LEAGUE_ID ?? '4340');
 const STANDINGS_SEASON = process.env.EXPO_PUBLIC_SPORTSDB_SEASON ?? '2025-2026';
 
 type LibrarySegmentKey = 'songs' | 'standings' | 'links' | 'videos';
