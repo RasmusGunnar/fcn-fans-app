@@ -82,6 +82,164 @@ async function cryptoRandom(): Promise<string> {
 
 export const COMMUNITY_MEDIA_BUCKET = 'community-media';
 const COMMUNITY_COVER_MAX_WIDTH = 1600;
+const WILD_TIGERS_COMMUNITY_NAME = 'wild tigers';
+
+function hasMissingCommunityColumnError(
+  error: { message?: string | null } | null,
+  column: string,
+): boolean {
+  const message = error?.message?.toLowerCase() ?? '';
+  return message.includes(column.toLowerCase()) && message.includes('column');
+}
+
+async function fetchBaseCommunitiesRows(): Promise<{
+  data: Community[] | null;
+  error: { message?: string | null } | null;
+  appliedFilters: string;
+}> {
+  const attempts = [
+    {
+      appliedFilters: 'visibility + is_active + is_deleted + is_hidden',
+      columns: ['visibility', 'is_active', 'is_deleted', 'is_hidden'],
+      run: () =>
+        supabase
+          .from('communities')
+          .select('*')
+          .or('visibility.eq.public,visibility.is.null')
+          .eq('is_active', true)
+          .not('is_deleted', 'is', 'true')
+          .not('is_hidden', 'is', 'true')
+          .order('name', { ascending: true }),
+    },
+    {
+      appliedFilters: 'visibility + is_active + is_deleted',
+      columns: ['visibility', 'is_active', 'is_deleted'],
+      run: () =>
+        supabase
+          .from('communities')
+          .select('*')
+          .or('visibility.eq.public,visibility.is.null')
+          .eq('is_active', true)
+          .not('is_deleted', 'is', 'true')
+          .order('name', { ascending: true }),
+    },
+    {
+      appliedFilters: 'visibility + is_active',
+      columns: ['visibility', 'is_active'],
+      run: () =>
+        supabase
+          .from('communities')
+          .select('*')
+          .or('visibility.eq.public,visibility.is.null')
+          .eq('is_active', true)
+          .order('name', { ascending: true }),
+    },
+    {
+      appliedFilters: 'is_active + is_deleted + is_hidden',
+      columns: ['is_active', 'is_deleted', 'is_hidden'],
+      run: () =>
+        supabase
+          .from('communities')
+          .select('*')
+          .eq('is_active', true)
+          .not('is_deleted', 'is', 'true')
+          .not('is_hidden', 'is', 'true')
+          .order('name', { ascending: true }),
+    },
+    {
+      appliedFilters: 'is_active + is_deleted',
+      columns: ['is_active', 'is_deleted'],
+      run: () =>
+        supabase
+          .from('communities')
+          .select('*')
+          .eq('is_active', true)
+          .not('is_deleted', 'is', 'true')
+          .order('name', { ascending: true }),
+    },
+    {
+      appliedFilters: 'is_active',
+      columns: ['is_active'],
+      run: () =>
+        supabase.from('communities').select('*').eq('is_active', true).order('name', {
+          ascending: true,
+        }),
+    },
+    {
+      appliedFilters: 'visibility only',
+      columns: ['visibility'],
+      run: () =>
+        supabase
+          .from('communities')
+          .select('*')
+          .or('visibility.eq.public,visibility.is.null')
+          .order('name', { ascending: true }),
+    },
+    {
+      appliedFilters: 'legacy fallback',
+      columns: [],
+      run: () => supabase.from('communities').select('*').order('name', { ascending: true }),
+    },
+  ] as const;
+
+  let lastError: { message?: string | null } | null = null;
+
+  for (const attempt of attempts) {
+    const { data, error } = await attempt.run();
+
+    if (!error) {
+      return {
+        data: (data as Community[] | null) ?? [],
+        error: null,
+        appliedFilters: attempt.appliedFilters,
+      };
+    }
+
+    lastError = error;
+    const missingColumn = attempt.columns.find((column) =>
+      hasMissingCommunityColumnError(error, column),
+    );
+
+    if (!missingColumn) {
+      return {
+        data: null,
+        error,
+        appliedFilters: attempt.appliedFilters,
+      };
+    }
+
+    logger.warn('[communities] Base query column unavailable, retrying with fallback filters:', {
+      missingColumn,
+      attemptedFilters: attempt.appliedFilters,
+      message: error.message,
+    });
+  }
+
+  return {
+    data: null,
+    error: lastError,
+    appliedFilters: 'unresolved fallback',
+  };
+}
+
+export function sortCommunities(communities: Community[]): Community[] {
+  const typeRank = (community: Community) => (community.type === 'fan_faction' ? 0 : 1);
+  const isWildTigers = (community: Community) =>
+    community.name?.trim().toLowerCase() === WILD_TIGERS_COMMUNITY_NAME;
+
+  return [...communities].sort((a, b) => {
+    const typeDiff = typeRank(a) - typeRank(b);
+    if (typeDiff !== 0) return typeDiff;
+
+    const aIsWild = isWildTigers(a) ? 0 : 1;
+    const bIsWild = isWildTigers(b) ? 0 : 1;
+    if (aIsWild !== bIsWild) return aIsWild - bIsWild;
+
+    const aName = a.name?.toLowerCase() ?? '';
+    const bName = b.name?.toLowerCase() ?? '';
+    return aName.localeCompare(bName, 'da');
+  });
+}
 
 // ===== API FUNCTIONS =====
 
@@ -139,29 +297,11 @@ export async function getMemberCounts(communityIds: string[]): Promise<Record<st
 }
 
 /**
- * Get all public communities
+ * Get the shared base communities dataset used across app filters.
  */
 export async function getCommunities(): Promise<Community[]> {
   try {
-    let { data, error } = await supabase
-      .from('communities')
-      .select('*')
-      .or('visibility.eq.public,visibility.is.null')
-      .order('name', { ascending: true });
-
-    if (error && error.message?.toLowerCase().includes('visibility')) {
-      logger.warn(
-        '[communities] visibility filter unavailable, falling back to legacy query:',
-        error,
-      );
-
-      const legacyResponse = await supabase.from('communities').select('*').order('name', {
-        ascending: true,
-      });
-
-      data = legacyResponse.data;
-      error = legacyResponse.error;
-    }
+    const { data, error, appliedFilters } = await fetchBaseCommunitiesRows();
 
     if (error) {
       logger.warn('[communities] Error fetching communities:', error);
@@ -169,17 +309,26 @@ export async function getCommunities(): Promise<Community[]> {
     }
 
     // Ensure avatar_url is populated for each community
-    const communities = (data || []).map(ensureAvatarUrl);
+    const baseCommunities = (data || []).map(ensureAvatarUrl);
 
     // Fetch member counts for all communities
-    const communityIds = communities.map((c) => c.id);
+    const communityIds = baseCommunities.map((c) => c.id);
     const memberCounts = await getMemberCounts(communityIds);
 
     // Attach member counts to communities
-    return communities.map((community) => ({
+    const communitiesWithCounts = baseCommunities.map((community) => ({
       ...community,
       member_count: memberCounts[community.id] || 0,
     }));
+
+    const sortedCommunities = sortCommunities(communitiesWithCounts);
+
+    logger.log('[communities] Loaded base communities dataset:', {
+      appliedFilters,
+      count: sortedCommunities.length,
+    });
+
+    return sortedCommunities;
   } catch (err) {
     logger.error('[communities] Unexpected error:', err);
     return [];

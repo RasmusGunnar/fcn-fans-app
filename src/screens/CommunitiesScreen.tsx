@@ -6,27 +6,244 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import MapView, { Marker, Region } from 'react-native-maps';
 import { AppHeader } from '../components/AppHeader';
 import { MapMarkerIcon } from '../components/MapMarkerIcon';
 import { Badge, Card, IconButton, SegmentedControl, Text } from '../components/ui';
 import { getPublicUrl } from '../lib/storageUrl';
-import { Community as CommunityData, getCommunities } from '../services/communities';
+import { Community as CommunityData, getCommunities, sortCommunities } from '../services/communities';
 import { getMyCommunityRoles } from '../services/rbac';
 import { useTheme } from '../theme';
 
-// Marker anchor adjustment: y < 1 moves pin UP relative to coordinate
-const COMMUNITY_MARKER_ANCHOR_Y = 0.93;
+type CoordinateSource = 'lat' | 'lng' | 'latitude' | 'longitude' | 'coordinates.lat' | 'coordinates.lng' | 'coordinates.latitude' | 'coordinates.longitude';
+
+type NormalizedCommunityCoordinate = {
+  latitude: number;
+  longitude: number;
+  latitudeSource: CoordinateSource;
+  longitudeSource: CoordinateSource;
+};
+
+type CommunityMapAudit = {
+  community: CommunityData;
+  normalizedCoordinate: NormalizedCommunityCoordinate | null;
+  exclusionReason: string | null;
+  debug: {
+    lat: unknown;
+    lng: unknown;
+    latitude: unknown;
+    longitude: unknown;
+    coordinates: unknown;
+    location_label: string | null;
+    place_name: string | null;
+    geocoded_at: string | null;
+    type: CommunityData['type'];
+  };
+};
+
+type MapCommunityItem = {
+  community: CommunityData;
+  coordinate: NormalizedCommunityCoordinate;
+};
+
+type RenderedMapCommunityItem = {
+  community: CommunityData;
+  coordinate: {
+    latitude: number;
+    longitude: number;
+  };
+  baseCoordinate: NormalizedCommunityCoordinate;
+  overlapIndex: number;
+  overlapGroupSize: number;
+};
+
+type CommunityCoordinateRecord = CommunityData & {
+  latitude?: unknown;
+  longitude?: unknown;
+  coordinates?:
+    | {
+        lat?: unknown;
+        lng?: unknown;
+        latitude?: unknown;
+        longitude?: unknown;
+      }
+    | null;
+};
+
+function parseCoordinateValue(value: unknown): number | null {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    const normalized = trimmed.replace(',', '.');
+    const parsed = Number.parseFloat(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
+function normalizeCommunityCoordinate(community: CommunityData): CommunityMapAudit {
+  const coordinateRecord = community as CommunityCoordinateRecord;
+  const latitudeCandidates: { source: CoordinateSource; value: unknown }[] = [
+    { source: 'lat', value: coordinateRecord.lat },
+    { source: 'latitude', value: coordinateRecord.latitude },
+    { source: 'coordinates.lat', value: coordinateRecord.coordinates?.lat },
+    { source: 'coordinates.latitude', value: coordinateRecord.coordinates?.latitude },
+  ];
+  const longitudeCandidates: { source: CoordinateSource; value: unknown }[] = [
+    { source: 'lng', value: coordinateRecord.lng },
+    { source: 'longitude', value: coordinateRecord.longitude },
+    { source: 'coordinates.lng', value: coordinateRecord.coordinates?.lng },
+    { source: 'coordinates.longitude', value: coordinateRecord.coordinates?.longitude },
+  ];
+
+  const latitudeMatch = latitudeCandidates
+    .map((candidate) => ({
+      ...candidate,
+      parsed: parseCoordinateValue(candidate.value),
+    }))
+    .find((candidate) => candidate.parsed !== null);
+  const longitudeMatch = longitudeCandidates
+    .map((candidate) => ({
+      ...candidate,
+      parsed: parseCoordinateValue(candidate.value),
+    }))
+    .find((candidate) => candidate.parsed !== null);
+
+  const debug = {
+    lat: coordinateRecord.lat,
+    lng: coordinateRecord.lng,
+    latitude: coordinateRecord.latitude,
+    longitude: coordinateRecord.longitude,
+    coordinates: coordinateRecord.coordinates ?? null,
+    location_label: community.location_label,
+    place_name: community.place_name,
+    geocoded_at: community.geocoded_at,
+    type: community.type,
+  };
+
+  if (!latitudeMatch && !longitudeMatch) {
+    return {
+      community,
+      normalizedCoordinate: null,
+      exclusionReason: 'missing_lat_and_lng',
+      debug,
+    };
+  }
+
+  if (!latitudeMatch) {
+    return {
+      community,
+      normalizedCoordinate: null,
+      exclusionReason: 'missing_or_invalid_lat',
+      debug,
+    };
+  }
+
+  if (!longitudeMatch) {
+    return {
+      community,
+      normalizedCoordinate: null,
+      exclusionReason: 'missing_or_invalid_lng',
+      debug,
+    };
+  }
+
+  if (latitudeMatch.parsed < -90 || latitudeMatch.parsed > 90) {
+    return {
+      community,
+      normalizedCoordinate: null,
+      exclusionReason: 'lat_out_of_range',
+      debug,
+    };
+  }
+
+  if (longitudeMatch.parsed < -180 || longitudeMatch.parsed > 180) {
+    return {
+      community,
+      normalizedCoordinate: null,
+      exclusionReason: 'lng_out_of_range',
+      debug,
+    };
+  }
+
+  return {
+    community,
+    normalizedCoordinate: {
+      latitude: latitudeMatch.parsed,
+      longitude: longitudeMatch.parsed,
+      latitudeSource: latitudeMatch.source,
+      longitudeSource: longitudeMatch.source,
+    },
+    exclusionReason: null,
+    debug,
+  };
+}
+
+function spreadOverlappingCommunityMarkers(
+  mapItems: MapCommunityItem[],
+): RenderedMapCommunityItem[] {
+  const overlapGroups = new Map<string, MapCommunityItem[]>();
+
+  mapItems.forEach((item) => {
+    const groupKey = `${item.coordinate.latitude.toFixed(6)}:${item.coordinate.longitude.toFixed(6)}`;
+    const existing = overlapGroups.get(groupKey) ?? [];
+    existing.push(item);
+    overlapGroups.set(groupKey, existing);
+  });
+
+  return Array.from(overlapGroups.values()).flatMap((group) => {
+    if (group.length === 1) {
+      const [item] = group;
+      return [
+        {
+          community: item.community,
+          coordinate: {
+            latitude: item.coordinate.latitude,
+            longitude: item.coordinate.longitude,
+          },
+          baseCoordinate: item.coordinate,
+          overlapIndex: 0,
+          overlapGroupSize: 1,
+        },
+      ];
+    }
+
+    return group.map((item, index) => {
+      const angle = (2 * Math.PI * index) / group.length;
+      const radius = 0.00022;
+
+      return {
+        community: item.community,
+        coordinate: {
+          latitude: item.coordinate.latitude + Math.cos(angle) * radius,
+          longitude: item.coordinate.longitude + Math.sin(angle) * radius,
+        },
+        baseCoordinate: item.coordinate,
+        overlapIndex: index,
+        overlapGroupSize: group.length,
+      };
+    });
+  });
+}
 
 export default function CommunitiesScreen() {
   const navigation = useNavigation();
   const tabBarHeight = useBottomTabBarHeight();
   const theme = useTheme();
   const styles = createStyles(theme);
+  const mapRef = useRef<MapView>(null);
 
-  const [communities, setCommunities] = useState<CommunityData[]>([]);
+  const [baseCommunities, setBaseCommunities] = useState<CommunityData[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [activeSegment, setActiveSegment] = useState<
@@ -57,7 +274,7 @@ export default function CommunitiesScreen() {
   const loadCommunities = async () => {
     setLoading(true);
     const data = await getCommunities();
-    setCommunities(data);
+    setBaseCommunities(data);
     setLoading(false);
   };
 
@@ -79,64 +296,176 @@ export default function CommunitiesScreen() {
     { key: 'mine', label: 'Mine' },
   ] as const;
 
-  const filteredCommunities = useMemo(() => {
-    const baseList = (() => {
-      if (activeSegment === 'mine') {
-        return communities.filter((community) => !!myCommunityRoles[community.id]);
-      }
-      if (activeSegment === 'fan_factions') {
-        return communities.filter((community) => community.type === 'fan_faction');
-      }
-      if (activeSegment === 'communities') {
-        return communities.filter((community) => community.type === 'community');
-      }
-      return communities;
-    })();
-
-    const wildTigersName = 'wild tigers';
-    const typeRank = (community: CommunityData) => (community.type === 'fan_faction' ? 0 : 1);
-    const isWildTigers = (community: CommunityData) =>
-      community.name?.trim().toLowerCase() === wildTigersName;
-
-    const sorted = [...baseList].sort((a, b) => {
-      const typeDiff = typeRank(a) - typeRank(b);
-      if (typeDiff !== 0) return typeDiff;
-
-      const aIsWild = isWildTigers(a) ? 0 : 1;
-      const bIsWild = isWildTigers(b) ? 0 : 1;
-      if (aIsWild !== bIsWild) return aIsWild - bIsWild;
-
-      const aName = a.name?.toLowerCase() ?? '';
-      const bName = b.name?.toLowerCase() ?? '';
-      return aName.localeCompare(bName, 'da');
-    });
-
-    return sorted;
-  }, [activeSegment, communities, myCommunityRoles]);
-
-  const hasCoords = (c: CommunityData) => 
-    typeof c.lat === 'number' && typeof c.lng === 'number';
-
-  const hasCoordsAny = useMemo(
-    () => communities.some(hasCoords),
-    [communities],
+  const orderedBaseCommunities = useMemo(
+    () => sortCommunities(baseCommunities),
+    [baseCommunities],
   );
 
-  const mapCommunities = useMemo(
-    () => filteredCommunities.filter(hasCoords),
+  const communitiesByTab = useMemo(
+    () => ({
+      all: orderedBaseCommunities,
+      fan_factions: orderedBaseCommunities.filter((community) => community.type === 'fan_faction'),
+      communities: orderedBaseCommunities.filter((community) => community.type === 'community'),
+      mine: orderedBaseCommunities.filter((community) => !!myCommunityRoles[community.id]),
+    }),
+    [myCommunityRoles, orderedBaseCommunities],
+  );
+
+  const filteredCommunities = useMemo(
+    () => communitiesByTab[activeSegment],
+    [activeSegment, communitiesByTab],
+  );
+
+  const normalizedFilteredCommunities = useMemo(
+    () => filteredCommunities.map((community) => normalizeCommunityCoordinate(community)),
     [filteredCommunities],
   );
 
+  const mapCommunities = useMemo(
+    () =>
+      normalizedFilteredCommunities.flatMap((item) =>
+        item.normalizedCoordinate
+          ? [{ community: item.community, coordinate: item.normalizedCoordinate }]
+          : [],
+      ),
+    [normalizedFilteredCommunities],
+  );
+
+  const mapExcludedCommunities = useMemo(
+    () => normalizedFilteredCommunities.filter((item) => !item.normalizedCoordinate),
+    [normalizedFilteredCommunities],
+  );
+
+  const filteredCommunitiesDebug = useMemo(
+    () =>
+      normalizedFilteredCommunities.map((item) => ({
+        id: item.community.id,
+        name: item.community.name,
+        type: item.community.type,
+        lat: item.debug.lat,
+        lng: item.debug.lng,
+        latitude: item.debug.latitude,
+        longitude: item.debug.longitude,
+        coordinates: item.debug.coordinates,
+        location_label: item.debug.location_label,
+        place_name: item.debug.place_name,
+        geocoded_at: item.debug.geocoded_at,
+        normalizedLatitude: item.normalizedCoordinate?.latitude ?? null,
+        normalizedLongitude: item.normalizedCoordinate?.longitude ?? null,
+        latitudeSource: item.normalizedCoordinate?.latitudeSource ?? null,
+        longitudeSource: item.normalizedCoordinate?.longitudeSource ?? null,
+        exclusionReason: item.exclusionReason,
+      })),
+    [normalizedFilteredCommunities],
+  );
+
+  const mapCommunitiesDebug = useMemo(
+    () =>
+      mapCommunities.map((item) => ({
+        id: item.community.id,
+        name: item.community.name,
+        type: item.community.type,
+        latitude: item.coordinate.latitude,
+        longitude: item.coordinate.longitude,
+        latitudeSource: item.coordinate.latitudeSource,
+        longitudeSource: item.coordinate.longitudeSource,
+      })),
+    [mapCommunities],
+  );
+
+  const mapExcludedCommunitiesDebug = useMemo(
+    () =>
+      mapExcludedCommunities.map((item) => ({
+        id: item.community.id,
+        name: item.community.name,
+        type: item.community.type,
+        reason: item.exclusionReason,
+        lat: item.debug.lat,
+        lng: item.debug.lng,
+        latitude: item.debug.latitude,
+        longitude: item.debug.longitude,
+        coordinates: item.debug.coordinates,
+        location_label: item.debug.location_label,
+        place_name: item.debug.place_name,
+        geocoded_at: item.debug.geocoded_at,
+      })),
+    [mapExcludedCommunities],
+  );
+
+  const renderedMarkerCommunities = useMemo(
+    () => spreadOverlappingCommunityMarkers(mapCommunities),
+    [mapCommunities],
+  );
+
+  const renderedMarkerDebug = useMemo(
+    () =>
+      renderedMarkerCommunities.map((item) => ({
+        id: item.community.id,
+        name: item.community.name,
+        type: item.community.type,
+        latitude: item.coordinate.latitude,
+        longitude: item.coordinate.longitude,
+        baseLatitude: item.baseCoordinate.latitude,
+        baseLongitude: item.baseCoordinate.longitude,
+        overlapIndex: item.overlapIndex,
+        overlapGroupSize: item.overlapGroupSize,
+        latitudeSource: item.baseCoordinate.latitudeSource,
+        longitudeSource: item.baseCoordinate.longitudeSource,
+      })),
+    [renderedMarkerCommunities],
+  );
+
+  const mapCommunitiesKey = useMemo(
+    () => renderedMarkerCommunities.map((item) => item.community.id).join(','),
+    [renderedMarkerCommunities],
+  );
+
+  const mapViewKey = useMemo(
+    () => `${activeSegment}:${mapCommunitiesKey}`,
+    [activeSegment, mapCommunitiesKey],
+  );
+
+  useEffect(() => {
+    console.log('[CommunitiesScreen] selectedTab:', activeSegment);
+    console.log('[CommunitiesScreen] filteredCommunities:', {
+      count: filteredCommunitiesDebug.length,
+      communities: filteredCommunitiesDebug,
+    });
+    console.log('[CommunitiesScreen] mapCommunities:', {
+      count: mapCommunitiesDebug.length,
+      communities: mapCommunitiesDebug,
+    });
+    console.log('[CommunitiesScreen] renderedMarkers:', {
+      count: renderedMarkerDebug.length,
+      communities: renderedMarkerDebug,
+    });
+    console.log('[CommunitiesScreen] excludedFromMapMissingCoordinates:', {
+      count: mapExcludedCommunitiesDebug.length,
+      communities: mapExcludedCommunitiesDebug,
+    });
+  }, [
+    activeSegment,
+    filteredCommunitiesDebug,
+    mapCommunitiesDebug,
+    renderedMarkerDebug,
+    mapExcludedCommunitiesDebug,
+  ]);
+
+  const hasCoordsInFilteredCommunities = useMemo(
+    () => mapCommunities.length > 0,
+    [mapCommunities],
+  );
+
   const mapRegion = useMemo<Region | null>(() => {
-    if (mapCommunities.length === 0) return null;
-    const first = mapCommunities[0];
+    if (renderedMarkerCommunities.length === 0) return null;
+    const first = renderedMarkerCommunities[0];
     return {
-      latitude: first.lat!,
-      longitude: first.lng!,
+      latitude: first.coordinate.latitude,
+      longitude: first.coordinate.longitude,
       latitudeDelta: 0.4,
       longitudeDelta: 0.4,
     };
-  }, [mapCommunities]);
+  }, [renderedMarkerCommunities]);
 
   const getCommunityMarkerLogo = (community: CommunityData): string | null => {
     if (community.avatar_url) {
@@ -150,6 +479,49 @@ export default function CommunitiesScreen() {
     }
     return null;
   };
+
+  const fitMapToRenderedMarkers = useCallback(() => {
+    if (!mapRef.current || renderedMarkerCommunities.length === 0) {
+      return;
+    }
+
+    const coordinates = renderedMarkerCommunities.map((item) => ({
+      latitude: item.coordinate.latitude,
+      longitude: item.coordinate.longitude,
+    }));
+
+    if (coordinates.length === 1) {
+      mapRef.current.animateToRegion(
+        {
+          latitude: coordinates[0].latitude,
+          longitude: coordinates[0].longitude,
+          latitudeDelta: 0.15,
+          longitudeDelta: 0.15,
+        },
+        250,
+      );
+      return;
+    }
+
+    mapRef.current.fitToCoordinates(coordinates, {
+      edgePadding: { top: 64, right: 64, bottom: 64, left: 64 },
+      animated: true,
+    });
+  }, [renderedMarkerCommunities]);
+
+  useEffect(() => {
+    if (viewMode !== 'map' || renderedMarkerCommunities.length === 0) {
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      fitMapToRenderedMarkers();
+    }, 250);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [viewMode, mapViewKey, fitMapToRenderedMarkers, renderedMarkerCommunities.length]);
 
   if (loading) {
     return (
@@ -203,26 +575,32 @@ export default function CommunitiesScreen() {
       {viewMode === 'map' ? (
         mapCommunities.length > 0 && mapRegion ? (
           <View style={styles.mapContainer}>
-            <MapView 
-              style={styles.map} 
+            <MapView
+              key={mapViewKey}
+              ref={mapRef}
+              style={styles.map}
               initialRegion={mapRegion}
               rotateEnabled={false}
               pitchEnabled={false}
+              onMapReady={fitMapToRenderedMarkers}
             >
-              {mapCommunities.map((community) => (
+              {renderedMarkerCommunities.map((item) => (
                 <Marker
-                  key={community.id}
-                  coordinate={{ latitude: community.lat!, longitude: community.lng! }}
-                  title={community.name}
-                  onPress={() => navigateToDetail(community.id, community.name)}
+                  key={item.community.id}
+                  coordinate={{
+                    latitude: item.coordinate.latitude,
+                    longitude: item.coordinate.longitude,
+                  }}
+                  title={item.community.name}
+                  onPress={() => navigateToDetail(item.community.id, item.community.name)}
                   anchor={{ x: 0.5, y: 1 }}
                   flat={false}
                   tracksViewChanges={false}
                 >
                   <MapMarkerIcon
-                    logoUrl={getCommunityMarkerLogo(community)}
-                    type={community.type}
-                    memberCount={community.member_count}
+                    logoUrl={getCommunityMarkerLogo(item.community)}
+                    type={item.community.type}
+                    memberCount={item.community.member_count}
                   />
                 </Marker>
               ))}
@@ -239,7 +617,7 @@ export default function CommunitiesScreen() {
               Kortvisning kommer snart
             </Text>
             <Text variant="body" color="secondary" style={styles.mapPlaceholderText}>
-              {hasCoordsAny
+              {hasCoordsInFilteredCommunities
                 ? 'Kortvisning er midlertidigt slået fra'
                 : 'Der er endnu ingen koordinater for fællesskaber'}
             </Text>

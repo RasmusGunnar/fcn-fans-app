@@ -1,8 +1,7 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { fetchWeeklyRanking, type WeeklyRankingData } from '../../api/weeklyRanking';
 import { Avatar } from '../Avatar';
 import { FanLevelBadge } from '../fan/FanLevelBadge';
 import { Badge, Button, Card, Text } from '../ui';
@@ -10,7 +9,7 @@ import { useTheme, type Theme } from '../../theme';
 import type { FanLevelKey } from '../../types/fan';
 import { cleanText } from '../../utils/text';
 
-const FALLBACK_BODY = 'Har været en af ugens mest aktive fans i fællesskabet.';
+const FALLBACK_BODY = 'Har v\u00e6ret blandt de mest aktive fans i f\u00e6llesskabet.';
 
 export type WeeklyTopFanCardProps = {
   avatarUrl?: string | null;
@@ -43,21 +42,39 @@ function getIsoWeekNumber(dateString?: string): number | null {
   return Math.ceil(((thursday.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
 }
 
+function decodeUnicodeEscapes(input: string | null | undefined): string {
+  if (typeof input !== 'string' || !input) {
+    return '';
+  }
+
+  return input.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex: string) =>
+    String.fromCharCode(Number.parseInt(hex, 16)),
+  );
+}
+
+function cleanCardText(input: string | null | undefined): string {
+  return cleanText(decodeUnicodeEscapes(input));
+}
+
 function extractHighlightBody(body: string): string {
-  const cleaned = cleanText(body)
+  const cleaned = cleanCardText(body)
     .replace(
-      /^(Fremhævet for sit opslag|Fremhævet for kommentaren|Valgt på baggrund af sit opslag|Valgt på baggrund af kommentaren|Spotlight på opslaget|Spotlight på kommentaren):\s*/i,
+      /^(Fremh\u00e6vet for sit opslag|Fremh\u00e6vet for kommentaren|Valgt p\u00e5 baggrund af sit opslag|Valgt p\u00e5 baggrund af kommentaren|Spotlight p\u00e5 opslaget|Spotlight p\u00e5 kommentaren):\s*/i,
       '',
     )
     .trim()
-    .replace(/^["«»]+/, '')
-    .replace(/["«»]+$/, '')
+    .replace(/^["\u00ab\u00bb]+/, '')
+    .replace(/["\u00ab\u00bb]+$/, '')
     .trim();
 
   return cleaned || FALLBACK_BODY;
 }
 
-function formatMetric(value: number | null | undefined, singular: string, plural: string): string | null {
+function formatMetric(
+  value: number | null | undefined,
+  singular: string,
+  plural: string,
+): string | null {
   if (typeof value !== 'number' || value <= 0) return null;
   return `${value} ${value === 1 ? singular : plural}`;
 }
@@ -68,7 +85,7 @@ function formatMetricValue(value: number | null | undefined): string | null {
 }
 
 function normalizeContentTypeLabel(label?: string | null): string | null {
-  const cleanedLabel = cleanText(label).trim();
+  const cleanedLabel = cleanCardText(label).trim();
   if (!cleanedLabel) return null;
   if (cleanedLabel.includes('Afstemning')) return 'Afstemning';
   if (cleanedLabel.includes('Opslag')) return 'Opslag';
@@ -76,18 +93,45 @@ function normalizeContentTypeLabel(label?: string | null): string | null {
   return cleanedLabel || null;
 }
 
-function formatRankingSummary(score: number, rank: number, totalUsers: number): string {
-  if (totalUsers > 0) {
-    return `${score} point · nr. ${rank} af ${totalUsers} denne uge`;
-  }
-
-  return `${score} point denne uge`;
+function buildOverline(weekNumber: number | null): string {
+  return weekNumber ? `Topfan \u00b7 Uge ${weekNumber}` : 'Seneste topfan';
 }
 
-function getRankingHelperText(rank: number): string {
-  if (rank === 1) return 'Du fører ugens ranking lige nu';
-  if (rank <= 3) return 'Du ligger helt i toppen denne uge';
-  return 'Top 3 er tæt på 👀';
+function buildStatusLine(weekNumber: number | null): string {
+  return weekNumber
+    ? `Mest engagerede fan i uge ${weekNumber}`
+    : 'Fremh\u00e6vet fan i f\u00e6llesskabet';
+}
+
+function buildHeroSummary(
+  weekNumber: number | null,
+  contentTypeLabel: string | null,
+  hasReference: boolean,
+): string {
+  if (contentTypeLabel === 'Opslag') {
+    return weekNumber ? 'Ugens st\u00e6rkeste opslag' : 'St\u00e6rkt opslag i f\u00e6llesskabet';
+  }
+
+  if (contentTypeLabel === 'Kommentar') {
+    return weekNumber ? 'St\u00e6rk stemme i kommentarerne' : 'Fremh\u00e6vet kommentar';
+  }
+
+  if (contentTypeLabel === 'Afstemning') {
+    return weekNumber ? 'Skabte engagement i ugens afstemning' : 'Skabte engagement omkring en afstemning';
+  }
+
+  if (hasReference) {
+    return weekNumber ? 'Ugens st\u00e6rkeste bidrag' : 'Fremh\u00e6vet bidrag i f\u00e6llesskabet';
+  }
+
+  return weekNumber ? `Fremh\u00e6vet for uge ${weekNumber}` : 'Fremh\u00e6vet i f\u00e6llesskabet';
+}
+
+function buildHighlightLabel(contentTypeLabel: string | null): string {
+  if (contentTypeLabel === 'Opslag') return 'Fremh\u00e6vet opslag';
+  if (contentTypeLabel === 'Kommentar') return 'Fremh\u00e6vet kommentar';
+  if (contentTypeLabel === 'Afstemning') return 'Fremh\u00e6vet afstemning';
+  return 'Fremh\u00e6vet bidrag';
 }
 
 export function WeeklyTopFanCard({
@@ -95,8 +139,6 @@ export function WeeklyTopFanCard({
   displayName,
   fanLevelKey,
   weekStartDate,
-  title,
-  subtitle,
   body,
   ctaLabel,
   contentTypeLabel,
@@ -109,22 +151,21 @@ export function WeeklyTopFanCard({
 }: WeeklyTopFanCardProps) {
   const theme = useTheme();
   const styles = createStyles(theme);
-  const [rankingOpen, setRankingOpen] = useState(false);
-  const [rankingLoading, setRankingLoading] = useState(false);
-  const [rankingLoaded, setRankingLoaded] = useState(false);
-  const [rankingError, setRankingError] = useState(false);
-  const [rankingData, setRankingData] = useState<WeeklyRankingData | null>(null);
   const weekNumber = getIsoWeekNumber(weekStartDate);
-  const cleanedDisplayName = cleanText(displayName).trim() || 'Fan';
-  const spotlightTitle = cleanText(title).trim() || 'Ugens Topfan';
-  const overline = weekNumber ? `Uge ${weekNumber} · ${spotlightTitle}` : spotlightTitle;
-  const resolvedSubtitle =
-    cleanText(subtitle).trim() || `${cleanedDisplayName} er fremhævet i denne uge`;
-  const resolvedBody = cleanText(body).trim() || FALLBACK_BODY;
-  const resolvedHighlightText =
-    cleanText(highlightText).trim() || extractHighlightBody(resolvedBody).trim();
+  const cleanedDisplayName = cleanCardText(displayName).trim() || 'Fan';
   const normalizedContentTypeLabel = normalizeContentTypeLabel(contentTypeLabel);
-  const cleanedCtaLabel = cleanText(ctaLabel).trim() || 'Se profil';
+  const overline = buildOverline(weekNumber);
+  const statusLine = buildStatusLine(weekNumber);
+  const resolvedSubtitle = buildHeroSummary(
+    weekNumber,
+    normalizedContentTypeLabel,
+    Boolean(onPressReference),
+  );
+  const resolvedBody = cleanCardText(body).trim() || FALLBACK_BODY;
+  const resolvedHighlightText =
+    cleanCardText(highlightText).trim() || extractHighlightBody(resolvedBody).trim();
+  const cleanedCtaLabel = cleanCardText(ctaLabel).trim() || 'Se profil';
+  const highlightLabel = buildHighlightLabel(normalizedContentTypeLabel);
   const metrics = [
     votesCount && votesCount > 0
       ? {
@@ -162,32 +203,7 @@ export function WeeklyTopFanCard({
     theme.colors.bg.surface,
     theme.colors.bg.surface,
   ] as const;
-  const gradientLocations = [0, 0.18, 0.48, 1] as const;
-
-  const handleToggleRanking = async () => {
-    const nextOpen = !rankingOpen;
-    setRankingOpen(nextOpen);
-
-    // Ranking is user-specific, so fetch it on first expand instead of adding another feed item.
-    if (!nextOpen || rankingLoaded || rankingLoading) {
-      return;
-    }
-
-    setRankingLoading(true);
-    setRankingLoaded(true);
-    setRankingError(false);
-
-    const data = await fetchWeeklyRanking();
-
-    if (!data) {
-      setRankingError(true);
-      setRankingLoading(false);
-      return;
-    }
-
-    setRankingData(data);
-    setRankingLoading(false);
-  };
+  const gradientLocations = [0, 0.16, 0.46, 1] as const;
 
   return (
     <Card variant="hero" style={styles.card}>
@@ -200,9 +216,14 @@ export function WeeklyTopFanCard({
       <View style={styles.topHighlight} />
 
       <View style={styles.content}>
-        <Text variant="caption" color="secondary" style={styles.overline}>
-          {overline}
-        </Text>
+        <View style={styles.kickerRow}>
+          <View style={styles.kickerPill}>
+            <Ionicons name="trophy-outline" size={14} color={theme.colors.primary} />
+            <Text variant="caption" color="primary" style={styles.kickerText}>
+              {overline}
+            </Text>
+          </View>
+        </View>
 
         <View style={styles.heroBlock}>
           <Pressable onPress={onPressProfile} style={styles.avatarWrap}>
@@ -217,7 +238,7 @@ export function WeeklyTopFanCard({
           </Text>
 
           <Text variant="small" color="secondary" style={styles.statusLine}>
-            Mest engagerede fan i denne uge
+            {statusLine}
           </Text>
 
           <View style={styles.badgeShell}>
@@ -231,33 +252,12 @@ export function WeeklyTopFanCard({
           </Text>
 
           <View style={styles.reasonBlock}>
-            <View style={styles.reasonAccent} />
-
-            <View style={styles.reasonCopy}>
-              <View style={styles.reasonTopRow}>
+            <View style={styles.reasonHeader}>
+              <View style={styles.reasonLabelRow}>
+                <Ionicons name="sparkles-outline" size={14} color={theme.colors.primary} />
                 <Text variant="caption" color="secondary" style={styles.reasonLabel}>
-                  Fremhævet for bl.a.
+                  {highlightLabel}
                 </Text>
-                {metrics.length > 0 ? (
-                  <View style={styles.metricsRow}>
-                    {metrics.map((metric) => (
-                      <View
-                        key={metric.key}
-                        style={styles.metricItem}
-                        accessibilityLabel={metric.accessibilityLabel}
-                      >
-                        <Ionicons
-                          name={metric.icon}
-                          size={14}
-                          color={theme.colors.text.secondary}
-                        />
-                        <Text variant="caption" color="secondary" style={styles.metricValue}>
-                          {metric.value}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                ) : null}
               </View>
 
               {normalizedContentTypeLabel ? (
@@ -267,79 +267,54 @@ export function WeeklyTopFanCard({
                   size="sm"
                 />
               ) : null}
-
-              <Text
-                variant={onPressReference ? 'bodyBold' : 'body'}
-                color={onPressReference ? 'primary' : 'secondary'}
-                style={[styles.reasonBody, onPressReference && styles.reasonBodyEmphasis]}
-              >
-                {resolvedHighlightText}
-              </Text>
             </View>
+
+            <Text
+              variant={onPressReference ? 'bodyBold' : 'body'}
+              color={onPressReference ? 'primary' : 'secondary'}
+              numberOfLines={4}
+              style={styles.reasonBody}
+            >
+              {resolvedHighlightText}
+            </Text>
+
+            {metrics.length > 0 ? (
+              <View style={styles.metricsRow}>
+                {metrics.map((metric) => (
+                  <View
+                    key={metric.key}
+                    style={styles.metricItem}
+                    accessibilityLabel={metric.accessibilityLabel}
+                  >
+                    <Ionicons
+                      name={metric.icon}
+                      size={14}
+                      color={theme.colors.text.secondary}
+                    />
+                    <Text variant="caption" color="secondary" style={styles.metricValue}>
+                      {metric.value}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
           </View>
         </View>
 
         <View style={styles.actionsRow}>
-          <Button title={cleanedCtaLabel} onPress={onPressProfile} variant="primary" size="sm" />
-          {onPressReference ? (
-            <Pressable onPress={onPressReference} style={styles.referenceAction}>
-              <Text variant="caption" color="primary" style={styles.referenceActionText}>
-                Se opslag →
-              </Text>
-            </Pressable>
-          ) : null}
-        </View>
-
-        <View style={styles.rankingShell}>
-          <Pressable onPress={handleToggleRanking} style={styles.rankingToggle}>
-            <Text variant="caption" color="primary" style={styles.referenceActionText}>
-              {rankingOpen ? 'Skjul din placering' : 'Se din placering'}
-            </Text>
-            <Ionicons
-              name={rankingOpen ? 'chevron-up' : 'chevron-down'}
-              size={theme.spacing[4]}
-              color={theme.colors.text.secondary}
+          <View style={[styles.actionWrap, !onPressReference && styles.actionWrapSingle]}>
+            <Button
+              title={cleanedCtaLabel}
+              onPress={onPressProfile}
+              variant="primary"
+              size="sm"
+              fullWidth
             />
-          </Pressable>
+          </View>
 
-          {rankingOpen ? (
-            <View style={styles.rankingPanel}>
-              {rankingLoading ? (
-                <Text variant="body" color="secondary">
-                  Henter din placering...
-                </Text>
-              ) : rankingError ? (
-                <Text variant="body" color="secondary">
-                  Placering kunne ikke hentes lige nu
-                </Text>
-              ) : rankingData?.rank !== null && rankingData ? (
-                <>
-                  <Text variant="caption" color="secondary">
-                    Din placering denne uge
-                  </Text>
-                  <Text variant="h2" color="primary">
-                    #{rankingData.rank}
-                  </Text>
-                  <Text variant="body" color="secondary">
-                    {formatRankingSummary(
-                      rankingData.score,
-                      rankingData.rank,
-                      rankingData.totalUsers,
-                    )}
-                  </Text>
-                  <Text variant="caption" color="secondary">
-                    {getRankingHelperText(rankingData.rank)}
-                  </Text>
-                </>
-              ) : rankingData ? (
-                <Text variant="body" color="secondary">
-                  Du har ikke aktivitet endnu denne uge
-                </Text>
-              ) : (
-                <Text variant="body" color="secondary">
-                  Placering kunne ikke hentes lige nu
-                </Text>
-              )}
+          {onPressReference ? (
+            <View style={styles.actionWrap}>
+              <Button title="Se opslag" onPress={onPressReference} variant="outline" size="sm" fullWidth />
             </View>
           ) : null}
         </View>
@@ -360,7 +335,7 @@ function createStyles(theme: Theme) {
       ...StyleSheet.absoluteFillObject,
     },
     topHighlight: {
-      height: theme.spacing[1],
+      height: theme.spacing[1] + theme.layout.borderWidth,
       borderRadius: theme.radius.pill,
       backgroundColor: theme.colors.primary,
       marginHorizontal: -theme.layout.borderHairline,
@@ -372,15 +347,28 @@ function createStyles(theme: Theme) {
       paddingBottom: theme.components.card.padding,
       gap: theme.spacing[3],
     },
-    overline: {
+    kickerRow: {
+      alignItems: 'center',
+    },
+    kickerPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing[1],
+      paddingVertical: theme.spacing[1],
+      paddingHorizontal: theme.spacing[3],
+      borderRadius: theme.radius.pill,
+      backgroundColor: theme.colors.bg.elevated,
+      borderWidth: theme.layout.borderHairline,
+      borderColor: theme.colors.border.active,
+    },
+    kickerText: {
       textTransform: 'uppercase',
-      letterSpacing: 1.2,
-      textAlign: 'center',
-      opacity: 0.78,
+      letterSpacing: 0.9,
+      fontWeight: '700',
     },
     heroBlock: {
       alignItems: 'center',
-      gap: theme.spacing[0] + 2,
+      gap: theme.spacing[1],
     },
     avatarWrap: {
       alignItems: 'center',
@@ -392,17 +380,18 @@ function createStyles(theme: Theme) {
     },
     avatarGlow: {
       position: 'absolute',
-      width: theme.spacing[14],
-      height: theme.spacing[14],
+      width: theme.spacing[16] + theme.spacing[2],
+      height: theme.spacing[16] + theme.spacing[2],
       borderRadius: theme.radius.pill,
-      backgroundColor: theme.colors.bg.subtle,
+      backgroundColor: theme.colors.pill.red.bg,
+      opacity: 0.22,
     },
     avatarRing: {
-      padding: theme.spacing[1],
+      padding: theme.spacing[1] + theme.layout.borderHairline,
       borderRadius: theme.radius.pill,
       backgroundColor: theme.colors.bg.elevated,
-      borderWidth: theme.layout.borderHairline,
-      borderColor: theme.colors.border.default,
+      borderWidth: theme.layout.borderWidth,
+      borderColor: theme.colors.border.active,
     },
     displayName: {
       fontWeight: '700',
@@ -428,56 +417,53 @@ function createStyles(theme: Theme) {
       borderColor: theme.colors.border.active,
     },
     copyBlock: {
-      gap: theme.spacing[2],
-      paddingTop: theme.spacing[1],
+      gap: theme.spacing[3],
+      paddingTop: theme.spacing[2],
     },
     subtitle: {
-      maxWidth: '92%',
+      maxWidth: '88%',
       lineHeight: theme.typography.bodyBold.lineHeight,
       textAlign: 'center',
       alignSelf: 'center',
     },
     reasonBlock: {
-      flexDirection: 'row',
-      alignItems: 'stretch',
       gap: theme.spacing[2],
       paddingVertical: theme.spacing[3],
-      paddingHorizontal: theme.spacing[3],
+      paddingHorizontal: theme.spacing[4],
       borderRadius: theme.radius.md,
       backgroundColor: theme.colors.bg.elevated,
       borderWidth: theme.layout.borderHairline,
       borderColor: theme.colors.border.default,
     },
-    reasonAccent: {
-      width: theme.layout.borderWidth * 3,
-      borderRadius: theme.radius.pill,
-      backgroundColor: theme.colors.primary,
-    },
-    reasonCopy: {
-      flex: 1,
-      gap: theme.spacing[1],
-    },
-    reasonTopRow: {
+    reasonHeader: {
       flexDirection: 'row',
-      alignItems: 'flex-start',
+      alignItems: 'center',
       justifyContent: 'space-between',
       gap: theme.spacing[2],
       flexWrap: 'wrap',
+    },
+    reasonLabelRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing[1],
     },
     reasonLabel: {
       letterSpacing: 0.3,
       fontWeight: '700',
     },
-    metricsText: {
-      textAlign: 'right',
-      opacity: 0.92,
+    reasonBody: {
+      maxWidth: '100%',
+      lineHeight: theme.typography.body.lineHeight,
     },
     metricsRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'flex-end',
+      justifyContent: 'flex-start',
       gap: theme.spacing[2],
       flexWrap: 'wrap',
+      paddingTop: theme.spacing[1],
+      borderTopWidth: theme.layout.borderHairline,
+      borderTopColor: theme.colors.border.subtle,
     },
     metricItem: {
       flexDirection: 'row',
@@ -487,47 +473,17 @@ function createStyles(theme: Theme) {
     metricValue: {
       fontWeight: '700',
     },
-    reasonBody: {
-      maxWidth: '100%',
-      lineHeight: theme.typography.body.lineHeight,
-    },
-    reasonBodyEmphasis: {
-      fontStyle: 'italic',
-      letterSpacing: -0.1,
-    },
     actionsRow: {
       flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
+      alignItems: 'stretch',
       gap: theme.spacing[2],
-      flexWrap: 'wrap',
       marginTop: theme.spacing[2],
     },
-    referenceAction: {
-      paddingVertical: theme.spacing[1],
+    actionWrap: {
+      flex: 1,
     },
-    referenceActionText: {
-      fontWeight: '700',
-    },
-    rankingShell: {
-      gap: theme.spacing[2],
-      marginTop: theme.spacing[1],
-    },
-    rankingToggle: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: theme.spacing[2],
-      paddingVertical: theme.spacing[1],
-    },
-    rankingPanel: {
-      gap: theme.spacing[1],
-      paddingVertical: theme.spacing[3],
-      paddingHorizontal: theme.spacing[3],
-      borderRadius: theme.radius.md,
-      backgroundColor: theme.colors.bg.elevated,
-      borderWidth: theme.layout.borderHairline,
-      borderColor: theme.colors.border.default,
+    actionWrapSingle: {
+      flexBasis: '100%',
     },
   });
 }

@@ -15,6 +15,7 @@ import { Text } from '../components/ui';
 import { getSafeFanLevelKey } from '../lib/fanLevel';
 import { getFanLevelDescription } from '../lib/fanbarometer';
 import { fetchUserCommentedPostIds } from '../services/commentsApi';
+import { fetchPublicProfileById } from '../services/profileApi';
 import { useFeed } from '../state/FeedContext';
 import { useTheme, type Theme } from '../theme';
 import { targetKey } from '../utils/targetKey';
@@ -40,10 +41,49 @@ export default function PublicProfileScreen() {
     removePost,
   } = useFeed();
 
+  const [resolvedProfile, setResolvedProfile] = useState<Awaited<
+    ReturnType<typeof fetchPublicProfileById>
+  > | null>(null);
+
+  useEffect(() => {
+    if (!userId) {
+      setResolvedProfile(null);
+      return;
+    }
+
+    let cancelled = false;
+    fetchPublicProfileById(userId).then((profile) => {
+      if (!cancelled) {
+        setResolvedProfile(profile);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
   const authorProfile = userId ? profileMap?.[userId] : undefined;
-  const displayName = authorProfile?.display_name || 'Fan';
-  const avatarUrl = authorProfile?.avatar_url || null;
-  const fanLevel = getSafeFanLevelKey(authorProfile?.fan_level_key);
+  const effectiveAuthorProfile = resolvedProfile ?? authorProfile;
+  const effectiveProfileMap = useMemo(() => {
+    if (!userId || !resolvedProfile) {
+      return profileMap;
+    }
+
+    return {
+      ...profileMap,
+      [userId]: {
+        ...(profileMap?.[userId] ?? {}),
+        display_name: resolvedProfile.display_name,
+        username: resolvedProfile.username,
+        avatar_url: resolvedProfile.avatar_url,
+        fan_level_key: resolvedProfile.fan_level_key,
+      },
+    };
+  }, [profileMap, resolvedProfile, userId]);
+  const displayName = effectiveAuthorProfile?.display_name || 'Fan';
+  const avatarUrl = effectiveAuthorProfile?.avatar_url || null;
+  const fanLevel = getSafeFanLevelKey(effectiveAuthorProfile?.fan_level_key);
   const levelDescription = getFanLevelDescription(fanLevel);
 
   // ---------- user's own posts ----------
@@ -128,7 +168,7 @@ export default function PublicProfileScreen() {
 
   const renderCard = useCallback(
     (post: FeedPost) => {
-      const profile = post.authorId ? profileMap?.[post.authorId] : undefined;
+      const profile = post.authorId ? effectiveProfileMap?.[post.authorId] : undefined;
       const key = targetKey('post', post.id);
       const likeState = likeMap[key] || { liked: false, likes: 0 };
       const commentCount = commentCountMap[key] || 0;
@@ -139,7 +179,7 @@ export default function PublicProfileScreen() {
             post={post}
             authorProfile={profile}
             communityMap={communityMap}
-            profileMap={profileMap}
+            profileMap={effectiveProfileMap}
             liked={likeState.liked}
             likes={likeState.likes}
             commentsCount={commentCount}
@@ -157,7 +197,7 @@ export default function PublicProfileScreen() {
       );
     },
     [
-      profileMap,
+      effectiveProfileMap,
       communityMap,
       likeMap,
       commentCountMap,

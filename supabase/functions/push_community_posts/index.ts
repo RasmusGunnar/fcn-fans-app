@@ -40,34 +40,21 @@ function readString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 }
 
-function getIsoTime(value: string | null | undefined): number {
-  if (!value) return Number.NEGATIVE_INFINITY;
-  const timestamp = new Date(value).getTime();
-  return Number.isFinite(timestamp) ? timestamp : Number.NEGATIVE_INFINITY;
-}
-
-function pickLatestTokenPerUser(rows: PushTokenRow[]): PushTokenRow[] {
-  const latestByUser = new Map<string, PushTokenRow>();
-
-  for (const row of rows) {
+function normalizePushTokens(rows: PushTokenRow[]): PushTokenRow[] {
+  return rows.flatMap((row) => {
     const userId = readString(row.user_id);
     const pushToken = readString(row.push_token);
-    if (!userId || !pushToken) continue;
+    if (!userId || !pushToken) return [];
 
-    const normalizedRow: PushTokenRow = {
-      user_id: userId,
-      push_token: pushToken,
-      platform: row.platform ?? null,
-      updated_at: row.updated_at ?? null,
-    };
-
-    const existing = latestByUser.get(userId);
-    if (!existing || getIsoTime(normalizedRow.updated_at) >= getIsoTime(existing.updated_at)) {
-      latestByUser.set(userId, normalizedRow);
-    }
-  }
-
-  return Array.from(latestByUser.values());
+    return [
+      {
+        user_id: userId,
+        push_token: pushToken,
+        platform: row.platform ?? null,
+        updated_at: row.updated_at ?? null,
+      },
+    ];
+  });
 }
 
 function truncatePreview(value: string | null | undefined, limit = 120) {
@@ -209,7 +196,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const tokens = pickLatestTokenPerUser(
+    const tokens = normalizePushTokens(
       (await fetchPushTokensForUsers(supabase, usersWithPreferenceEnabled)) as PushTokenRow[],
     );
     const tokenUserIds = new Set(tokens.map((tokenRow) => tokenRow.user_id));
@@ -228,7 +215,7 @@ Deno.serve(async (req) => {
     const notificationType = isPoll ? 'community_poll' : 'community_post';
     const targetType = isPoll ? 'community_poll' : 'community_post';
     const dedupeKeys = tokens.map((tokenRow) =>
-      buildNotificationDedupeKey(notificationType, post.id, tokenRow.user_id),
+      buildNotificationDedupeKey(notificationType, post.id, tokenRow.user_id, tokenRow.push_token),
     );
     const existingDedupeKeys = await fetchExistingNotificationDedupeKeys(supabase, dedupeKeys);
 
@@ -240,7 +227,12 @@ Deno.serve(async (req) => {
         return [];
       }
 
-      const dedupeKey = buildNotificationDedupeKey(notificationType, post.id, tokenRow.user_id);
+      const dedupeKey = buildNotificationDedupeKey(
+        notificationType,
+        post.id,
+        tokenRow.user_id,
+        tokenRow.push_token,
+      );
       if (existingDedupeKeys.has(dedupeKey)) {
         recipientsSkippedExistingDedupe += 1;
         return [];

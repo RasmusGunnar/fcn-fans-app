@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../auth/AuthProvider';
-import { getSafeFanLevelKey } from '../../lib/fanLevel';
+import { isFanLevelKey } from '../../lib/fanLevel';
 import { logger } from '../../lib/logger';
 import { supabase } from '../../lib/supabase';
 import { navigationRef } from '../../navigation/navigationRef';
@@ -403,7 +403,12 @@ export function FanPostCard({
     cleanText(post.authorDisplayName || authorProfile?.display_name || (post as any).authorName) ||
     '';
   const fallbackAuthorAvatarUrl = authorProfile?.avatar_url ?? post.authorAvatarUrl ?? null;
-  const fallbackAuthorFanLevelKey = authorProfile?.fan_level_key ?? post.authorFanLevelKey ?? null;
+  const fallbackAuthorFanLevelKey =
+    authorProfile != null
+      ? (isFanLevelKey(authorProfile.fan_level_key) ? authorProfile.fan_level_key : null)
+      : isFanLevelKey(post.authorFanLevelKey)
+        ? post.authorFanLevelKey
+        : null;
   const actorDisplayName = isCommunityPost
     ? fallbackActorDisplayName || communityName || 'Fællesskab'
     : fallbackAuthorDisplayName || 'Ukendt';
@@ -440,7 +445,7 @@ export function FanPostCard({
       ? cleanText(`${groupDisplay} · ${timeAgo}`)
       : timeAgo;
 
-  const authorFanLevel = getSafeFanLevelKey(fallbackAuthorFanLevelKey);
+  const authorFanLevel = fallbackAuthorFanLevelKey;
   const hasRightSlot = postMenuOptions.length > 0;
   const mediaCountBadge = hasMultipleMedia ? (
     <View style={styles.mediaCountBadge}>

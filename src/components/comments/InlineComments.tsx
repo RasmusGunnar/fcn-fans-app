@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { logger } from '../../lib/logger';
 import { supabase } from '../../lib/supabase';
 import { useEntityAutocomplete } from '../../hooks/useEntityAutocomplete';
 import { EntityAutocompleteList } from '../composer/EntityAutocompleteList';
@@ -382,28 +383,73 @@ export function InlineComments({
 
       const mentionedProfiles = await resolveMentionedProfiles(resolvedText);
 
-      if (targetType === 'post' && mentionedProfiles.length > 0) {
-        void createMentionNotifications({
-          mentionedUsernames: mentionedProfiles
-            .map((profile) => profile.username)
-            .filter((username): username is string => Boolean(username)),
-          actorId: currentUserId,
-          postId: targetId,
-          commentId: data.id,
-        });
+      void (async () => {
+        if (targetType === 'post' && mentionedProfiles.length > 0) {
+          const [mentionNotificationsResult, mentionPushResult] = await Promise.allSettled([
+            createMentionNotifications({
+              mentionedUsernames: mentionedProfiles
+                .map((profile) => profile.username)
+                .filter((username): username is string => Boolean(username)),
+              actorId: currentUserId,
+              postId: targetId,
+              commentId: data.id,
+            }),
+            triggerMentionPush({
+              actorUserId: currentUserId,
+              mentionedUserIds: mentionedProfiles.map((profile) => profile.id),
+              entityType: 'comment',
+              entityId: data.id,
+              postId: targetId,
+              commentId: data.id,
+              previewText: resolvedText,
+            }),
+          ]);
 
-        void triggerMentionPush({
-          actorUserId: currentUserId,
-          mentionedUserIds: mentionedProfiles.map((profile) => profile.id),
-          entityType: 'comment',
-          entityId: data.id,
-          postId: targetId,
-          commentId: data.id,
-          previewText: resolvedText,
-        });
-      }
+          if (mentionNotificationsResult.status === 'rejected') {
+            logger.warn('[InlineComments] createMentionNotifications failed:', {
+              targetType,
+              targetId,
+              commentId: data.id,
+              error: mentionNotificationsResult.reason,
+            });
+          }
 
-      void triggerCommentReplyPush(data.id);
+          if (mentionPushResult.status === 'rejected') {
+            logger.warn('[InlineComments] triggerMentionPush failed:', {
+              targetType,
+              targetId,
+              commentId: data.id,
+              error: mentionPushResult.reason,
+            });
+          } else if (!mentionPushResult.value) {
+            logger.warn('[InlineComments] triggerMentionPush returned false', {
+              targetType,
+              targetId,
+              commentId: data.id,
+            });
+          }
+        }
+
+        if (targetType === 'post') {
+          try {
+            const didTriggerReplyPush = await triggerCommentReplyPush(data.id);
+            if (!didTriggerReplyPush) {
+              logger.warn('[InlineComments] triggerCommentReplyPush returned false', {
+                targetType,
+                targetId,
+                commentId: data.id,
+              });
+            }
+          } catch (error) {
+            logger.warn('[InlineComments] triggerCommentReplyPush failed:', {
+              targetType,
+              targetId,
+              commentId: data.id,
+              error,
+            });
+          }
+        }
+      })();
       return true;
     } catch (err: any) {
       console.error('[InlineComments] Submit error:', err);
@@ -589,40 +635,117 @@ export function InlineComments({
         parentComment?.author_id &&
         parentComment.author_id !== currentUserId
       ) {
-        void createNotification({
-          user_id: parentComment.author_id,
-          actor_id: currentUserId,
-          type: 'reply',
-          entity_type: 'comment',
-          entity_id: savedReply.id,
-          post_id: targetId,
-        });
       }
 
       const mentionedProfiles = await resolveMentionedProfiles(optimisticReply.text);
 
-      if (targetType === 'post' && mentionedProfiles.length > 0) {
-        void createMentionNotifications({
-          mentionedUsernames: mentionedProfiles
-            .map((profile) => profile.username)
-            .filter((username): username is string => Boolean(username)),
-          actorId: currentUserId,
-          postId: targetId,
-          commentId: savedReply.id,
-        });
+      void (async () => {
+        if (
+          targetType === 'post' &&
+          parentComment?.author_id &&
+          parentComment.author_id !== currentUserId
+        ) {
+          try {
+            const { error } = await createNotification({
+              user_id: parentComment.author_id,
+              actor_id: currentUserId,
+              type: 'reply',
+              entity_type: 'comment',
+              entity_id: savedReply.id,
+              post_id: targetId,
+            });
 
-        void triggerMentionPush({
-          actorUserId: currentUserId,
-          mentionedUserIds: mentionedProfiles.map((profile) => profile.id),
-          entityType: 'reply',
-          entityId: savedReply.id,
-          postId: targetId,
-          commentId: savedReply.id,
-          previewText: optimisticReply.text,
-        });
-      }
+            if (error) {
+              logger.warn('[InlineComments] createNotification failed:', {
+                targetType,
+                targetId,
+                commentId,
+                replyId: savedReply.id,
+                error,
+              });
+            }
+          } catch (error) {
+            logger.warn('[InlineComments] createNotification threw:', {
+              targetType,
+              targetId,
+              commentId,
+              replyId: savedReply.id,
+              error,
+            });
+          }
+        }
 
-      void triggerCommentReplyPush(savedReply.id);
+        if (targetType === 'post' && mentionedProfiles.length > 0) {
+          const [mentionNotificationsResult, mentionPushResult] = await Promise.allSettled([
+            createMentionNotifications({
+              mentionedUsernames: mentionedProfiles
+                .map((profile) => profile.username)
+                .filter((username): username is string => Boolean(username)),
+              actorId: currentUserId,
+              postId: targetId,
+              commentId: savedReply.id,
+            }),
+            triggerMentionPush({
+              actorUserId: currentUserId,
+              mentionedUserIds: mentionedProfiles.map((profile) => profile.id),
+              entityType: 'reply',
+              entityId: savedReply.id,
+              postId: targetId,
+              commentId: savedReply.id,
+              previewText: optimisticReply.text,
+            }),
+          ]);
+
+          if (mentionNotificationsResult.status === 'rejected') {
+            logger.warn('[InlineComments] createMentionNotifications failed:', {
+              targetType,
+              targetId,
+              commentId,
+              replyId: savedReply.id,
+              error: mentionNotificationsResult.reason,
+            });
+          }
+
+          if (mentionPushResult.status === 'rejected') {
+            logger.warn('[InlineComments] triggerMentionPush failed:', {
+              targetType,
+              targetId,
+              commentId,
+              replyId: savedReply.id,
+              error: mentionPushResult.reason,
+            });
+          } else if (!mentionPushResult.value) {
+            logger.warn('[InlineComments] triggerMentionPush returned false', {
+              targetType,
+              targetId,
+              commentId,
+              replyId: savedReply.id,
+            });
+          }
+        }
+
+        if (targetType === 'post') {
+          try {
+            const didTriggerReplyPush = await triggerCommentReplyPush(savedReply.id);
+            if (!didTriggerReplyPush) {
+              logger.warn('[InlineComments] triggerCommentReplyPush returned false', {
+                targetType,
+                targetId,
+                commentId,
+                replyId: savedReply.id,
+              });
+            }
+          } catch (error) {
+            logger.warn('[InlineComments] triggerCommentReplyPush failed:', {
+              targetType,
+              targetId,
+              commentId,
+              replyId: savedReply.id,
+              error,
+            });
+          }
+        }
+      })();
     } catch (err) {
       console.error('[InlineComments] Reply submit error:', err);
     } finally {

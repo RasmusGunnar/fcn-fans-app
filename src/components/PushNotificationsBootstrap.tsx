@@ -1,8 +1,13 @@
 import React, { useEffect, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
+import { AppState, type AppStateStatus } from 'react-native';
 import { useAuth } from '../auth/AuthProvider';
 import { logger } from '../lib/logger';
-import { openNotificationTarget, syncPushNotifications } from '../lib/notifications';
+import {
+  openNotificationTarget,
+  removeCurrentPushToken,
+  syncPushNotifications,
+} from '../lib/notifications';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -35,6 +40,42 @@ export function PushNotificationsBootstrap() {
   }, [user?.id]);
 
   useEffect(() => {
+    let currentAppState: AppStateStatus = AppState.currentState;
+
+    const syncOnForeground = async () => {
+      if (!user?.id) {
+        return;
+      }
+
+      try {
+        const { status } = await Notifications.getPermissionsAsync();
+
+        if (status !== 'granted') {
+          await removeCurrentPushToken(user.id);
+          return;
+        }
+
+        await syncPushNotifications(user.id, { promptIfNeeded: false });
+      } catch (error) {
+        logger.warn('[PushNotificationsBootstrap] Foreground push sync failed:', error);
+      }
+    };
+
+    const appStateSub = AppState.addEventListener('change', (nextAppState) => {
+      const wasInBackground = currentAppState === 'background' || currentAppState === 'inactive';
+      currentAppState = nextAppState;
+
+      if (wasInBackground && nextAppState === 'active') {
+        void syncOnForeground();
+      }
+    });
+
+    return () => {
+      appStateSub.remove();
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
     const handleResponse = async (response: Notifications.NotificationResponse | null) => {
       if (!response) return;
 
@@ -63,9 +104,20 @@ export function PushNotificationsBootstrap() {
       void handleResponse(response);
     });
 
-    void Notifications.getLastNotificationResponseAsync().then((response) => {
-      void handleResponse(response);
-    });
+    void (async () => {
+      const response = await Notifications.getLastNotificationResponseAsync();
+
+      try {
+        await Notifications.clearLastNotificationResponseAsync();
+      } catch (error) {
+        logger.warn(
+          '[PushNotificationsBootstrap] Failed to clear last notification response:',
+          error,
+        );
+      }
+
+      await handleResponse(response);
+    })();
 
     return () => {
       receivedSub.remove();

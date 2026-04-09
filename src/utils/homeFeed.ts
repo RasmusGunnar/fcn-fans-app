@@ -46,6 +46,7 @@ export const HOME_RANKING_V1 = {
   },
   weeklyTopFan: {
     validWeekBoost: 10,
+    recencyMultiplier: 0.22,
   },
   community: {
     recencyMultiplier: 0.55,
@@ -283,7 +284,34 @@ export function getFeedItemCreatedAt(item: FeedItem): string | null {
 
 function isValidWeeklyTopFanForHome(item: FeedItem, baseDate = new Date()): boolean {
   if (item.kind !== 'weekly_top_fan') return false;
-  return item.data.weekStartDate === getLatestPublishedWeeklyTopFanWeekStart(baseDate);
+  const hasRequiredData = Boolean(
+    item.data.id &&
+      item.data.userId &&
+      (item.data.weekStartDate || item.data.generatedAt || item.data.createdAt),
+  );
+
+  if (!hasRequiredData) {
+    console.log('[homeFeed] dropping weekly_top_fan due to missing required data', {
+      id: item.id,
+      weekStartDate: item.data.weekStartDate ?? null,
+      userId: item.data.userId ?? null,
+    });
+    return false;
+  }
+
+  console.log('[homeFeed] allowing weekly_top_fan into home feed', {
+    id: item.id,
+    weekStartDate: item.data.weekStartDate,
+    latestExpectedWeekStart: getLatestPublishedWeeklyTopFanWeekStart(baseDate),
+  });
+  return true;
+}
+
+function isWeeklyTopFanItem(
+  item: FeedItem | RankedHomeFeedEntry | null | undefined,
+): boolean {
+  if (!item) return false;
+  return 'item' in item ? item.item.kind === 'weekly_top_fan' : item.kind === 'weekly_top_fan';
 }
 
 function compareFeedItemsByDate(a: FeedItem, b: FeedItem): number {
@@ -344,6 +372,10 @@ function getRecencyScore(item: FeedItem, now: Date): number {
     return recencyScore * HOME_RANKING_V1.community.recencyMultiplier;
   }
 
+  if (item.kind === 'weekly_top_fan') {
+    return recencyScore * HOME_RANKING_V1.weeklyTopFan.recencyMultiplier;
+  }
+
   if (item.kind === 'fan_activity') {
     const startsAt = toTimestamp(item.data.startsAt ?? null);
     const endsAt = toTimestamp(item.data.endsAt ?? null);
@@ -367,9 +399,13 @@ function getRecencyScore(item: FeedItem, now: Date): number {
 }
 
 function getEngagementScore(item: FeedItem): number {
+  if (item.kind === 'weekly_top_fan') {
+    return 0;
+  }
+
   const likeCount = Math.max(0, item.data.likeCount ?? 0);
   const commentCount = Math.max(0, item.data.commentCount ?? 0);
-  const votesCount = item.kind === 'weekly_top_fan' ? Math.max(0, item.data.votesCount ?? 0) : 0;
+  const votesCount = 0;
   const engagementCount =
     likeCount * HOME_RANKING_V1.engagement.likeWeight +
     commentCount * HOME_RANKING_V1.engagement.commentWeight +
@@ -593,6 +629,7 @@ function compareRankedHomeFeedEntries(a: RankedHomeFeedEntry, b: RankedHomeFeedE
 
 function applyHomeRankingGuardrails(entries: RankedHomeFeedEntry[]): RankedHomeFeedEntry[] {
   const top: RankedHomeFeedEntry[] = [];
+  const deferredWeeklyTopFanCards: RankedHomeFeedEntry[] = [];
   const deferredSystemCards: RankedHomeFeedEntry[] = [];
   const rest: RankedHomeFeedEntry[] = [];
   let systemCardsInTopWindow = 0;
@@ -601,6 +638,11 @@ function applyHomeRankingGuardrails(entries: RankedHomeFeedEntry[]): RankedHomeF
     const isSystemCard = Boolean(entry.item.data.isSystemCard);
 
     if (top.length < HOME_RANKING_V1.guardrails.topWindow) {
+      if (isWeeklyTopFanItem(entry)) {
+        deferredWeeklyTopFanCards.push(entry);
+        return;
+      }
+
       if (
         isSystemCard &&
         systemCardsInTopWindow >= HOME_RANKING_V1.guardrails.maxSystemCardsInTopWindow
@@ -627,7 +669,7 @@ function applyHomeRankingGuardrails(entries: RankedHomeFeedEntry[]): RankedHomeF
     top.push(deferredSystemCards.shift()!);
   }
 
-  return [...top, ...deferredSystemCards, ...rest];
+  return [...top, ...deferredWeeklyTopFanCards, ...deferredSystemCards, ...rest];
 }
 
 function applyHomeCommunityGuardrails(
@@ -827,7 +869,29 @@ function logHomeRankingDebug(entries: RankedHomeFeedEntry[]) {
 export function sortHomeFeedItems(items: FeedItem[], baseDate = new Date()): FeedItem[] {
   const auditContext = HOME_FEED_AUDIT_DEBUG_ENABLED ? { events: [] as HomeFeedAuditEvent[] } : undefined;
   const safeItems = sanitizeFeedItems(items, 'sortHomeFeedItems:input');
+  let hasValidWeeklyTopFan = false;
   const relevantItems = safeItems.filter((item) => {
+    if (item.kind === 'weekly_top_fan') {
+      if (!isValidWeeklyTopFanForHome(item, baseDate)) {
+        return false;
+      }
+
+      if (hasValidWeeklyTopFan) {
+        console.log('[homeFeed] dropping duplicate weekly_top_fan item', {
+          id: item.id,
+          weekStartDate: item.data.weekStartDate,
+        });
+        return false;
+      }
+
+      hasValidWeeklyTopFan = true;
+      console.log('[homeFeed] keeping weekly_top_fan item', {
+        id: item.id,
+        weekStartDate: item.data.weekStartDate,
+      });
+      return true;
+    }
+
     if (item.kind === 'community') {
       const createdAt = item.data.createdAt ?? null;
       if (!createdAt || !toTimestamp(createdAt)) {

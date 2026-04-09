@@ -194,6 +194,12 @@ For `weekly_top_fan`, also set `SYNC_SECRET` in Supabase secrets and run
 `supabase/sql/2026-03-20_schedule_weekly_top_fan.sql` manually with the real
 project ref and sync secret.
 
+Authoritative Weekly Top Fan publish rule:
+
+- Generate/publish every Monday at 12:00 Europe/Copenhagen
+- Publish the winner for the previous completed Monday-based week
+- Keep the Edge Function gate and pg_cron schedule aligned with this rule
+
 ## ✅ Setup Checklist
 
 Before testing the app:

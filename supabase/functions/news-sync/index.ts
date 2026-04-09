@@ -2,7 +2,10 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { XMLParser } from "npm:fast-xml-parser@4";
 import { decodeHtml } from "../_shared/decodeHtml.ts";
 import {
+  extractArticleMetadata,
   fetchArticleMedia,
+  isWeakArticleDescription,
+  isWeakArticleTitle,
   sanitizeNewsHeroImageUrl,
 } from "../_shared/newsMedia.ts";
 import { decodeResponseText, fixEncoding } from "../_shared/textEncoding.ts";
@@ -100,7 +103,7 @@ Deno.serve(async () => {
       totalFetched += 1;
 
       const parsed = parser.parse(xmlText);
-      const items = await enrichItemsWithMedia(extractItems(parsed, defaultSiteName));
+      const items = await enrichItemsWithMedia(extractItems(parsed, defaultSiteName), defaultSiteName);
       const uniqueItems = items.filter((item) => {
         if (!item.url || !item.title) return false;
         if (seenUrls.has(item.url)) return false;
@@ -219,24 +222,49 @@ function extractAtomItems(feed: Record<string, unknown>, defaultSiteName: string
   });
 }
 
-async function enrichItemsWithMedia(items: NewsItem[]): Promise<NewsItem[]> {
+function isWeakSiteName(siteName: string | null | undefined, defaultSiteName: string): boolean {
+  const cleaned = decodeHtml(fixEncoding(siteName)).trim();
+  if (!cleaned) return true;
+  return cleaned.toLowerCase() === defaultSiteName.trim().toLowerCase();
+}
+
+async function enrichItemsWithMedia(
+  items: NewsItem[],
+  defaultSiteName: string,
+): Promise<NewsItem[]> {
   return await Promise.all(
     items.map(async (item) => {
       const sanitizedFeedImage = sanitizeNewsHeroImageUrl(item.image_url, item.url);
-      if (sanitizedFeedImage) {
+      const weakTitle = isWeakArticleTitle(item.title, item.url, [item.site_name, defaultSiteName]);
+      const weakDescription = isWeakArticleDescription(item.description, item.title);
+      const weakSiteName = isWeakSiteName(item.site_name, defaultSiteName);
+
+      if (sanitizedFeedImage && !weakTitle && !weakDescription && !weakSiteName) {
+        return { ...item, image_url: sanitizedFeedImage };
+      }
+
+      if (!item.url) {
         return { ...item, image_url: sanitizedFeedImage };
       }
 
       try {
         const article = await fetchArticleMedia(item.url, FETCH_TIMEOUT_MS, USER_AGENT);
+        const metadata = extractArticleMetadata(article.html, article.resolvedUrl, {
+          siteNameHint: item.site_name,
+          defaultSiteName,
+        });
+
         return {
           ...item,
-          image_url: article.media.imageUrl ?? null,
+          title: weakTitle ? metadata.title || item.title : item.title,
+          description: weakDescription ? metadata.description || item.description : item.description,
+          image_url: sanitizedFeedImage || metadata.media.imageUrl || null,
+          site_name: weakSiteName ? metadata.siteName || item.site_name : item.site_name,
         };
       } catch {
         return {
           ...item,
-          image_url: null,
+          image_url: sanitizedFeedImage || null,
         };
       }
     }),

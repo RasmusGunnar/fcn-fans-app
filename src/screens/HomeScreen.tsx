@@ -17,7 +17,12 @@ import NextMatchBadge from '../components/home/NextMatchBadge';
 import { Card } from '../components/ui/Card';
 import { useAttendance } from '../hooks/useAttendance';
 import { useMatchCheckIn } from '../hooks/useMatchCheckIn';
-import { fetchPrimaryFixture, formatShortDateDa, type Fixture } from '../services/fixtures';
+import {
+  fetchUpcomingFixtures,
+  formatShortDateDa,
+  isFcnHomeFixture,
+  type Fixture,
+} from '../services/fixtures';
 import { getMatchHeroUrl, getTeamHeroImage } from '../services/sportsdb';
 import { useFeed } from '../state/FeedContext';
 import { colors, defaultTheme, spacing } from '../theme';
@@ -25,6 +30,8 @@ import type { FeedFanActivityData, FeedItem } from '../types/feed';
 import { getFeedItemKey } from '../types/feed';
 import { buildMatchdayUiModel } from '../utils/matchdayUiModel';
 import { getPrimaryMediaKind } from '../utils/media';
+
+const HOME_NEXT_MATCH_LOOKAHEAD_LIMIT = 20;
 
 function formatKickoffCountdown(kickoffAt: string, now: Date): string {
   const diffMs = new Date(kickoffAt).getTime() - now.getTime();
@@ -171,8 +178,40 @@ export default function HomeScreen() {
 
   const loadNextFixture = async () => {
     setLoadingFixture(true);
-    const fixture = await fetchPrimaryFixture();
+
+    const upcomingFixtures = await fetchUpcomingFixtures(HOME_NEXT_MATCH_LOOKAHEAD_LIMIT);
+    const fixture = upcomingFixtures[0] ?? null;
+
+    console.log('[HOME][NEXT_MATCH] upcoming candidates', {
+      total: upcomingFixtures.length,
+      fixtures: upcomingFixtures.map((candidate, index) => ({
+        index,
+        id: candidate.id,
+        homeTeam: candidate.home_team,
+        awayTeam: candidate.away_team,
+        kickoffAt: candidate.kickoff_at,
+        isFcnHomeFixture: isFcnHomeFixture(candidate),
+      })),
+    });
+
+    if (fixture) {
+      console.log('[HOME][NEXT_MATCH] selected fixture', {
+        id: fixture.id,
+        opponents: `${fixture.home_team} vs ${fixture.away_team}`,
+        kickoffAt: fixture.kickoff_at,
+        reason: 'Selected the chronologically earliest upcoming FC Nordsjaelland fixture; home/away is ignored for primary selection.',
+      });
+    } else {
+      console.log('[HOME][NEXT_MATCH] selected fixture', {
+        id: null,
+        opponents: null,
+        kickoffAt: null,
+        reason: 'No upcoming FC Nordsjaelland fixtures were available.',
+      });
+    }
+
     setNextFixture(fixture);
+
     // Resolve hero: try raw first, then team API
     let hero = getMatchHeroUrl(fixture as any);
     const homeTeamHeroId = fixture?.home_team_provider_id ?? fixture?.home_team_id ?? null;

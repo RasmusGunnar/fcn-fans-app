@@ -37,34 +37,21 @@ function readString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 }
 
-function getIsoTime(value: string | null | undefined): number {
-  if (!value) return Number.NEGATIVE_INFINITY;
-  const timestamp = new Date(value).getTime();
-  return Number.isFinite(timestamp) ? timestamp : Number.NEGATIVE_INFINITY;
-}
-
-function pickLatestTokenPerUser(rows: PushTokenRow[]): PushTokenRow[] {
-  const latestByUser = new Map<string, PushTokenRow>();
-
-  for (const row of rows) {
+function normalizePushTokens(rows: PushTokenRow[]): PushTokenRow[] {
+  return rows.flatMap((row) => {
     const userId = readString(row.user_id);
     const pushToken = readString(row.push_token);
-    if (!userId || !pushToken) continue;
+    if (!userId || !pushToken) return [];
 
-    const normalizedRow: PushTokenRow = {
-      user_id: userId,
-      push_token: pushToken,
-      platform: row.platform ?? null,
-      updated_at: row.updated_at ?? null,
-    };
-
-    const existing = latestByUser.get(userId);
-    if (!existing || getIsoTime(normalizedRow.updated_at) >= getIsoTime(existing.updated_at)) {
-      latestByUser.set(userId, normalizedRow);
-    }
-  }
-
-  return Array.from(latestByUser.values());
+    return [
+      {
+        user_id: userId,
+        push_token: pushToken,
+        platform: row.platform ?? null,
+        updated_at: row.updated_at ?? null,
+      },
+    ];
+  });
 }
 
 function truncatePreview(value: string, limit = 120): string {
@@ -235,7 +222,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const tokens = pickLatestTokenPerUser(
+    const tokens = normalizePushTokens(
       (await fetchPushTokensForUsers(supabase, [recipientUserId])) as PushTokenRow[],
     );
 
@@ -248,55 +235,75 @@ Deno.serve(async (req) => {
       return json(200, { ok: true, skipped: 'no_token', recipientUserId, inApp: inAppResult });
     }
 
-    const dedupeKey = buildNotificationDedupeKey(notificationType, comment.id);
-    const existingDedupeKeys = await fetchExistingNotificationDedupeKeys(supabase, [dedupeKey]);
-    if (existingDedupeKeys.has(dedupeKey)) {
+    const dedupeKeys = tokens.map((tokenRow) =>
+      buildNotificationDedupeKey(
+        notificationType,
+        comment.id,
+        recipientUserId,
+        tokenRow.push_token,
+      ),
+    );
+    const existingDedupeKeys = await fetchExistingNotificationDedupeKeys(supabase, dedupeKeys);
+    const requests = tokens.flatMap((tokenRow) => {
+      const dedupeKey = buildNotificationDedupeKey(
+        notificationType,
+        comment.id,
+        recipientUserId,
+        tokenRow.push_token,
+      );
+
+      if (existingDedupeKeys.has(dedupeKey)) {
+        return [];
+      }
+
+      return [
+        {
+          userId: recipientUserId,
+          pushToken: tokenRow.push_token,
+          notificationType,
+          dedupeKey,
+          title:
+            notificationType === 'reply_to_comment'
+              ? `${senderName} svarede p\u00E5 din kommentar`
+              : `${senderName} kommenterede dit opslag`,
+          body: bodyPreview,
+          data: {
+            notificationType,
+            targetType:
+              notificationType === 'reply_to_comment' ? 'comment_reply' : 'post_comment',
+            type: 'post',
+            postId: comment.target_id,
+            commentId: comment.id,
+            parentCommentId: comment.parent_id,
+            url: `fcnfans://post/${comment.target_id}`,
+          },
+        },
+      ];
+    });
+
+    if (requests.length === 0) {
       console.log('[push_comment_replies] skipped duplicate', {
         commentId,
         recipientUserId,
         notificationType,
-        dedupeKey,
+        dedupeKeys,
       });
       return json(200, {
         ok: true,
         skipped: 'duplicate',
         recipientUserId,
-        dedupeKey,
+        dedupeKeys,
         inApp: inAppResult,
       });
     }
 
-    const title =
-      notificationType === 'reply_to_comment'
-        ? `${senderName} svarede p\u00E5 din kommentar`
-        : `${senderName} kommenterede dit opslag`;
-    const targetType = notificationType === 'reply_to_comment' ? 'comment_reply' : 'post_comment';
-
-    const result = await dispatchNotifications(supabase, [
-      {
-        userId: recipientUserId,
-        pushToken: tokens[0].push_token,
-        notificationType,
-        dedupeKey,
-        title,
-        body: bodyPreview,
-        data: {
-          notificationType,
-          targetType,
-          type: 'post',
-          postId: comment.target_id,
-          commentId: comment.id,
-          parentCommentId: comment.parent_id,
-          url: `fcnfans://post/${comment.target_id}`,
-        },
-      },
-    ]);
+    const result = await dispatchNotifications(supabase, requests);
 
     console.log('[push_comment_replies] dispatch', {
       commentId,
       notificationType,
       recipientUserId,
-      requestsPrepared: 1,
+      requestsPrepared: requests.length,
       total: result.total,
       queued: result.queued,
       skipped: result.skipped,
@@ -309,7 +316,7 @@ Deno.serve(async (req) => {
       commentId,
       notificationType,
       recipientUserId,
-      dedupeKey,
+      dedupeKeys: requests.map((request) => request.dedupeKey),
       inApp: inAppResult,
       ...result,
     });

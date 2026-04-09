@@ -16,6 +16,8 @@ import {
   Platform,
   Dimensions,
 } from 'react-native';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from '../components/ui';
@@ -74,6 +76,10 @@ export default function LoginScreen({ route, navigation }: Props) {
 
       await signInWithPassword(e, password);
     } catch (err: any) {
+      if (err?.authUiHandled) {
+        return;
+      }
+
       const msg = err?.message || String(err) || 'Ukendt fejl';
       Alert.alert('Fejl', msg);
     }
@@ -149,17 +155,22 @@ export default function LoginScreen({ route, navigation }: Props) {
       <View style={styles.authSection}>
         {Platform.OS === 'ios' ? (
           <View style={styles.socialAuthSection}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.appleButton,
-                loading && styles.buttonDisabled,
-                pressed && !loading && styles.buttonPressed,
-              ]}
-              onPress={onApple}
-              disabled={loading}
+            <View
+              style={[styles.appleButtonWrapper, loading && styles.buttonDisabled]}
+              pointerEvents={loading ? 'none' : 'auto'}
             >
-              <Text style={styles.appleButtonText}>Fortsæt med Apple</Text>
-            </Pressable>
+              <AppleAuthentication.AppleAuthenticationButton
+                buttonType={
+                  isSignup
+                    ? AppleAuthentication.AppleAuthenticationButtonType.SIGN_UP
+                    : AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN
+                }
+                buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                cornerRadius={theme.components.button.radius}
+                style={styles.appleNativeButton}
+                onPress={onApple}
+              />
+            </View>
             {!isCompactHeight ? (
               <Text style={styles.helperText}>Hurtigt og sikkert på iPhone</Text>
             ) : null}
@@ -181,7 +192,14 @@ export default function LoginScreen({ route, navigation }: Props) {
             onPress={onFacebook}
             disabled={loading}
           >
-            <Text style={styles.facebookButtonText}>FortsÃ¦t med Facebook</Text>
+            <View style={styles.facebookButtonContent}>
+              <Ionicons
+                name="logo-facebook"
+                size={theme.spacing[5]}
+                color={theme.colors.text.inverse}
+              />
+              <Text style={styles.facebookButtonText}>{'Forts\u00E6t med Facebook'}</Text>
+            </View>
           </Pressable>
         </View>
 
@@ -396,28 +414,27 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     secondarySocialAuthSection: {
       marginTop: theme.spacing[2],
     },
-    appleButton: {
+    appleButtonWrapper: {
       width: '100%',
-      borderRadius: theme.radius.pill,
-      paddingVertical: theme.spacing[4],
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: theme.colors.bg.surface,
-      borderWidth: 1,
-      borderColor: theme.colors.border.default,
+    },
+    appleNativeButton: {
+      width: '100%',
+      height: theme.components.button.size.lg.height,
     },
     facebookButton: {
       width: '100%',
-      borderRadius: theme.radius.pill,
-      paddingVertical: theme.spacing[4],
+      minHeight: theme.components.button.size.lg.height,
+      borderRadius: theme.components.button.radius,
+      paddingHorizontal: theme.components.button.size.lg.px,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: theme.colors.primary,
+      backgroundColor: theme.colors.state.info,
     },
-    appleButtonText: {
-      fontSize: 18,
-      fontWeight: '600',
-      color: theme.colors.text.primary,
+    facebookButtonContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: theme.spacing[2],
     },
     facebookButtonText: {
       fontSize: 18,

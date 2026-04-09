@@ -22,7 +22,13 @@ import { getPublicUrl } from '../../lib/storageUrl';
 import { supabase } from '../../lib/supabase';
 import type { OnboardingStackParamList } from '../../navigation/OnboardingStack';
 import { fetchMyProfile } from '../../services/profileApi';
-import { getCommunities, getMembership, joinCommunity, type Community } from '../../services/communities';
+import {
+  getCommunities,
+  getMembership,
+  joinCommunity,
+  sortCommunities,
+  type Community,
+} from '../../services/communities';
 import { useTheme } from '../../theme';
 
 type Props = NativeStackScreenProps<OnboardingStackParamList, 'OnboardingCommunities'>;
@@ -67,19 +73,6 @@ function isMissingOnboardingColumnError(error: unknown): boolean {
   return message.toLowerCase().includes('onboarding_complete');
 }
 
-function sortSuggestedCommunities(communities: Community[]): Community[] {
-  return [...communities].sort((a, b) => {
-    const typeDiff = (a.type === 'fan_faction' ? 0 : 1) - (b.type === 'fan_faction' ? 0 : 1);
-    if (typeDiff !== 0) return typeDiff;
-
-    const aIsWildTigers = a.name?.trim().toLowerCase() === 'wild tigers' ? 0 : 1;
-    const bIsWildTigers = b.name?.trim().toLowerCase() === 'wild tigers' ? 0 : 1;
-    if (aIsWildTigers !== bIsWildTigers) return aIsWildTigers - bIsWildTigers;
-
-    return (a.name ?? '').localeCompare(b.name ?? '', 'da');
-  });
-}
-
 export default function OnboardingCommunitiesScreen({ navigation, route }: Props) {
   const theme = useTheme();
   const styles = createStyles(theme);
@@ -102,7 +95,7 @@ export default function OnboardingCommunitiesScreen({ navigation, route }: Props
         const data = await getCommunities();
         if (!isMounted) return;
 
-        const ordered = sortSuggestedCommunities(data).map((community) => ({
+        const ordered = sortCommunities(data).map((community) => ({
           ...community,
           imageUrl:
             community.avatar_url ||

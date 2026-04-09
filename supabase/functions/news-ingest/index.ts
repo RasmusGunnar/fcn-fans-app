@@ -1,7 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { decodeHtml } from "../_shared/decodeHtml.ts";
 import {
-  extractArticleMedia,
+  extractArticleMetadata,
   fetchArticleMedia,
   sanitizeNewsHeroImageUrl,
 } from "../_shared/newsMedia.ts";
@@ -14,13 +14,6 @@ type IngestPayload = {
   image_url?: string | null;
   site_name?: string | null;
   note?: string | null;
-};
-
-type ScrapedMetadata = {
-  title: string;
-  description: string;
-  image_url: string | null;
-  site_name: string;
 };
 
 const FETCH_TIMEOUT_MS = 12000;
@@ -150,8 +143,7 @@ Deno.serve(async (req) => {
     return jsonResponse({ ok: false, error: message }, 502);
   }
 
-  const metadata = scrapeMetadata(html, {
-    baseUrl: resolvedUrl,
+  const metadata = extractArticleMetadata(html, resolvedUrl, {
     siteNameHint: userSiteName || "",
     defaultSiteName,
   });
@@ -160,8 +152,8 @@ Deno.serve(async (req) => {
   const finalTitle = decodeHtml(userTitle || metadata.title);
   const finalDescription = decodeHtml(userDescription || metadata.description) || null;
   const finalImageUrl =
-    sanitizeNewsHeroImageUrl(userImageUrl, resolvedUrl) || metadata.image_url || null;
-  const finalSiteName = decodeHtml(userSiteName || metadata.site_name) || null;
+    sanitizeNewsHeroImageUrl(userImageUrl, resolvedUrl) || metadata.media.imageUrl || null;
+  const finalSiteName = decodeHtml(userSiteName || metadata.siteName) || null;
 
   if (!finalTitle) {
     return jsonResponse({ ok: false, error: "Missing title" }, 422);
@@ -205,91 +197,6 @@ Deno.serve(async (req) => {
   );
 });
 
-function scrapeMetadata(
-  html: string,
-  {
-    baseUrl,
-    siteNameHint,
-    defaultSiteName,
-  }: { baseUrl: string; siteNameHint: string; defaultSiteName: string },
-): ScrapedMetadata {
-  const title =
-    pickFirst(
-      extractMetaProperty(html, "og:title"),
-      extractMetaProperty(html, "twitter:title"),
-      extractTitleTag(html),
-    ) || "";
-
-  const description =
-    pickFirst(
-      extractMetaProperty(html, "og:description"),
-      extractMetaProperty(html, "twitter:description"),
-      extractMetaName(html, "description"),
-    ) || "";
-
-  const media = extractArticleMedia(html, baseUrl);
-
-  const siteName =
-    pickFirst(
-      extractMetaProperty(html, "og:site_name"),
-      siteNameHint,
-      extractSiteNameFromBody(html),
-      defaultSiteName,
-    ) || "";
-
-  return {
-    title: limitText(decodeHtml(fixEncoding(title)), 200),
-    description: limitText(decodeHtml(fixEncoding(description)), 500),
-    image_url: media.imageUrl ? limitText(media.imageUrl, 500) : null,
-    site_name: limitText(decodeHtml(fixEncoding(siteName)), 80),
-  };
-}
-
-function extractMetaProperty(html: string, property: string): string {
-  const regex = new RegExp(
-    `<meta[^>]+property=["']${escapeRegex(property)}["'][^>]+content=["']([^"']+)["'][^>]*>`,
-    "i",
-  );
-  return regexMatch(html, regex);
-}
-
-function extractMetaName(html: string, name: string): string {
-  const regex = new RegExp(
-    `<meta[^>]+name=["']${escapeRegex(name)}["'][^>]+content=["']([^"']+)["'][^>]*>`,
-    "i",
-  );
-  return regexMatch(html, regex);
-}
-
-function extractTitleTag(html: string): string {
-  return regexMatch(html, /<title[^>]*>([^<]+)<\/title>/i);
-}
-
-function extractSiteNameFromBody(html: string): string {
-  const jsonLike = regexMatch(html, /"site_name"\s*:\s*"([^"]+)"/i);
-  if (jsonLike) return jsonLike;
-  return regexMatch(html, /site_name\s*=\s*"([^"]+)"/i);
-}
-
-function regexMatch(html: string, regex: RegExp): string {
-  const match = html.match(regex);
-  return match?.[1]?.trim() || "";
-}
-
-function pickFirst(...values: string[]): string {
-  for (const value of values) {
-    const trimmed = value.trim();
-    if (trimmed) return trimmed;
-  }
-  return "";
-}
-
-function limitText(value: string, maxLength: number): string {
-  const trimmed = value.trim();
-  if (trimmed.length <= maxLength) return trimmed;
-  return trimmed.slice(0, maxLength).trim();
-}
-
 function isValidUrl(value: string): boolean {
   try {
     const parsed = new URL(value);
@@ -297,10 +204,6 @@ function isValidUrl(value: string): boolean {
   } catch {
     return false;
   }
-}
-
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function jsonResponse(body: Record<string, unknown>, status = 200): Response {

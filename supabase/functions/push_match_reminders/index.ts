@@ -114,35 +114,21 @@ function buildOpponentLabel(row: Record<string, unknown>): string {
   return `${homeTeam} - ${awayTeam}`;
 }
 
-function getIsoTime(value: string | null | undefined): number {
-  if (!value) return Number.NEGATIVE_INFINITY;
-
-  const timestamp = new Date(value).getTime();
-  return Number.isFinite(timestamp) ? timestamp : Number.NEGATIVE_INFINITY;
-}
-
-function pickLatestTokenPerUser(rows: PushTokenRow[]): PushTokenRow[] {
-  const latestByUser = new Map<string, PushTokenRow>();
-
-  for (const row of rows) {
+function normalizePushTokens(rows: PushTokenRow[]): PushTokenRow[] {
+  return rows.flatMap((row) => {
     const userId = readString(row.user_id);
     const pushToken = readString(row.push_token);
-    if (!userId || !pushToken) continue;
+    if (!userId || !pushToken) return [];
 
-    const normalizedRow: PushTokenRow = {
-      user_id: userId,
-      push_token: pushToken,
-      platform: row.platform ?? null,
-      updated_at: row.updated_at ?? null,
-    };
-
-    const existing = latestByUser.get(userId);
-    if (!existing || getIsoTime(normalizedRow.updated_at) >= getIsoTime(existing.updated_at)) {
-      latestByUser.set(userId, normalizedRow);
-    }
-  }
-
-  return Array.from(latestByUser.values());
+    return [
+      {
+        user_id: userId,
+        push_token: pushToken,
+        platform: row.platform ?? null,
+        updated_at: row.updated_at ?? null,
+      },
+    ];
+  });
 }
 
 async function fetchGoingRsvpUserIds(supabase: any, fixtureId: string) {
@@ -289,7 +275,7 @@ Deno.serve(async (req) => {
       recipientsSkippedPreference += notCheckedInUserIds.length - usersWithPreferenceEnabled.length;
       if (usersWithPreferenceEnabled.length === 0) continue;
 
-      const tokens = pickLatestTokenPerUser(
+      const tokens = normalizePushTokens(
         (await fetchPushTokensForUsers(supabase, usersWithPreferenceEnabled)) as PushTokenRow[],
       );
       const tokenUserIds = new Set(tokens.map((tokenRow) => tokenRow.user_id));
@@ -310,6 +296,7 @@ Deno.serve(async (req) => {
             'match_checkin_reminder',
             fixtureUuid,
             tokenRow.user_id,
+            tokenRow.push_token,
           ),
           title: 'Er du p\u00E5 stadion?',
           body: `FCN m\u00F8der ${opponent} kl. ${formatTimeDa(kickoffAt)}. Husk at tjekke ind til kampen i appen.`,

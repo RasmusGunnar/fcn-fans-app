@@ -40,6 +40,23 @@ function normalizeUserProfile(
   };
 }
 
+async function readProfileDirect(userId: string): Promise<UserProfile | null> {
+  for (const select of PROFILE_SELECT_ATTEMPTS) {
+    const { data, error } = await supabase.from('profiles').select(select).eq('id', userId).maybeSingle();
+
+    if (error) {
+      logger.warn('[profileApi] Direct profile lookup failed for select:', { select, error });
+      continue;
+    }
+
+    if (data) {
+      return normalizeUserProfile(data as unknown as Partial<UserProfile> & Pick<UserProfile, 'id'>);
+    }
+  }
+
+  return null;
+}
+
 export interface MyCommunity {
   id: string;
   name: string;
@@ -120,6 +137,15 @@ export async function fetchMyProfile(userId: string): Promise<UserProfile | null
     return null;
   } catch (err) {
     logger.error('[profileApi] Unexpected error fetching profile:', err);
+    return null;
+  }
+}
+
+export async function fetchPublicProfileById(userId: string): Promise<UserProfile | null> {
+  try {
+    return await readProfileDirect(userId);
+  } catch (err) {
+    logger.error('[profileApi] Unexpected error fetching public profile:', err);
     return null;
   }
 }

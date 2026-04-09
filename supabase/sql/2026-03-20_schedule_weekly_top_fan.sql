@@ -8,6 +8,10 @@
 --   Replace both placeholders, make sure the weekly_top_fan Edge Function is
 --   deployed, and set SYNC_SECRET in Supabase secrets before running this SQL.
 --
+-- Authoritative publish rule:
+--   Publish one Weekly Top Fan snapshot every Monday at 12:00 Europe/Copenhagen.
+--   The published card represents the previous completed Monday-based week.
+--
 -- Timezone assumption:
 --   Supabase pg_cron commonly runs on UTC.
 --   Europe/Copenhagen is UTC+1 in winter and UTC+2 in summer.

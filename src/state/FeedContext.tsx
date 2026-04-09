@@ -44,7 +44,6 @@ import {
 import { resolveAvatarUrl } from '../utils/avatar';
 import { normalizeMedia } from '../utils/media';
 import { targetKey } from '../utils/targetKey';
-import type { ProfileMap } from '../utils/actor';
 
 type FeedProfileEntry = {
   display_name: string | null;
@@ -211,7 +210,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
   const [homeFeedItems, setHomeFeedItems] = useState<FeedItem[]>([]);
   const [communityMap, setCommunityMap] = useState<Record<string, string>>({});
-  const [profileMap, setProfileMap] = useState<ProfileMap>({});
+  const [profileMap, setProfileMap] = useState<Record<string, FeedProfileEntry>>({});
   const [likeMap, setLikeMap] = useState<Record<string, { liked: boolean; likes: number }>>({});
   const [commentCountMap, setCommentCountMap] = useState<Record<string, number>>({});
   const [commentPreviewMap, setCommentPreviewMap] = useState<Record<string, CommentPreview[]>>({});
@@ -537,18 +536,47 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
 
     try {
       weeklyTopFanItem = await fetchLatestPublishedWeeklyTopFan();
+      console.log(
+        '[FeedProvider] weekly_top_fan fetch result',
+        weeklyTopFanItem
+          ? {
+              id: weeklyTopFanItem.id,
+              weekStartDate: weeklyTopFanItem.weekStartDate,
+              userId: weeklyTopFanItem.userId,
+            }
+          : null,
+      );
       if (weeklyTopFanItem?.userId) {
-        setProfileMap((prev) => ({
-          ...prev,
-          [weeklyTopFanItem!.userId]: {
-            display_name: weeklyTopFanItem!.displayName,
-            avatar_url: weeklyTopFanItem!.avatarUrl ?? null,
-            fan_level_key: weeklyTopFanItem!.fanLevelKey,
-          },
-        }));
+        setProfileMap((prev) => {
+          const existingProfile = prev[weeklyTopFanItem!.userId];
+          const nextProfile: FeedProfileEntry = {
+            username: existingProfile?.username ?? null,
+            display_name: existingProfile?.display_name ?? weeklyTopFanItem!.displayName,
+            avatar_url: existingProfile?.avatar_url ?? weeklyTopFanItem!.avatarUrl ?? null,
+            fan_level_key:
+              existingProfile?.fan_level_key ?? weeklyTopFanItem!.fanLevelKey ?? null,
+          };
+
+          if (
+            existingProfile &&
+            existingProfile.display_name === nextProfile.display_name &&
+            existingProfile.avatar_url === nextProfile.avatar_url &&
+            existingProfile.fan_level_key === nextProfile.fan_level_key
+          ) {
+            return prev;
+          }
+
+          return {
+            ...prev,
+            [weeklyTopFanItem!.userId]: nextProfile,
+          };
+        });
       }
     } catch (e: any) {
       logger.warn('[FeedProvider] fetchLatestPublishedWeeklyTopFan failed:', e?.message || e);
+      console.log('[FeedProvider] weekly_top_fan fetch threw, continuing without card', {
+        message: e?.message ?? String(e),
+      });
       weeklyTopFanItem = null;
     }
 
@@ -562,6 +590,15 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       const safeCommunityFeedEntries = communityFeedEntries ?? [];
       const safeWeeklyTopFanItem = weeklyTopFanItem ?? null;
       const baseDate = new Date();
+      console.log(
+        '[FeedProvider] injecting weekly_top_fan into feeds',
+        safeWeeklyTopFanItem
+          ? {
+              id: safeWeeklyTopFanItem.id,
+              weekStartDate: safeWeeklyTopFanItem.weekStartDate,
+            }
+          : null,
+      );
       const nextFeedItems = buildFeedItemsFromSources({
         posts: safePostsArray,
         newsItems: safeNewsArray,
@@ -579,6 +616,11 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         fanActivities: safeFanActivitiesArray,
         weeklyTopFanItem: safeWeeklyTopFanItem,
         baseDate,
+      });
+      console.log('[FeedProvider] weekly_top_fan injected state', {
+        feedHasCard: nextFeedItems.some((item) => item.kind === 'weekly_top_fan'),
+        homeHasCardBeforeRanking: nextHomeFeedItems.some((item) => item.kind === 'weekly_top_fan'),
+        weeklyTopFanId: safeWeeklyTopFanItem?.id ?? null,
       });
 
       setFeedItems(nextFeedItems);
@@ -714,6 +756,10 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         withFeedEngagementSummary(nextHomeFeedItems, newLikeMap, newCommentCountMap),
         baseDate,
       );
+      console.log('[FeedProvider] weekly_top_fan after home ranking', {
+        homeHasCardAfterRanking: rankedHomeFeedItems.some((item) => item.kind === 'weekly_top_fan'),
+        weeklyTopFanId: safeWeeklyTopFanItem?.id ?? null,
+      });
       setHomeFeedItems(rankedHomeFeedItems);
       logHomeFeedSnapshot('final', rankedHomeFeedItems, baseDate);
 

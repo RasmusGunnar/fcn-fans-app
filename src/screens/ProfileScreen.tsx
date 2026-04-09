@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -21,7 +21,7 @@ import { FanLevelBadge } from '../components/fan/FanLevelBadge';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Pill } from '../components/ui/Pill';
-import { getSafeFanLevelKey } from '../lib/fanLevel';
+import { isFanLevelKey } from '../lib/fanLevel';
 import { OutlineButton } from '../components/ui/OutlineButton';
 import { spacing } from '../theme';
 import { useTheme } from '../theme';
@@ -177,7 +177,35 @@ export default function ProfileScreen() {
   >(null);
   const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
   const [weeklyRanking, setWeeklyRanking] = useState<WeeklyRankingData | null>(null);
-  const fanLevel = getSafeFanLevelKey(profile?.fan_level_key);
+  const liveFanLevel = isFanLevelKey(profile?.fan_level_key) ? profile.fan_level_key : null;
+  const fanLevel = liveFanLevel ?? 'new_fan';
+  const weeklyStatus = useMemo(() => {
+    if (!weeklyRanking) {
+      return {
+        value: 'Ugestatus er utilgængelig',
+        note: 'Prøv igen senere.',
+      };
+    }
+
+    if (weeklyRanking.rank != null && weeklyRanking.totalUsers > 0) {
+      return {
+        value: `Nr. ${weeklyRanking.rank} af ${weeklyRanking.totalUsers}`,
+        note: `${weeklyRanking.score.toLocaleString('da-DK')} point i denne uge.`,
+      };
+    }
+
+    if (weeklyRanking.score > 0) {
+      return {
+        value: `${weeklyRanking.score.toLocaleString('da-DK')} point i denne uge`,
+        note: 'Placeringen opdateres, når ugens ranking er klar.',
+      };
+    }
+
+    return {
+      value: 'Ingen aktivitet endnu',
+      note: 'Post, kommentér eller check ind for at komme i gang.',
+    };
+  }, [weeklyRanking]);
 
   const loadData = useCallback(async () => {
     if (!user?.id) {
@@ -764,17 +792,13 @@ export default function ProfileScreen() {
 
       <FanBarometerCard
         level={fanLevel}
-        score={weeklyRanking?.score ?? 0}
-        progress={0}
-        scoreLabel="UGENS SCORE"
-        scoreValueText={weeklyRanking ? undefined : '—'}
-        showProgressSection={false}
-        footerNote={
-          weeklyRanking?.rank != null && weeklyRanking.totalUsers > 0
-            ? `Nr. ${weeklyRanking.rank} af ${weeklyRanking.totalUsers} denne uge`
-            : 'Fanstatus følger din samlede aktivitet i fællesskabet. Ugescoren kunne ikke hentes lige nu.'
-        }
-        state={profile ? 'ready' : 'empty'}
+        showScoreBlock={false}
+        showProgressSection
+        secondarySectionTitle="Denne uge"
+        secondarySectionValue={weeklyStatus.value}
+        secondarySectionNote={weeklyStatus.note}
+        footerNote="Fanstatus bygger på din samlede aktivitet i fællesskabet."
+        state={loading && !profile ? 'loading' : profile && liveFanLevel ? 'ready' : 'empty'}
       />
 
       {/* Owned Communities */}

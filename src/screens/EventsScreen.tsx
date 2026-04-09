@@ -15,6 +15,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import MapView, { Marker, Region } from 'react-native-maps';
 import { useAuth } from '../auth/AuthProvider';
 import { AppHeader } from '../components/AppHeader';
+import { EventsOverviewMatchCard } from '../components/events/EventsOverviewMatchCard';
 import { FeedItemRenderer } from '../components/feed/FeedItemRenderer';
 import { MapMarkerIcon } from '../components/MapMarkerIcon';
 import { IconButton } from '../components/ui/IconButton';
@@ -28,12 +29,12 @@ import type { FeedItem as HomeFeedItem } from '../types/feed';
 import { targetKey } from '../utils/targetKey';
 
 type ViewMode = 'list' | 'map';
-type EventFilterKey = 'all' | 'matches' | 'bus_trips' | 'events';
+type EventFilterKey = 'all' | 'matches' | 'events';
 
 // Normalized map item type (for Kort view)
 type MapItem = {
   id: string;
-  kind: 'match' | 'event' | 'bus_trip';
+  kind: 'match' | 'event';
   title: string;
   datetime: string;
   lat: number;
@@ -72,7 +73,8 @@ export default function EventsScreen() {
   // Rate-limit fixture sync: at most once per 30 min (in-memory)
   const lastSyncRef = useRef<number>(0);
 
-  // Single unified feed: matches + events + bus_trips, already sorted chronologically
+  // Upstream feed still includes legacy top-level bus trips, but the Events
+  // overview filters them out before rendering list/map content.
   const [feed, setFeed] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -84,7 +86,6 @@ export default function EventsScreen() {
   const eventFilterSegments = [
     { key: 'all', label: 'Alle' },
     { key: 'matches', label: 'Kampe' },
-    { key: 'bus_trips', label: 'Busture' },
     { key: 'events', label: 'Events' },
   ] as const satisfies readonly { key: EventFilterKey; label: string }[];
 
@@ -165,22 +166,24 @@ export default function EventsScreen() {
     return null;
   }
 
-  const filteredFeedForMap =
-    selectedEventType === 'all'
-      ? feed
-      : feed.filter((item) => {
-          const kindMap: Record<EventFilterKey, FeedItem['kind']> = {
-            all: 'match',
-            matches: 'match',
-            bus_trips: 'bus_trip',
-            events: 'event',
-          };
-          return item.kind === kindMap[selectedEventType];
-        });
+  const overviewFeed = useMemo(() => feed.filter((item) => item.kind !== 'bus_trip'), [feed]);
+
+  const filteredFeed = useMemo(() => {
+    if (selectedEventType === 'all') {
+      return overviewFeed;
+    }
+
+    const kindMap: Record<Exclude<EventFilterKey, 'all'>, 'match' | 'event'> = {
+      matches: 'match',
+      events: 'event',
+    };
+
+    return overviewFeed.filter((item) => item.kind === kindMap[selectedEventType]);
+  }, [overviewFeed, selectedEventType]);
 
   const mapItems: MapItem[] = useMemo(
     () =>
-      filteredFeedForMap
+      filteredFeed
         .map((item): MapItem | null => {
           if (item.kind === 'match') {
             const lat = toCoordinateNumber(item.lat);
@@ -215,43 +218,13 @@ export default function EventsScreen() {
               feedItem: item,
             };
           }
-          if (item.kind === 'bus_trip') {
-            const lat = toCoordinateNumber(item.lat);
-            const lng = toCoordinateNumber(item.lng);
-            if (lat == null || lng == null) return null;
-            return {
-              id: item.id,
-              kind: 'bus_trip' as const,
-              title: item.title,
-              datetime: item.startAt,
-              lat,
-              lng,
-              subtitle: item.departurePlace || item.venue || undefined,
-              logoUrl: null,
-              feedItem: item,
-            };
-          }
           return null;
         })
         .filter((item): item is MapItem => item !== null),
-    [filteredFeedForMap, profileMap, communityMap],
+    [filteredFeed, profileMap, communityMap],
   );
 
   // ── Filter feed by event type ──────────────────────────────────────────────
-
-  const filteredFeed = useMemo(() => {
-    if (selectedEventType === 'all') {
-      return feed;
-    }
-    const kindMap: Record<EventFilterKey, FeedItem['kind']> = {
-      all: 'match',
-      matches: 'match',
-      bus_trips: 'bus_trip',
-      events: 'event',
-    };
-    const targetKind = kindMap[selectedEventType];
-    return feed.filter((item) => item.kind === targetKind);
-  }, [feed, selectedEventType]);
 
   // ── FeedItem (eventsApi) → HomeFeedItem (types/feed) mapper ────────────────
 
@@ -327,6 +300,25 @@ export default function EventsScreen() {
   // ── Render a single feed item (match, event, or bus_trip) ──────────────────
 
   const renderFeedItem = (item: FeedItem) => {
+    if (item.kind === 'match') {
+      return (
+        <EventsOverviewMatchCard
+          title={`${item.home} vs ${item.away}`}
+          homeTeam={item.home}
+          awayTeam={item.away}
+          homeLogo={item.homeLogo}
+          awayLogo={item.awayLogo}
+          heroImageUrl={item.heroUrl ?? null}
+          kickoffAt={item.kickoffAt}
+          venue={item.venue}
+          venueCity={item.venueCity}
+          competition={item.competition}
+          round={item.round}
+          onPress={() => (navigation as any).navigate('MatchDetails', { fixtureId: item.id })}
+        />
+      );
+    }
+
     const homeFeedItem = toHomeFeedItem(item);
     const targetKind =
       homeFeedItem.kind === 'match'
@@ -387,8 +379,6 @@ export default function EventsScreen() {
 
     if (selectedItem.kind === 'match') {
       (navigation as any).navigate('MatchDetails', { fixtureId: selectedItem.id });
-    } else if (selectedItem.kind === 'bus_trip') {
-      (navigation as any).navigate('BusTripDetails', { busTripId: selectedItem.id });
     } else if (selectedItem.kind === 'event') {
       (navigation as any).navigate('EventDetails', { eventId: selectedItem.id });
     }
@@ -459,7 +449,7 @@ export default function EventsScreen() {
           <Text style={styles.loadingText}>Henter events...</Text>
         </View>
       ) : viewMode === 'list' ? (
-        /* Unified chronological list: matches, events, bus_trips mixed and sorted
+        /* Unified chronological overview list: matches + events only.
            by start time. ScrollView + .map() — dataset is small enough (<60 items). */
         <ScrollView
           style={styles.scrollView}
@@ -525,7 +515,7 @@ export default function EventsScreen() {
                   >
                     <MapMarkerIcon
                       logoUrl={item.logoUrl}
-                      type={item.kind === 'bus_trip' ? 'event' : item.kind}
+                      type={item.kind}
                     />
                   </Marker>
                 ))}
@@ -562,11 +552,7 @@ export default function EventsScreen() {
                       onPress={handleBottomSheetCTA}
                     >
                       <Text style={styles.bottomSheetButtonText}>
-                        {selectedItem.kind === 'match'
-                          ? 'Se kampdetaljer'
-                          : selectedItem.kind === 'bus_trip'
-                            ? 'Se bustur'
-                            : 'Se event'}
+                        {selectedItem.kind === 'match' ? 'Se kampdetaljer' : 'Se event'}
                       </Text>
                     </TouchableOpacity>
                   </BottomSheetView>

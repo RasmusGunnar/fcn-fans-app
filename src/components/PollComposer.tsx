@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../auth/AuthProvider';
+import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { triggerMentionPush } from '../services/mentionPushApi';
 import { createMentionNotifications } from '../services/mentionNotifications';
@@ -171,30 +172,63 @@ export function PollComposer({ actor, feedTargets, onSuccess }: PollComposerProp
       if (data?.id) {
         const { mentionedProfiles } = await persistPostEntities(data.id, normalizedQuestion);
 
-        if (mentionedProfiles.length > 0) {
-          void createMentionNotifications({
-            mentionedUsernames: mentionedProfiles
-              .map((profile) => profile.username)
-              .filter((username): username is string => Boolean(username)),
-            actorId: user.id,
-            postId: data.id,
-            entityType: 'post',
-            entityId: data.id,
-          });
+        void (async () => {
+          if (mentionedProfiles.length > 0) {
+            const [mentionNotificationsResult, mentionPushResult] = await Promise.allSettled([
+              createMentionNotifications({
+                mentionedUsernames: mentionedProfiles
+                  .map((profile) => profile.username)
+                  .filter((username): username is string => Boolean(username)),
+                actorId: user.id,
+                postId: data.id,
+                entityType: 'post',
+                entityId: data.id,
+              }),
+              triggerMentionPush({
+                actorUserId: user.id,
+                mentionedUserIds: mentionedProfiles.map((profile) => profile.id),
+                entityType: 'post',
+                entityId: data.id,
+                postId: data.id,
+                previewText: normalizedQuestion,
+              }),
+            ]);
 
-          void triggerMentionPush({
-            actorUserId: user.id,
-            mentionedUserIds: mentionedProfiles.map((profile) => profile.id),
-            entityType: 'post',
-            entityId: data.id,
-            postId: data.id,
-            previewText: normalizedQuestion,
-          });
-        }
-      }
+            if (mentionNotificationsResult.status === 'rejected') {
+              logger.warn('[PollComposer] createMentionNotifications failed:', {
+                postId: data.id,
+                error: mentionNotificationsResult.reason,
+              });
+            }
 
-      if (actor?.type === 'community' && data?.id) {
-        void triggerCommunityPostPush(data.id);
+            if (mentionPushResult.status === 'rejected') {
+              logger.warn('[PollComposer] triggerMentionPush failed:', {
+                postId: data.id,
+                error: mentionPushResult.reason,
+              });
+            } else if (!mentionPushResult.value) {
+              logger.warn('[PollComposer] triggerMentionPush returned false', {
+                postId: data.id,
+              });
+            }
+          }
+
+          if (actor?.type === 'community') {
+            try {
+              const didTriggerCommunityPush = await triggerCommunityPostPush(data.id);
+              if (!didTriggerCommunityPush) {
+                logger.warn('[PollComposer] triggerCommunityPostPush returned false', {
+                  postId: data.id,
+                });
+              }
+            } catch (error) {
+              logger.warn('[PollComposer] triggerCommunityPostPush failed:', {
+                postId: data.id,
+                error,
+              });
+            }
+          }
+        })();
       }
 
       resetForm();

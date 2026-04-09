@@ -12,6 +12,10 @@ type User = any;
 type Session = any;
 const FACEBOOK_REDIRECT_URL = 'fcnfans://auth/callback';
 
+type HandledAuthError = Error & {
+  authUiHandled?: boolean;
+};
+
 type AuthContextValue = {
   session: Session | null;
   user: User | null;
@@ -76,6 +80,37 @@ async function completeOAuthSessionFromUrl(url: string) {
   }
 
   throw new Error('Kunne ikke gennemfoere Facebook login.');
+}
+
+function getFriendlyAuthErrorMessage(error: unknown): string {
+  const rawMessage = String((error as any)?.message ?? '').trim();
+  const normalizedMessage = rawMessage.toLowerCase();
+
+  if (
+    normalizedMessage.includes('email rate limit exceeded') ||
+    normalizedMessage.includes('rate limit') ||
+    normalizedMessage.includes('too many requests')
+  ) {
+    return 'Du har fors\u00F8gt for mange gange. Vent lidt og pr\u00F8v igen.';
+  }
+
+  if (
+    normalizedMessage.includes('invalid login credentials') ||
+    normalizedMessage.includes('invalid credentials') ||
+    normalizedMessage.includes('invalid email or password')
+  ) {
+    return 'Email eller kodeord er forkert.';
+  }
+
+  if (
+    normalizedMessage.includes('user already registered') ||
+    normalizedMessage.includes('already registered') ||
+    normalizedMessage.includes('email already')
+  ) {
+    return 'Der findes allerede en konto med denne email.';
+  }
+
+  return 'Noget gik galt. Pr\u00F8v igen.';
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -194,8 +229,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error;
       return data;
     } catch (e: any) {
-      Alert.alert('Fejl', e.message ?? String(e));
-      throw e;
+      const message = getFriendlyAuthErrorMessage(e);
+      const handledError = new Error(message) as HandledAuthError;
+      handledError.authUiHandled = true;
+      Alert.alert('Fejl', message);
+      throw handledError;
     } finally {
       setLoading(false);
     }
@@ -207,6 +245,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          emailRedirectTo: FACEBOOK_REDIRECT_URL,
+        },
       });
       if (error) throw error;
 
@@ -220,8 +261,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       return data;
     } catch (e: any) {
-      Alert.alert('Fejl', e.message ?? String(e));
-      throw e;
+      const message = getFriendlyAuthErrorMessage(e);
+      const handledError = new Error(message) as HandledAuthError;
+      handledError.authUiHandled = true;
+      Alert.alert('Fejl', message);
+      throw handledError;
     } finally {
       setLoading(false);
     }

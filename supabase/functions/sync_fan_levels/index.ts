@@ -21,20 +21,34 @@ type ProfileRow = {
 type PostRow = {
   id: string;
   author_id: string | null;
+  created_at: string;
 };
 
 type CommentRow = {
   id: string;
   author_id: string | null;
+  target_type: string;
+  target_id: string;
+  created_at: string;
 };
 
 type LikeRow = {
+  user_id: string;
   target_type: 'post' | 'comment';
   target_id: string;
+  created_at: string;
 };
 
 type MatchCheckInRow = {
+  match_id: string;
   user_id: string | null;
+  created_at: string;
+};
+
+type FixtureRow = {
+  id: string;
+  home_team: string | null;
+  away_team: string | null;
 };
 
 type QueryFailure = {
@@ -42,14 +56,24 @@ type QueryFailure = {
   message?: string;
 };
 
-const POST_SCORE = 5;
-const COMMENT_SCORE = 3;
+const COPENHAGEN_TIMEZONE = 'Europe/Copenhagen';
+const POST_SCORE = 8;
+const COMMENT_SCORE = 2;
 const LIKE_RECEIVED_SCORE = 1;
-const CHECKIN_SCORE = 5;
+const HOME_CHECKIN_SCORE = 10;
+const AWAY_CHECKIN_SCORE = 18;
+const DAILY_POST_CAP = 2;
+const DAILY_COMMENT_CAP = 10;
+const COMMENT_TARGET_24H_CAP = 3;
+const DAILY_RECEIVED_LIKES_CAP = 20;
+const POST_RECEIVED_LIKES_CAP = 5;
+const COMMENT_RECEIVED_LIKES_CAP = 3;
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const FCN_TEAM_NAME_MATCHERS = ['nordsjalland', 'nordsjaelland'];
 
 const FAN_LEVEL_THRESHOLDS: { minScore: number; level: FanLevelKey }[] = [
-  { minScore: 1200, level: 'top_fan' },
-  { minScore: 800, level: 'dedicated' },
+  { minScore: 1300, level: 'top_fan' },
+  { minScore: 850, level: 'dedicated' },
   { minScore: 500, level: 'community_core' },
   { minScore: 250, level: 'regular_voice' },
   { minScore: 100, level: 'community_member' },
@@ -98,10 +122,65 @@ async function readRequest(req: Request): Promise<SyncFanLevelsRequest | null> {
   }
 }
 
+function readFormatterParts(
+  date: Date,
+  timeZone: string,
+): Record<string, string> {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    weekday: 'short',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+
+  return Object.fromEntries(
+    parts
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value]),
+  );
+}
+
+function getCopenhagenDateKey(value: string): string {
+  const parts = readFormatterParts(new Date(value), COPENHAGEN_TIMEZONE);
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function normalizeTeamName(value: string | null | undefined): string {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\u00e6/g, 'ae')
+    .replace(/\u00f8/g, 'o')
+    .replace(/\u00e5/g, 'a')
+    .replace(/Ã¦/g, 'ae')
+    .replace(/Ã¸/g, 'o')
+    .replace(/Ã¥/g, 'a');
+}
+
+function isFcnAwayFixture(fixture: FixtureRow | null | undefined): boolean {
+  const awayName = normalizeTeamName(fixture?.away_team);
+  return FCN_TEAM_NAME_MATCHERS.some((matcher) => awayName.includes(matcher));
+}
+
+function sortRowsByCreatedAtAsc<T extends { created_at: string }>(rows: T[]): T[] {
+  return [...rows].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+  );
+}
+
 async function loadCommentRows(
   adminClient: ReturnType<typeof createClient>,
 ): Promise<{ data: CommentRow[] | null; error: QueryFailure | null }> {
-  const commentsV2Response = await adminClient.from('comments_v2').select('id, author_id');
+  const commentsV2Response = await adminClient
+    .from('comments_v2')
+    .select('id, author_id, target_type, target_id, created_at');
 
   if (!commentsV2Response.error) {
     return {
@@ -117,11 +196,31 @@ async function loadCommentRows(
     };
   }
 
-  const commentsResponse = await adminClient.from('comments').select('id, author_id');
+  const commentsResponse = await adminClient
+    .from('comments')
+    .select('id, author_id, post_id, created_at');
+
+  if (commentsResponse.error) {
+    return {
+      data: null,
+      error: commentsResponse.error,
+    };
+  }
 
   return {
-    data: (commentsResponse.data || []) as CommentRow[],
-    error: commentsResponse.error,
+    data: ((commentsResponse.data || []) as Array<{
+      id: string;
+      author_id: string | null;
+      post_id: string;
+      created_at: string;
+    }>).map((comment) => ({
+      id: comment.id,
+      author_id: comment.author_id,
+      target_type: 'post',
+      target_id: comment.post_id,
+      created_at: comment.created_at,
+    })),
+    error: null,
   };
 }
 
@@ -168,16 +267,24 @@ serve(async (req) => {
       },
     });
 
-    const [profilesResponse, postsResponse, commentsResponse, likesResponse, checkinsResponse] =
+    const [
+      profilesResponse,
+      postsResponse,
+      commentsResponse,
+      likesResponse,
+      checkinsResponse,
+      fixturesResponse,
+    ] =
       await Promise.all([
         adminClient.from('profiles').select('id, fan_level_key'),
-        adminClient.from('posts').select('id, author_id'),
+        adminClient.from('posts').select('id, author_id, created_at'),
         loadCommentRows(adminClient),
         adminClient
           .from('likes_v2')
-          .select('target_type, target_id')
+          .select('user_id, target_type, target_id, created_at')
           .in('target_type', ['post', 'comment']),
-        adminClient.from('match_checkins').select('user_id'),
+        adminClient.from('match_checkins').select('match_id, user_id, created_at'),
+        adminClient.from('fixtures').select('id, home_team, away_team'),
       ]);
 
     if (profilesResponse.error) {
@@ -214,12 +321,19 @@ serve(async (req) => {
         details: checkinsResponse.error.message,
       });
     }
+    if (fixturesResponse.error) {
+      return json(500, {
+        error: 'Failed to load fixtures',
+        details: fixturesResponse.error.message,
+      });
+    }
 
     const profiles = (profilesResponse.data || []) as ProfileRow[];
     const posts = (postsResponse.data || []) as PostRow[];
     const comments = (commentsResponse.data || []) as CommentRow[];
     const likes = (likesResponse.data || []) as LikeRow[];
     const checkins = (checkinsResponse.data || []) as MatchCheckInRow[];
+    const fixtures = (fixturesResponse.data || []) as FixtureRow[];
 
     const profileIds = new Set(profiles.map((profile) => profile.id));
     const postAuthorById = new Map<string, string>();
@@ -246,27 +360,102 @@ serve(async (req) => {
       if (post.id && post.author_id) {
         postAuthorById.set(post.id, post.author_id);
       }
-      addScore(post.author_id, POST_SCORE);
     });
 
     comments.forEach((comment) => {
       if (comment.id && comment.author_id) {
         commentAuthorById.set(comment.id, comment.author_id);
       }
+    });
+
+    const fixturesById = new Map<string, FixtureRow>();
+    fixtures.forEach((fixture) => {
+      fixturesById.set(fixture.id, fixture);
+    });
+
+    const acceptedPostsPerUserDay = new Map<string, number>();
+    sortRowsByCreatedAtAsc(posts).forEach((post) => {
+      const dayKey = getCopenhagenDateKey(post.created_at);
+      const userDayKey = `${post.author_id}:${dayKey}`;
+      const acceptedCount = acceptedPostsPerUserDay.get(userDayKey) || 0;
+
+      if (acceptedCount >= DAILY_POST_CAP) {
+        return;
+      }
+
+      acceptedPostsPerUserDay.set(userDayKey, acceptedCount + 1);
+      addScore(post.author_id, POST_SCORE);
+    });
+
+    const acceptedCommentsPerUserDay = new Map<string, number>();
+    const acceptedCommentTimestampsByUserTarget = new Map<string, number[]>();
+    sortRowsByCreatedAtAsc(comments).forEach((comment) => {
+      const createdAtMs = new Date(comment.created_at).getTime();
+      const dayKey = getCopenhagenDateKey(comment.created_at);
+      const userDayKey = `${comment.author_id}:${dayKey}`;
+      const userTargetKey = `${comment.author_id}:${comment.target_type}:${comment.target_id}`;
+      const acceptedForDay = acceptedCommentsPerUserDay.get(userDayKey) || 0;
+
+      if (acceptedForDay >= DAILY_COMMENT_CAP) {
+        return;
+      }
+
+      const recentAccepted = (acceptedCommentTimestampsByUserTarget.get(userTargetKey) || []).filter(
+        (timestamp) => createdAtMs - timestamp < ONE_DAY_MS,
+      );
+
+      if (recentAccepted.length >= COMMENT_TARGET_24H_CAP) {
+        acceptedCommentTimestampsByUserTarget.set(userTargetKey, recentAccepted);
+        return;
+      }
+
+      recentAccepted.push(createdAtMs);
+      acceptedCommentTimestampsByUserTarget.set(userTargetKey, recentAccepted);
+      acceptedCommentsPerUserDay.set(userDayKey, acceptedForDay + 1);
       addScore(comment.author_id, COMMENT_SCORE);
     });
 
-    likes.forEach((like) => {
+    const acceptedReceivedLikesPerUserDay = new Map<string, number>();
+    const acceptedReceivedLikesPerTarget = new Map<string, number>();
+    sortRowsByCreatedAtAsc(likes).forEach((like) => {
       const targetAuthorId =
         like.target_type === 'post'
           ? postAuthorById.get(like.target_id)
           : commentAuthorById.get(like.target_id);
 
-      addScore(targetAuthorId || null, LIKE_RECEIVED_SCORE);
+      if (!targetAuthorId || targetAuthorId === like.user_id) {
+        return;
+      }
+
+      const dayKey = getCopenhagenDateKey(like.created_at);
+      const userDayKey = `${targetAuthorId}:${dayKey}`;
+      const targetKey = `${like.target_type}:${like.target_id}`;
+      const acceptedForDay = acceptedReceivedLikesPerUserDay.get(userDayKey) || 0;
+      const acceptedForTarget = acceptedReceivedLikesPerTarget.get(targetKey) || 0;
+      const perTargetCap =
+        like.target_type === 'post' ? POST_RECEIVED_LIKES_CAP : COMMENT_RECEIVED_LIKES_CAP;
+
+      if (acceptedForDay >= DAILY_RECEIVED_LIKES_CAP || acceptedForTarget >= perTargetCap) {
+        return;
+      }
+
+      acceptedReceivedLikesPerUserDay.set(userDayKey, acceptedForDay + 1);
+      acceptedReceivedLikesPerTarget.set(targetKey, acceptedForTarget + 1);
+      addScore(targetAuthorId, LIKE_RECEIVED_SCORE);
     });
 
-    checkins.forEach((checkin) => {
-      addScore(checkin.user_id, CHECKIN_SCORE);
+    const acceptedCheckIns = new Set<string>();
+    sortRowsByCreatedAtAsc(checkins).forEach((checkin) => {
+      const uniqueCheckInKey = `${checkin.user_id}:${checkin.match_id}`;
+      if (acceptedCheckIns.has(uniqueCheckInKey)) {
+        return;
+      }
+
+      acceptedCheckIns.add(uniqueCheckInKey);
+
+      const fixture = fixturesById.get(checkin.match_id);
+      const points = isFcnAwayFixture(fixture) ? AWAY_CHECKIN_SCORE : HOME_CHECKIN_SCORE;
+      addScore(checkin.user_id, points);
     });
 
     const updates: { id: string; fan_level_key: FanLevelKey }[] = [];
@@ -310,7 +499,8 @@ serve(async (req) => {
         posts: POST_SCORE,
         comments: COMMENT_SCORE,
         likes_received: LIKE_RECEIVED_SCORE,
-        match_checkins: CHECKIN_SCORE,
+        home_match_checkins: HOME_CHECKIN_SCORE,
+        away_match_checkins: AWAY_CHECKIN_SCORE,
       },
       thresholds: FAN_LEVEL_THRESHOLDS.slice().reverse(),
       activity_users_without_profile_count: activityUsersWithoutProfile.size,

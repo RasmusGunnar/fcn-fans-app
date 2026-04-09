@@ -239,30 +239,63 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
             dbRecord.text ?? text.trim(),
           );
 
-          if (mentionedProfiles.length > 0) {
-            void createMentionNotifications({
-              mentionedUsernames: mentionedProfiles
-                .map((profile) => profile.username)
-                .filter((username): username is string => Boolean(username)),
-              actorId: user.id,
-              postId: dbRecord.id,
-              entityType: 'post',
-              entityId: dbRecord.id,
-            });
+          void (async () => {
+            if (mentionedProfiles.length > 0) {
+              const [mentionNotificationsResult, mentionPushResult] = await Promise.allSettled([
+                createMentionNotifications({
+                  mentionedUsernames: mentionedProfiles
+                    .map((profile) => profile.username)
+                    .filter((username): username is string => Boolean(username)),
+                  actorId: user.id,
+                  postId: dbRecord.id,
+                  entityType: 'post',
+                  entityId: dbRecord.id,
+                }),
+                triggerMentionPush({
+                  actorUserId: user.id,
+                  mentionedUserIds: mentionedProfiles.map((profile) => profile.id),
+                  entityType: 'post',
+                  entityId: dbRecord.id,
+                  postId: dbRecord.id,
+                  previewText: dbRecord.text ?? text.trim(),
+                }),
+              ]);
 
-            void triggerMentionPush({
-              actorUserId: user.id,
-              mentionedUserIds: mentionedProfiles.map((profile) => profile.id),
-              entityType: 'post',
-              entityId: dbRecord.id,
-              postId: dbRecord.id,
-              previewText: dbRecord.text ?? text.trim(),
-            });
-          }
+              if (mentionNotificationsResult.status === 'rejected') {
+                logger.warn('[PostComposer] createMentionNotifications failed:', {
+                  postId: dbRecord.id,
+                  error: mentionNotificationsResult.reason,
+                });
+              }
 
-          if (actor?.type === 'community') {
-            void triggerCommunityPostPush(dbRecord.id);
-          }
+              if (mentionPushResult.status === 'rejected') {
+                logger.warn('[PostComposer] triggerMentionPush failed:', {
+                  postId: dbRecord.id,
+                  error: mentionPushResult.reason,
+                });
+              } else if (!mentionPushResult.value) {
+                logger.warn('[PostComposer] triggerMentionPush returned false', {
+                  postId: dbRecord.id,
+                });
+              }
+            }
+
+            if (actor?.type === 'community') {
+              try {
+                const didTriggerCommunityPush = await triggerCommunityPostPush(dbRecord.id);
+                if (!didTriggerCommunityPush) {
+                  logger.warn('[PostComposer] triggerCommunityPostPush returned false', {
+                    postId: dbRecord.id,
+                  });
+                }
+              } catch (error) {
+                logger.warn('[PostComposer] triggerCommunityPostPush failed:', {
+                  postId: dbRecord.id,
+                  error,
+                });
+              }
+            }
+          })();
         }
       }
     } catch (e) {

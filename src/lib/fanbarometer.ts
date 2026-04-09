@@ -44,7 +44,7 @@ export const FAN_LEVELS = [
     fullLabel: 'Blandt de mest engagerede fans',
     shortLabel: 'Dedikeret',
     description: 'Dit engagement er højt, og du sætter dit præg på fællesskabet.',
-    minScore: 800,
+    minScore: 850,
   },
   {
     key: 'top_fan',
@@ -53,7 +53,7 @@ export const FAN_LEVELS = [
     fullLabel: 'En af de mest aktive fans',
     shortLabel: 'Top Fan',
     description: 'Du er blandt de mest engagerede fans i hele fællesskabet.',
-    minScore: 1200,
+    minScore: 1300,
   },
 ] as const satisfies readonly FanLevelDefinition[];
 
@@ -89,8 +89,21 @@ export function getFanLevelLabel(level: FanLevelKey, mode: FanLevelLabelMode = '
   return mode === 'short' ? definition.shortLabel : definition.fullLabel;
 }
 
+export function getFanLevelName(level: FanLevelKey): string {
+  return FAN_LEVELS_BY_KEY[level].name;
+}
+
 export function getFanLevelDescription(level: FanLevelKey): string {
   return FAN_LEVELS_BY_KEY[level].description;
+}
+
+export function getFanLevelPosition(level: FanLevelKey): { current: number; total: number } {
+  const currentIndex = FAN_LEVELS.findIndex((entry) => entry.key === level);
+
+  return {
+    current: currentIndex >= 0 ? currentIndex + 1 : 1,
+    total: FAN_LEVELS.length,
+  };
 }
 
 export function getNextFanLevel(level: FanLevelKey): FanLevelKey | null {

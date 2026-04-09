@@ -4,9 +4,10 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import {
-  extractMetaContent,
-  extractTitleTag,
+  extractArticleMetadata,
   fetchArticleMedia,
+  isWeakArticleDescription,
+  isWeakArticleTitle,
 } from '../_shared/newsMedia.ts';
 import { fixEncoding } from '../_shared/textEncoding.ts';
 
@@ -120,6 +121,23 @@ function buildFallbackPreview(url: string, resolvedUrl: string) {
   };
 }
 
+function isLikelyFacebookInterstitial(
+  html: string,
+  resolvedUrl: string,
+  metadata: { title: string; description: string; media: { imageUrl: string | null } },
+): boolean {
+  const lowerHtml = html.toLowerCase();
+  const titleWeak = isWeakArticleTitle(metadata.title, resolvedUrl, ['Facebook']);
+  const descriptionWeak = isWeakArticleDescription(metadata.description, metadata.title);
+  const looksLikeLoginShell =
+    lowerHtml.includes('log into facebook') ||
+    lowerHtml.includes('log in to facebook') ||
+    lowerHtml.includes('log ind på facebook') ||
+    lowerHtml.includes('facebook helps you connect and share');
+
+  return looksLikeLoginShell || (titleWeak && descriptionWeak && !metadata.media.imageUrl);
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -156,31 +174,27 @@ serve(async (req) => {
 
     console.log('[parse-link] HTML fetched, parsing meta tags...');
 
-    // Extract metadata with fallbacks
-    const title = fixEncoding(
-      extractMetaContent(html, 'og:title') ||
-        extractMetaContent(html, 'twitter:title') ||
-        extractTitleTag(html) ||
-        'Ingen titel',
-    );
+    const provider = getPreviewProvider(resolvedUrl);
+    const metadata = extractArticleMetadata(html, resolvedUrl);
 
-    const description = fixEncoding(
-      extractMetaContent(html, 'og:description') ||
-        extractMetaContent(html, 'twitter:description') ||
-        extractMetaContent(html, 'description') ||
-        '',
-    );
+    if (provider === 'facebook' && isLikelyFacebookInterstitial(html, resolvedUrl, metadata)) {
+      return new Response(JSON.stringify(buildFallbackPreview(url, resolvedUrl)), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
+    const title = fixEncoding(metadata.title || 'Ingen titel');
+    const description = fixEncoding(metadata.description || '');
     const siteName = fixEncoding(
-      extractMetaContent(html, 'og:site_name') || new URL(resolvedUrl).hostname,
+      metadata.siteName || new URL(resolvedUrl).hostname.replace(/^www\./i, ''),
     );
 
     const result = {
       resolvedUrl,
       title,
       description,
-      imageUrl: media.imageUrl,
-      hasVideo: media.hasVideo,
+      imageUrl: metadata.media.imageUrl ?? media.imageUrl,
+      hasVideo: metadata.media.hasVideo || media.hasVideo,
       siteName,
     };
 
