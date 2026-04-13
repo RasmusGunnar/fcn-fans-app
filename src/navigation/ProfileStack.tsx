@@ -1,6 +1,8 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AdminFanFactionRequestsScreen from '../screens/AdminFanFactionRequestsScreen';
+import FanActivityRegistrationReceiptScreen from '../screens/FanActivityRegistrationReceiptScreen';
+import FanActivityRegistrationPassScreen from '../screens/FanActivityRegistrationPassScreen';
 import HashtagScreen from '../screens/HashtagScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
@@ -13,6 +15,14 @@ export function ProfileStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="ProfileMain" component={ProfileScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
+      <Stack.Screen
+        name="FanActivityRegistrationReceipt"
+        component={FanActivityRegistrationReceiptScreen}
+      />
+      <Stack.Screen
+        name="FanActivityRegistrationPass"
+        component={FanActivityRegistrationPassScreen}
+      />
       <Stack.Screen name="PublicProfile" component={PublicProfileScreen} />
       <Stack.Screen name="Hashtag" component={HashtagScreen} />
       <Stack.Screen name="AdminFanFactionRequests" component={AdminFanFactionRequestsScreen} />

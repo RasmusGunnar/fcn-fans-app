@@ -1,12 +1,19 @@
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
-import { WILD_TIGERS_COMMUNITY_NAME } from './rbac';
+import {
+  fetchFanActivityRegistrationSummaries,
+  getEmptyFanActivityRegistrationSummary,
+  type FanActivityRegistrationSummary,
+} from './fanActivityRegistrations';
 
 export type FanActivityParentType = 'match' | 'event';
 
 export type FanActivityCommunity = {
   id: string;
   name: string;
+  type?: 'community' | 'fan_faction' | null;
+  mobilepay_info?: string | null;
+  mobilepay_instructions?: string | null;
 };
 
 export type CreateFanActivityInput = {
@@ -22,11 +29,35 @@ export type CreateFanActivityInput = {
   locationName?: string | null;
   ctaLabel?: string | null;
   ctaUrl?: string | null;
+  registrationEnabled?: boolean;
+  registrationCapacity?: number | null;
+  registrationPriceDkk?: number | null;
+  registrationPaymentMode?: 'free' | 'manual' | null;
+  registrationPaymentInstructions?: string | null;
+  registrationMobilepayInfo?: string | null;
+};
+
+export type UpdateFanActivityInput = {
+  fanActivityId: string;
+  type: string;
+  title: string;
+  body?: string | null;
+  startsAt: string;
+  endsAt?: string | null;
+  locationName?: string | null;
+  ctaLabel?: string | null;
+  ctaUrl?: string | null;
+  registrationEnabled?: boolean;
+  registrationCapacity?: number | null;
+  registrationPriceDkk?: number | null;
+  registrationPaymentMode?: 'free' | 'manual' | null;
+  registrationPaymentInstructions?: string | null;
+  registrationMobilepayInfo?: string | null;
 };
 
 export type ResolvedFanActivityCommunity = {
   community: FanActivityCommunity | null;
-  source: 'event_parent' | 'wild_tigers_default' | 'single_owned_fallback' | 'unresolved';
+  source: 'event_parent' | 'explicit_selection' | 'existing_activity' | 'unresolved';
   errorMessage: string | null;
 };
 
@@ -48,6 +79,13 @@ export type FanActivity = {
   cover_url: string | null;
   cta_label: string | null;
   cta_url: string | null;
+  registration_enabled: boolean;
+  registration_capacity: number | null;
+  registration_price_dkk: number;
+  registration_payment_mode: 'free' | 'manual';
+  registration_payment_instructions: string | null;
+  registration_mobilepay_info: string | null;
+  registration_summary: FanActivityRegistrationSummary | null;
   is_published: boolean;
   is_cancelled: boolean;
   sort_order: number | null;
@@ -59,22 +97,21 @@ export type FanActivity = {
 type FanActivityCommunityRow = {
   id: string;
   name: string;
+  type?: 'community' | 'fan_faction' | null;
+  mobilepay_info?: string | null;
+  mobilepay_instructions?: string | null;
 };
 
-type OwnedCommunityMembershipRow = {
+type ManageableCommunityMembershipRow = {
   community_id: string;
 };
 
-type FanActivityRow = Omit<FanActivity, 'community'> & {
+type FanActivityRow = Omit<FanActivity, 'community' | 'registration_summary'> & {
   communities?: FanActivityCommunityRow | FanActivityCommunityRow[] | null;
 };
 
 const FAN_ACTIVITY_SELECT =
-  'id, parent_type, parent_id, community_id, created_by, type, title, body, starts_at, ends_at, location_name, location_address, lat, lng, cover_url, cta_label, cta_url, is_published, is_cancelled, sort_order, created_at, updated_at, communities(id, name)';
-
-function normalizeCommunityName(name: string | null | undefined): string {
-  return name?.trim().toLowerCase() ?? '';
-}
+  'id, parent_type, parent_id, community_id, created_by, type, title, body, starts_at, ends_at, location_name, location_address, lat, lng, cover_url, cta_label, cta_url, registration_enabled, registration_capacity, registration_price_dkk, registration_payment_mode, registration_payment_instructions, registration_mobilepay_info, is_published, is_cancelled, sort_order, created_at, updated_at, communities(id, name, type, mobilepay_info, mobilepay_instructions)';
 
 function isMissingFanActivitiesTable(error: unknown): boolean {
   const code = typeof error === 'object' && error !== null ? (error as { code?: string }).code : null;
@@ -98,6 +135,9 @@ function toCommunity(row: FanActivityRow): FanActivityCommunity | null {
   return {
     id: communityRow.id,
     name: communityRow.name,
+    type: communityRow.type ?? null,
+    mobilepay_info: communityRow.mobilepay_info ?? null,
+    mobilepay_instructions: communityRow.mobilepay_instructions ?? null,
   };
 }
 
@@ -120,6 +160,14 @@ function toFanActivity(row: FanActivityRow): FanActivity {
     cover_url: row.cover_url ?? null,
     cta_label: row.cta_label ?? null,
     cta_url: row.cta_url ?? null,
+    registration_enabled: row.registration_enabled === true,
+    registration_capacity:
+      typeof row.registration_capacity === 'number' ? row.registration_capacity : null,
+    registration_price_dkk: Math.max(0, Number(row.registration_price_dkk ?? 0) || 0),
+    registration_payment_mode: row.registration_payment_mode === 'manual' ? 'manual' : 'free',
+    registration_payment_instructions: row.registration_payment_instructions ?? null,
+    registration_mobilepay_info: row.registration_mobilepay_info ?? null,
+    registration_summary: null,
     is_published: row.is_published === true,
     is_cancelled: row.is_cancelled === true,
     sort_order: typeof row.sort_order === 'number' ? row.sort_order : null,
@@ -127,6 +175,32 @@ function toFanActivity(row: FanActivityRow): FanActivity {
     updated_at: row.updated_at,
     community: toCommunity(row),
   };
+}
+
+function withRegistrationSummary(
+  activity: FanActivity,
+  summaryMap: Record<string, FanActivityRegistrationSummary>,
+): FanActivity {
+  return {
+    ...activity,
+    registration_summary:
+      summaryMap[activity.id] ??
+      (activity.registration_enabled ? getEmptyFanActivityRegistrationSummary() : null),
+  };
+}
+
+async function hydrateFanActivitiesWithRegistrationSummaries(
+  activities: FanActivity[],
+): Promise<FanActivity[]> {
+  if (activities.length === 0) {
+    return activities;
+  }
+
+  const summaryMap = await fetchFanActivityRegistrationSummaries(
+    activities.map((activity) => activity.id),
+  );
+
+  return activities.map((activity) => withRegistrationSummary(activity, summaryMap));
 }
 
 function isValidFanActivityRow(row: unknown): row is FanActivityRow {
@@ -164,6 +238,9 @@ function toCommunityList(rows: FanActivityCommunityRow[] | null | undefined): Fa
     .map((row) => ({
       id: row.id,
       name: row.name,
+      type: row.type ?? null,
+      mobilepay_info: row.mobilepay_info ?? null,
+      mobilepay_instructions: row.mobilepay_instructions ?? null,
     }));
 }
 
@@ -201,7 +278,9 @@ async function fetchFanActivitiesForParent(
       return [];
     }
 
-    return ((data || []) as FanActivityRow[]).map(toFanActivity);
+    return hydrateFanActivitiesWithRegistrationSummaries(
+      ((data || []) as FanActivityRow[]).map(toFanActivity),
+    );
   } catch (error) {
     logger.warn('[fanActivities] Unexpected fetch error:', {
       parentType,
@@ -218,6 +297,50 @@ export async function fetchFanActivitiesForMatch(matchId: string): Promise<FanAc
 
 export async function fetchFanActivitiesForEvent(eventId: string): Promise<FanActivity[]> {
   return fetchFanActivitiesForParent('event', eventId);
+}
+
+export async function fetchFanActivityById(fanActivityId: string): Promise<FanActivity | null> {
+  const normalizedFanActivityId = fanActivityId.trim();
+  if (!normalizedFanActivityId) {
+    return null;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('fan_activities')
+      .select(FAN_ACTIVITY_SELECT)
+      .eq('id', normalizedFanActivityId)
+      .maybeSingle();
+
+    if (error) {
+      if (isMissingFanActivitiesTable(error)) {
+        logger.warn('[fanActivities] fan_activities table not available yet. Returning null item.');
+        return null;
+      }
+
+      logger.warn('[fanActivities] Single fetch failed:', {
+        fanActivityId: normalizedFanActivityId,
+        error,
+      });
+      return null;
+    }
+
+    if (!data || !isValidFanActivityRow(data)) {
+      return null;
+    }
+
+    const [hydratedActivity] = await hydrateFanActivitiesWithRegistrationSummaries([
+      toFanActivity(data as FanActivityRow),
+    ]);
+
+    return hydratedActivity ?? null;
+  } catch (error) {
+    logger.warn('[fanActivities] Unexpected single fetch error:', {
+      fanActivityId: normalizedFanActivityId,
+      error,
+    });
+    return null;
+  }
 }
 
 export async function fetchHomeFanActivities(limit = 12): Promise<FanActivity[]> {
@@ -252,15 +375,18 @@ export async function fetchHomeFanActivities(limit = 12): Promise<FanActivity[]>
       });
     }
 
-    return safeRows.map(toFanActivity);
+    return hydrateFanActivitiesWithRegistrationSummaries(safeRows.map(toFanActivity));
   } catch (error) {
     logger.warn('[fanActivities] Unexpected Home fetch error:', { error, limit: safeLimit });
     return [];
   }
 }
 
-export async function fetchOwnedFanActivityCommunities(
+export async function fetchManageableFanActivityCommunities(
   userId: string,
+  options?: {
+    communityType?: 'community' | 'fan_faction';
+  },
 ): Promise<FanActivityCommunity[]> {
   const normalizedUserId = userId.trim();
   if (!normalizedUserId) {
@@ -272,10 +398,10 @@ export async function fetchOwnedFanActivityCommunities(
       .from('community_members')
       .select('community_id')
       .eq('user_id', normalizedUserId)
-      .eq('role', 'owner');
+      .in('role', ['owner', 'admin']);
 
     if (membershipsError) {
-      logger.warn('[fanActivities] Failed to load owned communities:', {
+      logger.warn('[fanActivities] Failed to load manageable communities:', {
         userId: normalizedUserId,
         error: membershipsError,
       });
@@ -284,7 +410,7 @@ export async function fetchOwnedFanActivityCommunities(
 
     const communityIds = Array.from(
       new Set(
-        ((memberships || []) as OwnedCommunityMembershipRow[])
+        ((memberships || []) as ManageableCommunityMembershipRow[])
           .map((membership) => membership.community_id)
           .filter(Boolean),
       ),
@@ -294,14 +420,21 @@ export async function fetchOwnedFanActivityCommunities(
       return [];
     }
 
-    const { data: communities, error: communitiesError } = await supabase
+    let communitiesQuery = supabase
       .from('communities')
-      .select('id, name')
-      .in('id', communityIds)
-      .order('name', { ascending: true });
+      .select('id, name, type, mobilepay_info, mobilepay_instructions')
+      .in('id', communityIds);
+
+    if (options?.communityType) {
+      communitiesQuery = communitiesQuery.eq('type', options.communityType);
+    }
+
+    const { data: communities, error: communitiesError } = await communitiesQuery.order('name', {
+      ascending: true,
+    });
 
     if (communitiesError) {
-      logger.warn('[fanActivities] Failed to resolve owned community names:', {
+      logger.warn('[fanActivities] Failed to resolve manageable community names:', {
         userId: normalizedUserId,
         error: communitiesError,
       });
@@ -310,7 +443,7 @@ export async function fetchOwnedFanActivityCommunities(
 
     return toCommunityList((communities || []) as FanActivityCommunityRow[]);
   } catch (error) {
-    logger.warn('[fanActivities] Unexpected owned communities error:', {
+    logger.warn('[fanActivities] Unexpected manageable communities error:', {
       userId: normalizedUserId,
       error,
     });
@@ -334,19 +467,19 @@ export async function resolveCreateFanActivityCommunity(params: {
     };
   }
 
-  const ownedCommunities = await fetchOwnedFanActivityCommunities(normalizedUserId);
-
   if (params.parentType === 'event') {
     if (!normalizedParentCommunityId) {
       return {
         community: null,
         source: 'unresolved',
-        errorMessage: 'Eventet mangler et community, så afsender kan ikke fastlægges automatisk.',
+        errorMessage: 'Eventet mangler et arrangør-community.',
       };
     }
 
+    const manageableCommunities = await fetchManageableFanActivityCommunities(normalizedUserId);
     const parentCommunity =
-      ownedCommunities.find((community) => community.id === normalizedParentCommunityId) ?? null;
+      manageableCommunities.find((community) => community.id === normalizedParentCommunityId) ??
+      null;
 
     if (!parentCommunity) {
       return {
@@ -363,39 +496,52 @@ export async function resolveCreateFanActivityCommunity(params: {
     };
   }
 
-  const normalizedWildTigersName = normalizeCommunityName(WILD_TIGERS_COMMUNITY_NAME);
-  const wildTigersMatches = ownedCommunities.filter(
-    (community) => normalizeCommunityName(community.name) === normalizedWildTigersName,
-  );
+  if (normalizedParentCommunityId) {
+    const manageableFanFactions = await fetchManageableFanActivityCommunities(normalizedUserId, {
+      communityType: 'fan_faction',
+    });
+    const selectedCommunity =
+      manageableFanFactions.find((community) => community.id === normalizedParentCommunityId) ??
+      null;
 
-  if (wildTigersMatches.length === 1) {
+    if (selectedCommunity) {
+      return {
+        community: selectedCommunity,
+        source: 'explicit_selection',
+        errorMessage: null,
+      };
+    }
+
     return {
-      community: wildTigersMatches[0],
-      source: 'wild_tigers_default',
-      errorMessage: null,
+      community: null,
+      source: 'unresolved',
+      errorMessage: 'Du kan kun oprette kampaktiviteter som en fanfraktion, du administrerer.',
     };
   }
 
-  if (ownedCommunities.length === 1) {
+  const manageableFanFactions = await fetchManageableFanActivityCommunities(normalizedUserId, {
+    communityType: 'fan_faction',
+  });
+
+  if (manageableFanFactions.length === 0) {
     return {
-      community: ownedCommunities[0],
-      source: 'single_owned_fallback',
-      errorMessage: null,
+      community: null,
+      source: 'unresolved',
+      errorMessage:
+        'Du skal være owner eller admin i en fanfraktion for at oprette kampaktiviteter.',
     };
   }
 
-  // TODO: Replace this conservative fallback once the app has a stable,
-  // migration-backed Wild Tigers identifier for match-linked fan activities.
   return {
     community: null,
     source: 'unresolved',
-    errorMessage:
-      'Kunne ikke fastlægge afsender automatisk for kampen endnu. V1 kræver en entydig Wild Tigers-owner eller præcis ét owner-community.',
+    errorMessage: 'Vælg hvilken fanfraktion der skal stå som arrangør.',
   };
 }
 
 export async function createFanActivity(input: CreateFanActivityInput): Promise<FanActivity> {
   const normalizedParentId = input.parentId.trim();
+  const normalizedParentCommunityId = input.parentCommunityId?.trim() || null;
   const normalizedType = input.type.trim();
   const normalizedTitle = input.title.trim();
   const normalizedBody = input.body?.trim() || null;
@@ -403,6 +549,23 @@ export async function createFanActivity(input: CreateFanActivityInput): Promise<
   const normalizedEndsAt = input.endsAt?.trim() || null;
   const normalizedCtaLabel = input.ctaLabel?.trim() || null;
   const normalizedCtaUrl = normalizeExternalUrl(input.ctaUrl);
+  const registrationEnabled = input.registrationEnabled === true;
+  const registrationCapacity = registrationEnabled
+    ? Math.max(0, Math.trunc(Number(input.registrationCapacity ?? 0) || 0))
+    : null;
+  const registrationPriceDkk = registrationEnabled
+    ? Math.max(0, Math.trunc(Number(input.registrationPriceDkk ?? 0) || 0))
+    : 0;
+  const registrationPaymentMode =
+    registrationEnabled && registrationPriceDkk > 0 ? 'manual' : 'free';
+  const registrationPaymentInstructions =
+    registrationEnabled && registrationPaymentMode === 'manual'
+      ? input.registrationPaymentInstructions?.trim() || null
+      : null;
+  const registrationMobilepayInfo =
+    registrationEnabled && registrationPaymentMode === 'manual'
+      ? input.registrationMobilepayInfo?.trim() || null
+      : null;
 
   if (!normalizedParentId) {
     throw new Error('Parent-ID mangler.');
@@ -414,6 +577,14 @@ export async function createFanActivity(input: CreateFanActivityInput): Promise<
 
   if (!normalizedTitle) {
     throw new Error('Titel er påkrævet.');
+  }
+
+  if (registrationEnabled && !registrationCapacity) {
+    throw new Error('Kapacitet er påkrævet, når tilmelding er slået til.');
+  }
+
+  if (registrationPaymentMode === 'manual' && !registrationMobilepayInfo) {
+    throw new Error('MobilePay-info er påkrævet for betalingsaktiviteter.');
   }
 
   const {
@@ -431,18 +602,42 @@ export async function createFanActivity(input: CreateFanActivityInput): Promise<
 
   let normalizedCommunityId = input.communityId?.trim() || '';
 
-  if (!normalizedCommunityId) {
-    const resolution = await resolveCreateFanActivityCommunity({
-      userId: user.id,
-      parentType: input.parentType,
-      parentCommunityId: input.parentCommunityId ?? null,
-    });
-
-    if (!resolution.community?.id) {
-      throw new Error(resolution.errorMessage || 'Community kunne ikke fastlægges automatisk.');
+  if (input.parentType === 'event') {
+    if (!normalizedParentCommunityId) {
+      throw new Error('Eventet mangler et gyldigt arrangør-community.');
     }
 
-    normalizedCommunityId = resolution.community.id;
+    if (!normalizedCommunityId) {
+      normalizedCommunityId = normalizedParentCommunityId;
+    }
+
+    if (normalizedCommunityId !== normalizedParentCommunityId) {
+      throw new Error('Fanaktiviteten skal oprettes under eventets arrangør-community.');
+    }
+
+    const manageableCommunities = await fetchManageableFanActivityCommunities(user.id);
+    const canManageParentCommunity = manageableCommunities.some(
+      (community) => community.id === normalizedParentCommunityId,
+    );
+
+    if (!canManageParentCommunity) {
+      throw new Error('Du kan ikke oprette fanaktiviteter for dette event-community.');
+    }
+  } else {
+    if (!normalizedCommunityId) {
+      throw new Error('Vælg hvilken fanfraktion der skal stå som arrangør.');
+    }
+
+    const manageableFanFactions = await fetchManageableFanActivityCommunities(user.id, {
+      communityType: 'fan_faction',
+    });
+    const selectedCommunity = manageableFanFactions.find(
+      (community) => community.id === normalizedCommunityId,
+    );
+
+    if (!selectedCommunity) {
+      throw new Error('Du kan kun oprette kampaktiviteter som en fanfraktion, du administrerer.');
+    }
   }
 
   const insertPayload = {
@@ -458,6 +653,12 @@ export async function createFanActivity(input: CreateFanActivityInput): Promise<
     location_name: normalizedLocationName,
     cta_label: normalizedCtaLabel,
     cta_url: normalizedCtaUrl,
+    registration_enabled: registrationEnabled,
+    registration_capacity: registrationCapacity,
+    registration_price_dkk: registrationPriceDkk,
+    registration_payment_mode: registrationPaymentMode,
+    registration_payment_instructions: registrationPaymentInstructions,
+    registration_mobilepay_info: registrationMobilepayInfo,
     is_published: true,
     is_cancelled: false,
   };
@@ -466,7 +667,7 @@ export async function createFanActivity(input: CreateFanActivityInput): Promise<
     .from('fan_activities')
     .insert(insertPayload)
     .select(
-      'id, parent_type, parent_id, community_id, created_by, type, title, body, starts_at, ends_at, location_name, location_address, lat, lng, cover_url, cta_label, cta_url, is_published, is_cancelled, sort_order, created_at, updated_at',
+      'id, parent_type, parent_id, community_id, created_by, type, title, body, starts_at, ends_at, location_name, location_address, lat, lng, cover_url, cta_label, cta_url, registration_enabled, registration_capacity, registration_price_dkk, registration_payment_mode, registration_payment_instructions, registration_mobilepay_info, is_published, is_cancelled, sort_order, created_at, updated_at',
     )
     .single();
 
@@ -474,8 +675,93 @@ export async function createFanActivity(input: CreateFanActivityInput): Promise<
     throw error;
   }
 
-  return toFanActivity({
-    ...(data as Omit<FanActivityRow, 'communities'>),
-    communities: null,
-  });
+  return withRegistrationSummary(
+    toFanActivity({
+      ...(data as Omit<FanActivityRow, 'communities'>),
+      communities: null,
+    }),
+    {},
+  );
+}
+
+export async function updateFanActivity(input: UpdateFanActivityInput): Promise<FanActivity> {
+  const normalizedFanActivityId = input.fanActivityId.trim();
+  const normalizedType = input.type.trim();
+  const normalizedTitle = input.title.trim();
+  const normalizedBody = input.body?.trim() || null;
+  const normalizedLocationName = input.locationName?.trim() || null;
+  const normalizedEndsAt = input.endsAt?.trim() || null;
+  const normalizedCtaLabel = input.ctaLabel?.trim() || null;
+  const normalizedCtaUrl = normalizeExternalUrl(input.ctaUrl);
+  const registrationEnabled = input.registrationEnabled === true;
+  const registrationCapacity = registrationEnabled
+    ? Math.max(0, Math.trunc(Number(input.registrationCapacity ?? 0) || 0))
+    : null;
+  const registrationPriceDkk = registrationEnabled
+    ? Math.max(0, Math.trunc(Number(input.registrationPriceDkk ?? 0) || 0))
+    : 0;
+  const registrationPaymentMode =
+    registrationEnabled && registrationPriceDkk > 0 ? 'manual' : 'free';
+  const registrationPaymentInstructions =
+    registrationEnabled && registrationPaymentMode === 'manual'
+      ? input.registrationPaymentInstructions?.trim() || null
+      : null;
+  const registrationMobilepayInfo =
+    registrationEnabled && registrationPaymentMode === 'manual'
+      ? input.registrationMobilepayInfo?.trim() || null
+      : null;
+
+  if (!normalizedFanActivityId) {
+    throw new Error('Fanaktiviteten mangler et id.');
+  }
+
+  if (!normalizedType) {
+    throw new Error('Type er påkrævet.');
+  }
+
+  if (!normalizedTitle) {
+    throw new Error('Titel er påkrævet.');
+  }
+
+  if (registrationEnabled && !registrationCapacity) {
+    throw new Error('Kapacitet er påkrævet, når tilmelding er slået til.');
+  }
+
+  if (registrationPaymentMode === 'manual' && !registrationMobilepayInfo) {
+    throw new Error('MobilePay-info er påkrævet for betalingsaktiviteter.');
+  }
+
+  const updatePayload = {
+    type: normalizedType,
+    title: normalizedTitle,
+    body: normalizedBody,
+    starts_at: input.startsAt,
+    ends_at: normalizedEndsAt,
+    location_name: normalizedLocationName,
+    cta_label: normalizedCtaLabel,
+    cta_url: normalizedCtaUrl,
+    registration_enabled: registrationEnabled,
+    registration_capacity: registrationCapacity,
+    registration_price_dkk: registrationPriceDkk,
+    registration_payment_mode: registrationPaymentMode,
+    registration_payment_instructions: registrationPaymentInstructions,
+    registration_mobilepay_info: registrationMobilepayInfo,
+  };
+
+  const { data, error } = await supabase
+    .from('fan_activities')
+    .update(updatePayload)
+    .eq('id', normalizedFanActivityId)
+    .select(FAN_ACTIVITY_SELECT)
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  const [hydratedActivity] = await hydrateFanActivitiesWithRegistrationSummaries([
+    toFanActivity(data as FanActivityRow),
+  ]);
+
+  return hydratedActivity ?? withRegistrationSummary(toFanActivity(data as FanActivityRow), {});
 }

@@ -61,6 +61,7 @@ export type RootStackParamList = {
     parentId: string;
     communityId?: string;
     lockCommunity?: boolean;
+    fanActivityId?: string;
   };
   Create: undefined;
   MediaViewer: {

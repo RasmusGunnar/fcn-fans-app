@@ -54,11 +54,36 @@ function getSourceLabel(item: FeedFanActivityData): string | null {
   return item.parentType === 'match' ? 'Omkring kampdagen' : 'Omkring eventet';
 }
 
+function formatRegistrationLine(item: FeedFanActivityData): string | null {
+  if (!item.registrationEnabled) {
+    return null;
+  }
+
+  const reservedCount = Math.max(0, item.registrationReservedCount ?? 0);
+  const capacity =
+    typeof item.registrationCapacity === 'number' && item.registrationCapacity > 0
+      ? item.registrationCapacity
+      : null;
+  const price =
+    (item.registrationPaymentMode === 'manual' || (item.registrationPriceDkk ?? 0) > 0)
+      ? `${Math.max(0, item.registrationPriceDkk ?? 0)} kr`
+      : 'Gratis';
+  const capacityLabel = capacity
+    ? `${reservedCount}/${capacity} deltagere`
+    : reservedCount === 1
+      ? '1 deltager'
+      : `${reservedCount} deltagere`;
+  const availabilityLabel = capacity && reservedCount >= capacity ? 'Fuldt booket' : null;
+
+  return ['Tilmelding', capacityLabel, price, availabilityLabel].filter(Boolean).join(' · ');
+}
+
 export function FanActivityFeedCard({ item, onPress }: FanActivityFeedCardProps) {
   const theme = useTheme();
   const styles = createStyles(theme);
   const preset = getFanActivityVisualPreset(theme, item.type);
   const sourceLabel = getSourceLabel(item);
+  const registrationLine = formatRegistrationLine(item);
   const hasCta = Boolean(item.ctaLabel?.trim() && item.ctaUrl?.trim());
   const ctaLabel = item.ctaLabel?.trim() || 'Se aktivitet';
 
@@ -121,6 +146,17 @@ export function FanActivityFeedCard({ item, onPress }: FanActivityFeedCardProps)
         {sourceLabel ? (
           <Text variant="small" color="muted" numberOfLines={1} style={styles.source}>
             {sourceLabel}
+          </Text>
+        ) : null}
+
+        {registrationLine ? (
+          <Text
+            variant="small"
+            color="secondary"
+            numberOfLines={2}
+            style={styles.registrationMeta}
+          >
+            {registrationLine}
           </Text>
         ) : null}
 
@@ -189,6 +225,9 @@ function createStyles(theme: ReturnType<typeof useTheme>) {
     },
     source: {
       marginTop: -theme.spacing[1] / 3,
+    },
+    registrationMeta: {
+      lineHeight: theme.spacing[3] + theme.spacing[1] / 2,
     },
     ctaWrap: {
       paddingTop: theme.spacing[1],

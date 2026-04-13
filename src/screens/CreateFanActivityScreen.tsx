@@ -5,10 +5,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -26,7 +27,11 @@ import { OutlineButton } from '../components/ui/OutlineButton';
 import type { RootStackParamList } from '../navigation/types';
 import {
   createFanActivity,
+  fetchManageableFanActivityCommunities,
+  fetchFanActivityById,
   resolveCreateFanActivityCommunity,
+  updateFanActivity,
+  type FanActivity,
   type FanActivityCommunity,
   type ResolvedFanActivityCommunity,
 } from '../services/fanActivities';
@@ -130,20 +135,21 @@ function withUpdatedTime(baseDate: Date, selectedTime: Date): Date {
 function getSenderHelperText(
   parentType: 'match' | 'event',
   resolutionSource: ResolvedFanActivityCommunity['source'],
-): string {
+  isCommunityLocked: boolean,
+): string | null {
   if (parentType === 'event') {
-    return 'Afsenderen følger eventets community.';
+    return 'Arrangør følger eventets community.';
   }
 
-  if (resolutionSource === 'wild_tigers_default') {
-    return 'Afsenderen sættes automatisk til Wild Tigers for kampdagsaktiviteter.';
+  if (isCommunityLocked) {
+    return 'Arrangør er låst på aktiviteten.';
   }
 
-  if (resolutionSource === 'single_owned_fallback') {
-    return 'Du ejer kun ét community, så det bruges automatisk i V1.';
+  if (resolutionSource === 'explicit_selection') {
+    return 'Vælg den fanfraktion, der skal stå som arrangør.';
   }
 
-  return 'Afsenderen fastlægges automatisk fra kampkonteksten.';
+  return null;
 }
 
 export default function CreateFanActivityScreen() {
@@ -151,7 +157,25 @@ export default function CreateFanActivityScreen() {
   const route = useRoute<CreateFanActivityRouteProp>();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { parentType, parentId, communityId: parentCommunityId } = route.params;
+  const {
+    parentType,
+    parentId,
+    communityId: parentCommunityId,
+    lockCommunity = false,
+    fanActivityId,
+  } = route.params;
+
+  const isEditMode = Boolean(fanActivityId?.trim());
+  const isCommunityLocked = isEditMode || lockCommunity || parentType === 'event';
+
+  const titleRef = useRef<TextInput>(null);
+  const bodyRef = useRef<TextInput>(null);
+  const capacityRef = useRef<TextInput>(null);
+  const priceRef = useRef<TextInput>(null);
+  const instructionsRef = useRef<TextInput>(null);
+  const locationRef = useRef<TextInput>(null);
+  const ctaLabelRef = useRef<TextInput>(null);
+  const ctaUrlRef = useRef<TextInput>(null);
 
   const [type, setType] = useState<FanActivityTypeValue | ''>('');
   const [title, setTitle] = useState('');
@@ -159,6 +183,10 @@ export default function CreateFanActivityScreen() {
   const [locationName, setLocationName] = useState('');
   const [ctaLabel, setCtaLabel] = useState('');
   const [ctaUrl, setCtaUrl] = useState('');
+  const [registrationEnabled, setRegistrationEnabled] = useState(false);
+  const [registrationCapacity, setRegistrationCapacity] = useState('');
+  const [registrationPriceDkk, setRegistrationPriceDkk] = useState('');
+  const [registrationPaymentInstructions, setRegistrationPaymentInstructions] = useState('');
   const [startsAt, setStartsAt] = useState<Date>(() => getDefaultStartDate());
   const [endsAt, setEndsAt] = useState<Date>(() => getDefaultEndDate(getDefaultStartDate()));
   const [hasEndAt, setHasEndAt] = useState(false);
@@ -166,26 +194,102 @@ export default function CreateFanActivityScreen() {
   const [showStartTimePicker, setShowStartTimePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [showEndTimePicker, setShowEndTimePicker] = useState(false);
+  const [availableCommunities, setAvailableCommunities] = useState<FanActivityCommunity[]>([]);
   const [resolvedCommunity, setResolvedCommunity] = useState<FanActivityCommunity | null>(null);
   const [communityResolutionSource, setCommunityResolutionSource] =
     useState<ResolvedFanActivityCommunity['source']>('unresolved');
   const [loadingCommunity, setLoadingCommunity] = useState(true);
   const [communityAccessError, setCommunityAccessError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [loadedActivity, setLoadedActivity] = useState<FanActivity | null>(null);
 
   const parentLabel = parentType === 'match' ? 'kamp' : 'event';
   const parentPossessiveLabel = parentType === 'match' ? 'kampens' : 'eventets';
+  const screenTitle = isEditMode ? 'Redigér fanaktivitet' : 'Ny fanaktivitet';
+  const submitLabel = submitting
+    ? isEditMode
+      ? 'Gemmer...'
+      : 'Opretter...'
+    : isEditMode
+      ? 'Gem ændringer'
+      : 'Opret fanaktivitet';
   const selectedTypeOption = useMemo(
     () => FAN_ACTIVITY_TYPE_OPTIONS.find((option) => option.value === type) ?? null,
     [type],
   );
+  const parsedRegistrationCapacity = useMemo(
+    () => Math.max(0, Math.trunc(Number(registrationCapacity ?? 0) || 0)),
+    [registrationCapacity],
+  );
+  const parsedRegistrationPrice = useMemo(
+    () => Math.max(0, Math.trunc(Number(registrationPriceDkk ?? 0) || 0)),
+    [registrationPriceDkk],
+  );
+  const isPaidRegistration = registrationEnabled && parsedRegistrationPrice > 0;
+  const communityMobilepayInfo = resolvedCommunity?.mobilepay_info?.trim() || null;
+  const communityPaymentInstructions = resolvedCommunity?.mobilepay_instructions?.trim() || null;
   const senderHelperText = useMemo(() => {
     if (!resolvedCommunity) return null;
-    return getSenderHelperText(parentType, communityResolutionSource);
-  }, [communityResolutionSource, parentType, resolvedCommunity]);
+    return getSenderHelperText(parentType, communityResolutionSource, isCommunityLocked);
+  }, [communityResolutionSource, isCommunityLocked, parentType, resolvedCommunity]);
+
+  const focusField = (ref: React.RefObject<TextInput>) => {
+    ref.current?.focus();
+  };
 
   useEffect(() => {
     let isActive = true;
+
+    const hydrateEditActivity = async () => {
+      if (!isEditMode || !fanActivityId) {
+        return;
+      }
+
+      setLoadingCommunity(true);
+      setCommunityAccessError(null);
+
+      const existingActivity = await fetchFanActivityById(fanActivityId);
+      if (!isActive) return;
+
+      if (!existingActivity) {
+        setLoadedActivity(null);
+        setResolvedCommunity(null);
+        setCommunityResolutionSource('unresolved');
+        setCommunityAccessError('Kunne ikke finde fanaktiviteten, der skal redigeres.');
+        setLoadingCommunity(false);
+        return;
+      }
+
+      const nextStart = new Date(existingActivity.starts_at);
+      const nextEnd = existingActivity.ends_at ? new Date(existingActivity.ends_at) : null;
+
+      setLoadedActivity(existingActivity);
+      setType((existingActivity.type as FanActivityTypeValue) || 'andet');
+      setTitle(existingActivity.title ?? '');
+      setBody(existingActivity.body ?? '');
+      setLocationName(existingActivity.location_name ?? '');
+      setCtaLabel(existingActivity.cta_label ?? '');
+      setCtaUrl(existingActivity.cta_url ?? '');
+      setRegistrationEnabled(existingActivity.registration_enabled);
+      setRegistrationCapacity(
+        existingActivity.registration_capacity != null
+          ? String(existingActivity.registration_capacity)
+          : '',
+      );
+      setRegistrationPriceDkk(String(existingActivity.registration_price_dkk ?? 0));
+      setRegistrationPaymentInstructions(existingActivity.registration_payment_instructions ?? '');
+      setStartsAt(Number.isNaN(nextStart.getTime()) ? getDefaultStartDate() : nextStart);
+      if (nextEnd && !Number.isNaN(nextEnd.getTime())) {
+        setHasEndAt(true);
+        setEndsAt(nextEnd);
+      } else {
+        setHasEndAt(false);
+        setEndsAt(getDefaultEndDate(nextStart));
+      }
+      setResolvedCommunity(existingActivity.community ?? null);
+      setCommunityResolutionSource('existing_activity');
+      setLoadingCommunity(false);
+    };
 
     const resolveCommunity = async () => {
       if (!user?.id) {
@@ -198,8 +302,50 @@ export default function CreateFanActivityScreen() {
         return;
       }
 
+      if (isEditMode) {
+        if (isActive) {
+          setLoadingCommunity(false);
+        }
+        return;
+      }
+
       setLoadingCommunity(true);
       setCommunityAccessError(null);
+
+      if (!isCommunityLocked && parentType === 'match') {
+        const manageableCommunities = await fetchManageableFanActivityCommunities(user.id, {
+          communityType: 'fan_faction',
+        });
+
+        if (!isActive) return;
+
+        setAvailableCommunities(manageableCommunities);
+
+        const preselected =
+          parentCommunityId?.trim() &&
+          manageableCommunities.find((community) => community.id === parentCommunityId.trim());
+
+        if (preselected) {
+          setResolvedCommunity(preselected);
+          setCommunityResolutionSource('explicit_selection');
+          setCommunityAccessError(null);
+        } else if (manageableCommunities.length === 1) {
+          setResolvedCommunity(manageableCommunities[0]);
+          setCommunityResolutionSource('explicit_selection');
+          setCommunityAccessError(null);
+        } else {
+          setResolvedCommunity(null);
+          setCommunityResolutionSource('unresolved');
+          setCommunityAccessError(
+            manageableCommunities.length === 0
+              ? 'Du skal være owner eller admin i en fanfraktion for at oprette kampaktiviteter.'
+              : null,
+          );
+        }
+
+        setLoadingCommunity(false);
+        return;
+      }
 
       const resolution = await resolveCreateFanActivityCommunity({
         userId: user.id,
@@ -209,18 +355,35 @@ export default function CreateFanActivityScreen() {
 
       if (!isActive) return;
 
+      setAvailableCommunities([]);
       setResolvedCommunity(resolution.community);
       setCommunityResolutionSource(resolution.source);
       setCommunityAccessError(resolution.errorMessage);
       setLoadingCommunity(false);
     };
 
+    void hydrateEditActivity();
     void resolveCommunity();
 
     return () => {
       isActive = false;
     };
-  }, [parentCommunityId, parentType, user?.id]);
+  }, [fanActivityId, isEditMode, parentCommunityId, parentType, user?.id]);
+
+  useEffect(() => {
+    if (!registrationEnabled || !isPaidRegistration) {
+      return;
+    }
+
+    if (!registrationPaymentInstructions.trim() && communityPaymentInstructions) {
+      setRegistrationPaymentInstructions(communityPaymentInstructions);
+    }
+  }, [
+    communityPaymentInstructions,
+    isPaidRegistration,
+    registrationEnabled,
+    registrationPaymentInstructions,
+  ]);
 
   const handleStartDateChange = (_event: unknown, selectedDate?: Date) => {
     setShowStartDatePicker(false);
@@ -272,6 +435,41 @@ export default function CreateFanActivityScreen() {
     setEndsAt((current) => (current < startsAt ? getDefaultEndDate(startsAt) : current));
   };
 
+  const handleSelectCommunity = (community: FanActivityCommunity) => {
+    setResolvedCommunity(community);
+    setCommunityResolutionSource('explicit_selection');
+    setCommunityAccessError(null);
+  };
+
+  const missingReasons = useMemo(() => {
+    const reasons: string[] = [];
+    if (!type.trim()) reasons.push('Vælg aktivitetstype');
+    if (!title.trim()) reasons.push('Udfyld titel');
+    if (!resolvedCommunity?.id) reasons.push('Vælg arrangør');
+    if (registrationEnabled && !parsedRegistrationCapacity) reasons.push('Angiv kapacitet');
+    if (isPaidRegistration && !communityMobilepayInfo) reasons.push('Mangler MobilePay på arrangør');
+    if (hasEndAt && endsAt < startsAt) reasons.push('Sluttid skal være efter starttid');
+    return reasons;
+  }, [
+    communityMobilepayInfo,
+    endsAt,
+    hasEndAt,
+    isPaidRegistration,
+    parsedRegistrationCapacity,
+    registrationEnabled,
+    resolvedCommunity,
+    startsAt,
+    title,
+    type,
+  ]);
+
+  const isSubmitDisabled =
+    submitting ||
+    loadingCommunity ||
+    Boolean(communityAccessError) ||
+    (isEditMode && !loadedActivity) ||
+    missingReasons.length > 0;
+
   const handleSubmit = async () => {
     if (!type.trim()) {
       Alert.alert('Fejl', 'Vælg en type for fanaktiviteten.');
@@ -284,7 +482,17 @@ export default function CreateFanActivityScreen() {
     }
 
     if (!resolvedCommunity?.id) {
-      Alert.alert('Fejl', communityAccessError || 'Afsender kunne ikke fastlægges.');
+      Alert.alert('Fejl', communityAccessError || 'Arrangør kunne ikke fastlægges.');
+      return;
+    }
+
+    if (registrationEnabled && !parsedRegistrationCapacity) {
+      Alert.alert('Fejl', 'Kapacitet er påkrævet, når tilmelding er slået til.');
+      return;
+    }
+
+    if (isPaidRegistration && !communityMobilepayInfo) {
+      Alert.alert('Fejl', 'Arrangøren mangler MobilePay-info.');
       return;
     }
 
@@ -296,24 +504,55 @@ export default function CreateFanActivityScreen() {
     setSubmitting(true);
 
     try {
-      await createFanActivity({
-        parentType,
-        parentId,
-        parentCommunityId: parentCommunityId ?? null,
-        communityId: resolvedCommunity.id,
-        type,
-        title,
-        body,
-        startsAt: startsAt.toISOString(),
-        endsAt: hasEndAt ? endsAt.toISOString() : null,
-        locationName,
-        ctaLabel,
-        ctaUrl,
-      });
+      const effectiveMobilepayInfo = isPaidRegistration ? communityMobilepayInfo : null;
+      const effectiveInstructions =
+        registrationPaymentInstructions.trim() || communityPaymentInstructions || null;
+
+      if (isEditMode && fanActivityId) {
+        await updateFanActivity({
+          fanActivityId,
+          type,
+          title,
+          body,
+          startsAt: startsAt.toISOString(),
+          endsAt: hasEndAt ? endsAt.toISOString() : null,
+          locationName,
+          ctaLabel,
+          ctaUrl,
+          registrationEnabled,
+          registrationCapacity: parsedRegistrationCapacity || null,
+          registrationPriceDkk: parsedRegistrationPrice || 0,
+          registrationPaymentInstructions: effectiveInstructions,
+          registrationMobilepayInfo: effectiveMobilepayInfo,
+        });
+      } else {
+        await createFanActivity({
+          parentType,
+          parentId,
+          parentCommunityId: parentCommunityId ?? null,
+          communityId: resolvedCommunity.id,
+          type,
+          title,
+          body,
+          startsAt: startsAt.toISOString(),
+          endsAt: hasEndAt ? endsAt.toISOString() : null,
+          locationName,
+          ctaLabel,
+          ctaUrl,
+          registrationEnabled,
+          registrationCapacity: parsedRegistrationCapacity || null,
+          registrationPriceDkk: parsedRegistrationPrice || 0,
+          registrationPaymentInstructions: effectiveInstructions,
+          registrationMobilepayInfo: effectiveMobilepayInfo,
+        });
+      }
 
       navigation.goBack();
     } catch (error: any) {
-      Alert.alert('Fejl', error?.message || 'Kunne ikke oprette fanaktiviteten.');
+      Alert.alert(
+        'Fejl',
+        error?.message || `Kunne ikke ${isEditMode ? 'opdatere' : 'oprette'} fanaktiviteten.`,
+      );
     } finally {
       setSubmitting(false);
     }
@@ -330,7 +569,7 @@ export default function CreateFanActivityScreen() {
           />
         </Pressable>
         <Text variant="h3" color="inverse" style={styles.headerTitle}>
-          Ny fanaktivitet
+          {screenTitle}
         </Text>
         <View style={styles.headerSpacer} />
       </View>
@@ -344,6 +583,7 @@ export default function CreateFanActivityScreen() {
           style={styles.flex}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
         >
           <Card style={styles.card}>
             <Text variant="caption" color="secondary" style={styles.eyebrow}>
@@ -413,24 +653,28 @@ export default function CreateFanActivityScreen() {
             </View>
 
             <Text variant="caption" color="secondary" style={styles.typeHelp}>
-              Vælg den type, der passer bedst. Resten kan du uddybe i titel og beskrivelse.
+              Vælg typen først, uddybes i titel og beskrivelse.
             </Text>
 
             <Text variant="caption" color="secondary" style={styles.label}>
               Titel
             </Text>
             <TextInput
+              ref={titleRef}
               style={styles.input}
               value={title}
               onChangeText={setTitle}
               placeholder={selectedTypeOption?.titlePlaceholder || 'F.eks. Optakt i Farum'}
               placeholderTextColor={theme.colors.text.muted}
+              returnKeyType="next"
+              onSubmitEditing={() => focusField(bodyRef)}
             />
 
             <Text variant="caption" color="secondary" style={styles.label}>
               Beskrivelse
             </Text>
             <TextInput
+              ref={bodyRef}
               style={[styles.input, styles.textArea]}
               value={body}
               onChangeText={setBody}
@@ -441,6 +685,15 @@ export default function CreateFanActivityScreen() {
               multiline
               numberOfLines={4}
               textAlignVertical="top"
+              blurOnSubmit
+              returnKeyType="next"
+              onSubmitEditing={() => {
+                if (registrationEnabled) {
+                  focusField(capacityRef);
+                } else {
+                  focusField(locationRef);
+                }
+              }}
             />
           </Card>
 
@@ -604,51 +857,64 @@ export default function CreateFanActivityScreen() {
               Sted
             </Text>
             <TextInput
+              ref={locationRef}
               style={styles.input}
               value={locationName}
               onChangeText={setLocationName}
               placeholder="F.eks. Caféen ved stadion"
               placeholderTextColor={theme.colors.text.muted}
+              returnKeyType="next"
+              onSubmitEditing={() => focusField(ctaLabelRef)}
             />
 
-            <Text variant="caption" color="secondary" style={styles.label}>
-              Knaptekst
-            </Text>
-            <TextInput
-              style={styles.input}
-              value={ctaLabel}
-              onChangeText={setCtaLabel}
-              placeholder="Valgfrit, f.eks. Book plads"
-              placeholderTextColor={theme.colors.text.muted}
-            />
+            {!registrationEnabled ? (
+              <>
+                <Text variant="caption" color="secondary" style={styles.label}>
+                  Knaptekst
+                </Text>
+                <TextInput
+                  ref={ctaLabelRef}
+                  style={styles.input}
+                  value={ctaLabel}
+                  onChangeText={setCtaLabel}
+                  placeholder="Valgfrit, f.eks. Book plads"
+                  placeholderTextColor={theme.colors.text.muted}
+                  returnKeyType="next"
+                  onSubmitEditing={() => focusField(ctaUrlRef)}
+                />
+
+                <Text variant="caption" color="secondary" style={styles.label}>
+                  Link
+                </Text>
+                <TextInput
+                  ref={ctaUrlRef}
+                  style={styles.input}
+                  value={ctaUrl}
+                  onChangeText={setCtaUrl}
+                  placeholder="Valgfrit, f.eks. https://fcnordsjaelland.dk"
+                  placeholderTextColor={theme.colors.text.muted}
+                  autoCapitalize="none"
+                  keyboardType="url"
+                  returnKeyType="done"
+                  onSubmitEditing={() => Keyboard.dismiss()}
+                />
+
+                <Text variant="caption" color="secondary" style={styles.helperText}>
+                  Valgfrit. Brug dem til booking eller ekstra info. Udfyld begge felter for at vise
+                  en knap i detaljevisningen.
+                </Text>
+              </>
+            ) : null}
 
             <Text variant="caption" color="secondary" style={styles.label}>
-              Link
-            </Text>
-            <TextInput
-              style={styles.input}
-              value={ctaUrl}
-              onChangeText={setCtaUrl}
-              placeholder="Valgfrit, f.eks. https://wildtigers.dk"
-              placeholderTextColor={theme.colors.text.muted}
-              autoCapitalize="none"
-              keyboardType="url"
-            />
-
-            <Text variant="caption" color="secondary" style={styles.helperText}>
-              Valgfrit. Brug dem til booking, info eller stotte. Udfyld begge felter for at
-              vise en knap i detaljevisningen.
-            </Text>
-
-            <Text variant="caption" color="secondary" style={styles.label}>
-              Afsender
+              Arrangør
             </Text>
 
             {loadingCommunity ? (
               <View style={styles.loadingRow}>
                 <ActivityIndicator size="small" color={theme.colors.primary} />
                 <Text variant="caption" color="secondary">
-                  Fastlægger afsender...
+                  Finder arrangør...
                 </Text>
               </View>
             ) : null}
@@ -659,7 +925,55 @@ export default function CreateFanActivityScreen() {
               </Text>
             ) : null}
 
-            {!loadingCommunity && resolvedCommunity ? (
+            {!loadingCommunity && !isCommunityLocked ? (
+              <View style={styles.senderOptions}>
+                {availableCommunities.length === 0 ? (
+                  <Text variant="caption" color="secondary" style={styles.helperText}>
+                    Ingen fanfraktioner tilgængelige for din konto.
+                  </Text>
+                ) : null}
+                {availableCommunities.map((community) => {
+                  const isSelected = community.id === resolvedCommunity?.id;
+
+                  return (
+                    <Pressable
+                      key={community.id}
+                      style={({ pressed }) => [
+                        styles.senderOptionCard,
+                        isSelected && styles.senderOptionCardSelected,
+                        pressed && styles.typeCardPressed,
+                      ]}
+                      onPress={() => handleSelectCommunity(community)}
+                    >
+                      <View style={styles.senderCopy}>
+                        <Text
+                          variant="body"
+                          color="primary"
+                          style={[styles.senderName, isSelected && styles.senderNameSelected]}
+                        >
+                          {community.name}
+                        </Text>
+                        <Text variant="caption" color="secondary">
+                          Fanfraktion
+                        </Text>
+                      </View>
+                      <Ionicons
+                        name={isSelected ? 'checkmark-circle-outline' : 'ellipse-outline'}
+                        size={theme.components.icon.size.sm}
+                        color={isSelected ? theme.colors.primary : theme.colors.text.secondary}
+                      />
+                    </Pressable>
+                  );
+                })}
+                {senderHelperText ? (
+                  <Text variant="caption" color="secondary" style={styles.helperText}>
+                    {senderHelperText}
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
+
+            {!loadingCommunity && isCommunityLocked && resolvedCommunity ? (
               <View style={styles.senderCard}>
                 <View style={styles.senderCopy}>
                   <Text variant="body" color="primary" style={styles.senderName}>
@@ -672,21 +986,138 @@ export default function CreateFanActivityScreen() {
                   ) : null}
                 </View>
                 <Ionicons
-                  name={parentType === 'event' ? 'lock-closed-outline' : 'checkmark-circle-outline'}
+                  name="lock-closed-outline"
                   size={theme.components.icon.size.sm}
                   color={theme.colors.primary}
                 />
               </View>
             ) : null}
           </Card>
+
+          <Card style={styles.card}>
+            <Text variant="h3" color="primary" style={styles.sectionTitle}>
+              Tilmelding
+            </Text>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.settingCard,
+                registrationEnabled && styles.settingCardSelected,
+                pressed && styles.typeCardPressed,
+              ]}
+              onPress={() => setRegistrationEnabled((current) => !current)}
+            >
+              <View style={styles.settingCopy}>
+                <Text variant="body" color="primary" style={styles.settingTitle}>
+                  Kræver tilmelding
+                </Text>
+                <Text variant="caption" color="secondary" style={styles.settingBody}>
+                  Slå til hvis der er pladser eller betaling.
+                </Text>
+              </View>
+              <Ionicons
+                name={registrationEnabled ? 'checkmark-circle-outline' : 'ellipse-outline'}
+                size={theme.components.icon.size.sm}
+                color={registrationEnabled ? theme.colors.primary : theme.colors.text.secondary}
+              />
+            </Pressable>
+
+            {registrationEnabled ? (
+              <>
+                <View style={styles.splitRow}>
+                  <View style={styles.splitField}>
+                    <Text variant="caption" color="secondary" style={styles.label}>
+                      Kapacitet
+                    </Text>
+                    <TextInput
+                      ref={capacityRef}
+                      style={[styles.input, styles.compactInput]}
+                      value={registrationCapacity}
+                      onChangeText={setRegistrationCapacity}
+                      placeholder="F.eks. 50"
+                      placeholderTextColor={theme.colors.text.muted}
+                      keyboardType="number-pad"
+                      returnKeyType="next"
+                      onSubmitEditing={() => focusField(priceRef)}
+                    />
+                  </View>
+
+                  <View style={styles.splitField}>
+                    <Text variant="caption" color="secondary" style={styles.label}>
+                      Pris (kr)
+                    </Text>
+                    <TextInput
+                      ref={priceRef}
+                      style={[styles.input, styles.compactInput]}
+                      value={registrationPriceDkk}
+                      onChangeText={setRegistrationPriceDkk}
+                      placeholder="0 for gratis"
+                      placeholderTextColor={theme.colors.text.muted}
+                      keyboardType="number-pad"
+                      returnKeyType={isPaidRegistration ? 'next' : 'done'}
+                      onSubmitEditing={() => {
+                        if (isPaidRegistration) {
+                          focusField(instructionsRef);
+                        } else {
+                          focusField(locationRef);
+                        }
+                      }}
+                    />
+                  </View>
+                </View>
+
+                {isPaidRegistration ? (
+                  <>
+                    <Text variant="caption" color="secondary" style={styles.label}>
+                      MobilePay
+                    </Text>
+                    <View style={styles.readonlyField}>
+                      <Text variant="body" color="primary" style={styles.readonlyValue}>
+                        {communityMobilepayInfo || 'Mangler MobilePay-info på arrangør'}
+                      </Text>
+                      <Text variant="caption" color="secondary">
+                        {resolvedCommunity?.name ? `Arrangør: ${resolvedCommunity.name}` : 'Arrangør'}
+                      </Text>
+                    </View>
+
+                    <Text variant="caption" color="secondary" style={styles.label}>
+                      Betalingsinfo (valgfri)
+                    </Text>
+                    <TextInput
+                      ref={instructionsRef}
+                      style={[styles.input, styles.instructionsInput]}
+                      value={registrationPaymentInstructions}
+                      onChangeText={setRegistrationPaymentInstructions}
+                      placeholder="Kort besked til deltagerne om betaling."
+                      placeholderTextColor={theme.colors.text.muted}
+                      multiline
+                      numberOfLines={3}
+                      textAlignVertical="top"
+                      blurOnSubmit
+                      returnKeyType="next"
+                      onSubmitEditing={() => focusField(locationRef)}
+                    />
+                    <Text variant="caption" color="secondary" style={styles.helperText}>
+                      Reference til betaling genereres automatisk ved tilmelding.
+                    </Text>
+                  </>
+                ) : null}
+              </>
+            ) : null}
+          </Card>
         </ScrollView>
 
         <View style={[styles.footer, { paddingBottom: insets.bottom + theme.spacing[4] }]}>
+          {missingReasons.length > 0 ? (
+            <Text variant="caption" color="secondary" style={styles.helperText}>
+              Mangler: {missingReasons.join(' · ')}
+            </Text>
+          ) : null}
           <OutlineButton title="Annuller" onPress={() => navigation.goBack()} disabled={submitting} />
           <PrimaryButton
-            title={submitting ? 'Opretter...' : 'Opret fanaktivitet'}
+            title={submitLabel}
             onPress={handleSubmit}
-            disabled={submitting || loadingCommunity || !resolvedCommunity || Boolean(communityAccessError)}
+            disabled={isSubmitDisabled}
           />
         </View>
       </KeyboardAvoidingView>
@@ -810,8 +1241,27 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.body.fontSize,
     marginBottom: theme.spacing[3],
   },
+  compactInput: {
+    minHeight: theme.spacing[11],
+  },
   textArea: {
     minHeight: theme.spacing[16] + theme.spacing[12],
+  },
+  instructionsInput: {
+    minHeight: theme.spacing[16],
+  },
+  readonlyField: {
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
+    backgroundColor: theme.colors.bg.subtle,
+    borderRadius: theme.radius.md,
+    borderWidth: theme.layout.borderHairline,
+    borderColor: theme.colors.border.default,
+    marginBottom: theme.spacing[3],
+  },
+  readonlyValue: {
+    fontWeight: '700',
+    marginBottom: theme.spacing[1],
   },
   dateTimeRow: {
     flexDirection: 'row',
@@ -874,6 +1324,61 @@ const styles = StyleSheet.create({
   senderName: {
     fontWeight: '700',
     marginBottom: theme.spacing[1],
+  },
+  senderNameSelected: {
+    color: theme.colors.primary,
+  },
+  senderOptions: {
+    gap: theme.spacing[2],
+  },
+  senderOptionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
+    backgroundColor: theme.colors.bg.default,
+    borderRadius: theme.radius.md,
+    borderWidth: theme.layout.borderHairline,
+    borderColor: theme.colors.border.default,
+  },
+  senderOptionCardSelected: {
+    backgroundColor: theme.colors.bg.subtle,
+    borderColor: theme.colors.border.active,
+  },
+  splitRow: {
+    flexDirection: 'row',
+    gap: theme.spacing[3],
+  },
+  splitField: {
+    flex: 1,
+  },
+  settingCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
+    backgroundColor: theme.colors.bg.default,
+    borderRadius: theme.radius.md,
+    borderWidth: theme.layout.borderHairline,
+    borderColor: theme.colors.border.default,
+    marginBottom: theme.spacing[2],
+  },
+  settingCardSelected: {
+    backgroundColor: theme.colors.bg.subtle,
+    borderColor: theme.colors.border.active,
+  },
+  settingCopy: {
+    flex: 1,
+    marginRight: theme.spacing[3],
+  },
+  settingTitle: {
+    fontWeight: '700',
+    marginBottom: theme.spacing[1],
+  },
+  settingBody: {
+    lineHeight: theme.spacing[4],
   },
   footer: {
     paddingHorizontal: theme.spacing[4],

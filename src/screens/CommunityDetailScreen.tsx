@@ -110,6 +110,10 @@ export default function CommunityDetailScreen() {
   const [showEditLocation, setShowEditLocation] = useState(false);
   const [editLocationText, setEditLocationText] = useState('');
   const [savingLocation, setSavingLocation] = useState(false);
+  const [showEditPaymentInfo, setShowEditPaymentInfo] = useState(false);
+  const [editMobilepayInfo, setEditMobilepayInfo] = useState('');
+  const [editPaymentInstructions, setEditPaymentInstructions] = useState('');
+  const [savingPaymentInfo, setSavingPaymentInfo] = useState(false);
   const [showFanFactionRequestModal, setShowFanFactionRequestModal] = useState(false);
   const [fanFactionRequestNote, setFanFactionRequestNote] = useState('');
   const [loadingFanFactionRequest, setLoadingFanFactionRequest] = useState(false);
@@ -452,6 +456,13 @@ export default function CommunityDetailScreen() {
     setShowEditLocation(true);
   };
 
+  const handleEditPaymentInfo = () => {
+    setShowEditSheet(false);
+    setEditMobilepayInfo(community?.mobilepay_info || '');
+    setEditPaymentInstructions(community?.mobilepay_instructions || '');
+    setShowEditPaymentInfo(true);
+  };
+
   const handleSaveAbout = async () => {
     setSavingAbout(true);
     try {
@@ -523,6 +534,29 @@ export default function CommunityDetailScreen() {
       Alert.alert('Fejl', 'Kunne ikke opdatere. Prøv igen.');
     } finally {
       setSavingLocation(false);
+    }
+  };
+
+  const handleSavePaymentInfo = async () => {
+    setSavingPaymentInfo(true);
+    try {
+      const success = await updateCommunity(id, {
+        mobilepay_info: editMobilepayInfo.trim() || null,
+        mobilepay_instructions: editPaymentInstructions.trim() || null,
+      });
+
+      if (success) {
+        Alert.alert('Succes', 'Betalingsinfo opdateret!');
+        setShowEditPaymentInfo(false);
+        loadData();
+      } else {
+        Alert.alert('Fejl', 'Kunne ikke opdatere. Prøv igen.');
+      }
+    } catch (error) {
+      logger.error('[CommunityDetail] Error saving payment info:', error);
+      Alert.alert('Fejl', 'Kunne ikke opdatere. Prøv igen.');
+    } finally {
+      setSavingPaymentInfo(false);
     }
   };
 
@@ -1048,6 +1082,11 @@ export default function CommunityDetailScreen() {
                   <Text style={styles.editSheetActionText}>Redigér "Lokation"</Text>
                 </Pressable>
 
+                <Pressable style={styles.editSheetAction} onPress={handleEditPaymentInfo}>
+                  <Ionicons name="card-outline" size={20} color={theme.colors.text.primary} />
+                  <Text style={styles.editSheetActionText}>Redigér betalingsinfo</Text>
+                </Pressable>
+
                 {community?.type === 'community' && (
                   <Pressable style={styles.editSheetAction} onPress={openFanFactionRequestModal}>
                     <Ionicons
@@ -1325,6 +1364,82 @@ export default function CommunityDetailScreen() {
             </View>
           </View>
         </View>
+      </Modal>
+
+      <Modal
+        visible={showEditPaymentInfo}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowEditPaymentInfo(false)}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={{ flex: 1 }}
+          >
+            <View style={styles.editSheetOverlay}>
+              <Pressable
+                style={styles.editSheetBackdrop}
+                onPress={() => setShowEditPaymentInfo(false)}
+              />
+              <ScrollView
+                style={styles.editSheetScrollContainer}
+                keyboardShouldPersistTaps="handled"
+              >
+                <View style={styles.editSheet}>
+                  <Text style={styles.editSheetTitle}>Betalingsinfo</Text>
+                  <Text style={styles.messageModalSubtitle}>
+                    Denne info bruges som standard for betalte fanaktiviteter.
+                  </Text>
+
+                  <TextInput
+                    style={styles.editInput}
+                    value={editMobilepayInfo}
+                    onChangeText={setEditMobilepayInfo}
+                    placeholder="MobilePay nummer/navn"
+                    placeholderTextColor={theme.colors.text.secondary}
+                    returnKeyType="next"
+                  />
+
+                  <TextInput
+                    style={[styles.editInput, styles.editInputMultiline]}
+                    value={editPaymentInstructions}
+                    onChangeText={setEditPaymentInstructions}
+                    placeholder="Valgfri betalingsinstruktion"
+                    placeholderTextColor={theme.colors.text.secondary}
+                    multiline
+                    numberOfLines={4}
+                    returnKeyType="done"
+                    blurOnSubmit
+                    onSubmitEditing={() => Keyboard.dismiss()}
+                  />
+
+                  <View style={styles.editActions}>
+                    <Pressable
+                      style={styles.cancelButton}
+                      onPress={() => setShowEditPaymentInfo(false)}
+                      disabled={savingPaymentInfo}
+                    >
+                      <Text style={styles.cancelButtonText}>Annuller</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[
+                        styles.saveButton,
+                        { backgroundColor: accentColor, opacity: savingPaymentInfo ? 0.6 : 1 },
+                      ]}
+                      onPress={handleSavePaymentInfo}
+                      disabled={savingPaymentInfo}
+                    >
+                      <Text style={styles.saveButtonText}>
+                        {savingPaymentInfo ? 'Gemmer...' : 'Gem'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+              </ScrollView>
+            </View>
+          </KeyboardAvoidingView>
+        </TouchableWithoutFeedback>
       </Modal>
     </SafeAreaView>
   );

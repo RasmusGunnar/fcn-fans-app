@@ -28,8 +28,8 @@ import { Card } from '../components/ui/Card';
 import type { RootStackParamList } from '../navigation/types';
 import { fetchFixtureById, type Fixture } from '../services/eventsApi';
 import {
+  fetchManageableFanActivityCommunities,
   fetchFanActivitiesForMatch,
-  resolveCreateFanActivityCommunity,
   type FanActivity,
 } from '../services/fanActivities';
 import { formatDateDa } from '../services/fixtures';
@@ -197,13 +197,12 @@ export default function MatchDetailsScreen() {
         return;
       }
 
-      const resolution = await resolveCreateFanActivityCommunity({
-        userId: user.id,
-        parentType: 'match',
+      const communities = await fetchManageableFanActivityCommunities(user.id, {
+        communityType: 'fan_faction',
       });
 
       if (isActive) {
-        setCanCreateFanActivities(Boolean(resolution.community?.id));
+        setCanCreateFanActivities(communities.length > 0);
       }
     };
 

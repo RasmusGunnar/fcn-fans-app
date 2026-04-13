@@ -19,7 +19,7 @@ import { fetchWeeklyRanking, type WeeklyRankingData } from '../api/weeklyRanking
 import { FanBarometerCard } from '../components/fan/FanBarometerCard';
 import { FanLevelBadge } from '../components/fan/FanLevelBadge';
 import { Card } from '../components/ui/Card';
-import { Badge } from '../components/ui/Badge';
+import { Badge, type BadgeVariant } from '../components/ui/Badge';
 import { Pill } from '../components/ui/Pill';
 import { isFanLevelKey } from '../lib/fanLevel';
 import { OutlineButton } from '../components/ui/OutlineButton';
@@ -55,6 +55,11 @@ import {
 } from '../services/profileApi';
 import { getUnreadNotificationsCount } from '../services/notificationsApi';
 import { normalizeDisplayNameToUsername } from '../utils/username';
+import {
+  fetchMyFanActivityRegistrations,
+  type FanActivityRegistrationListItem,
+  type FanActivityRegistrationStatus,
+} from '../services/fanActivityRegistrations';
 
 function isUsernameConflictError(error: any): boolean {
   const message = String(error?.message ?? '').toLowerCase();
@@ -177,6 +182,7 @@ export default function ProfileScreen() {
   >(null);
   const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
   const [weeklyRanking, setWeeklyRanking] = useState<WeeklyRankingData | null>(null);
+  const [myRegistrations, setMyRegistrations] = useState<FanActivityRegistrationListItem[]>([]);
   const liveFanLevel = isFanLevelKey(profile?.fan_level_key) ? profile.fan_level_key : null;
   const fanLevel = liveFanLevel ?? 'new_fan';
   const weeklyStatus = useMemo(() => {
@@ -221,6 +227,7 @@ export default function ProfileScreen() {
       fetchMyUpcomingItems(user.id),
       countOwnedCommunities(user.id),
       fetchWeeklyRanking(),
+      fetchMyFanActivityRegistrations(),
     ]);
 
     // Extract profile
@@ -259,6 +266,12 @@ export default function ProfileScreen() {
       setWeeklyRanking(results[4].value);
     } else {
       setWeeklyRanking(null);
+    }
+
+    if (results[5].status === 'fulfilled') {
+      setMyRegistrations(results[5].value);
+    } else {
+      setMyRegistrations([]);
     }
 
     setLoading(false);
@@ -579,10 +592,42 @@ export default function ProfileScreen() {
     }
   };
 
+  const navigateToRegistration = (registrationId: string) => {
+    (navigation as any).navigate('FanActivityRegistrationReceipt', { registrationId });
+  };
+
   const getItemIcon = (type: string): string => {
     if (type === 'match') return 'football';
     if (type === 'bus_trip') return 'bus';
     return 'calendar';
+  };
+
+  const getRegistrationStatusLabel = (status: FanActivityRegistrationStatus) => {
+    switch (status) {
+      case 'pending_payment':
+        return 'Mangler betaling';
+      case 'pending_verification':
+        return 'Du er tilmeldt';
+      case 'confirmed':
+        return 'Plads bekræftet';
+      default:
+        return 'Ukendt status';
+    }
+  };
+
+  const getRegistrationStatusVariant = (
+    status: FanActivityRegistrationStatus,
+  ): BadgeVariant => {
+    switch (status) {
+      case 'confirmed':
+        return 'success';
+      case 'pending_verification':
+        return 'info';
+      case 'pending_payment':
+        return 'warning';
+      default:
+        return 'neutral';
+    }
   };
 
   // If not logged in
@@ -800,6 +845,64 @@ export default function ProfileScreen() {
         footerNote="Fanstatus bygger på din samlede aktivitet i fællesskabet."
         state={loading && !profile ? 'loading' : profile && liveFanLevel ? 'ready' : 'empty'}
       />
+
+      <SectionCard title="MINE TILMELDINGER" icon="ticket" styles={styles}>
+        {myRegistrations.length > 0 ? (
+          myRegistrations.map((registration) => {
+            const title = registration.activityTitle || 'Fanaktivitet';
+            const dateLabel = registration.activityStartsAt
+              ? formatEventDate(registration.activityStartsAt)
+              : 'Dato ikke sat';
+            const organizerLabel = registration.communityName
+              ? `Arrangør: ${registration.communityName}`
+              : 'Arrangør: ukendt';
+            const subtitle = `${dateLabel} • ${organizerLabel}`;
+
+            return (
+              <Pressable
+                key={registration.id}
+                style={[
+                  styles.registrationRow,
+                  { borderBottomColor: theme.colors.border.default },
+                ]}
+                onPress={() => navigateToRegistration(registration.id)}
+              >
+                <View style={styles.registrationRowCopy}>
+                  <Text
+                    style={[styles.registrationRowTitle, { color: theme.colors.text.primary }]}
+                  >
+                    {title}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.registrationRowSubtitle,
+                      { color: theme.colors.text.secondary },
+                    ]}
+                  >
+                    {subtitle}
+                  </Text>
+                </View>
+                <View style={styles.registrationRowMeta}>
+                  <Badge
+                    label={getRegistrationStatusLabel(registration.status)}
+                    variant={getRegistrationStatusVariant(registration.status)}
+                    size="sm"
+                  />
+                  <Ionicons
+                    name="chevron-forward"
+                    size={16}
+                    color={theme.colors.text.secondary}
+                  />
+                </View>
+              </Pressable>
+            );
+          })
+        ) : (
+          <Text style={[styles.emptyText, { color: theme.colors.text.secondary }]}>
+            Du har ingen tilmeldinger endnu.
+          </Text>
+        )}
+      </SectionCard>
 
       {/* Owned Communities */}
       {ownerCommunities.length > 0 && (
@@ -1275,6 +1378,30 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     rowSubtitle: {
       fontSize: 14,
       marginTop: theme.spacing[0],
+    },
+    registrationRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: spacing.sm,
+      borderBottomWidth: theme.layout.borderWidth,
+      gap: theme.spacing[2],
+    },
+    registrationRowCopy: {
+      flex: 1,
+      gap: theme.spacing[0],
+    },
+    registrationRowTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    registrationRowSubtitle: {
+      fontSize: 14,
+      marginTop: theme.spacing[0],
+    },
+    registrationRowMeta: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing[2],
     },
     footer: {
       alignItems: 'center',

@@ -27,6 +27,8 @@ export interface Community {
   visibility: 'public' | 'private';
   created_at: string;
   created_by: string | null;
+  mobilepay_info?: string | null;
+  mobilepay_instructions?: string | null;
   member_count?: number;
 }
 
@@ -838,9 +840,9 @@ export async function uploadCommunityCover(
  */
 export async function updateCommunity(
   communityId: string,
-  updates: { 
-    name?: string; 
-    description?: string | null; 
+  updates: {
+    name?: string;
+    description?: string | null;
     location_label?: string | null;
     lat?: number | null;
     lng?: number | null;
@@ -850,6 +852,8 @@ export async function updateCommunity(
     avatar_path?: string | null;
     avatar_url?: string | null;
     avatar_kind?: 'logo' | 'image' | null;
+    mobilepay_info?: string | null;
+    mobilepay_instructions?: string | null;
   },
 ): Promise<boolean> {
   try {
@@ -869,6 +873,12 @@ export async function updateCommunity(
       ...(updates.avatar_path !== undefined && { avatar_path: updates.avatar_path }),
       ...(updates.avatar_url !== undefined && { avatar_url: updates.avatar_url }),
       ...(updates.avatar_kind !== undefined && { avatar_kind: updates.avatar_kind }),
+      ...(updates.mobilepay_info !== undefined && {
+        mobilepay_info: updates.mobilepay_info?.trim() || null,
+      }),
+      ...(updates.mobilepay_instructions !== undefined && {
+        mobilepay_instructions: updates.mobilepay_instructions?.trim() || null,
+      }),
     };
 
     logger.log('[communities] updateCommunity payload:', {

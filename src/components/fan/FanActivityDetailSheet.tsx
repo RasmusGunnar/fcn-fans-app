@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
 import {
@@ -12,10 +13,12 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useCommunityRole } from '../../hooks/useCommunityRole';
 import type { FanActivity } from '../../services/fanActivities';
 import { useTheme } from '../../theme';
 import { PrimaryButton } from '../PrimaryButton';
 import { Text } from '../ui';
+import { FanActivityRegistrationSection } from './FanActivityRegistrationSection';
 import { getFanActivityVisualPreset } from './fanActivityVisualPresets';
 
 type FanActivityDetailSheetProps = {
@@ -163,15 +166,18 @@ export function FanActivityDetailSheet({
   activity,
   onClose,
 }: FanActivityDetailSheetProps) {
+  const navigation = useNavigation();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const styles = createStyles(theme);
+  const { role: communityRole } = useCommunityRole(activity?.community_id);
 
   if (!activity) {
     return null;
   }
 
   const preset = getFanActivityVisualPreset(theme, activity.type);
+  const canEditActivity = communityRole === 'owner' || communityRole === 'admin';
   const location = getFanActivityLocation(activity);
   const communityName = activity.community?.name?.trim() || null;
   const body = activity.body?.trim() || null;
@@ -218,6 +224,19 @@ export function FanActivityDetailSheet({
     }
   };
 
+  const handleEditActivity = () => {
+    onClose();
+    setTimeout(() => {
+      (navigation as any).navigate('CreateFanActivity', {
+        parentType: activity.parent_type,
+        parentId: activity.parent_id,
+        communityId: activity.community_id,
+        lockCommunity: true,
+        fanActivityId: activity.id,
+      });
+    }, 0);
+  };
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.overlay}>
@@ -228,7 +247,10 @@ export function FanActivityDetailSheet({
 
           <ScrollView
             style={styles.body}
-            contentContainerStyle={[styles.bodyContent, { paddingBottom: insets.bottom + theme.spacing[5] }]}
+            contentContainerStyle={[
+              styles.bodyContent,
+              { paddingBottom: insets.bottom + theme.spacing[5] },
+            ]}
             showsVerticalScrollIndicator={false}
           >
             <ImageBackground
@@ -295,15 +317,32 @@ export function FanActivityDetailSheet({
                 ))}
               </View>
 
+              {canEditActivity ? (
+                <Pressable style={styles.editCta} onPress={handleEditActivity}>
+                  <Ionicons
+                    name="create-outline"
+                    size={theme.typography.body.fontSize}
+                    color={theme.colors.primary}
+                  />
+                  <Text variant="bodyBold" color="primary" style={styles.editCtaText}>
+                    Redigér
+                  </Text>
+                </Pressable>
+              ) : null}
+
               <View style={styles.descriptionSection}>
                 <Text variant="small" color="muted" style={styles.descriptionEyebrow}>
                   {body ? 'BESKRIVELSE' : 'OM OPLEVELSEN'}
                 </Text>
                 <Text variant="body" color="primary" style={styles.bodyText}>
                   {body ||
-                    'Aktiviteten er allerede en del af kampdagsoplevelsen. Flere praktiske detaljer kan komme senere, men tid, sted og ramme er pa plads, sa fans kan planlaegge omkring oplevelsen.'}
+                    'Aktiviteten er allerede en del af kampdagsoplevelsen. Flere praktiske detaljer kan komme senere, men tid, sted og ramme er på plads, så fans kan planlægge omkring oplevelsen.'}
                 </Text>
               </View>
+
+              {activity.registration_enabled ? (
+                <FanActivityRegistrationSection activity={activity} visible={visible} />
+              ) : null}
 
               {ctaLabel && ctaUrl ? (
                 <View style={styles.ctaWrap}>
@@ -420,6 +459,21 @@ function createStyles(theme: ReturnType<typeof useTheme>) {
     },
     metaStack: {
       gap: theme.spacing[2],
+    },
+    editCta: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      alignSelf: 'flex-start',
+      gap: theme.spacing[1],
+      paddingHorizontal: theme.spacing[3],
+      paddingVertical: theme.spacing[1] + theme.spacing[1] / 2,
+      borderRadius: theme.radius.pill,
+      backgroundColor: theme.colors.bg.subtle,
+      borderWidth: theme.layout.borderHairline,
+      borderColor: theme.colors.border.subtle,
+    },
+    editCtaText: {
+      fontWeight: '700',
     },
     inlineMetaRow: {
       flexDirection: 'row',

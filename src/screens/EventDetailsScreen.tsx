@@ -309,7 +309,9 @@ export default function EventDetailsScreen() {
   const endStr = event.end_at ? formatTimeDa(event.end_at) : null;
   const addressDisplay = buildAddressDisplay(event);
   const attendeeCountLabel = formatAttendeeCount(attendance.countGoing);
-  const canCreateFanActivities = Boolean(event.organizer_group_id && communityRole === 'owner');
+  const canCreateFanActivities = Boolean(
+    event.organizer_group_id && (communityRole === 'owner' || communityRole === 'admin'),
+  );
   const showFanActivitiesSection = fanActivities.length > 0 || canCreateFanActivities;
 
   const showEditOption = canEditEvent(

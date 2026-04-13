@@ -98,6 +98,11 @@ export type FeedFanActivityData = {
   coverUrl?: string | null;
   ctaLabel?: string | null;
   ctaUrl?: string | null;
+  registrationEnabled?: boolean;
+  registrationCapacity?: number | null;
+  registrationPriceDkk?: number | null;
+  registrationPaymentMode?: 'free' | 'manual' | null;
+  registrationReservedCount?: number | null;
   createdAt?: string | null;
 } & FeedRankingSignals;
 
