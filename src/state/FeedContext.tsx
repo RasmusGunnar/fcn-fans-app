@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useRef, useState } from 'react';
+import React, { createContext, useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
 import {
@@ -145,6 +145,27 @@ function withPostAuthorProfile(post: Post, profile?: FeedProfileEntry | null): P
   };
 }
 
+function mergeFetchedLikeMapPreservingLikedState(
+  previousLikeMap: Record<string, { liked: boolean; likes: number }>,
+  fetchedLikeMap: Record<string, { liked: boolean; likes: number }>,
+): Record<string, { liked: boolean; likes: number }> {
+  const mergedLikeMap = { ...previousLikeMap };
+
+  Object.entries(fetchedLikeMap).forEach(([key, fetchedState]) => {
+    const previousState = previousLikeMap[key];
+    const shouldPreserveLikedTrue = previousState?.liked === true && fetchedState.liked !== true;
+
+    mergedLikeMap[key] = {
+      liked: shouldPreserveLikedTrue ? true : fetchedState.liked,
+      likes: shouldPreserveLikedTrue
+        ? Math.max(previousState?.likes ?? 0, fetchedState.likes)
+        : fetchedState.likes,
+    };
+  });
+
+  return mergedLikeMap;
+}
+
 function mergeCommunityFeedEntries(
   localEntries: CommunityFeedSource[],
   persistedEntries: CommunityFeedSource[],
@@ -218,8 +239,14 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
     Record<string, { count: number; avatars: string[]; isGoing: boolean }>
   >({});
   const localCommunityFeedEntriesRef = useRef<CommunityFeedSource[]>([]);
+  const likeMapRef = useRef<Record<string, { liked: boolean; likes: number }>>({});
+  const fetchRequestIdRef = useRef(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    likeMapRef.current = likeMap;
+  }, [likeMap]);
 
   const patchFeedItemEngagement = useCallback(
     (
@@ -323,6 +350,9 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
   );
 
   const fetchPosts = useCallback(async () => {
+    const requestId = ++fetchRequestIdRef.current;
+    const isCurrentRequest = () => fetchRequestIdRef.current === requestId;
+
     setLoading(true);
     setError(null);
 
@@ -366,6 +396,10 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         } catch (e) {
           logger.warn('[FeedProvider] Failed to fetch profiles:', e);
         }
+      }
+
+      if (!isCurrentRequest()) {
+        return;
       }
 
       setProfileMap((prev) => ({
@@ -454,6 +488,10 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
                 avatarUrl: resolveAvatarUrl(c.avatar_url ?? c.avatar_path ?? null),
               });
             });
+            if (!isCurrentRequest()) {
+              return;
+            }
+
             setCommunityMap(newCommunityMap);
 
             transformedPosts = transformedPosts.map((post) => {
@@ -507,6 +545,10 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
           debugSource: entry.debug_source ?? null,
         })),
       });
+    }
+
+    if (!isCurrentRequest()) {
+      return;
     }
 
     if (communityFeedEntries.length > 0) {
@@ -623,8 +665,11 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         weeklyTopFanId: safeWeeklyTopFanItem?.id ?? null,
       });
 
+      if (!isCurrentRequest()) {
+        return;
+      }
+
       setFeedItems(nextFeedItems);
-      setHomeFeedItems(nextHomeFeedItems);
       logHomeFeedSnapshot('built', nextHomeFeedItems, baseDate);
 
       // Fetch like and comment counts for all feed items
@@ -750,18 +795,23 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         newCommentPreviewMap[key] = safeBusTripPreviews.get(id) || [];
       });
 
-      setLikeMap(newLikeMap);
-      setFeedItems(withFeedEngagementSummary(nextFeedItems, newLikeMap, newCommentCountMap));
+      const mergedLikeMap = mergeFetchedLikeMapPreservingLikedState(likeMapRef.current, newLikeMap);
+
+      if (!isCurrentRequest()) {
+        return;
+      }
+
+      likeMapRef.current = mergedLikeMap;
+      setLikeMap(mergedLikeMap);
+      setFeedItems(withFeedEngagementSummary(nextFeedItems, mergedLikeMap, newCommentCountMap));
       const rankedHomeFeedItems = sortHomeFeedItems(
-        withFeedEngagementSummary(nextHomeFeedItems, newLikeMap, newCommentCountMap),
+        withFeedEngagementSummary(nextHomeFeedItems, mergedLikeMap, newCommentCountMap),
         baseDate,
       );
       console.log('[FeedProvider] weekly_top_fan after home ranking', {
         homeHasCardAfterRanking: rankedHomeFeedItems.some((item) => item.kind === 'weekly_top_fan'),
         weeklyTopFanId: safeWeeklyTopFanItem?.id ?? null,
       });
-      setHomeFeedItems(rankedHomeFeedItems);
-      logHomeFeedSnapshot('final', rankedHomeFeedItems, baseDate);
 
       // ── Rehydrate likedByMe from likes_v2 for current user ──
       try {
@@ -777,7 +827,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
             fetchMyLikedIds(currentUserId, 'bus_trip', busTripIds).catch(() => new Set<string>()),
           ]);
 
-          const patchedLikeMap = { ...newLikeMap };
+          const patchedLikeMap = { ...mergedLikeMap };
           const patchLiked = (kind: LikeTargetType, ids: string[], mySet: Set<string>) => {
             for (const id of ids) {
               if (mySet.has(id)) {
@@ -791,7 +841,16 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
           patchLiked('event', eventIds, myEventLikes);
           patchLiked('bus_trip', busTripIds, myBusTripLikes);
 
-          setLikeMap(patchedLikeMap);
+          if (!isCurrentRequest()) {
+            return;
+          }
+
+          const mergedPatchedLikeMap = mergeFetchedLikeMapPreservingLikedState(
+            likeMapRef.current,
+            patchedLikeMap,
+          );
+          likeMapRef.current = mergedPatchedLikeMap;
+          setLikeMap(mergedPatchedLikeMap);
         }
       } catch (e) {
         logger.warn('[FeedProvider] likedByMe rehydration failed:', e);
@@ -838,6 +897,10 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
               }
             });
 
+            if (!isCurrentRequest()) {
+              return;
+            }
+
             setAttendanceMap(attendanceByEntity);
           } else {
             logger.warn('[FeedProvider] Attendance fetch failed:', rsvpError);
@@ -847,13 +910,21 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         logger.warn('[FeedProvider] Attendance fetch error:', e);
       }
 
+      if (!isCurrentRequest()) {
+        return;
+      }
+
       setCommentCountMap(newCommentCountMap);
       setCommentPreviewMap(newCommentPreviewMap);
+      setHomeFeedItems(rankedHomeFeedItems);
+      logHomeFeedSnapshot('final', rankedHomeFeedItems, baseDate);
     } catch (e: any) {
       logger.error('[FeedProvider] Error merging feed:', e?.message || e);
     }
 
-    setLoading(false);
+    if (isCurrentRequest()) {
+      setLoading(false);
+    }
   }, []);
 
   const addPost = useCallback(
@@ -979,10 +1050,12 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
           return prev;
         }
 
-        return {
+        const next = {
           ...prev,
           [key]: { liked, likes },
         };
+        likeMapRef.current = next;
+        return next;
       });
 
       setCommentCountMap((prev) => {
@@ -1019,14 +1092,16 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       const newLiked = !currentState.liked;
       const newLikes = newLiked ? currentState.likes + 1 : Math.max(0, currentState.likes - 1);
 
-      setLikeMap((prev) => ({
-        ...prev,
-        [key]: { liked: newLiked, likes: newLikes },
-      }));
+      setLikeMap((prev) => {
+        const next = {
+          ...prev,
+          [key]: { liked: newLiked, likes: newLikes },
+        };
+        likeMapRef.current = next;
+        return next;
+      });
       setFeedItems((prev) => patchFeedItemEngagement(prev, kind, id, { likeCount: newLikes }));
-      setHomeFeedItems((prev) =>
-        sortHomeFeedItems(patchFeedItemEngagement(prev, kind, id, { likeCount: newLikes })),
-      );
+      setHomeFeedItems((prev) => patchFeedItemEngagement(prev, kind, id, { likeCount: newLikes }));
 
       // Persist to DB
       try {
@@ -1034,17 +1109,19 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         if (!success) {
           logger.warn('[toggleLike failed]', { targetType: kind, targetId: id, error: 'unknown' });
           // Revert on failure
-          setLikeMap((prev) => ({
-            ...prev,
-            [key]: currentState,
-          }));
+          setLikeMap((prev) => {
+            const next = {
+              ...prev,
+              [key]: currentState,
+            };
+            likeMapRef.current = next;
+            return next;
+          });
           setFeedItems((prev) =>
             patchFeedItemEngagement(prev, kind, id, { likeCount: currentState.likes }),
           );
           setHomeFeedItems((prev) =>
-            sortHomeFeedItems(
-              patchFeedItemEngagement(prev, kind, id, { likeCount: currentState.likes }),
-            ),
+            patchFeedItemEngagement(prev, kind, id, { likeCount: currentState.likes }),
           );
           return;
         }
@@ -1052,17 +1129,19 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       } catch (error) {
         logger.warn('[toggleLike failed]', { targetType: kind, targetId: id, error });
         // Revert on failure
-        setLikeMap((prev) => ({
-          ...prev,
-          [key]: currentState,
-        }));
+        setLikeMap((prev) => {
+          const next = {
+            ...prev,
+            [key]: currentState,
+          };
+          likeMapRef.current = next;
+          return next;
+        });
         setFeedItems((prev) =>
           patchFeedItemEngagement(prev, kind, id, { likeCount: currentState.likes }),
         );
         setHomeFeedItems((prev) =>
-          sortHomeFeedItems(
-            patchFeedItemEngagement(prev, kind, id, { likeCount: currentState.likes }),
-          ),
+          patchFeedItemEngagement(prev, kind, id, { likeCount: currentState.likes }),
         );
       }
     },
@@ -1081,9 +1160,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         patchFeedItemEngagement(prev, kind, id, { commentCount: nextCommentCount }),
       );
       setHomeFeedItems((prev) =>
-        sortHomeFeedItems(
-          patchFeedItemEngagement(prev, kind, id, { commentCount: nextCommentCount }),
-        ),
+        patchFeedItemEngagement(prev, kind, id, { commentCount: nextCommentCount }),
       );
     },
     [commentCountMap, patchFeedItemEngagement],

@@ -152,6 +152,11 @@ export default function EventsScreen() {
     return null;
   }
 
+  function toDateTimestamp(value: string): number {
+    const timestamp = new Date(value).getTime();
+    return Number.isFinite(timestamp) ? timestamp : 0;
+  }
+
   function getEventOrganizerLogo(item: Extract<FeedItem, { kind: 'event' }>): string | null {
     const pm = profileMap || {};
     const groupId = item.organizer_group_id ?? null;
@@ -222,6 +227,21 @@ export default function EventsScreen() {
         })
         .filter((item): item is MapItem => item !== null),
     [filteredFeed, profileMap, communityMap],
+  );
+
+  const mapRenderItems = useMemo(
+    () => {
+      if (selectedEventType !== 'matches') {
+        return mapItems;
+      }
+
+      return [...mapItems].sort((a, b) => {
+        const timeDiff = toDateTimestamp(b.datetime) - toDateTimestamp(a.datetime);
+        if (timeDiff !== 0) return timeDiff;
+        return `${a.kind}:${a.id}`.localeCompare(`${b.kind}:${b.id}`);
+      });
+    },
+    [mapItems, selectedEventType],
   );
 
   // ── Filter feed by event type ──────────────────────────────────────────────
@@ -387,6 +407,22 @@ export default function EventsScreen() {
     setSelectedItem(null);
   }, [selectedItem, navigation]);
 
+  useEffect(() => {
+    setSelectedItem(null);
+  }, [selectedEventType, viewMode]);
+
+  useEffect(() => {
+    if (!selectedItem) return;
+
+    const stillVisible = mapItems.some(
+      (item) => item.kind === selectedItem.kind && item.id === selectedItem.id,
+    );
+
+    if (!stillVisible) {
+      setSelectedItem(null);
+    }
+  }, [mapItems, selectedItem]);
+
   // Fit map to markers when entering map view
   useEffect(() => {
     if (viewMode === 'map' && mapItems.length > 0 && mapRef.current) {
@@ -504,13 +540,14 @@ export default function EventsScreen() {
                 rotateEnabled={false}
                 pitchEnabled={false}
               >
-                {mapItems.map((item) => (
+                {mapRenderItems.map((item, index) => (
                   <Marker
                     key={`${item.kind}-${item.id}`}
                     coordinate={{ latitude: item.lat, longitude: item.lng }}
                     onPress={() => handleMarkerPress(item)}
                     anchor={{ x: 0.5, y: 1 }}
                     centerOffset={{ x: 0, y: -16 }}
+                    zIndex={index + 1}
                     flat={false}
                   >
                     <MapMarkerIcon

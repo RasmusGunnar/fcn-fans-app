@@ -1,7 +1,15 @@
 import React, { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TextInput } from 'react-native';
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+} from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { logger } from '../lib/logger';
 import {
@@ -16,6 +24,7 @@ import { HOME_FEED_AUDIT_DEBUG_ENABLED } from '../utils/homeFeed';
 
 export default function CreateCommunityScreen() {
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const theme = useTheme();
   const { addCommunityFeedItem, fetchPosts } = useFeed();
   const [name, setName] = useState('');
@@ -139,47 +148,65 @@ export default function CreateCommunityScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Opret faellesskab</Text>
-        <Text style={styles.subtitle}>Saml lokale fans i dit omraade</Text>
+      <KeyboardAvoidingView
+        style={styles.formArea}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: insets.bottom + theme.spacing[6] + theme.spacing[4] },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          automaticallyAdjustKeyboardInsets
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={styles.title}>Opret faellesskab</Text>
+          <Text style={styles.subtitle}>Saml lokale fans i dit omraade</Text>
 
-        <Text style={styles.label}>Navn *</Text>
-        <TextInput
-          style={styles.input}
-          value={name}
-          onChangeText={setName}
-          placeholder="F.eks. Ganlose, Egedal, eller Nordsjaelland"
-          placeholderTextColor={theme.colors.text.secondary}
-        />
+          <Text style={styles.label}>Navn *</Text>
+          <TextInput
+            style={styles.input}
+            value={name}
+            onChangeText={setName}
+            placeholder="F.eks. Ganlose, Egedal, eller Nordsjaelland"
+            placeholderTextColor={theme.colors.text.secondary}
+          />
 
-        <Text style={styles.label}>Beskrivelse</Text>
-        <TextInput
-          style={[styles.input, styles.textArea]}
-          value={description}
-          onChangeText={setDescription}
-          placeholder="Fortael om jeres faellesskab..."
-          placeholderTextColor={theme.colors.text.secondary}
-          multiline
-          numberOfLines={4}
-        />
+          <Text style={styles.label}>Beskrivelse</Text>
+          <TextInput
+            style={[styles.input, styles.textArea]}
+            value={description}
+            onChangeText={setDescription}
+            placeholder="Fortael om jeres faellesskab..."
+            placeholderTextColor={theme.colors.text.secondary}
+            multiline
+            numberOfLines={4}
+          />
 
-        <Text style={styles.label}>Lokation (valgfri)</Text>
-        <TextInput
-          style={styles.input}
-          value={locationLabel}
-          onChangeText={setLocationLabel}
-          placeholder="F.eks. Ganlose, Kobenhavn, eller Fyn"
-          placeholderTextColor={theme.colors.text.secondary}
-        />
+          <Text style={styles.label}>Lokation (valgfri)</Text>
+          <TextInput
+            style={styles.input}
+            value={locationLabel}
+            onChangeText={setLocationLabel}
+            placeholder="F.eks. Ganlose, Kobenhavn, eller Fyn"
+            placeholderTextColor={theme.colors.text.secondary}
+          />
 
-        <PrimaryButton
-          title={creating ? 'Opretter...' : 'Opret faellesskab'}
-          onPress={handleCreate}
-          disabled={creating}
-        />
+          <PrimaryButton
+            title={creating ? 'Opretter...' : 'Opret faellesskab'}
+            onPress={handleCreate}
+            disabled={creating}
+          />
 
-        <PrimaryButton title="Annuller" onPress={() => navigation.goBack()} disabled={creating} />
-      </ScrollView>
+          <PrimaryButton
+            title="Annuller"
+            onPress={() => navigation.goBack()}
+            disabled={creating}
+          />
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -190,8 +217,12 @@ const makeStyles = (theme: ReturnType<typeof useTheme>) =>
       flex: 1,
       backgroundColor: theme.colors.bg.default,
     },
-    content: {
+    formArea: {
+      flex: 1,
+    },
+    scrollContent: {
       padding: theme.spacing[6],
+      flexGrow: 1,
     },
     title: {
       fontSize: 28,

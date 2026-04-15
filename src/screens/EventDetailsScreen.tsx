@@ -231,6 +231,19 @@ export default function EventDetailsScreen() {
     setSelectedFanActivity(null);
   };
 
+  const handleDeleteFanActivity = useCallback(
+    (fanActivityId: string) => {
+      setFanActivities((current) =>
+        current.filter((activity) => activity.id !== fanActivityId),
+      );
+      setSelectedFanActivity((current) =>
+        current?.id === fanActivityId ? null : current,
+      );
+      void loadFanActivities();
+    },
+    [loadFanActivities],
+  );
+
   const handleDeleteEvent = async () => {
     Alert.alert('Slet event', 'Er du sikker på du vil slette dette event?', [
       { text: 'Annuller', style: 'cancel' },
@@ -653,6 +666,7 @@ export default function EventDetailsScreen() {
         visible={Boolean(selectedFanActivity)}
         activity={selectedFanActivity}
         onClose={handleCloseFanActivity}
+        onDeleted={handleDeleteFanActivity}
       />
     </SafeAreaView>
   );

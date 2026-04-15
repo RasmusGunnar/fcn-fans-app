@@ -32,6 +32,12 @@ export type FanActivityRegistrationAdminEntry = FanActivityRegistration & {
   avatarUrl: string | null;
 };
 
+export type FanActivityParticipant = {
+  userId: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+};
+
 export type FanActivityRegistrationListItem = FanActivityRegistration & {
   activityTitle: string | null;
   activityStartsAt: string | null;
@@ -70,6 +76,12 @@ type ProfileRow = {
   id: string;
   display_name: string | null;
   username: string | null;
+  avatar_url: string | null;
+};
+
+type FanActivityParticipantRow = {
+  user_id: string;
+  display_name: string | null;
   avatar_url: string | null;
 };
 
@@ -144,6 +156,14 @@ function toRegistration(row: FanActivityRegistrationRow): FanActivityRegistratio
   };
 }
 
+function toParticipant(row: FanActivityParticipantRow): FanActivityParticipant {
+  return {
+    userId: row.user_id,
+    displayName: row.display_name ?? null,
+    avatarUrl: row.avatar_url ?? null,
+  };
+}
+
 function normalizeCommunity(
   community?: CommunityRow | CommunityRow[] | null,
 ): CommunityRow | null {
@@ -208,6 +228,32 @@ async function callSingleRegistrationRpc(
   }
 
   return toRegistration(row);
+}
+
+async function sendRegistrationStatusPush(params: {
+  registrationId: string;
+  status: FanActivityRegistrationStatus;
+}) {
+  try {
+    const { error } = await supabase.functions.invoke('push_fan_activity_registration_status', {
+      body: {
+        registrationId: params.registrationId,
+        status: params.status,
+      },
+    });
+
+    if (error) {
+      const message = String(error.message ?? '');
+      if (message.toLowerCase().includes('not found') || message.includes('404')) {
+        logger.warn('[fanActivityRegistrations] push function missing, skipping.');
+        return;
+      }
+
+      logger.warn('[fanActivityRegistrations] push function failed:', error);
+    }
+  } catch (error) {
+    logger.warn('[fanActivityRegistrations] push function threw:', error);
+  }
 }
 
 export function getEmptyFanActivityRegistrationSummary(): FanActivityRegistrationSummary {
@@ -363,6 +409,42 @@ export async function fetchFanActivityAdminRegistrations(
     });
 }
 
+export async function fetchPublicFanActivityParticipants(
+  fanActivityId: string,
+): Promise<FanActivityParticipant[]> {
+  const normalizedFanActivityId = fanActivityId.trim();
+  if (!normalizedFanActivityId) {
+    return [];
+  }
+
+  try {
+    const { data, error } = await supabase.rpc('get_public_fan_activity_participants', {
+      p_fan_activity_id: normalizedFanActivityId,
+    });
+
+    if (error) {
+      if (isMissingRegistrationInfra(error)) {
+        logger.warn('[fanActivityRegistrations] Public participants RPC not available yet.');
+        return [];
+      }
+
+      logger.warn('[fanActivityRegistrations] Public participants RPC failed:', {
+        fanActivityId: normalizedFanActivityId,
+        error,
+      });
+      return [];
+    }
+
+    return ((data || []) as FanActivityParticipantRow[]).map(toParticipant);
+  } catch (error) {
+    logger.warn('[fanActivityRegistrations] Unexpected public participants fetch error:', {
+      fanActivityId: normalizedFanActivityId,
+      error,
+    });
+    return [];
+  }
+}
+
 export async function fetchMyFanActivityRegistrations(): Promise<FanActivityRegistrationListItem[]> {
   const {
     data: { user },
@@ -466,8 +548,17 @@ export async function adminUpdateFanActivityRegistrationStatus(params: {
     throw new Error('Tilmeldingen mangler et id.');
   }
 
-  return callSingleRegistrationRpc('admin_update_fan_activity_registration_status', {
+  const updated = await callSingleRegistrationRpc('admin_update_fan_activity_registration_status', {
     p_registration_id: normalizedRegistrationId,
     p_status: params.status,
   });
+
+  if (params.status === 'confirmed' || params.status === 'pending_payment') {
+    void sendRegistrationStatusPush({
+      registrationId: normalizedRegistrationId,
+      status: params.status,
+    });
+  }
+
+  return updated;
 }

@@ -1,6 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../auth/AuthProvider';
 import { ActorSelector } from '../components/ActorSelector';
@@ -412,9 +421,23 @@ export default function CreateSheet({
           <View style={{ width: 28 }} />
         </View>
 
-        <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
-          {renderContent()}
-        </ScrollView>
+        <KeyboardAvoidingView
+          style={styles.keyboardContainer}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <ScrollView
+            style={styles.content}
+            contentContainerStyle={[
+              styles.contentContainer,
+              { paddingBottom: insets.bottom + theme.spacing[6] },
+            ]}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+            showsVerticalScrollIndicator={false}
+          >
+            {renderContent()}
+          </ScrollView>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );
@@ -425,6 +448,9 @@ const makeStyles = (theme: ReturnType<typeof useTheme>) =>
     container: {
       flex: 1,
       backgroundColor: theme.colors.bg.default,
+    },
+    keyboardContainer: {
+      flex: 1,
     },
     header: {
       flexDirection: 'row',
@@ -447,6 +473,9 @@ const makeStyles = (theme: ReturnType<typeof useTheme>) =>
     content: {
       flex: 1,
       backgroundColor: theme.colors.bg.default,
+    },
+    contentContainer: {
+      flexGrow: 1,
     },
     postSettingsBlock: {
       paddingHorizontal: theme.spacing[3],

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Alert,
   ImageBackground,
@@ -9,12 +9,15 @@ import {
   Modal,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuth } from '../../auth/AuthProvider';
 import { useCommunityRole } from '../../hooks/useCommunityRole';
-import type { FanActivity } from '../../services/fanActivities';
+import { createFanActivityDeepLink } from '../../lib/deeplink';
+import { deleteFanActivity, type FanActivity } from '../../services/fanActivities';
 import { useTheme } from '../../theme';
 import { PrimaryButton } from '../PrimaryButton';
 import { Text } from '../ui';
@@ -25,6 +28,7 @@ type FanActivityDetailSheetProps = {
   visible: boolean;
   activity: FanActivity | null;
   onClose: () => void;
+  onDeleted?: (fanActivityId: string) => void;
 };
 
 function formatFanActivityTypeLabel(type: string): string {
@@ -165,12 +169,15 @@ export function FanActivityDetailSheet({
   visible,
   activity,
   onClose,
+  onDeleted,
 }: FanActivityDetailSheetProps) {
   const navigation = useNavigation();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const styles = createStyles(theme);
+  const { user } = useAuth();
   const { role: communityRole } = useCommunityRole(activity?.community_id);
+  const [deletingActivity, setDeletingActivity] = useState(false);
 
   if (!activity) {
     return null;
@@ -178,11 +185,20 @@ export function FanActivityDetailSheet({
 
   const preset = getFanActivityVisualPreset(theme, activity.type);
   const canEditActivity = communityRole === 'owner' || communityRole === 'admin';
+  const canDeleteActivity =
+    (typeof activity.created_by === 'string' && activity.created_by === user?.id) ||
+    communityRole === 'owner' ||
+    communityRole === 'admin';
   const location = getFanActivityLocation(activity);
   const communityName = activity.community?.name?.trim() || null;
   const body = activity.body?.trim() || null;
   const ctaLabel = activity.cta_label?.trim() || null;
   const ctaUrl = normalizeCtaUrl(activity.cta_url);
+  const shareUrl = createFanActivityDeepLink({
+    parentType: activity.parent_type,
+    parentId: activity.parent_id,
+    fanActivityId: activity.id,
+  });
   const metaRows = [
     {
       icon: 'time-outline' as const,
@@ -235,6 +251,59 @@ export function FanActivityDetailSheet({
         fanActivityId: activity.id,
       });
     }, 0);
+  };
+
+  const handleShareActivity = async () => {
+    try {
+      const shareContextLine = location ?? communityName ?? null;
+      const shareLines = [
+        `🚌 ${activity.title.trim()}`,
+        '',
+        formatFanActivityDateTime(activity),
+        ...(shareContextLine ? [shareContextLine] : []),
+        '',
+        'Åbn i FCN Fans:',
+        shareUrl,
+      ];
+
+      await Share.share({
+        title: activity.title.trim(),
+        message: shareLines.join('\n'),
+      });
+    } catch {
+      Alert.alert('Kunne ikke dele', 'Prøv igen senere.');
+    }
+  };
+
+  const handleDeleteActivity = () => {
+    if (deletingActivity) {
+      return;
+    }
+
+    Alert.alert(
+      'Slet fanaktivitet',
+      `Er du sikker på at du vil slette "${activity.title}"?`,
+      [
+        { text: 'Annuller', style: 'cancel' },
+        {
+          text: 'Slet',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setDeletingActivity(true);
+              await deleteFanActivity(activity.id);
+              onDeleted?.(activity.id);
+              onClose();
+              Alert.alert('Slettet', 'Fanaktiviteten er slettet.');
+            } catch (error: any) {
+              Alert.alert('Fejl', error?.message || 'Kunne ikke slette fanaktiviteten.');
+            } finally {
+              setDeletingActivity(false);
+            }
+          },
+        },
+      ],
+    );
   };
 
   return (
@@ -317,6 +386,17 @@ export function FanActivityDetailSheet({
                 ))}
               </View>
 
+              <Pressable style={styles.editCta} onPress={handleShareActivity}>
+                <Ionicons
+                  name="share-social-outline"
+                  size={theme.typography.body.fontSize}
+                  color={theme.colors.primary}
+                />
+                <Text variant="bodyBold" color="primary" style={styles.editCtaText}>
+                  Del aktivitet
+                </Text>
+              </Pressable>
+
               {canEditActivity ? (
                 <Pressable style={styles.editCta} onPress={handleEditActivity}>
                   <Ionicons
@@ -326,6 +406,28 @@ export function FanActivityDetailSheet({
                   />
                   <Text variant="bodyBold" color="primary" style={styles.editCtaText}>
                     Redigér
+                  </Text>
+                </Pressable>
+              ) : null}
+
+              {canDeleteActivity ? (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.editCta,
+                    styles.deleteCta,
+                    pressed && !deletingActivity ? styles.deleteCtaPressed : null,
+                    deletingActivity ? styles.deleteCtaDisabled : null,
+                  ]}
+                  onPress={handleDeleteActivity}
+                  disabled={deletingActivity}
+                >
+                  <Ionicons
+                    name="trash-outline"
+                    size={theme.typography.body.fontSize}
+                    color={theme.colors.state.error}
+                  />
+                  <Text variant="bodyBold" style={styles.deleteCtaText}>
+                    {deletingActivity ? 'Sletter...' : 'Slet aktivitet'}
                   </Text>
                 </Pressable>
               ) : null}
@@ -474,6 +576,20 @@ function createStyles(theme: ReturnType<typeof useTheme>) {
     },
     editCtaText: {
       fontWeight: '700',
+    },
+    deleteCta: {
+      borderColor: theme.colors.state.error,
+      backgroundColor: theme.colors.bg.card,
+    },
+    deleteCtaText: {
+      fontWeight: '700',
+      color: theme.colors.state.error,
+    },
+    deleteCtaPressed: {
+      opacity: 0.78,
+    },
+    deleteCtaDisabled: {
+      opacity: 0.55,
     },
     inlineMetaRow: {
       flexDirection: 'row',

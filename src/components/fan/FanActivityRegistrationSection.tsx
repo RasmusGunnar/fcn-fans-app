@@ -3,7 +3,9 @@ import * as Clipboard from 'expo-clipboard';
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   Pressable,
+  ScrollView,
   Switch,
   StyleSheet,
   View,
@@ -14,17 +16,20 @@ import {
   adminUpdateFanActivityRegistrationStatus,
   createFanActivityRegistration,
   fetchFanActivityAdminRegistrations,
+  fetchPublicFanActivityParticipants,
   fetchFanActivityRegistrationSummaries,
   fetchMyFanActivityRegistration,
   getEmptyFanActivityRegistrationSummary,
   markFanActivityRegistrationPaid,
   type FanActivityRegistration,
   type FanActivityRegistrationAdminEntry,
+  type FanActivityParticipant,
   type FanActivityRegistrationStatus,
   type FanActivityRegistrationSummary,
 } from '../../services/fanActivityRegistrations';
 import type { FanActivity } from '../../services/fanActivities';
 import { useTheme } from '../../theme';
+import { Avatar } from '../Avatar';
 import { PrimaryButton } from '../PrimaryButton';
 import { Text } from '../ui';
 
@@ -55,9 +60,9 @@ function formatPriceLabel(activity: FanActivity): string {
 function getRegistrationStatusLabel(status: FanActivityRegistrationStatus): string {
   switch (status) {
     case 'pending_payment':
-      return 'Mangler betaling';
+      return 'Du deltager';
     case 'pending_verification':
-      return 'Du er tilmeldt';
+      return 'Betaling tjekkes';
     case 'confirmed':
       return 'Plads bekræftet';
     default:
@@ -68,11 +73,11 @@ function getRegistrationStatusLabel(status: FanActivityRegistrationStatus): stri
 function getRegistrationStatusHint(status: FanActivityRegistrationStatus): string {
   switch (status) {
     case 'confirmed':
-      return 'Du er klar til busturen.';
+      return 'Du deltager, og din plads er bekræftet.';
     case 'pending_verification':
-      return 'Vi tjekker din betaling nu. Din plads er endeligt bekræftet, når arrangøren har godkendt den.';
+      return 'Du tæller med som deltager. Arrangøren tjekker din betaling nu.';
     case 'pending_payment':
-      return 'Følg betalingsoplysningerne for at sikre din plads.';
+      return 'Du tæller med som deltager. Følg betalingsoplysningerne for at færdiggøre betalingen.';
     default:
       return '';
   }
@@ -98,6 +103,89 @@ function formatShortReference(reference: string | null | undefined): string {
   }
   const suffix = trimmed.slice(-4);
   return `Ref: ...${suffix}`;
+}
+
+function isParticipatingStatus(
+  status: FanActivityRegistrationStatus | null | undefined,
+): status is FanActivityRegistrationStatus {
+  return (
+    status === 'pending_payment' ||
+    status === 'pending_verification' ||
+    status === 'confirmed'
+  );
+}
+
+function applyRegistrationToSummary(
+  summary: FanActivityRegistrationSummary,
+  previousStatus: FanActivityRegistrationStatus | null | undefined,
+  nextStatus: FanActivityRegistrationStatus | null | undefined,
+): FanActivityRegistrationSummary {
+  const nextSummary = { ...summary };
+
+  const decrement = (status: FanActivityRegistrationStatus | null | undefined) => {
+    if (!isParticipatingStatus(status)) {
+      return;
+    }
+
+    nextSummary.reservedCount = Math.max(0, nextSummary.reservedCount - 1);
+
+    if (status === 'pending_payment') {
+      nextSummary.pendingPaymentCount = Math.max(0, nextSummary.pendingPaymentCount - 1);
+      return;
+    }
+
+    if (status === 'pending_verification') {
+      nextSummary.pendingVerificationCount = Math.max(
+        0,
+        nextSummary.pendingVerificationCount - 1,
+      );
+      return;
+    }
+
+    nextSummary.confirmedCount = Math.max(0, nextSummary.confirmedCount - 1);
+  };
+
+  const increment = (status: FanActivityRegistrationStatus | null | undefined) => {
+    if (!isParticipatingStatus(status)) {
+      return;
+    }
+
+    nextSummary.reservedCount += 1;
+
+    if (status === 'pending_payment') {
+      nextSummary.pendingPaymentCount += 1;
+      return;
+    }
+
+    if (status === 'pending_verification') {
+      nextSummary.pendingVerificationCount += 1;
+      return;
+    }
+
+    nextSummary.confirmedCount += 1;
+  };
+
+  decrement(previousStatus);
+  increment(nextStatus);
+
+  return nextSummary;
+}
+
+function getParticipantLabel(participant: {
+  displayName?: string | null;
+  userId?: string | null;
+}): string {
+  const trimmedDisplayName = participant.displayName?.trim();
+  if (trimmedDisplayName) {
+    return trimmedDisplayName;
+  }
+
+  const trimmedUserId = participant.userId?.trim();
+  if (trimmedUserId) {
+    return trimmedUserId.slice(0, 8);
+  }
+
+  return 'Fan';
 }
 
 function RegistrationStatusBadge({
@@ -179,12 +267,14 @@ export function FanActivityRegistrationSection({
   const [registrationSummary, setRegistrationSummary] =
     useState<FanActivityRegistrationSummary | null>(null);
   const [myRegistration, setMyRegistration] = useState<FanActivityRegistration | null>(null);
+  const [participants, setParticipants] = useState<FanActivityParticipant[]>([]);
   const [adminRegistrations, setAdminRegistrations] = useState<FanActivityRegistrationAdminEntry[]>(
     [],
   );
   const [loadingRegistrationState, setLoadingRegistrationState] = useState(false);
   const [registrationActionLoading, setRegistrationActionLoading] = useState(false);
   const [adminActionId, setAdminActionId] = useState<string | null>(null);
+  const [participantsSheetVisible, setParticipantsSheetVisible] = useState(false);
 
   const fallbackSummary = useMemo(
     () => getEmptyFanActivityRegistrationSummary(),
@@ -205,8 +295,11 @@ export function FanActivityRegistrationSection({
     activity.registration_price_dkk > 0;
   const paymentInstructions = activity.registration_payment_instructions?.trim() || null;
   const mobilePayInfo = activity.registration_mobilepay_info?.trim() || null;
-  const userHasReservedSeat =
-    myRegistration?.status === 'pending_verification' || myRegistration?.status === 'confirmed';
+  const userHasReservedSeat = isParticipatingStatus(myRegistration?.status);
+  const visibleParticipants = useMemo(() => participants.slice(0, 5), [participants]);
+  const remainingParticipantCount = Math.max(0, participants.length - visibleParticipants.length);
+  const participantsCountLabel =
+    reservedCount === 1 ? '1 deltager er med' : `${reservedCount} deltagere er med`;
 
   const handleCopy = async (value: string, label: string) => {
     try {
@@ -228,9 +321,10 @@ export function FanActivityRegistrationSection({
       setLoadingRegistrationState(true);
 
       try {
-        const [summaryMap, myRegistrationRow, adminRegistrationRows] = await Promise.all([
+        const [summaryMap, myRegistrationRow, participantRows, adminRegistrationRows] = await Promise.all([
           fetchFanActivityRegistrationSummaries([activity.id]),
           user?.id ? fetchMyFanActivityRegistration(activity.id) : Promise.resolve(null),
+          fetchPublicFanActivityParticipants(activity.id),
           canManageRegistrations
             ? fetchFanActivityAdminRegistrations(activity.id)
             : Promise.resolve([] as FanActivityRegistrationAdminEntry[]),
@@ -242,6 +336,7 @@ export function FanActivityRegistrationSection({
 
         setRegistrationSummary(summaryMap[activity.id] ?? activity.registration_summary ?? fallbackSummary);
         setMyRegistration(myRegistrationRow);
+        setParticipants(participantRows);
         setAdminRegistrations(adminRegistrationRows);
       } catch (error: any) {
         if (!isActive) {
@@ -250,6 +345,7 @@ export function FanActivityRegistrationSection({
 
         setRegistrationSummary(activity.registration_summary ?? fallbackSummary);
         setMyRegistration(null);
+        setParticipants([]);
         setAdminRegistrations([]);
         Alert.alert('Fejl', error?.message || 'Kunne ikke hente tilmeldingerne lige nu.');
       } finally {
@@ -266,10 +362,17 @@ export function FanActivityRegistrationSection({
     };
   }, [activity.id, activity.registration_summary, canManageRegistrations, fallbackSummary, user?.id, visible]);
 
+  useEffect(() => {
+    if (!visible) {
+      setParticipantsSheetVisible(false);
+    }
+  }, [visible]);
+
   const refreshRegistrations = async () => {
-    const [summaryMap, myRegistrationRow, adminRegistrationRows] = await Promise.all([
+    const [summaryMap, myRegistrationRow, participantRows, adminRegistrationRows] = await Promise.all([
       fetchFanActivityRegistrationSummaries([activity.id]),
       user?.id ? fetchMyFanActivityRegistration(activity.id) : Promise.resolve(null),
+      fetchPublicFanActivityParticipants(activity.id),
       canManageRegistrations
         ? fetchFanActivityAdminRegistrations(activity.id)
         : Promise.resolve([] as FanActivityRegistrationAdminEntry[]),
@@ -277,6 +380,7 @@ export function FanActivityRegistrationSection({
 
     setRegistrationSummary(summaryMap[activity.id] ?? activity.registration_summary ?? fallbackSummary);
     setMyRegistration(myRegistrationRow);
+    setParticipants(participantRows);
     setAdminRegistrations(adminRegistrationRows);
   };
 
@@ -288,14 +392,22 @@ export function FanActivityRegistrationSection({
 
     try {
       setRegistrationActionLoading(true);
+      const previousStatus = myRegistration?.status ?? null;
       const nextRegistration = await createFanActivityRegistration(activity.id);
       setMyRegistration(nextRegistration);
+      setRegistrationSummary((currentSummary) =>
+        applyRegistrationToSummary(
+          currentSummary ?? activity.registration_summary ?? fallbackSummary,
+          previousStatus,
+          nextRegistration.status,
+        ),
+      );
       await refreshRegistrations();
       Alert.alert(
         'Tilmelding oprettet',
         nextRegistration.status === 'confirmed'
-          ? 'Du er nu bekræftet på aktiviteten.'
-          : 'Din tilmelding er oprettet. Følg betalingsoplysningerne for at sikre din plads.',
+          ? 'Du deltager nu i aktiviteten.'
+          : 'Du tæller nu med som deltager. Følg betalingsoplysningerne for at færdiggøre betalingen.',
       );
     } catch (error: any) {
       Alert.alert('Fejl', error?.message || 'Kunne ikke oprette tilmeldingen.');
@@ -307,10 +419,18 @@ export function FanActivityRegistrationSection({
   const handleMarkPaid = async () => {
     try {
       setRegistrationActionLoading(true);
+      const previousStatus = myRegistration?.status ?? null;
       const nextRegistration = await markFanActivityRegistrationPaid(activity.id);
       setMyRegistration(nextRegistration);
+      setRegistrationSummary((currentSummary) =>
+        applyRegistrationToSummary(
+          currentSummary ?? activity.registration_summary ?? fallbackSummary,
+          previousStatus,
+          nextRegistration.status,
+        ),
+      );
       await refreshRegistrations();
-      Alert.alert('Tak', 'Din tilmelding står nu som afventer verificering.');
+      Alert.alert('Tak', 'Du deltager stadig. Arrangøren tjekker nu din betaling.');
     } catch (error: any) {
       Alert.alert('Fejl', error?.message || 'Kunne ikke opdatere din betalingsstatus.');
     } finally {
@@ -370,6 +490,64 @@ export function FanActivityRegistrationSection({
         </View>
       </View>
 
+      {participants.length > 0 ? (
+        <View style={styles.participantsPanel}>
+          <View style={styles.participantsRow}>
+            <View style={styles.participantsAvatarStack}>
+              {visibleParticipants.map((participant, index) => (
+                <View
+                  key={participant.userId}
+                  style={[
+                    styles.participantAvatarWrap,
+                    index > 0 ? styles.participantAvatarOverlap : null,
+                    { zIndex: visibleParticipants.length - index },
+                  ]}
+                >
+                  <Avatar
+                    userId={participant.userId}
+                    avatarUrl={participant.avatarUrl}
+                    label={getParticipantLabel(participant)}
+                    size={34}
+                  />
+                </View>
+              ))}
+              {remainingParticipantCount > 0 ? (
+                <View
+                  style={[
+                    styles.participantMoreBubble,
+                    visibleParticipants.length > 0 ? styles.participantAvatarOverlap : null,
+                  ]}
+                >
+                  <Text variant="small" color="primary" style={styles.participantMoreText}>
+                    +{remainingParticipantCount}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+
+            <View style={styles.participantsCopy}>
+              <Text variant="bodyBold" color="primary" style={styles.participantsCount}>
+                {participantsCountLabel}
+              </Text>
+            </View>
+
+            {participants.length > 0 ? (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.participantsAction,
+                  pressed ? styles.participantsActionPressed : null,
+                ]}
+                onPress={() => setParticipantsSheetVisible(true)}
+              >
+                <Text variant="small" color="primary" style={styles.participantsActionText}>
+                  Se alle {'\u2192'}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      ) : null}
+
       {loadingRegistrationState ? (
         <View style={styles.registrationLoadingRow}>
           <ActivityIndicator size="small" color={theme.colors.primary} />
@@ -389,7 +567,7 @@ export function FanActivityRegistrationSection({
 
           {isPaidActivity ? (
             <Text variant="caption" color="secondary" style={styles.registrationNote}>
-              Du er først endeligt tilmeldt, når betalingen er modtaget og godkendt af arrangøren.
+              Du tæller med som deltager med det samme. Betalingskontrol kører separat hos arrangøren.
             </Text>
           ) : null}
 
@@ -496,7 +674,7 @@ export function FanActivityRegistrationSection({
                     5. Gå tilbage hertil og tryk “Jeg har betalt”
                   </Text>
                   <Text variant="caption" color="secondary" style={styles.paymentGuideNote}>
-                    Du er først endeligt tilmeldt, når betalingen er godkendt.
+                    Du tæller med som deltager allerede nu. Betalingen bliver bare tjekket bagefter.
                   </Text>
                 </View>
               ) : null}
@@ -645,6 +823,61 @@ export function FanActivityRegistrationSection({
           )}
         </View>
       ) : null}
+
+      <Modal
+        visible={participantsSheetVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setParticipantsSheetVisible(false)}
+      >
+        <View style={styles.participantsSheetOverlay}>
+          <Pressable
+            style={styles.participantsSheetBackdrop}
+            onPress={() => setParticipantsSheetVisible(false)}
+          />
+
+          <View style={styles.participantsSheet}>
+            <View style={styles.participantsSheetHandle} />
+
+            <View style={styles.participantsSheetHeader}>
+              <Text variant="h3" color="primary" style={styles.participantsSheetTitle}>
+                Deltagere
+              </Text>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.participantsSheetClose,
+                  pressed ? styles.participantsActionPressed : null,
+                ]}
+                onPress={() => setParticipantsSheetVisible(false)}
+              >
+                <Text variant="small" color="primary" style={styles.participantsActionText}>
+                  Luk
+                </Text>
+              </Pressable>
+            </View>
+
+            <ScrollView
+              style={styles.participantsSheetBody}
+              contentContainerStyle={styles.participantsSheetBodyContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {participants.map((participant) => (
+                <View key={participant.userId} style={styles.participantListRow}>
+                  <Avatar
+                    userId={participant.userId}
+                    avatarUrl={participant.avatarUrl}
+                    label={getParticipantLabel(participant)}
+                    size={40}
+                  />
+                  <Text variant="body" color="primary" style={styles.participantListName}>
+                    {getParticipantLabel(participant)}
+                  </Text>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -688,6 +921,124 @@ function createStyles(theme: ReturnType<typeof useTheme>) {
       borderColor: theme.colors.border.subtle,
     },
     registrationMetaText: {
+      fontWeight: '600',
+    },
+    participantsPanel: {
+      paddingVertical: theme.spacing[1],
+      borderTopWidth: theme.layout.borderHairline,
+      borderColor: theme.colors.border.subtle,
+    },
+    participantsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing[2],
+    },
+    participantsAvatarStack: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      minHeight: 34,
+    },
+    participantAvatarWrap: {
+      borderRadius: theme.radius.pill,
+      backgroundColor: theme.colors.bg.card,
+      borderWidth: 2,
+      borderColor: theme.colors.bg.card,
+    },
+    participantAvatarOverlap: {
+      marginLeft: -theme.spacing[2],
+    },
+    participantMoreBubble: {
+      minWidth: 34,
+      height: 34,
+      paddingHorizontal: theme.spacing[2],
+      borderRadius: theme.radius.pill,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.colors.bg.subtle,
+      borderWidth: theme.layout.borderHairline,
+      borderColor: theme.colors.border.default,
+    },
+    participantMoreText: {
+      fontWeight: '700',
+    },
+    participantsCopy: {
+      flex: 1,
+      minWidth: 0,
+    },
+    participantsCount: {
+      fontWeight: '700',
+    },
+    participantsAction: {
+      paddingVertical: theme.spacing[1],
+      paddingLeft: theme.spacing[1],
+    },
+    participantsActionPressed: {
+      opacity: 0.72,
+    },
+    participantsActionText: {
+      fontWeight: '700',
+    },
+    participantsSheetOverlay: {
+      flex: 1,
+      justifyContent: 'flex-end',
+      backgroundColor: theme.colors.overlay.medium,
+    },
+    participantsSheetBackdrop: {
+      flex: 1,
+    },
+    participantsSheet: {
+      maxHeight: '70%',
+      backgroundColor: theme.colors.bg.card,
+      borderTopLeftRadius: theme.radius.xl,
+      borderTopRightRadius: theme.radius.xl,
+      overflow: 'hidden',
+    },
+    participantsSheetHandle: {
+      alignSelf: 'center',
+      width: theme.spacing[10],
+      height: theme.spacing[1],
+      borderRadius: theme.radius.pill,
+      backgroundColor: theme.colors.border.default,
+      marginTop: theme.spacing[3],
+      opacity: 0.85,
+    },
+    participantsSheetHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: theme.spacing[2],
+      paddingHorizontal: theme.spacing[4],
+      paddingTop: theme.spacing[3],
+      paddingBottom: theme.spacing[2],
+    },
+    participantsSheetTitle: {
+      fontWeight: '800',
+    },
+    participantsSheetClose: {
+      paddingHorizontal: theme.spacing[2],
+      paddingVertical: theme.spacing[1],
+      borderRadius: theme.radius.pill,
+      backgroundColor: theme.colors.bg.subtle,
+      borderWidth: theme.layout.borderHairline,
+      borderColor: theme.colors.border.subtle,
+    },
+    participantsSheetBody: {
+      flexGrow: 0,
+    },
+    participantsSheetBodyContent: {
+      paddingHorizontal: theme.spacing[4],
+      paddingBottom: theme.spacing[5],
+    },
+    participantListRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing[3],
+      paddingVertical: theme.spacing[2],
+      borderBottomWidth: theme.layout.borderHairline,
+      borderBottomColor: theme.colors.border.subtle,
+    },
+    participantListName: {
+      flex: 1,
       fontWeight: '600',
     },
     registrationLoadingRow: {

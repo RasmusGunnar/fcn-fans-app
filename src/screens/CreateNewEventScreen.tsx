@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -423,10 +424,21 @@ export default function CreateNewEventScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={{ padding: spacing.md, paddingBottom: insets.bottom + 24 }}
+      <KeyboardAvoidingView
+        style={styles.formArea}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: insets.bottom + spacing.xl + spacing.lg },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          automaticallyAdjustKeyboardInsets
+          showsVerticalScrollIndicator={false}
+        >
         {/* Type Selector */}
         <Card style={styles.card}>
           <Text style={styles.label}>Type</Text>
@@ -776,7 +788,8 @@ export default function CreateNewEventScreen() {
           <View style={{ height: spacing.sm }} />
           <OutlineButton title="Annuller" onPress={() => navigation.goBack()} />
         </View>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -786,6 +799,9 @@ const createStyles = () =>
     container: {
       flex: 1,
       backgroundColor: colors.bg,
+    },
+    formArea: {
+      flex: 1,
     },
     header: {
       flexDirection: 'row',
@@ -810,6 +826,10 @@ const createStyles = () =>
     },
     scrollView: {
       flex: 1,
+    },
+    scrollContent: {
+      padding: spacing.md,
+      flexGrow: 1,
     },
     loadingContainer: {
       flex: 1,

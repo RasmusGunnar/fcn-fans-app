@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, getStateFromPath as defaultGetStateFromPath } from '@react-navigation/native';
 import * as Linking from 'expo-linking';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
@@ -17,6 +17,28 @@ import { logger } from '../lib/logger';
 import { navigationRef } from './navigationRef';
 
 const Stack = createNativeStackNavigator();
+
+function normalizeFanActivityDetailPath(path: string): string {
+  const normalizedPath = path.replace(/^\/+/, '');
+  const [pathname, queryString = ''] = normalizedPath.split('?');
+  const fanActivitySearchParams = new URLSearchParams(queryString);
+
+  const matchFanActivityMatch = pathname.match(/^match\/([^/]+)\/fan-activity\/([^/]+)$/);
+  if (matchFanActivityMatch) {
+    fanActivitySearchParams.set('fanActivityId', decodeURIComponent(matchFanActivityMatch[2]));
+    const search = fanActivitySearchParams.toString();
+    return `match/${decodeURIComponent(matchFanActivityMatch[1])}${search ? `?${search}` : ''}`;
+  }
+
+  const eventFanActivityMatch = pathname.match(/^event\/([^/]+)\/fan-activity\/([^/]+)$/);
+  if (eventFanActivityMatch) {
+    fanActivitySearchParams.set('fanActivityId', decodeURIComponent(eventFanActivityMatch[2]));
+    const search = fanActivitySearchParams.toString();
+    return `event/${decodeURIComponent(eventFanActivityMatch[1])}${search ? `?${search}` : ''}`;
+  }
+
+  return normalizedPath;
+}
 
 function hasCompletedCoreProfile(profile: UserProfile | null): boolean {
   if (!profile) return false;
@@ -161,6 +183,9 @@ export function RootNavigator() {
           },
         },
       },
+    },
+    getStateFromPath(path: string, options: any) {
+      return defaultGetStateFromPath(normalizeFanActivityDetailPath(path), options);
     },
   };
 

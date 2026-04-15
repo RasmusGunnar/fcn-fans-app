@@ -1,20 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Image,
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-  findNodeHandle,
-} from 'react-native';
-import { supabase } from '../lib/supabase';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { logger } from '../lib/logger';
+import { supabase } from '../lib/supabase';
 import { fetchLinkPreview, insertNewsItem } from '../services/newsApi';
 import { Theme, useTheme } from '../theme';
 import { Actor, LinkPreview } from '../types/news';
@@ -47,8 +34,6 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
   const theme = useTheme();
   const styles = createStyles(theme);
   const newsAccent = theme.colors.state.success;
-  const scrollRef = useRef<ScrollView>(null);
-  const bodyInputRef = useRef<TextInput>(null);
   const urlInputRef = useRef<TextInput>(null);
   const [url, setUrl] = useState('');
   const [preview, setPreview] = useState<LinkPreview | null>(null);
@@ -57,47 +42,13 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
   const [publishing, setPublishing] = useState(false);
   const [body, setBody] = useState('');
   const [lastFetchedUrl, setLastFetchedUrl] = useState<string | null>(null);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const normalizedUrl = normalizeHttpUrl(url);
   const showPreviewSuccess = !!preview && !loadingPreview && normalizedUrl === lastFetchedUrl;
-
-  // Keyboard height tracking for stable scroll behavior
-  useEffect(() => {
-    const showListener = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-      (e) => {
-        setKeyboardHeight(e.endCoordinates.height);
-      }
-    );
-    const hideListener = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-      () => {
-        setKeyboardHeight(0);
-      }
-    );
-
-    return () => {
-      showListener.remove();
-      hideListener.remove();
-    };
-  }, []);
-
-  const scrollToInput = (inputRef: React.RefObject<TextInput | null>, extraOffset: number = theme.spacing[6]) => {
-    requestAnimationFrame(() => {
-      const node = findNodeHandle(inputRef.current);
-      if (!node) {
-        return;
-      }
-      const responder = scrollRef.current?.getScrollResponder?.();
-      responder?.scrollResponderScrollNativeHandleToKeyboard(node, extraOffset, true);
-    });
-  };
 
   const handleBodyEndEditing = () => {
     if (url.trim().length === 0) {
       requestAnimationFrame(() => {
         urlInputRef.current?.focus();
-        scrollToInput(urlInputRef);
       });
     }
   };
@@ -163,7 +114,7 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
 
   const handlePublish = async () => {
     if (!preview) {
-      alert('Hent venligst preview først');
+      alert('Hent venligst preview f\u00F8rst');
       return;
     }
 
@@ -172,16 +123,14 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
       return;
     }
 
-    // Validate actor - actor_id must not be null
     if (!actor.id) {
-      alert('Fejl: Ingen actor valgt. Vælg venligst hvem der deler nyheden.');
+      alert('Fejl: Ingen actor valgt. V\u00E6lg venligst hvem der deler nyheden.');
       return;
     }
 
-    // If posting as community, validate actor_id is a valid string/uuid
     if (actor.type === 'community') {
       if (!actor.id || typeof actor.id !== 'string' || actor.id.trim().length === 0) {
-        alert('Fejl: Community ID er ugyldig. Vælg venligst en community.');
+        alert('Fejl: Community ID er ugyldig. V\u00E6lg venligst en community.');
         return;
       }
     }
@@ -189,7 +138,6 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
     setPublishing(true);
 
     try {
-      // Get current user ID from Supabase auth
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -207,7 +155,6 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
         id: user.id,
       });
 
-      // Build payload to match RLS policy exactly
       const newsData = {
         url: preview.url,
         title: preview.title || undefined,
@@ -215,12 +162,9 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
         note: body.trim() || undefined,
         imageUrl: preview.imageUrl || undefined,
         siteName: preview.siteName || undefined,
-        createdBy: user.id, // Must be current user
-        actorType: actor.type, // 'user' or 'community'
-        // For user posting: actor_id = user.id
-        // For community posting: actor_id = community.id
+        createdBy: user.id,
+        actorType: actor.type,
         actorId: actor.type === 'user' ? user.id : actor.id,
-        // community_id only set when posting as community
         communityId: actor.type === 'community' ? actor.id : undefined,
       };
 
@@ -230,7 +174,6 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
 
       logger.log('[NewsComposer] News published successfully');
 
-      // Reset form
       setUrl('');
       setBody('');
       setPreview(null);
@@ -244,13 +187,11 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
         kind: error?.kind,
       });
 
-      // Handle duplicate URL error
       if (error?.kind === 'DUPLICATE_URL') {
         logger.warn('[NewsComposer] Duplicate URL detected');
         alert(
-          'Linket findes allerede\n\nDet link er allerede delt i appen. Et link kan kun oprettes én gang.\n\nTip: Find nyheden i feedet og kommentér i stedet på opslaget.',
+          'Linket findes allerede\n\nDet link er allerede delt i appen. Et link kan kun oprettes \u00E9n gang.\n\nTip: Find nyheden i feedet og komment\u00E9r i stedet p\u00E5 opslaget.',
         );
-        // Focus URL input so user can easily replace it
         requestAnimationFrame(() => {
           urlInputRef.current?.focus();
         });
@@ -265,142 +206,116 @@ export function NewsComposer({ actor, onSuccess }: NewsComposerProps) {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.keyboardContainer}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={theme.spacing[8]}
-    >
-      <ScrollView
-        ref={scrollRef}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{
-          paddingBottom: theme.spacing[16] + keyboardHeight,
-        }}
-      >
-        <View style={styles.container}>
-          <Card style={styles.sectionCard}>
-            <View style={styles.bodySection}>
-              <Text style={styles.label}>Tekst (valgfrit)</Text>
-              <TextInput
-                ref={bodyInputRef}
-                style={[styles.input, styles.bodyInput]}
-                placeholder="Tilføj brødtekst til nyheden..."
-                placeholderTextColor={theme.colors.text.secondary}
-                value={body}
-                onChangeText={setBody}
-                onEndEditing={handleBodyEndEditing}
-                multiline
-                numberOfLines={6}
-                textAlignVertical="top"
-              />
-            </View>
-          </Card>
-
-          <Card style={styles.sectionCard}>
-            <Text style={styles.label}>Link URL</Text>
-            <TextInput
-              ref={urlInputRef}
-              style={styles.input}
-              placeholder="https://example.com/article"
-              placeholderTextColor={theme.colors.text.secondary}
-              value={url}
-              onChangeText={setUrl}
-              onFocus={() => scrollToInput(urlInputRef)}
-              returnKeyType="done"
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-              textContentType="URL"
-              clearButtonMode="while-editing"
-              editable={!publishing}
-            />
-
-            {showPreviewSuccess ? (
-              <View style={styles.statusRow}>
-                <Text style={styles.successText}>Preview klar</Text>
-              </View>
-            ) : null}
-
-            {loadingPreview ? (
-              <View style={styles.statusRow}>
-                <ActivityIndicator size="small" color={newsAccent} />
-                <Text style={styles.statusText}>Henter preview...</Text>
-              </View>
-            ) : null}
-
-            {!loadingPreview && previewError ? (
-              <View style={styles.statusRow}>
-                <Text style={styles.errorText}>Kunne ikke hente preview</Text>
-                {normalizedUrl ? (
-                  <Pressable onPress={() => handleFetchPreview(normalizedUrl, true)}>
-                    <Text style={styles.retryText}>Prøv igen</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            ) : null}
-
-            {!loadingPreview && previewError && normalizedUrl ? (
-              <Text style={styles.errorUrl} numberOfLines={2}>
-                {normalizedUrl}
-              </Text>
-            ) : null}
-          </Card>
-
-          {preview && (
-            <Card style={styles.previewCard}>
-              {preview.imageUrl && (
-                <Image
-                  source={{ uri: preview.imageUrl }}
-                  style={styles.previewImage}
-                  resizeMode="cover"
-                />
-              )}
-              <View style={styles.previewContent}>
-                {preview.siteName && <Text style={styles.previewSiteName}>{preview.siteName}</Text>}
-                {preview.title && (
-                  <Text style={styles.previewTitle} numberOfLines={2}>
-                    {preview.title}
-                  </Text>
-                )}
-                {preview.description && (
-                  <Text style={styles.previewDescription} numberOfLines={3}>
-                    {preview.description}
-                  </Text>
-                )}
-              </View>
-            </Card>
-          )}
-
-          <View
-            style={[
-              styles.submitButtonWrap,
-              !preview || publishing || (!preview?.title && !preview?.description)
-                ? styles.submitButtonWrapDisabled
-                : null,
-            ]}
-          >
-            <View style={styles.submitButtonInner}>
-              <PrimaryButton
-                title={publishing ? 'Deler...' : 'Del nyhed'}
-                onPress={handlePublish}
-                disabled={!preview || publishing || (!preview?.title && !preview?.description)}
-              />
-            </View>
-          </View>
+    <View style={styles.container}>
+      <Card style={styles.sectionCard}>
+        <View style={styles.bodySection}>
+          <Text style={styles.label}>Tekst (valgfrit)</Text>
+          <TextInput
+            style={[styles.input, styles.bodyInput]}
+            placeholder="Tilf\u00F8j br\u00F8dtekst til nyheden..."
+            placeholderTextColor={theme.colors.text.secondary}
+            value={body}
+            onChangeText={setBody}
+            onEndEditing={handleBodyEndEditing}
+            multiline
+            numberOfLines={6}
+            textAlignVertical="top"
+          />
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </Card>
+
+      <Card style={styles.sectionCard}>
+        <Text style={styles.label}>Link URL</Text>
+        <TextInput
+          ref={urlInputRef}
+          style={styles.input}
+          placeholder="https://example.com/article"
+          placeholderTextColor={theme.colors.text.secondary}
+          value={url}
+          onChangeText={setUrl}
+          returnKeyType="done"
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="url"
+          textContentType="URL"
+          clearButtonMode="while-editing"
+          editable={!publishing}
+        />
+
+        {showPreviewSuccess ? (
+          <View style={styles.statusRow}>
+            <Text style={styles.successText}>Preview klar</Text>
+          </View>
+        ) : null}
+
+        {loadingPreview ? (
+          <View style={styles.statusRow}>
+            <ActivityIndicator size="small" color={newsAccent} />
+            <Text style={styles.statusText}>Henter preview...</Text>
+          </View>
+        ) : null}
+
+        {!loadingPreview && previewError ? (
+          <View style={styles.statusRow}>
+            <Text style={styles.errorText}>Kunne ikke hente preview</Text>
+            {normalizedUrl ? (
+              <Pressable onPress={() => handleFetchPreview(normalizedUrl, true)}>
+                <Text style={styles.retryText}>Pr\u00F8v igen</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
+
+        {!loadingPreview && previewError && normalizedUrl ? (
+          <Text style={styles.errorUrl} numberOfLines={2}>
+            {normalizedUrl}
+          </Text>
+        ) : null}
+      </Card>
+
+      {preview && (
+        <Card style={styles.previewCard}>
+          {preview.imageUrl && (
+            <Image source={{ uri: preview.imageUrl }} style={styles.previewImage} resizeMode="cover" />
+          )}
+          <View style={styles.previewContent}>
+            {preview.siteName && <Text style={styles.previewSiteName}>{preview.siteName}</Text>}
+            {preview.title && (
+              <Text style={styles.previewTitle} numberOfLines={2}>
+                {preview.title}
+              </Text>
+            )}
+            {preview.description && (
+              <Text style={styles.previewDescription} numberOfLines={3}>
+                {preview.description}
+              </Text>
+            )}
+          </View>
+        </Card>
+      )}
+
+      <View
+        style={[
+          styles.submitButtonWrap,
+          !preview || publishing || (!preview?.title && !preview?.description)
+            ? styles.submitButtonWrapDisabled
+            : null,
+        ]}
+      >
+        <View style={styles.submitButtonInner}>
+          <PrimaryButton
+            title={publishing ? 'Deler...' : 'Del nyhed'}
+            onPress={handlePublish}
+            disabled={!preview || publishing || (!preview?.title && !preview?.description)}
+          />
+        </View>
+      </View>
+    </View>
   );
 }
 
 function createStyles(theme: Theme) {
   return StyleSheet.create({
-    keyboardContainer: {
-      flex: 1,
-    },
-    scrollContent: {
-      paddingBottom: theme.spacing[16],
-    },
     container: {
       gap: theme.spacing[3],
       paddingHorizontal: theme.spacing[3],
@@ -430,8 +345,7 @@ function createStyles(theme: Theme) {
     bodyInput: {
       minHeight: 148,
     },
-    bodySection: {
-    },
+    bodySection: {},
     statusRow: {
       flexDirection: 'row',
       alignItems: 'center',

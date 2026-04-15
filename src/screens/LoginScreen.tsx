@@ -13,13 +13,14 @@ import {
   Alert,
   Image,
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
   Dimensions,
 } from 'react-native';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '../components/ui';
 import { useTheme } from '../theme';
 import { useAuth } from '../auth/AuthProvider';
@@ -29,22 +30,36 @@ import type { AuthStackParamList } from '../navigation/AuthStack';
 type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
 
 export default function LoginScreen({ route, navigation }: Props) {
+  const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [mode, setMode] = useState<'login' | 'signup'>(route.params?.mode ?? 'login');
   const [focusedInput, setFocusedInput] = useState<'email' | 'password' | null>(null);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const appLogo = require('../../assets/NewLogo.png');
   const screenHeight = Dimensions.get('window').height;
   const isCompactHeight = screenHeight < 780;
-  const useScrollFallback = screenHeight < 760;
   const { signInWithPassword, signUp, signInWithApple, signInWithFacebook, loading } = useAuth();
   const theme = useTheme();
   const styles = createStyles(theme);
+  const isCondensedLayout = isCompactHeight || isKeyboardVisible;
 
   useEffect(() => {
     const newMode = route.params?.mode ?? 'login';
     setMode(newMode);
   }, [route.params?.mode]);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSubscription = Keyboard.addListener(showEvent, () => setIsKeyboardVisible(true));
+    const hideSubscription = Keyboard.addListener(hideEvent, () => setIsKeyboardVisible(false));
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
 
   const onSubmit = async () => {
     const e = email.trim().toLowerCase();
@@ -121,27 +136,35 @@ export default function LoginScreen({ route, navigation }: Props) {
   };
 
   const contentBody = (
-    <View style={styles.content}>
-      <View style={styles.topNav}>
+    <View style={[styles.content, isKeyboardVisible && styles.contentKeyboard]}>
+      <View style={[styles.topNav, isCondensedLayout && styles.topNavCompact]}>
         <Pressable style={styles.backButton} onPress={handleBack}>
           <Text style={styles.backArrow}>←</Text>
         </Pressable>
       </View>
 
-      <View style={styles.heroSection}>
-        <View style={styles.logoSurface}>
-          <Image source={appLogo} style={styles.logo} resizeMode="contain" />
+      <View style={[styles.heroSection, isCondensedLayout && styles.heroSectionCompact]}>
+        <View style={[styles.logoSurface, isCondensedLayout && styles.logoSurfaceCompact]}>
+          <Image
+            source={appLogo}
+            style={[styles.logo, isCondensedLayout && styles.logoCompact]}
+            resizeMode="contain"
+          />
         </View>
         <Text variant="h1" style={styles.heroTitle}>
           {isSignup ? 'Bliv en del af fællesskabet' : 'Velkommen tilbage'}
         </Text>
-        <Text variant="body" color="secondary" style={styles.heroSubtitle}>
+        <Text
+          variant="body"
+          color="secondary"
+          style={[styles.heroSubtitle, isCondensedLayout && styles.heroSubtitleCompact]}
+        >
           {isSignup
             ? 'Opret din profil og kom tættere på andre FCN-fans.'
             : 'Log ind og fortsæt i fællesskabet.'}
         </Text>
 
-        <View style={styles.modeTabs}>
+        <View style={[styles.modeTabs, isCondensedLayout && styles.modeTabsCompact]}>
           <Pressable onPress={() => setMode('signup')}>
             <Text style={isSignup ? styles.activeTab : styles.inactiveTab}>Opret profil</Text>
           </Pressable>
@@ -154,7 +177,9 @@ export default function LoginScreen({ route, navigation }: Props) {
 
       <View style={styles.authSection}>
         {Platform.OS === 'ios' ? (
-          <View style={styles.socialAuthSection}>
+          <View
+            style={[styles.socialAuthSection, isCondensedLayout && styles.socialAuthSectionCompact]}
+          >
             <View
               style={[styles.appleButtonWrapper, loading && styles.buttonDisabled]}
               pointerEvents={loading ? 'none' : 'auto'}
@@ -171,7 +196,7 @@ export default function LoginScreen({ route, navigation }: Props) {
                 onPress={onApple}
               />
             </View>
-            {!isCompactHeight ? (
+            {!isCondensedLayout ? (
               <Text style={styles.helperText}>Hurtigt og sikkert på iPhone</Text>
             ) : null}
           </View>
@@ -180,6 +205,7 @@ export default function LoginScreen({ route, navigation }: Props) {
         <View
           style={[
             styles.socialAuthSection,
+            isCondensedLayout && styles.socialAuthSectionCompact,
             Platform.OS === 'ios' && styles.secondarySocialAuthSection,
           ]}
         >
@@ -203,7 +229,9 @@ export default function LoginScreen({ route, navigation }: Props) {
           </Pressable>
         </View>
 
-        <View style={styles.dividerContainer}>
+        <View
+          style={[styles.dividerContainer, isCondensedLayout && styles.dividerContainerCompact]}
+        >
           <View style={styles.dividerLine} />
           <Text variant="small" color="secondary">
             eller fortsæt med email
@@ -211,7 +239,7 @@ export default function LoginScreen({ route, navigation }: Props) {
           <View style={styles.dividerLine} />
         </View>
 
-        <View style={styles.inputGroup}>
+        <View style={[styles.inputGroup, isCondensedLayout && styles.inputGroupCompact]}>
           <Text variant="bodyBold" color="secondary" style={styles.inputLabel}>
             Email
           </Text>
@@ -228,10 +256,19 @@ export default function LoginScreen({ route, navigation }: Props) {
             placeholder="navn@mail.dk"
             placeholderTextColor={theme.colors.text.secondary}
             keyboardType="email-address"
+            autoComplete="email"
+            textContentType="emailAddress"
+            returnKeyType="next"
           />
         </View>
 
-        <View style={[styles.inputGroup, styles.lastInputGroup]}>
+        <View
+          style={[
+            styles.inputGroup,
+            isCondensedLayout && styles.inputGroupCompact,
+            styles.lastInputGroup,
+          ]}
+        >
           <Text variant="bodyBold" color="secondary" style={styles.inputLabel}>
             Kodeord
           </Text>
@@ -247,10 +284,18 @@ export default function LoginScreen({ route, navigation }: Props) {
             onBlur={() => setFocusedInput(null)}
             placeholder="Min. 6 tegn"
             placeholderTextColor={theme.colors.text.secondary}
+            autoComplete="password"
+            textContentType="password"
+            returnKeyType={isSignup ? 'done' : 'go'}
           />
         </View>
 
-        <View style={styles.primaryActionSection}>
+        <View
+          style={[
+            styles.primaryActionSection,
+            isCondensedLayout && styles.primaryActionSectionCompact,
+          ]}
+        >
           <Pressable
             style={({ pressed }) => [
               isFormValid ? styles.primaryButton : styles.primaryButtonDisabled,
@@ -272,7 +317,12 @@ export default function LoginScreen({ route, navigation }: Props) {
           </Pressable>
         </View>
 
-        <View style={styles.legalTextContainer}>
+        <View
+          style={[
+            styles.legalTextContainer,
+            isCondensedLayout && styles.legalTextContainerCompact,
+          ]}
+        >
           <Text variant="caption" style={styles.legalText}>
             Ved at fortsætte accepterer du vores betingelser.
           </Text>
@@ -295,19 +345,21 @@ export default function LoginScreen({ route, navigation }: Props) {
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.flex}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
       >
-        {useScrollFallback ? (
-          <ScrollView
-            style={styles.flex}
-            contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            {contentBody}
-          </ScrollView>
-        ) : (
-          contentBody
-        )}
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: insets.bottom + theme.spacing[6] },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          automaticallyAdjustKeyboardInsets
+          showsVerticalScrollIndicator={false}
+        >
+          {contentBody}
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -326,11 +378,14 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       ...StyleSheet.absoluteFillObject,
     },
     content: {
-      flex: 1,
+      flexGrow: 1,
       paddingHorizontal: theme.spacing[6],
       paddingTop: theme.spacing[1],
       paddingBottom: theme.spacing[3],
       justifyContent: 'flex-start',
+    },
+    contentKeyboard: {
+      paddingTop: theme.spacing[0],
     },
     scrollContent: {
       flexGrow: 1,
@@ -339,6 +394,9 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       minHeight: 40,
       justifyContent: 'center',
       marginBottom: theme.spacing[0],
+    },
+    topNavCompact: {
+      minHeight: 36,
     },
     backButton: {
       width: 40,
@@ -356,6 +414,9 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       alignItems: 'center',
       marginBottom: theme.spacing[2],
     },
+    heroSectionCompact: {
+      marginBottom: theme.spacing[1],
+    },
     logoSurface: {
       width: theme.spacing[14],
       height: theme.spacing[14],
@@ -367,10 +428,19 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       borderColor: theme.colors.border.subtle,
       marginBottom: theme.spacing[2],
     },
+    logoSurfaceCompact: {
+      width: theme.spacing[11],
+      height: theme.spacing[11],
+      marginBottom: theme.spacing[1],
+    },
     logo: {
       width: 72,
       height: 72,
       alignSelf: 'center',
+    },
+    logoCompact: {
+      width: 56,
+      height: 56,
     },
     heroTitle: {
       fontSize: 28,
@@ -386,11 +456,17 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       color: theme.colors.text.secondary,
       marginTop: theme.spacing[1],
     },
+    heroSubtitleCompact: {
+      marginTop: theme.spacing[0],
+    },
     modeTabs: {
       flexDirection: 'row',
       justifyContent: 'center',
       gap: theme.spacing[6],
       marginTop: theme.spacing[3],
+    },
+    modeTabsCompact: {
+      marginTop: theme.spacing[2],
     },
     activeTab: {
       fontSize: 16,
@@ -410,6 +486,9 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
     socialAuthSection: {
       marginTop: theme.spacing[3],
+    },
+    socialAuthSectionCompact: {
+      marginTop: theme.spacing[2],
     },
     secondarySocialAuthSection: {
       marginTop: theme.spacing[2],
@@ -455,6 +534,10 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       marginBottom: theme.spacing[3],
       gap: theme.spacing[2],
     },
+    dividerContainerCompact: {
+      marginTop: theme.spacing[1],
+      marginBottom: theme.spacing[2],
+    },
     dividerLine: {
       flex: 1,
       height: theme.layout.borderWidth,
@@ -462,6 +545,9 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
     inputGroup: {
       marginBottom: theme.spacing[3],
+    },
+    inputGroupCompact: {
+      marginBottom: theme.spacing[2],
     },
     lastInputGroup: {
       marginBottom: theme.spacing[0],
@@ -485,6 +571,9 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
     primaryActionSection: {
       marginTop: theme.spacing[2],
+    },
+    primaryActionSectionCompact: {
+      marginTop: theme.spacing[1],
     },
     primaryButton: {
       width: '100%',
@@ -526,6 +615,9 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       alignItems: 'center',
       marginTop: theme.spacing[2],
       paddingHorizontal: theme.spacing[4],
+    },
+    legalTextContainerCompact: {
+      marginTop: theme.spacing[1],
     },
     legalText: {
       fontSize: 13,

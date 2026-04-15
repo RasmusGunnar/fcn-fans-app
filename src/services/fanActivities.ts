@@ -765,3 +765,24 @@ export async function updateFanActivity(input: UpdateFanActivityInput): Promise<
 
   return hydratedActivity ?? withRegistrationSummary(toFanActivity(data as FanActivityRow), {});
 }
+
+export async function deleteFanActivity(fanActivityId: string): Promise<string> {
+  const normalizedFanActivityId = fanActivityId.trim();
+  if (!normalizedFanActivityId) {
+    throw new Error('Fanaktiviteten mangler et id.');
+  }
+
+  const { data, error } = await supabase.rpc('delete_fan_activity', {
+    p_fan_activity_id: normalizedFanActivityId,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  if (typeof data !== 'string' || !data.trim()) {
+    throw new Error('Fanaktiviteten kunne ikke slettes.');
+  }
+
+  return data;
+}

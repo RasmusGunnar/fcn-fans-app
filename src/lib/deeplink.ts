@@ -1,5 +1,7 @@
 import * as Linking from 'expo-linking';
 
+const APP_SCHEME = 'fcnfans://';
+
 type NotificationPayload = Record<string, unknown> | null | undefined;
 type NotificationTargetType =
   | 'home_feed'
@@ -55,6 +57,28 @@ export function createMatchDeepLink(fixtureId: string): string {
 
 export function createEventDeepLink(eventId: string): string {
   return Linking.createURL(`/event/${eventId}`);
+}
+
+export function createFanActivityDeepLink(params: {
+  parentType: 'match' | 'event';
+  parentId: string;
+  fanActivityId: string;
+}): string {
+  const parentId = params.parentId.trim();
+  const fanActivityId = params.fanActivityId.trim();
+
+  if (!parentId || !fanActivityId) {
+    return `${APP_SCHEME}home`;
+  }
+
+  const encodedParentId = encodeURIComponent(parentId);
+  const encodedFanActivityId = encodeURIComponent(fanActivityId);
+  const path =
+    params.parentType === 'match'
+      ? `match/${encodedParentId}/fan-activity/${encodedFanActivityId}`
+      : `event/${encodedParentId}/fan-activity/${encodedFanActivityId}`;
+
+  return `${APP_SCHEME}${path}`;
 }
 
 export function getNotificationDeepLink(data: NotificationPayload): string | null {

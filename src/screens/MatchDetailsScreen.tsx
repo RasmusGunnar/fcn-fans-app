@@ -438,6 +438,19 @@ export default function MatchDetailsScreen() {
     matchCheckIn.userIds,
   ]);
 
+  const handleDeleteFanActivity = useCallback(
+    (fanActivityId: string) => {
+      setFanActivities((current) =>
+        current.filter((activity) => activity.id !== fanActivityId),
+      );
+      setSelectedFanActivity((current) =>
+        current?.id === fanActivityId ? null : current,
+      );
+      void loadFanActivities();
+    },
+    [loadFanActivities],
+  );
+
   const loadFixture = async () => {
     if (!fixtureId) return;
     setLoading(true);
@@ -888,6 +901,7 @@ export default function MatchDetailsScreen() {
         visible={Boolean(selectedFanActivity)}
         activity={selectedFanActivity}
         onClose={handleCloseFanActivity}
+        onDeleted={handleDeleteFanActivity}
       />
     </SafeAreaView>
   );

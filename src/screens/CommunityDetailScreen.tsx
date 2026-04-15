@@ -721,6 +721,41 @@ export default function CommunityDetailScreen() {
   };
 
   const styles = makeStyles(theme, accentColor, LAYOUT);
+  const renderKeyboardAwareFormModal = ({
+    visible,
+    onClose,
+    children,
+  }: {
+    visible: boolean;
+    onClose: () => void;
+    children: React.ReactNode;
+  }) => (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalFormRoot}
+        >
+          <View style={styles.editSheetOverlay}>
+            <Pressable style={styles.editSheetBackdrop} onPress={onClose} />
+            <ScrollView
+              style={styles.editSheetScrollContainer}
+              contentContainerStyle={[
+                styles.editSheetScrollContent,
+                { paddingBottom: insets.bottom + theme.spacing[4] },
+              ]}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+              automaticallyAdjustKeyboardInsets
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.editSheet}>{children}</View>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </TouchableWithoutFeedback>
+    </Modal>
+  );
 
   if (loading) {
     return (
@@ -778,13 +813,20 @@ export default function CommunityDetailScreen() {
         )}
       </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          paddingBottom: insets.bottom + theme.spacing[6],
-        }}
+      <KeyboardAvoidingView
+        style={styles.contentArea}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
+        <ScrollView
+          style={styles.scrollView}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: insets.bottom + theme.spacing[6] + theme.spacing[4] },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        >
         {/* 2. Hero Section */}
         <View style={styles.heroSection}>
           {heroUrl ? (
@@ -990,7 +1032,8 @@ export default function CommunityDetailScreen() {
             </Pressable>
           </View>
         )}
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       <Modal
         visible={showEditSheet}
@@ -1222,15 +1265,11 @@ export default function CommunityDetailScreen() {
       </Modal>
 
       {/* Message broadcast modal */}
-      <Modal
-        visible={showMessageModal}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShowMessageModal(false)}
-      >
-        <View style={styles.editSheetOverlay}>
-          <Pressable style={styles.editSheetBackdrop} onPress={() => setShowMessageModal(false)} />
-          <View style={styles.editSheet}>
+      {renderKeyboardAwareFormModal({
+        visible: showMessageModal,
+        onClose: () => setShowMessageModal(false),
+        children: (
+          <>
             <Text style={styles.editSheetTitle}>Send besked til alle</Text>
             <Text style={styles.messageModalSubtitle}>
               Beskeden sendes til alle {memberCount} medlem{memberCount !== 1 ? 'mer' : ''}
@@ -1268,9 +1307,9 @@ export default function CommunityDetailScreen() {
                 )}
               </Pressable>
             </View>
-          </View>
-        </View>
-      </Modal>
+          </>
+        ),
+      })}
 
       {/* Edit About modal */}
       <Modal
@@ -1279,9 +1318,26 @@ export default function CommunityDetailScreen() {
         transparent
         onRequestClose={() => setShowEditAbout(false)}
       >
-        <View style={styles.editSheetOverlay}>
-          <Pressable style={styles.editSheetBackdrop} onPress={() => setShowEditAbout(false)} />
-          <View style={styles.editSheet}>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.modalFormRoot}
+          >
+            <View style={styles.editSheetOverlay}>
+              <Pressable style={styles.editSheetBackdrop} onPress={() => setShowEditAbout(false)} />
+              <View style={styles.editAboutSheetContainer}>
+                <ScrollView
+                  style={styles.editAboutSheetScrollContainer}
+                  contentContainerStyle={[
+                    styles.editAboutSheetScrollContent,
+                    { paddingBottom: insets.bottom + theme.spacing[4] },
+                  ]}
+                  keyboardShouldPersistTaps="handled"
+                  keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+                  automaticallyAdjustKeyboardInsets
+                  showsVerticalScrollIndicator={false}
+                >
+                  <View style={styles.editSheet}>
             <Text style={styles.editSheetTitle}>Redigér "Om os"</Text>
             <TextInput
               style={[styles.editInput, styles.editInputMultiline]}
@@ -1316,8 +1372,12 @@ export default function CommunityDetailScreen() {
                 )}
               </Pressable>
             </View>
-          </View>
-        </View>
+                  </View>
+                </ScrollView>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </TouchableWithoutFeedback>
       </Modal>
 
       {/* Edit Location modal */}
@@ -1327,9 +1387,25 @@ export default function CommunityDetailScreen() {
         transparent
         onRequestClose={() => setShowEditLocation(false)}
       >
-        <View style={styles.editSheetOverlay}>
-          <Pressable style={styles.editSheetBackdrop} onPress={() => setShowEditLocation(false)} />
-          <View style={styles.editSheet}>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.modalFormRoot}
+          >
+            <View style={styles.editSheetOverlay}>
+              <Pressable style={styles.editSheetBackdrop} onPress={() => setShowEditLocation(false)} />
+              <ScrollView
+                style={styles.editSheetScrollContainer}
+                contentContainerStyle={[
+                  styles.editSheetScrollContent,
+                  { paddingBottom: insets.bottom + theme.spacing[4] },
+                ]}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+                automaticallyAdjustKeyboardInsets
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={styles.editSheet}>
             <Text style={styles.editSheetTitle}>Redigér "Lokation"</Text>
             <TextInput
               style={styles.editInput}
@@ -1362,8 +1438,11 @@ export default function CommunityDetailScreen() {
                 )}
               </Pressable>
             </View>
-          </View>
-        </View>
+                </View>
+              </ScrollView>
+            </View>
+          </KeyboardAvoidingView>
+        </TouchableWithoutFeedback>
       </Modal>
 
       <Modal
@@ -1461,6 +1540,9 @@ const makeStyles = (
       flex: 1,
       backgroundColor: theme.colors.bg.default,
     },
+    contentArea: {
+      flex: 1,
+    },
     header: {
       backgroundColor: accentColor,
       flexDirection: 'row',
@@ -1492,8 +1574,14 @@ const makeStyles = (
       justifyContent: 'center',
       alignItems: 'center',
     },
+    modalFormRoot: {
+      flex: 1,
+    },
     scrollView: {
       flex: 1,
+    },
+    scrollContent: {
+      flexGrow: 1,
     },
     heroSection: {
       height: layout.heroHeight,
@@ -1884,6 +1972,23 @@ const makeStyles = (
     editSheetScrollContainer: {
       flex: 1,
       maxHeight: '85%',
+    },
+    editSheetScrollContent: {
+      flexGrow: 1,
+      justifyContent: 'flex-end',
+    },
+    editAboutSheetContainer: {
+      width: '100%',
+      maxHeight: '85%',
+      flexShrink: 1,
+    },
+    editAboutSheetScrollContainer: {
+      width: '100%',
+      flexGrow: 0,
+      flexShrink: 1,
+    },
+    editAboutSheetScrollContent: {
+      flexGrow: 0,
     },
     editSheet: {
       backgroundColor: theme.colors.bg.card,
