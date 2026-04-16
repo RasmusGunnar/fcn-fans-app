@@ -219,6 +219,69 @@ export function NewsCard({
     setImageFailed(false);
   }, [heroImageUrl]);
 
+  const defaultLinkPreview = showHeroImage ? (
+    <>
+      <CardMedia aspectRatio={16 / 9} fullBleed style={{ marginTop: theme.spacing[3] }}>
+        <Image
+          source={{ uri: heroImageUrl! }}
+          style={styles.mediaImage}
+          resizeMode="cover"
+          onError={() => setImageFailed(true)}
+        />
+      </CardMedia>
+
+      <View style={styles.linkContent}>
+        <Text variant="small" color="secondary" style={styles.siteName}>
+          {mediaLabel}
+        </Text>
+        {cleanedTitle ? (
+          <Text variant="bodyBold" color="primary" style={styles.title} numberOfLines={2}>
+            {cleanedTitle}
+          </Text>
+        ) : null}
+        {cleanedDescription ? (
+          <Text variant="body" color="secondary" style={styles.description} numberOfLines={3}>
+            {cleanedDescription}
+          </Text>
+        ) : null}
+        {newsItem.url ? (
+          <Pressable style={styles.ctaButton} onPress={handleOpenLink}>
+            <Text variant="body" color="primary" style={styles.ctaText}>
+              {ctaLabel}
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </>
+  ) : (
+    <View style={styles.linkContentCompact}>
+      <View style={styles.linkIconWrap}>
+        <Ionicons
+          name={compactIconName}
+          size={theme.components.icon.size.md}
+          color={theme.colors.text.secondary}
+        />
+      </View>
+      <View style={styles.linkTextWrap}>
+        <Text variant="bodyBold" color="primary" numberOfLines={1} style={styles.compactTitle}>
+          {compactPrimaryLabel}
+        </Text>
+        {compactSecondaryLabel ? (
+          <Text variant="small" color="secondary" numberOfLines={1} style={styles.compactMeta}>
+            {compactSecondaryLabel}
+          </Text>
+        ) : null}
+      </View>
+      {newsItem.url ? (
+        <Pressable style={styles.ctaButtonCompact} onPress={handleOpenLink}>
+          <Text variant="small" color="primary" style={styles.ctaTextCompact}>
+            {ctaLabel}
+          </Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+
   return (
     <CardRoot
       targetType="news"
@@ -264,69 +327,7 @@ export function NewsCard({
           </Text>
         </View>
       ) : null}
-
-      {showHeroImage ? (
-        <>
-          <CardMedia aspectRatio={16 / 9} fullBleed style={{ marginTop: theme.spacing[3] }}>
-            <Image
-              source={{ uri: heroImageUrl! }}
-              style={styles.mediaImage}
-              resizeMode="cover"
-              onError={() => setImageFailed(true)}
-            />
-          </CardMedia>
-
-          <View style={styles.linkContent}>
-            <Text variant="small" color="secondary" style={styles.siteName}>
-              {mediaLabel}
-            </Text>
-            {cleanedTitle ? (
-              <Text variant="bodyBold" color="primary" style={styles.title} numberOfLines={2}>
-                {cleanedTitle}
-              </Text>
-            ) : null}
-            {cleanedDescription ? (
-              <Text variant="body" color="secondary" style={styles.description} numberOfLines={3}>
-                {cleanedDescription}
-              </Text>
-            ) : null}
-            {newsItem.url ? (
-              <Pressable style={styles.ctaButton} onPress={handleOpenLink}>
-                <Text variant="body" color="primary" style={styles.ctaText}>
-                  {ctaLabel}
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
-        </>
-      ) : (
-        <View style={styles.linkContentCompact}>
-          <View style={styles.linkIconWrap}>
-            <Ionicons
-              name={compactIconName}
-              size={theme.components.icon.size.md}
-              color={theme.colors.text.secondary}
-            />
-          </View>
-          <View style={styles.linkTextWrap}>
-            <Text variant="bodyBold" color="primary" numberOfLines={1} style={styles.compactTitle}>
-              {compactPrimaryLabel}
-            </Text>
-            {compactSecondaryLabel ? (
-              <Text variant="small" color="secondary" numberOfLines={1} style={styles.compactMeta}>
-                {compactSecondaryLabel}
-              </Text>
-            ) : null}
-          </View>
-          {newsItem.url ? (
-            <Pressable style={styles.ctaButtonCompact} onPress={handleOpenLink}>
-              <Text variant="small" color="primary" style={styles.ctaTextCompact}>
-                {ctaLabel}
-              </Text>
-            </Pressable>
-          ) : null}
-        </View>
-      )}
+      {defaultLinkPreview}
     </CardRoot>
   );
 }

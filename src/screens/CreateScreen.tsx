@@ -48,6 +48,7 @@ export default function CreateScreen() {
     isFocused: isInputFocused,
     setText,
     setSelection,
+    includeCommunityMentions: true,
   });
 
   const refocusInput = useCallback(() => {

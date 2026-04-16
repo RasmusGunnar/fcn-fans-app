@@ -18,14 +18,16 @@ import { logger } from '../../lib/logger';
 import { supabase } from '../../lib/supabase';
 import { useEntityAutocomplete } from '../../hooks/useEntityAutocomplete';
 import { EntityAutocompleteList } from '../composer/EntityAutocompleteList';
+import { resolveMentionTargetByHandle } from '../../services/mentionAutocompleteApi';
 import { triggerMentionPush } from '../../services/mentionPushApi';
 import { createMentionNotifications } from '../../services/mentionNotifications';
 import { createNotification } from '../../services/notificationsApi';
-import { resolveMentionedProfiles, resolveProfileIdByUsername } from '../../services/postEntities';
+import { resolveMentionedProfiles } from '../../services/postEntities';
 import { defaultTheme } from '../../theme';
 import { Avatar } from '../Avatar';
 import { Text } from '../ui';
 import { resolveActorLine, type ProfileMap } from '../../utils/actor';
+import { navigateToMentionTarget } from '../../utils/mentionNavigation';
 import { renderTextWithEntities } from '../../utils/renderTextWithEntities';
 import {
   toggleCommentLike,
@@ -122,6 +124,7 @@ export function InlineComments({
     isFocused: isComposerFocused,
     setText: setCommentText,
     setSelection: setCommentSelection,
+    includeCommunityMentions: targetType === 'post',
   });
 
   const refocusComposer = useCallback(() => {
@@ -154,11 +157,11 @@ export function InlineComments({
   );
 
   const handlePressMention = useCallback(
-    async (username: string) => {
-      const profileId = await resolveProfileIdByUsername(username);
+    async (handle: string) => {
+      const target = await resolveMentionTargetByHandle(handle);
 
-      if (profileId) {
-        navigation.navigate('PublicProfile', { userId: profileId });
+      if (target) {
+        navigateToMentionTarget(navigation, target);
       }
     },
     [navigation],

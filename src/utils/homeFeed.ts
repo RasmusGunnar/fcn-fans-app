@@ -287,7 +287,7 @@ function isValidWeeklyTopFanForHome(item: FeedItem, baseDate = new Date()): bool
   const hasRequiredData = Boolean(
     item.data.id &&
       item.data.userId &&
-      (item.data.weekStartDate || item.data.generatedAt || item.data.createdAt),
+      item.data.weekStartDate,
   );
 
   if (!hasRequiredData) {
@@ -299,10 +299,22 @@ function isValidWeeklyTopFanForHome(item: FeedItem, baseDate = new Date()): bool
     return false;
   }
 
+  const latestExpectedWeekStart = getLatestPublishedWeeklyTopFanWeekStart(baseDate);
+  const actualWeekStart = item.data.weekStartDate?.slice(0, 10) ?? null;
+
+  if (actualWeekStart !== latestExpectedWeekStart) {
+    console.log('[homeFeed] dropping stale weekly_top_fan from home feed', {
+      id: item.id,
+      weekStartDate: actualWeekStart,
+      latestExpectedWeekStart,
+    });
+    return false;
+  }
+
   console.log('[homeFeed] allowing weekly_top_fan into home feed', {
     id: item.id,
-    weekStartDate: item.data.weekStartDate,
-    latestExpectedWeekStart: getLatestPublishedWeeklyTopFanWeekStart(baseDate),
+    weekStartDate: actualWeekStart,
+    latestExpectedWeekStart,
   });
   return true;
 }

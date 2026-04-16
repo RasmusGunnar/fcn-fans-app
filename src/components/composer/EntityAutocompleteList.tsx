@@ -49,7 +49,7 @@ export function EntityAutocompleteList({
 
               return (
                 <Pressable
-                  key={item.id}
+                  key={`${item.type}:${item.id}`}
                   style={({ pressed }) => [
                     styles.row,
                     pressed ? styles.rowPressed : null,
@@ -58,17 +58,21 @@ export function EntityAutocompleteList({
                   onPress={() => onSelectMention(item)}
                 >
                   <Avatar
-                    userId={item.id}
+                    userId={item.type === 'profile' ? item.id : undefined}
                     avatarUrl={item.avatar_url}
                     size={theme.spacing[8]}
-                    label={item.display_name || item.username}
+                    label={
+                      item.type === 'community'
+                        ? item.name
+                        : item.display_name || item.username
+                    }
                   />
                   <View style={styles.copy}>
                     <Text variant="body" color="primary" style={styles.primaryText}>
-                      {item.display_name || item.username}
+                      {item.type === 'community' ? item.name : item.display_name || item.username}
                     </Text>
                     <Text variant="caption" color="secondary">
-                      @{item.username}
+                      @{item.handle}
                     </Text>
                   </View>
                 </Pressable>

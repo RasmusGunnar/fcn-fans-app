@@ -21,6 +21,7 @@ type Options = {
   isFocused: boolean;
   setText: (text: string) => void;
   setSelection: (selection: Selection) => void;
+  includeCommunityMentions?: boolean;
 };
 
 const AUTOCOMPLETE_DEBOUNCE_MS = 150;
@@ -31,6 +32,7 @@ export function useEntityAutocomplete({
   isFocused,
   setText,
   setSelection,
+  includeCommunityMentions = false,
 }: Options) {
   const [mentionSuggestions, setMentionSuggestions] = useState<MentionSuggestion[]>([]);
   const [hashtagSuggestions, setHashtagSuggestions] = useState<string[]>([]);
@@ -57,7 +59,9 @@ export function useEntityAutocomplete({
     let cancelled = false;
     const timer = setTimeout(async () => {
       if (activeMatch.type === 'mention') {
-        const nextSuggestions = await searchMentionSuggestions(activeMatch.query);
+        const nextSuggestions = await searchMentionSuggestions(activeMatch.query, {
+          includeCommunities: includeCommunityMentions,
+        });
         if (!cancelled) {
           setMentionSuggestions(nextSuggestions);
           setHashtagSuggestions([]);
@@ -76,7 +80,7 @@ export function useEntityAutocomplete({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [activeMatch, clear]);
+  }, [activeMatch, clear, includeCommunityMentions]);
 
   const applyReplacement = useCallback(
     (replacement: string) => {
@@ -94,7 +98,7 @@ export function useEntityAutocomplete({
 
   const handleSelectMention = useCallback(
     (item: MentionSuggestion) => {
-      applyReplacement(`@${item.username}`);
+      applyReplacement(`@${item.handle}`);
     },
     [applyReplacement],
   );

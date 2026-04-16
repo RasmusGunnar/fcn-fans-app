@@ -59,6 +59,7 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
     isFocused: isInputFocused,
     setText,
     setSelection,
+    includeCommunityMentions: true,
   });
 
   const refocusInput = useCallback(() => {

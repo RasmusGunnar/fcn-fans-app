@@ -11,6 +11,7 @@ import { Alert } from 'react-native';
 export interface Community {
   id: string;
   name: string;
+  mention_key: string | null;
   description: string | null;
   type: 'community' | 'fan_faction';
   owner_id: string | null;

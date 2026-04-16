@@ -21,12 +21,13 @@ import { logger } from '../../lib/logger';
 import { supabase } from '../../lib/supabase';
 import { navigationRef } from '../../navigation/navigationRef';
 import type { CommentPreview } from '../../services/likesApi';
-import { resolveProfileIdByUsername } from '../../services/postEntities';
+import { resolveMentionTargetByHandle } from '../../services/mentionAutocompleteApi';
 import { defaultTheme } from '../../theme';
 import type { CategoryKey } from '../../theme/categories';
 import { Post } from '../../types/post';
 import { resolveActorLine, type ProfileMap } from '../../utils/actor';
 import { resolveRenderableMedia } from '../../utils/media';
+import { navigateToMentionTarget } from '../../utils/mentionNavigation';
 import { cleanText } from '../../utils/text';
 import { useCommunityRole } from '../../hooks/useCommunityRole';
 import { canDeleteFeedItem, canEditPost } from '../../utils/permissions';
@@ -534,22 +535,22 @@ export function FanPostCard({
         </View>
       ) : bodyContent ? (
         bodyContent
-      ) : (
+      ) : cleanedPostText ? (
         <Text variant="body" color="primary" style={styles.text}>
           {renderTextWithEntities(cleanedPostText, {
             entityStyle: styles.entityText,
             mentionLabels,
             onPressTag: (tag) => navigation.navigate('Hashtag', { tag }),
-            onPressMention: async (username) => {
-              const profileId = await resolveProfileIdByUsername(username);
+            onPressMention: async (handle) => {
+              const target = await resolveMentionTargetByHandle(handle);
 
-              if (profileId) {
-                navigation.navigate('PublicProfile', { userId: profileId });
+              if (target) {
+                navigateToMentionTarget(navigation, target);
               }
             },
           })}
         </Text>
-      )}
+      ) : null}
       {/* BASELINE: Deterministic media rendering - no silent failures */}
       {!m0 ? null : (
         <View style={styles.mediaOuter}>
