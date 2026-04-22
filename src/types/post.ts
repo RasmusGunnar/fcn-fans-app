@@ -1,3 +1,5 @@
+import type { LinkPreview } from './news';
+
 export interface PollOption {
   id: string;
   text: string;
@@ -29,6 +31,7 @@ export interface Post {
   createdAt: string;
   text: string;
   poll_data?: PollData | null;
+  linkPreview?: LinkPreview | null;
   imageUri?: string;
   media?: {
     bucket?: string;

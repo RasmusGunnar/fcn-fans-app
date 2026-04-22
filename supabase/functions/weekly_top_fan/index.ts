@@ -100,9 +100,9 @@ const QUALIFYING_SCORE_THRESHOLD = 25;
 const MIN_ACTIVE_SOURCES = 2;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const FCN_TEAM_NAME_MATCHERS = ['nordsjalland', 'nordsjaelland'];
-const WEEKLY_TOP_FAN_PUBLISH_WEEKDAY = 'Mon';
+const WEEKLY_TOP_FAN_PUBLISH_WEEKDAY = 'Wed';
 const WEEKLY_TOP_FAN_PUBLISH_HOUR = 12;
-const WEEKLY_TOP_FAN_PUBLISH_RULE = 'Monday 12:00 Europe/Copenhagen';
+const WEEKLY_TOP_FAN_PUBLISH_RULE = 'Wednesday 12:00 Europe/Copenhagen';
 
 function json(status: number, payload: unknown) {
   return new Response(JSON.stringify(payload), {
@@ -562,7 +562,7 @@ serve(async (req) => {
     const copenhagen = getCopenhagenParts(now);
 
     // Authoritative publish cadence:
-    // Monday 12:00 Europe/Copenhagen publishes the winner for the
+    // Wednesday 12:00 Europe/Copenhagen publishes the winner for the
     // previous completed Monday-based week.
     if (!forced && !isWeeklyTopFanPublishWindow(copenhagen)) {
       return json(200, {

@@ -15,7 +15,6 @@ import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Card } from '../components/ui/Card';
-import { PrimaryButton } from '../components/PrimaryButton';
 import { fetchBusTripById, type BusTrip } from '../services/eventsApi';
 import { useTheme, defaultTheme as theme } from '../theme';
 
@@ -248,28 +247,6 @@ export default function BusTripDetailsScreen() {
           </Card>
         )}
 
-        {/* CTA Button */}
-        <View style={styles.ctaContainer}>
-          {isFull ? (
-            <View style={styles.fullBanner}>
-              <Text style={styles.fullBannerText}>Alle pladser er booket</Text>
-            </View>
-          ) : (
-            <PrimaryButton
-              title={`Book plads nu${busTrip.price_dkk ? ` (${busTrip.price_dkk} kr.)` : ''}`}
-              onPress={() => {
-                // TODO: Implement booking flow
-                logger.log('Book bus trip:', busTripId);
-              }}
-            />
-          )}
-        </View>
-
-        {/* Placeholder: Participants */}
-        <Card style={styles.participantsCard}>
-          <Text style={styles.sectionTitle}>Deltagere ({busTrip.seats_taken})</Text>
-          <Text style={styles.placeholderText}>Deltagerliste kommer snart...</Text>
-        </Card>
       </ScrollView>
     </SafeAreaView>
   );

@@ -23,6 +23,7 @@ import { triggerMentionPush } from '../../services/mentionPushApi';
 import { createMentionNotifications } from '../../services/mentionNotifications';
 import { createNotification } from '../../services/notificationsApi';
 import { resolveMentionedProfiles } from '../../services/postEntities';
+import { confirmAndSubmitReport } from '../../services/reporting';
 import { defaultTheme } from '../../theme';
 import { Avatar } from '../Avatar';
 import { Text } from '../ui';
@@ -495,6 +496,15 @@ export function InlineComments({
     ]);
   };
 
+  const handleReportComment = (commentId: string) => {
+    confirmAndSubmitReport({
+      reporterUserId: currentUserId,
+      targetType: 'comment',
+      targetId: commentId,
+      subjectLabel: 'kommentar',
+    });
+  };
+
   const handleToggleCommentLike = async (commentId: string) => {
     if (!currentUserId) {
       Alert.alert('Fejl', 'Du skal være logget ind for at like en kommentar');
@@ -880,6 +890,13 @@ export function InlineComments({
                   Svar
                 </Text>
               </Pressable>
+              {!isOwnComment ? (
+                <Pressable onPress={() => handleReportComment(comment.id)}>
+                  <Text variant="caption" color="secondary" style={styles.replyAction}>
+                    Rapportér
+                  </Text>
+                </Pressable>
+              ) : null}
               {canDelete ? (
                 <Pressable
                   onPress={() => handleDeleteComment(comment.id, comment.author_id)}
@@ -954,6 +971,13 @@ export function InlineComments({
                               Svar
                             </Text>
                           </Pressable>
+                          {currentUserId && currentUserId !== reply.author_id ? (
+                            <Pressable onPress={() => handleReportComment(reply.id)}>
+                              <Text variant="caption" color="secondary" style={styles.replyAction}>
+                                Rapportér
+                              </Text>
+                            </Pressable>
+                          ) : null}
                         </View>
                       </View>
                     </View>

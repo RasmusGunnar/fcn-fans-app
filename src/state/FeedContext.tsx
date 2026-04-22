@@ -42,6 +42,7 @@ import {
   withFeedEngagementSummary,
 } from '../utils/homeFeed';
 import { resolveAvatarUrl } from '../utils/avatar';
+import { normalizeLinkPreview } from '../utils/linkPreview';
 import { normalizeMedia } from '../utils/media';
 import { targetKey } from '../utils/targetKey';
 
@@ -363,13 +364,14 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
     let homeFanActivities: FanActivity[] = [];
     let communityFeedEntries: CommunityFeedSource[] = [];
     let weeklyTopFanItem: Awaited<ReturnType<typeof fetchLatestPublishedWeeklyTopFan>> = null;
+    const baseDate = new Date();
 
     // Fetch posts in separate try/catch so news_items errors don't block posts
     try {
       const { data: postsData, error: fetchError } = await supabase
         .from('posts')
         .select(
-          'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets, poll_data',
+          'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets, poll_data, link_preview',
         )
         .order('created_at', { ascending: false })
         .limit(50);
@@ -435,6 +437,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
             createdAt: dbPost.created_at,
             text: dbPost.text,
             poll_data: dbPost.poll_data ?? null,
+            linkPreview: normalizeLinkPreview(dbPost.link_preview),
             likesCount: 0, // TODO: Add likes support
             commentsCount: 0, // TODO: Count comments
             likedByMe: false,
@@ -577,7 +580,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      weeklyTopFanItem = await fetchLatestPublishedWeeklyTopFan();
+      weeklyTopFanItem = await fetchLatestPublishedWeeklyTopFan(baseDate);
       console.log(
         '[FeedProvider] weekly_top_fan fetch result',
         weeklyTopFanItem
@@ -631,7 +634,6 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       const safeFanActivitiesArray = homeFanActivities ?? [];
       const safeCommunityFeedEntries = communityFeedEntries ?? [];
       const safeWeeklyTopFanItem = weeklyTopFanItem ?? null;
-      const baseDate = new Date();
       console.log(
         '[FeedProvider] injecting weekly_top_fan into feeds',
         safeWeeklyTopFanItem

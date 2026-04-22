@@ -11,6 +11,7 @@ import { useFeed } from '../state/FeedContext';
 import { useTheme, type Theme } from '../theme';
 import type { Post } from '../types/post';
 import { extractHashtags } from '../utils/extractHashtags';
+import { normalizeLinkPreview } from '../utils/linkPreview';
 import { normalizeMedia } from '../utils/media';
 import { targetKey } from '../utils/targetKey';
 
@@ -25,6 +26,7 @@ type HashtagPostRow = {
   community_id: string | null;
   feed_targets: string[] | null;
   poll_data: Post['poll_data'];
+  link_preview: unknown;
 };
 
 type HashtagCommentRow = {
@@ -33,7 +35,7 @@ type HashtagCommentRow = {
 };
 
 const HASHTAG_POST_SELECT =
-  'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets, poll_data';
+  'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets, poll_data, link_preview';
 
 function normalizeTag(value: string | undefined): string {
   return (value ?? '').replace('#', '').trim().toLowerCase();
@@ -115,6 +117,7 @@ export default function HashtagScreen() {
         createdAt: row.created_at,
         text: row.text ?? '',
         poll_data: row.poll_data ?? null,
+        linkPreview: normalizeLinkPreview(row.link_preview),
         media: normalizeMedia(row.media),
         likesCount: 0,
         commentsCount: 0,
@@ -285,7 +288,7 @@ export default function HashtagScreen() {
 
   return (
     <View style={styles.container}>
-      <AppHeader title={`#${tag || 'hashtag'}`} subtitle={subtitle} />
+      <AppHeader title={`#${tag || 'hashtag'}`} subtitle={subtitle} showProfileButton={false} />
       {loading ? (
         <View style={styles.stateContainer}>
           <ActivityIndicator size="small" color={theme.colors.brand.accent} />

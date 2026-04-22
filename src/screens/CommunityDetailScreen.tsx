@@ -386,18 +386,6 @@ export default function CommunityDetailScreen() {
     }
   };
 
-  const handleCreatePoll = () => {
-    setShowEditSheet(false);
-    // TODO: Navigate to PollCreateScreen when it exists
-    Alert.alert('Kommer snart', 'Poll-funktionalitet er under udvikling');
-  };
-
-  const handleCreateEvent = () => {
-    setShowEditSheet(false);
-    // TODO: Navigate to EventCreateScreen or check if CreateNewEventScreen exists
-    Alert.alert('Kommer snart', 'Event-oprettelse er under udvikling');
-  };
-
   const handleEditHero = async () => {
     if (!community) return;
     runAfterEditSheetClose(handleUploadCover);
@@ -1047,44 +1035,6 @@ export default function CommunityDetailScreen() {
             <Text style={styles.editSheetTitle}>Admin handlinger</Text>
             {canManage && (
               <>
-                {/* Primary action: Send message to all */}
-                <Pressable
-                  style={[styles.primaryAction, { backgroundColor: accentColor }]}
-                  onPress={() => {
-                    setShowEditSheet(false);
-                    setShowMessageModal(true);
-                  }}
-                >
-                  <Ionicons name="send" size={20} color={theme.colors.text.inverse} />
-                  <Text style={styles.primaryActionText}>Send besked til alle</Text>
-                </Pressable>
-
-                {/* Secondary actions: Poll and Event */}
-                <View style={styles.secondaryActionsRow}>
-                  <Pressable
-                    style={[styles.secondaryAction, { borderColor: theme.colors.border.default }]}
-                    onPress={handleCreatePoll}
-                  >
-                    <Ionicons name="bar-chart-outline" size={20} color={accentColor} />
-                    <Text style={[styles.secondaryActionText, { color: accentColor }]}>
-                      Lav Poll
-                    </Text>
-                  </Pressable>
-
-                  <Pressable
-                    style={[styles.secondaryAction, { borderColor: theme.colors.border.default }]}
-                    onPress={handleCreateEvent}
-                  >
-                    <Ionicons name="calendar-outline" size={20} color={accentColor} />
-                    <Text style={[styles.secondaryActionText, { color: accentColor }]}>
-                      Opret event
-                    </Text>
-                  </Pressable>
-                </View>
-
-                {/* Divider */}
-                <View style={styles.editSheetDivider} />
-
                 {/* Edit options */}
                 <Pressable style={styles.editSheetAction} onPress={handleEditHero}>
                   <Ionicons name="image-outline" size={20} color={theme.colors.text.primary} />

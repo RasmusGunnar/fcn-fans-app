@@ -21,14 +21,5 @@
       "autoIncrement": true,
       "channel": "testflight"
     }
-  },
-  "submit": {
-    "production": {
-      "ios": {
-        "ascApiKeyPath": "./keys/AuthKey_9WR3K43MAC.p8",
-        "ascApiKeyIssuerId": "40c6fe2a-f012-46b8-9a1b-021062c53853",
-        "ascApiKeyId": "9WR3K43MAC"
-      }
-    }
   }
 }

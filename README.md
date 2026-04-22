@@ -117,4 +117,6 @@ Upload/submit til App Store Connect:
 eas submit --platform ios --profile production
 ```
 
-> Du skal oprette en **App Store Connect API Key** og udfylde `eas.json` under `submit.production.ios`.
+> Hold App Store Connect credentials ude af git. Repoet indeholder ikke længere `submit.production.ios`
+> med en lokal `.p8`-sti. Når du kører `eas submit`, skal du bruge en lokal, ikke-tracket API key
+> (fx i en ignoreret `keys/`-mappe eller uden for repoet) og lade EAS bruge den lokalt.

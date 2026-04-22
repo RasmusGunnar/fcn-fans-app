@@ -4,6 +4,7 @@ import { fetchCommentCounts, fetchCommentPreviews, fetchLikeStates, fetchMyLiked
 import type { FanLevelKey } from '../types/fan';
 import type { Post } from '../types/post';
 import { resolveAvatarUrl } from '../utils/avatar';
+import { normalizeLinkPreview } from '../utils/linkPreview';
 import { normalizeMedia } from '../utils/media';
 
 type PostAuthorProfile = {
@@ -37,6 +38,7 @@ type PostRow = {
   community_id: string | null;
   feed_targets: unknown;
   poll_data: Post['poll_data'];
+  link_preview: unknown;
 };
 
 const PROFILE_SELECT_ATTEMPTS = [
@@ -123,7 +125,7 @@ export async function fetchPostDetailById(
   const { data, error } = await supabase
     .from('posts')
     .select(
-      'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets, poll_data',
+      'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets, poll_data, link_preview',
     )
     .eq('id', normalizedPostId)
     .maybeSingle();
@@ -179,6 +181,7 @@ export async function fetchPostDetailById(
     createdAt: row.created_at,
     text: row.text ?? '',
     poll_data: row.poll_data ?? null,
+    linkPreview: normalizeLinkPreview(row.link_preview),
     media: normalizeMedia(row.media),
     likesCount: likeState.likes,
     commentsCount,

@@ -23,9 +23,7 @@ export async function fetchWeeklyRanking(): Promise<WeeklyRankingData | null> {
       return null;
     }
 
-    const { data, error } = await supabase.functions.invoke('weekly_ranking', {
-      body: { userId: user.id },
-    });
+    const { data, error } = await supabase.functions.invoke('weekly_ranking');
 
     console.log('[weeklyRanking] invoke result', {
       userId: user.id,

@@ -59,6 +59,11 @@ function getDomainLabel(
   }
 }
 
+function isInstagramUrl(url: string | null | undefined): boolean {
+  const domain = getDomainLabel(url, { stripWww: false })?.toLowerCase() || '';
+  return domain.includes('instagram.com') || domain === 'instagr.am';
+}
+
 function getLinkIconName(url: string | null | undefined): keyof typeof Ionicons.glyphMap {
   const domain = getDomainLabel(url)?.toLowerCase() || '';
 
@@ -126,13 +131,14 @@ export function NewsCard({
   const cleanedDescription = cleanText(newsItem.description);
   const cleanedNote = cleanText(newsItem.note);
   const linkDomain = useMemo(() => getDomainLabel(newsItem.url), [newsItem.url]);
+  const isInstagramLink = useMemo(() => isInstagramUrl(newsItem.url), [newsItem.url]);
   const fullLinkDomain = useMemo(
     () => getDomainLabel(newsItem.url, { stripWww: false }),
     [newsItem.url],
   );
   const heroImageUrl = useMemo(
-    () => sanitizeNewsHeroImageUrl(newsItem.imageUrl, newsItem.url),
-    [newsItem.imageUrl, newsItem.url],
+    () => (isInstagramLink ? null : sanitizeNewsHeroImageUrl(newsItem.imageUrl, newsItem.url)),
+    [isInstagramLink, newsItem.imageUrl, newsItem.url],
   );
   const authoredCommunityId =
     newsActorType === 'community' ? newsActorId || newsCommunityId || null : null;
@@ -203,7 +209,7 @@ export function NewsCard({
   });
 
   const hasRightSlot = newsMenuOptions.length > 0;
-  const showHeroImage = Boolean(heroImageUrl) && !imageFailed;
+  const showHeroImage = !isInstagramLink && Boolean(heroImageUrl) && !imageFailed;
   const mediaLabel = cleanedSiteName || linkDomain || 'Nyhed';
   const compactPrimaryLabel = cleanedSiteName || cleanedTitle || linkDomain || 'Link';
   const compactSecondaryLabel =

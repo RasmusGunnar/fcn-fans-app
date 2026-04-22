@@ -225,7 +225,7 @@ export default function PostDetailScreen() {
 
   return (
     <View style={styles.container}>
-      <AppHeader title="Opslag" subtitle="" />
+      <AppHeader title="Opslag" subtitle="" showProfileButton={false} />
       <ScrollView
         style={styles.scrollView}
         keyboardShouldPersistTaps="handled"
@@ -241,7 +241,7 @@ export default function PostDetailScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   scrollView: { flex: 1 },
-  content: { padding: spacing.md },
+  content: { paddingVertical: spacing.md },
   centerState: {
     alignItems: 'center',
     justifyContent: 'center',

@@ -12,7 +12,7 @@ export default function CommunityScreen() {
       style={styles.container}
       contentContainerStyle={{ paddingBottom: insets.bottom + spacing.lg, flexGrow: 1 }}
     >
-      <AppHeader title="Fællesskab" />
+      <AppHeader title="Fællesskab" showProfileButton={false} />
       <View style={styles.content}>
         <Text style={styles.placeholder}>Fællesskab placeholder</Text>
       </View>

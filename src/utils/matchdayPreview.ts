@@ -1,5 +1,7 @@
 export type MatchdayPreviewMode = 'off' | 'matchday' | 'checked_in';
 
+const MATCHDAY_PREVIEW_DEV_ONLY = __DEV__;
+
 function normalizePreviewMode(value?: string | null): MatchdayPreviewMode | null {
   const normalized = value?.trim().toLowerCase();
 
@@ -17,6 +19,10 @@ function normalizePreviewMode(value?: string | null): MatchdayPreviewMode | null
 }
 
 export function getMatchdayPreviewMode(): MatchdayPreviewMode {
+  if (!MATCHDAY_PREVIEW_DEV_ONLY) {
+    return 'off';
+  }
+
   const explicitMode = normalizePreviewMode(process.env.EXPO_PUBLIC_MATCHDAY_PREVIEW_MODE);
   if (explicitMode) {
     return explicitMode;

@@ -31,9 +31,9 @@ verify_jwt = false
 [functions.weekly_top_fan]
 verify_jwt = false
 
-# weekly_ranking: user-specific ranking now uses userId in request body instead of function auth.
+# weekly_ranking: authenticated self-only ranking lookup via JWT auth context.
 [functions.weekly_ranking]
-verify_jwt = false
+verify_jwt = true
 
 # sync_fan_levels: daily batch fan status writer via x-sync-secret.
 [functions.sync_fan_levels]
@@ -68,4 +68,8 @@ verify_jwt = true
 
 # push_mentions: authenticated route triggered after successful post/comment/reply writes.
 [functions.push_mentions]
+verify_jwt = true
+
+# delete_my_account: authenticated self-service account deletion from the profile screen.
+[functions.delete_my_account]
 verify_jwt = true

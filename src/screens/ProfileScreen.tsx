@@ -32,6 +32,7 @@ import { supabase } from '../lib/supabase';
 import { ensureProfile } from '../lib/profile';
 import {
   getPushStatusSnapshot,
+  removeCurrentPushToken,
   sendManualTestPush,
   syncPushNotifications,
   type PushUiStatus,
@@ -60,6 +61,13 @@ import {
   type FanActivityRegistrationListItem,
   type FanActivityRegistrationStatus,
 } from '../services/fanActivityRegistrations';
+import { deleteMyAccount } from '../services/accountDeletion';
+import {
+  hasConfiguredLegalUrl,
+  openLegalDocument,
+  openSupportEmail,
+  SUPPORT_EMAIL,
+} from '../lib/legal';
 
 function isUsernameConflictError(error: any): boolean {
   const message = String(error?.message ?? '').toLowerCase();
@@ -103,6 +111,9 @@ function ProfileRow({
   subtitle,
   onPress,
   isLogout,
+  isDestructive,
+  loading,
+  disabled,
   styles,
 }: {
   icon: string;
@@ -110,19 +121,30 @@ function ProfileRow({
   subtitle?: string;
   onPress?: () => void;
   isLogout?: boolean;
+  isDestructive?: boolean;
+  loading?: boolean;
+  disabled?: boolean;
   styles: ReturnType<typeof createStyles>;
 }) {
   const theme = useTheme();
+  const destructive = isDestructive === true;
+
   return (
     <Pressable
-      style={[styles.row, { borderBottomColor: theme.colors.border.default }]}
+      style={[
+        styles.row,
+        { borderBottomColor: theme.colors.border.default },
+        (disabled || loading) && styles.rowDisabled,
+      ]}
       onPress={onPress}
+      disabled={disabled || loading}
     >
       <View
         style={[
           styles.rowIcon,
           { backgroundColor: theme.colors.primary },
-          isLogout && { backgroundColor: theme.colors.primary },
+          destructive && { backgroundColor: theme.colors.error },
+          (disabled || loading) && styles.rowDisabled,
         ]}
       >
         <Ionicons name={icon as any} size={16} color={theme.colors.bg.card} />
@@ -133,17 +155,32 @@ function ProfileRow({
             styles.rowTitle,
             { color: theme.colors.text.primary },
             isLogout && { color: theme.colors.primary },
+            destructive && { color: theme.colors.error },
+            (disabled || loading) && styles.rowTextDisabled,
           ]}
         >
           {title}
         </Text>
         {subtitle && (
-          <Text style={[styles.rowSubtitle, { color: theme.colors.text.secondary }]}>
+          <Text
+            style={[
+              styles.rowSubtitle,
+              { color: theme.colors.text.secondary },
+              (disabled || loading) && styles.rowTextDisabled,
+            ]}
+          >
             {subtitle}
           </Text>
         )}
       </View>
-      <Ionicons name="chevron-forward" size={16} color={theme.colors.text.secondary} />
+      {loading ? (
+        <ActivityIndicator
+          size="small"
+          color={destructive ? theme.colors.error : theme.colors.primary}
+        />
+      ) : (
+        <Ionicons name="chevron-forward" size={16} color={theme.colors.text.secondary} />
+      )}
     </Pressable>
   );
 }
@@ -183,6 +220,7 @@ export default function ProfileScreen() {
   const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
   const [weeklyRanking, setWeeklyRanking] = useState<WeeklyRankingData | null>(null);
   const [myRegistrations, setMyRegistrations] = useState<FanActivityRegistrationListItem[]>([]);
+  const [deleteAccountLoading, setDeleteAccountLoading] = useState(false);
   const liveFanLevel = isFanLevelKey(profile?.fan_level_key) ? profile.fan_level_key : null;
   const fanLevel = liveFanLevel ?? 'new_fan';
   const weeklyStatus = useMemo(() => {
@@ -403,6 +441,31 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleOpenLegalDocument = useCallback(async (kind: 'privacy' | 'terms') => {
+    try {
+      const result = await openLegalDocument(kind);
+      if (result.mode === 'support_fallback') {
+        Alert.alert(
+          kind === 'privacy' ? 'Privatlivspolitik' : 'Brugsvilkår',
+          'Den endelige webside er ikke sat op endnu. Vi åbner din mailapp, så du kan kontakte support.',
+        );
+      }
+    } catch (error: any) {
+      Alert.alert(
+        'Kunne ikke åbne link',
+        error?.message || 'Der opstod en fejl under åbning af linket.',
+      );
+    }
+  }, []);
+
+  const handleSupportPress = useCallback(async () => {
+    try {
+      await openSupportEmail();
+    } catch (error: any) {
+      Alert.alert('Hjælp', `Kontakt ${SUPPORT_EMAIL}`);
+    }
+  }, []);
+
   const handleTogglePushPreference = async (
     key: keyof Pick<
       PushPreferences,
@@ -442,6 +505,67 @@ export default function ProfileScreen() {
       console.error('Logout error:', e);
     }
   };
+
+  const runDeleteAccount = useCallback(async () => {
+    if (!user?.id || deleteAccountLoading) {
+      return;
+    }
+
+    setDeleteAccountLoading(true);
+    let shouldResetLoading = true;
+    try {
+      const result = await deleteMyAccount();
+      console.log('[ProfileScreen] Account deleted', result);
+
+      setDeleteAccountLoading(false);
+      shouldResetLoading = false;
+      let cleanupMessage =
+        'Din konto er blevet slettet permanent. Du kan oprette en ny konto senere, hvis du ønsker det.';
+
+      try {
+        await removeCurrentPushToken(user.id);
+        await supabase.auth.signOut({ scope: 'local' } as any);
+      } catch (cleanupError) {
+        console.warn('[ProfileScreen] local cleanup after account deletion failed:', cleanupError);
+        cleanupMessage =
+          'Din konto er slettet. Hvis du stadig ser en aktiv session, så luk og åbn appen igen.';
+      }
+
+      Alert.alert('Konto slettet', cleanupMessage);
+    } catch (error: any) {
+      console.warn('[ProfileScreen] delete account failed:', error);
+      Alert.alert(
+        'Kunne ikke slette konto',
+        error?.message || 'Der opstod en fejl under sletning af kontoen. Prøv igen.',
+      );
+    } finally {
+      if (shouldResetLoading) {
+        setDeleteAccountLoading(false);
+      }
+    }
+  }, [deleteAccountLoading, user?.id]);
+
+  const handleDeleteAccount = useCallback(() => {
+    if (!user?.id || deleteAccountLoading) {
+      return;
+    }
+
+    Alert.alert(
+      'Slet konto?',
+      'Din konto og dine personlige data bliver slettet permanent. Denne handling kan ikke fortrydes.',
+      [
+        { text: 'Annuller', style: 'cancel' },
+        {
+          text: 'Slet konto',
+          style: 'destructive',
+          onPress: () => {
+            void runDeleteAccount();
+          },
+        },
+      ],
+      { cancelable: true },
+    );
+  }, [deleteAccountLoading, runDeleteAccount, user?.id]);
 
   const handleDevResetLogin = async () => {
     try {
@@ -1131,12 +1255,6 @@ export default function ProfileScreen() {
           onPress={() => (navigation as any).navigate('Notifications')}
           styles={styles}
         />
-        <ProfileRow
-          icon="settings"
-          title="Generelle indstillinger"
-          onPress={() => Alert.alert('Indstillinger', 'Kommer snart!')}
-          styles={styles}
-        />
         {isAppAdmin && (
           <ProfileRow
             icon="shield-checkmark"
@@ -1149,7 +1267,34 @@ export default function ProfileScreen() {
         <ProfileRow
           icon="help-circle"
           title="Hjælp & support"
-          onPress={() => Alert.alert('Hjælp', 'Kontakt support@fcnfans.dk')}
+          subtitle={SUPPORT_EMAIL}
+          onPress={handleSupportPress}
+          styles={styles}
+        />
+        <ProfileRow
+          icon="shield-checkmark"
+          title="Privatlivspolitik"
+          subtitle={
+            hasConfiguredLegalUrl('privacy')
+              ? 'Åbner den aktuelle privatlivspolitik'
+              : 'Åbner support-mail, indtil webadressen er live'
+          }
+          onPress={() => {
+            void handleOpenLegalDocument('privacy');
+          }}
+          styles={styles}
+        />
+        <ProfileRow
+          icon="document-text"
+          title="Brugsvilkår"
+          subtitle={
+            hasConfiguredLegalUrl('terms')
+              ? 'Åbner de aktuelle brugsvilkår'
+              : 'Åbner support-mail, indtil webadressen er live'
+          }
+          onPress={() => {
+            void handleOpenLegalDocument('terms');
+          }}
           styles={styles}
         />
         {__DEV__ && (
@@ -1160,6 +1305,16 @@ export default function ProfileScreen() {
             styles={styles}
           />
         )}
+        <ProfileRow
+          icon="trash"
+          title="Slet konto"
+          subtitle="Sletter din konto permanent og logger dig ud"
+          onPress={handleDeleteAccount}
+          isDestructive
+          loading={deleteAccountLoading}
+          disabled={deleteAccountLoading}
+          styles={styles}
+        />
         <ProfileRow icon="log-out" title="Log ud" onPress={handleLogout} isLogout styles={styles} />
       </Card>
 
@@ -1372,8 +1527,14 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     rowText: {
       flex: 1,
     },
+    rowDisabled: {
+      opacity: 0.6,
+    },
     rowTitle: {
       fontSize: 16,
+    },
+    rowTextDisabled: {
+      opacity: 0.6,
     },
     rowSubtitle: {
       fontSize: 14,

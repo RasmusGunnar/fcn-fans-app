@@ -274,7 +274,11 @@ export default function LibraryScreen() {
 
   return (
     <View style={styles.container}>
-      <AppHeader title="Bibliotek" subtitle="Ressourcer til FCN fans" />
+      <AppHeader
+        title="Bibliotek"
+        subtitle="Ressourcer til FCN fans"
+        showProfileButton={false}
+      />
 
       <SegmentedControl items={segments} activeKey={activeSegment} onChange={handleSegmentPress} />
 

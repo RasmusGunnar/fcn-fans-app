@@ -8,6 +8,7 @@ import type { NewsItem } from '../types/news';
 import type { Post } from '../types/post';
 
 const COPENHAGEN_TIMEZONE = 'Europe/Copenhagen';
+const WEEKLY_TOP_FAN_PUBLISH_WEEKDAY = 'Wed';
 const WEEKLY_TOP_FAN_PUBLISH_HOUR = 12;
 const MS_PER_HOUR = 1000 * 60 * 60;
 const HOME_FEED_RANKING_DEBUG =
@@ -207,6 +208,28 @@ function getCopenhagenTimeParts(baseDate: Date) {
   };
 }
 
+function hasWeeklyTopFanPublishedForCurrentWeek(
+  copenhagen: ReturnType<typeof getCopenhagenTimeParts>,
+): boolean {
+  const weekdayOrder = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const currentWeekdayIndex = weekdayOrder.indexOf(copenhagen.weekday);
+  const publishWeekdayIndex = weekdayOrder.indexOf(WEEKLY_TOP_FAN_PUBLISH_WEEKDAY);
+
+  if (currentWeekdayIndex === -1 || publishWeekdayIndex === -1) {
+    return false;
+  }
+
+  if (currentWeekdayIndex > publishWeekdayIndex) {
+    return true;
+  }
+
+  if (currentWeekdayIndex < publishWeekdayIndex) {
+    return false;
+  }
+
+  return copenhagen.hour >= WEEKLY_TOP_FAN_PUBLISH_HOUR;
+}
+
 function getWeekStartDate(year: number, month: number, day: number): string {
   const date = new Date(Date.UTC(year, month - 1, day));
   const weekday = date.getUTCDay();
@@ -219,10 +242,9 @@ export function getLatestPublishedWeeklyTopFanWeekStart(baseDate = new Date()): 
   const copenhagen = getCopenhagenTimeParts(baseDate);
   const currentWeekStart = getWeekStartDate(copenhagen.year, copenhagen.month, copenhagen.day);
 
-  // Backend publishes the previous completed week on Monday 12:00 Copenhagen.
+  // Backend publishes the previous completed week on Wednesday 12:00 Copenhagen.
   // Before that window, the latest published row is still the one from two weeks back.
-  const daysBack =
-    copenhagen.weekday === 'Mon' && copenhagen.hour < WEEKLY_TOP_FAN_PUBLISH_HOUR ? 14 : 7;
+  const daysBack = hasWeeklyTopFanPublishedForCurrentWeek(copenhagen) ? 7 : 14;
 
   return addDays(currentWeekStart, -daysBack);
 }
@@ -287,7 +309,7 @@ function isValidWeeklyTopFanForHome(item: FeedItem, baseDate = new Date()): bool
   const hasRequiredData = Boolean(
     item.data.id &&
       item.data.userId &&
-      item.data.weekStartDate,
+      (item.data.weekStartDate || item.data.generatedAt || item.data.createdAt),
   );
 
   if (!hasRequiredData) {
@@ -299,22 +321,10 @@ function isValidWeeklyTopFanForHome(item: FeedItem, baseDate = new Date()): bool
     return false;
   }
 
-  const latestExpectedWeekStart = getLatestPublishedWeeklyTopFanWeekStart(baseDate);
-  const actualWeekStart = item.data.weekStartDate?.slice(0, 10) ?? null;
-
-  if (actualWeekStart !== latestExpectedWeekStart) {
-    console.log('[homeFeed] dropping stale weekly_top_fan from home feed', {
-      id: item.id,
-      weekStartDate: actualWeekStart,
-      latestExpectedWeekStart,
-    });
-    return false;
-  }
-
   console.log('[homeFeed] allowing weekly_top_fan into home feed', {
     id: item.id,
-    weekStartDate: actualWeekStart,
-    latestExpectedWeekStart,
+    weekStartDate: item.data.weekStartDate,
+    latestExpectedWeekStart: getLatestPublishedWeeklyTopFanWeekStart(baseDate),
   });
   return true;
 }
@@ -684,6 +694,24 @@ function applyHomeRankingGuardrails(entries: RankedHomeFeedEntry[]): RankedHomeF
   return [...top, ...deferredWeeklyTopFanCards, ...deferredSystemCards, ...rest];
 }
 
+function pinWeeklyTopFanToFront(entries: RankedHomeFeedEntry[]): RankedHomeFeedEntry[] {
+  const weeklyTopFanIndex = entries.findIndex((entry) => isWeeklyTopFanItem(entry));
+  if (weeklyTopFanIndex <= 0) {
+    return entries;
+  }
+
+  const pinnedEntries = [...entries];
+  const [weeklyTopFanEntry] = pinnedEntries.splice(weeklyTopFanIndex, 1);
+
+  pinnedEntries.unshift(weeklyTopFanEntry);
+  console.log('[homeFeed] pinned weekly_top_fan to top of home feed', {
+    id: weeklyTopFanEntry.item.id,
+    previousIndex: weeklyTopFanIndex,
+  });
+
+  return pinnedEntries;
+}
+
 function applyHomeCommunityGuardrails(
   entries: RankedHomeFeedEntry[],
   auditContext?: HomeFeedAuditContext,
@@ -954,10 +982,11 @@ export function sortHomeFeedItems(items: FeedItem[], baseDate = new Date()): Fee
   const guardedEntries = applyHomeFanActivityGuardrails(
     applyHomeCommunityGuardrails(applyHomeRankingGuardrails(rankedEntries), auditContext),
   );
-  logHomeRankingDebug(guardedEntries);
-  logHomeFeedAudit(guardedEntries, auditContext, safeItems, relevantItems);
+  const finalEntries = pinWeeklyTopFanToFront(guardedEntries);
+  logHomeRankingDebug(finalEntries);
+  logHomeFeedAudit(finalEntries, auditContext, safeItems, relevantItems);
 
-  return guardedEntries.map((entry) => entry.item);
+  return finalEntries.map((entry) => entry.item);
 }
 
 export function toPostFeedItem(post: Post, baseDate = new Date()): FeedItem {

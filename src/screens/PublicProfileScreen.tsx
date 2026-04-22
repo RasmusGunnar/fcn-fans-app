@@ -11,11 +11,13 @@ import { FanPostCard } from '../components/cards/FanPostCard';
 import { FanBarometerCompactCard } from '../components/fan/FanBarometerCompactCard';
 import { FanLevelBadge } from '../components/fan/FanLevelBadge';
 import { AppHeader } from '../components/AppHeader';
+import { OutlineButton } from '../components/ui/OutlineButton';
 import { Text } from '../components/ui';
 import { getSafeFanLevelKey } from '../lib/fanLevel';
 import { getFanLevelDescription } from '../lib/fanbarometer';
 import { fetchUserCommentedPostIds } from '../services/commentsApi';
 import { fetchPublicProfileById } from '../services/profileApi';
+import { confirmAndSubmitReport } from '../services/reporting';
 import { useFeed } from '../state/FeedContext';
 import { useTheme, type Theme } from '../theme';
 import { targetKey } from '../utils/targetKey';
@@ -85,6 +87,7 @@ export default function PublicProfileScreen() {
   const avatarUrl = effectiveAuthorProfile?.avatar_url || null;
   const fanLevel = getSafeFanLevelKey(effectiveAuthorProfile?.fan_level_key);
   const levelDescription = getFanLevelDescription(fanLevel);
+  const canReportUser = Boolean(user?.id && userId && user.id !== userId);
 
   // ---------- user's own posts ----------
   const userPosts = useMemo(() => {
@@ -234,6 +237,15 @@ export default function PublicProfileScreen() {
     [renderCard, styles],
   );
 
+  const handleReportUser = useCallback(() => {
+    confirmAndSubmitReport({
+      reporterUserId: user?.id,
+      targetType: 'user',
+      targetId: userId,
+      subjectLabel: 'bruger',
+    });
+  }, [user?.id, userId]);
+
   const ListHeader = (
     <View style={styles.headerCard}>
       <Avatar userId={userId} avatarUrl={avatarUrl} size={80} label={displayName} />
@@ -250,12 +262,17 @@ export default function PublicProfileScreen() {
         </Text>
       </View>
       <FanBarometerCompactCard level={fanLevel} state="ready" />
+      {canReportUser ? (
+        <View style={styles.reportButtonWrap}>
+          <OutlineButton title="Rapportér bruger" onPress={handleReportUser} />
+        </View>
+      ) : null}
     </View>
   );
 
   return (
     <View style={styles.container}>
-      <AppHeader title="Profil" subtitle="" />
+      <AppHeader title="Profil" subtitle="" showProfileButton={false} />
       <FlatList
         data={listData}
         keyExtractor={(item) => item.key}
@@ -300,6 +317,10 @@ function createStyles(theme: Theme) {
       marginTop: theme.spacing[1],
       textAlign: 'center',
       maxWidth: '82%',
+    },
+    reportButtonWrap: {
+      marginTop: theme.spacing[2],
+      width: '100%',
     },
     sectionTitle: {
       marginTop: theme.spacing[4],

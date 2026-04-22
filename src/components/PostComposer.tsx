@@ -19,6 +19,7 @@ import { useAuth } from '../auth/AuthProvider';
 import { supabase } from '../lib/supabase';
 import { EntityAutocompleteList } from './composer/EntityAutocompleteList';
 import { createMentionNotifications } from '../services/mentionNotifications';
+import { fetchLinkPreview } from '../services/newsApi';
 import { triggerMentionPush } from '../services/mentionPushApi';
 import { persistPostEntities } from '../services/postEntities';
 import { useEntityAutocomplete } from '../hooks/useEntityAutocomplete';
@@ -26,6 +27,7 @@ import { useFeed } from '../state/FeedContext';
 import { Post } from '../types/post';
 import type { Actor } from '../types/news';
 import { triggerCommunityPostPush } from '../services/postPushApi';
+import { extractFirstUrl, normalizeLinkPreview } from '../utils/linkPreview';
 
 interface PostComposerProps {
   onSuccess?: () => void;
@@ -133,13 +135,16 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
   };
 
   const handlePublish = async () => {
-    if (!text.trim()) {
+    const normalizedText = text.trim();
+    if (!normalizedText) {
       alert('Skriv noget før du udgiver!');
       return;
     }
 
     setLoading(true);
     let mediaArray: Post['media'] = [];
+    const firstUrl = extractFirstUrl(normalizedText);
+    let linkPreview = null;
 
     try {
       // Upload attachment if present (reuse existing upload flow)
@@ -176,6 +181,17 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
       return;
     }
 
+    if (firstUrl) {
+      try {
+        linkPreview = await fetchLinkPreview(firstUrl);
+      } catch (error) {
+        logger.warn('[PostComposer] Link preview fetch failed, continuing without preview', {
+          url: firstUrl,
+          error,
+        });
+      }
+    }
+
     // Insert post and fetch it back from DB to ensure consistency (exactly as existing code)
     let dbPost: Post | null = null;
     try {
@@ -195,14 +211,15 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
             author_id: user.id,
             actor_type: resolvedActorType,
             actor_id: resolvedActorId,
-            text: text.trim(),
+            text: normalizedText,
             media: mediaArray,
             feed_targets: resolvedFeedTargets,
+            link_preview: linkPreview,
             media_type: attachment?.type ?? null,
             ...(actor?.type === 'community' ? { community_id: actor.id } : {}),
           })
           .select(
-            'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets',
+            'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets, link_preview',
           );
         if (error) throw error;
 
@@ -225,6 +242,7 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
             feedTargets: dbRecord.feed_targets ?? ['home'],
             createdAt: dbRecord.created_at || new Date().toISOString(),
             text: dbRecord.text,
+            linkPreview: normalizeLinkPreview(dbRecord.link_preview),
             likesCount: 0,
             commentsCount: 0,
             likedByMe: false,
@@ -237,7 +255,7 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
 
           const { mentionedProfiles } = await persistPostEntities(
             dbRecord.id,
-            dbRecord.text ?? text.trim(),
+            dbRecord.text ?? normalizedText,
           );
 
           void (async () => {
@@ -258,7 +276,7 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
                   entityType: 'post',
                   entityId: dbRecord.id,
                   postId: dbRecord.id,
-                  previewText: dbRecord.text ?? text.trim(),
+                  previewText: dbRecord.text ?? normalizedText,
                 }),
               ]);
 
@@ -315,7 +333,8 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
       communityName: actor?.type === 'community' ? actor.name : undefined,
       communityId: actor?.type === 'community' ? actor.id : null,
       createdAt: new Date().toISOString(),
-      text: text.trim(),
+      text: normalizedText,
+      linkPreview,
       likesCount: 0,
       commentsCount: 0,
       likedByMe: false,

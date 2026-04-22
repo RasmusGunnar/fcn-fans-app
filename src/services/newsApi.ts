@@ -6,6 +6,17 @@ import { sanitizeNewsHeroImageUrl } from '../utils/newsMedia';
 
 const LINK_PREVIEW_TIMEOUT_MS = 8000;
 
+function isInstagramUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./i, '').toLowerCase();
+    return hostname.includes('instagram.com') || hostname === 'instagr.am';
+  } catch {
+    return false;
+  }
+}
+
 async function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number,
@@ -90,13 +101,19 @@ export async function fetchLinkPreview(url: string): Promise<LinkPreview> {
 
     logger.log('[newsApi] Link preview fetched:', data);
 
+    const resolvedUrl = data.resolvedUrl || url;
+    const isInstagramPreview = isInstagramUrl(resolvedUrl);
+    const normalizedImageUrl = isInstagramPreview
+      ? undefined
+      : sanitizeNewsHeroImageUrl(data.imageUrl, resolvedUrl) || undefined;
+
     return {
-      url: data.resolvedUrl || url,
+      url: resolvedUrl,
       title: fixEncoding(data.title) || 'Ingen titel',
       description: fixEncoding(data.description) || undefined,
-      imageUrl: sanitizeNewsHeroImageUrl(data.imageUrl, data.resolvedUrl || url) || undefined,
+      imageUrl: normalizedImageUrl,
       siteName: fixEncoding(data.siteName) || new URL(url).hostname,
-      hasVideo: Boolean(data.hasVideo),
+      hasVideo: isInstagramPreview ? false : Boolean(data.hasVideo),
     };
   } catch (error: any) {
     logger.error('[newsApi] fetchLinkPreview error:', error);
@@ -122,11 +139,12 @@ export async function insertNewsItem(params: {
   try {
     logger.log('[newsApi] insertNewsItem called:', params);
 
+    const isInstagramNews = isInstagramUrl(params.url);
     const insertPayload = {
       url: params.url,
       title: fixEncoding(params.title),
       description: fixEncoding(params.description),
-      image_url: sanitizeNewsHeroImageUrl(params.imageUrl, params.url),
+      image_url: isInstagramNews ? null : sanitizeNewsHeroImageUrl(params.imageUrl, params.url),
       site_name: fixEncoding(params.siteName),
       created_by: params.createdBy,
       actor_type: params.actorType,

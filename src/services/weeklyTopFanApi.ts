@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { fetchPollVotes } from './pollService';
 import type { FeedWeeklyTopFanData } from '../types/feed';
 import type { FanLevelKey } from '../types/fan';
+import { getLatestPublishedWeeklyTopFanWeekStart } from '../utils/homeFeed';
 
 type WeeklyTopFanRow = {
   id: string;
@@ -112,8 +113,14 @@ async function fetchWeeklyTopFanProfile(userId: string): Promise<WeeklyTopFanPro
   return null;
 }
 
-export async function fetchLatestPublishedWeeklyTopFan(): Promise<FeedWeeklyTopFanData | null> {
-  console.log('[weeklyTopFanApi] fetching latest published weekly_top_fan row');
+export async function fetchLatestPublishedWeeklyTopFan(
+  baseDate = new Date(),
+): Promise<FeedWeeklyTopFanData | null> {
+  const expectedWeekStart = getLatestPublishedWeeklyTopFanWeekStart(baseDate);
+
+  console.log('[weeklyTopFanApi] fetching published weekly_top_fan row for expected week', {
+    expectedWeekStart,
+  });
 
   const { data, error } = await supabase
     .from('weekly_top_fan')
@@ -137,7 +144,7 @@ export async function fetchLatestPublishedWeeklyTopFan(): Promise<FeedWeeklyTopF
     `,
     )
     .eq('is_published', true)
-    .order('week_start_date', { ascending: false })
+    .eq('week_start_date', expectedWeekStart)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -153,13 +160,38 @@ export async function fetchLatestPublishedWeeklyTopFan(): Promise<FeedWeeklyTopF
 
   const row = data as WeeklyTopFanRow | null;
   if (!row) {
-    console.log('[weeklyTopFanApi] no published weekly_top_fan row found');
+    const { data: fallbackData, error: fallbackError } = await supabase
+      .from('weekly_top_fan')
+      .select('id, week_start_date, generated_at, created_at')
+      .eq('is_published', true)
+      .order('week_start_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (fallbackError) {
+      logger.warn('[weeklyTopFanApi] fallback latest published weekly_top_fan lookup failed:', fallbackError);
+    }
+
+    const fallbackRow = (fallbackData as Pick<
+      WeeklyTopFanRow,
+      'id' | 'week_start_date' | 'generated_at' | 'created_at'
+    > | null) || null;
+
+    console.log('[weeklyTopFanApi] no published weekly_top_fan row found for expected week', {
+      expectedWeekStart,
+      latestAvailableWeekStart: fallbackRow?.week_start_date ?? null,
+      latestAvailableId: fallbackRow?.id ?? null,
+      latestAvailableGeneratedAt: fallbackRow?.generated_at ?? null,
+      latestAvailableCreatedAt: fallbackRow?.created_at ?? null,
+    });
     return null;
   }
 
-  console.log('[weeklyTopFanApi] latest published row', {
+  console.log('[weeklyTopFanApi] expected published row', {
     id: row.id,
     weekStartDate: row.week_start_date,
+    expectedWeekStart,
     userId: row.user_id,
     createdAt: row.created_at,
     generatedAt: row.generated_at,

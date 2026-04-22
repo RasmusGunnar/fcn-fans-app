@@ -24,6 +24,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Text } from '../components/ui';
 import { useTheme } from '../theme';
 import { useAuth } from '../auth/AuthProvider';
+import { hasConfiguredLegalUrl, openLegalDocument } from '../lib/legal';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { AuthStackParamList } from '../navigation/AuthStack';
 
@@ -122,6 +123,26 @@ export default function LoginScreen({ route, navigation }: Props) {
     loading || !email.trim().includes('@') || !password || password.length < 6;
   const isFormValid = email.trim().includes('@') && !!password && password.length >= 6;
   const isSignup = mode === 'signup';
+  const showAppleAuth = Platform.OS === 'ios';
+  const showFacebookAuth = false;
+  const showSocialDivider = showAppleAuth || showFacebookAuth;
+
+  const handleOpenLegalDocument = async (kind: 'privacy' | 'terms') => {
+    try {
+      const result = await openLegalDocument(kind);
+      if (result.mode === 'support_fallback') {
+        Alert.alert(
+          kind === 'privacy' ? 'Privatlivspolitik' : 'Brugsvilkår',
+          'Den endelige webside er ikke sat op endnu. Vi åbner din mailapp, så du kan kontakte support.',
+        );
+      }
+    } catch (err: any) {
+      Alert.alert(
+        'Kunne ikke åbne link',
+        err?.message || 'Der opstod en fejl under åbning af linket.',
+      );
+    }
+  };
 
   const handleBack = () => {
     if (navigation.canGoBack()) {
@@ -176,7 +197,7 @@ export default function LoginScreen({ route, navigation }: Props) {
       </View>
 
       <View style={styles.authSection}>
-        {Platform.OS === 'ios' ? (
+        {showAppleAuth ? (
           <View
             style={[styles.socialAuthSection, isCondensedLayout && styles.socialAuthSectionCompact]}
           >
@@ -202,7 +223,8 @@ export default function LoginScreen({ route, navigation }: Props) {
           </View>
         ) : null}
 
-        <View
+        {showFacebookAuth ? (
+          <View
           style={[
             styles.socialAuthSection,
             isCondensedLayout && styles.socialAuthSectionCompact,
@@ -227,9 +249,11 @@ export default function LoginScreen({ route, navigation }: Props) {
               <Text style={styles.facebookButtonText}>{'Forts\u00E6t med Facebook'}</Text>
             </View>
           </Pressable>
-        </View>
+          </View>
+        ) : null}
 
-        <View
+        {showSocialDivider ? (
+          <View
           style={[styles.dividerContainer, isCondensedLayout && styles.dividerContainerCompact]}
         >
           <View style={styles.dividerLine} />
@@ -237,7 +261,8 @@ export default function LoginScreen({ route, navigation }: Props) {
             eller fortsæt med email
           </Text>
           <View style={styles.dividerLine} />
-        </View>
+          </View>
+        ) : null}
 
         <View style={[styles.inputGroup, isCondensedLayout && styles.inputGroupCompact]}>
           <Text variant="bodyBold" color="secondary" style={styles.inputLabel}>
@@ -324,8 +349,33 @@ export default function LoginScreen({ route, navigation }: Props) {
           ]}
         >
           <Text variant="caption" style={styles.legalText}>
-            Ved at fortsætte accepterer du vores betingelser.
+            Ved at fortsætte accepterer du vores{' '}
+            <Text
+              variant="caption"
+              style={styles.legalLink}
+              onPress={() => {
+                void handleOpenLegalDocument('terms');
+              }}
+            >
+              brugsvilkår
+            </Text>{' '}
+            og{' '}
+            <Text
+              variant="caption"
+              style={styles.legalLink}
+              onPress={() => {
+                void handleOpenLegalDocument('privacy');
+              }}
+            >
+              privatlivspolitik
+            </Text>
+            .
           </Text>
+          {!hasConfiguredLegalUrl('privacy') || !hasConfiguredLegalUrl('terms') ? (
+            <Text variant="caption" style={styles.legalHint}>
+              Links bruger midlertidigt support-mail, indtil de endelige websider er live.
+            </Text>
+          ) : null}
         </View>
       </View>
     </View>
@@ -622,6 +672,18 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     legalText: {
       fontSize: 13,
       lineHeight: 18,
+      textAlign: 'center',
+      color: theme.colors.text.secondary,
+      paddingHorizontal: theme.spacing[4],
+    },
+    legalLink: {
+      color: theme.colors.primary,
+      textDecorationLine: 'underline',
+    },
+    legalHint: {
+      marginTop: theme.spacing[1],
+      fontSize: 12,
+      lineHeight: 16,
       textAlign: 'center',
       color: theme.colors.text.secondary,
       paddingHorizontal: theme.spacing[4],

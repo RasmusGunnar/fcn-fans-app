@@ -3,6 +3,7 @@
 // NO hardcoded numbers or color strings allowed.
 
 import * as Linking from 'expo-linking';
+import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -22,12 +23,15 @@ import { supabase } from '../../lib/supabase';
 import { navigationRef } from '../../navigation/navigationRef';
 import type { CommentPreview } from '../../services/likesApi';
 import { resolveMentionTargetByHandle } from '../../services/mentionAutocompleteApi';
+import { confirmAndSubmitReport } from '../../services/reporting';
 import { defaultTheme } from '../../theme';
 import type { CategoryKey } from '../../theme/categories';
 import { Post } from '../../types/post';
 import { resolveActorLine, type ProfileMap } from '../../utils/actor';
+import { getLinkPreviewDomain, isInstagramUrl, normalizeLinkPreview } from '../../utils/linkPreview';
 import { resolveRenderableMedia } from '../../utils/media';
 import { navigateToMentionTarget } from '../../utils/mentionNavigation';
+import { sanitizeNewsHeroImageUrl } from '../../utils/newsMedia';
 import { cleanText } from '../../utils/text';
 import { useCommunityRole } from '../../hooks/useCommunityRole';
 import { canDeleteFeedItem, canEditPost } from '../../utils/permissions';
@@ -371,6 +375,15 @@ export function FanPostCard({
     }
   };
 
+  const handleReportPost = () => {
+    confirmAndSubmitReport({
+      reporterUserId: viewerUserId,
+      targetType: 'post',
+      targetId: post.id,
+      subjectLabel: 'opslag',
+    });
+  };
+
   // Build card behavior model to determine category, name line, and press behavior
   const communityId = postCommunityId;
   const isCommunityPost = postActorType === 'community' || !!authoredCommunityId;
@@ -391,6 +404,13 @@ export function FanPostCard({
       onPress: handleDeletePost,
       destructive: true,
       icon: 'trash-outline',
+    });
+  }
+  if (viewerUserId && (!postAuthorId || viewerUserId !== postAuthorId)) {
+    postMenuOptions.push({
+      label: 'Rapportér',
+      onPress: handleReportPost,
+      icon: 'flag-outline',
     });
   }
   const communityName = cleanText(
@@ -415,13 +435,53 @@ export function FanPostCard({
     : fallbackAuthorDisplayName || 'Ukendt';
   const actorAvatarUrl = isCommunityPost ? fallbackActorAvatarUrl : fallbackAuthorAvatarUrl;
   const authorDisplayName = fallbackAuthorDisplayName || 'Ukendt';
+  const rawLinkPreview = (post as Post & { link_preview?: unknown }).link_preview;
+  const linkPreview = useMemo(
+    () => normalizeLinkPreview(post.linkPreview ?? rawLinkPreview),
+    [post.linkPreview, rawLinkPreview],
+  );
+  const linkPreviewDomain = useMemo(
+    () => getLinkPreviewDomain(linkPreview?.url),
+    [linkPreview?.url],
+  );
+  const isInstagramLinkPreview = useMemo(
+    () => isInstagramUrl(linkPreview?.url),
+    [linkPreview?.url],
+  );
+  const linkPreviewImageUrl = useMemo(
+    () =>
+      linkPreview && !isInstagramLinkPreview
+        ? sanitizeNewsHeroImageUrl(linkPreview.imageUrl, linkPreview.url)
+        : null,
+    [isInstagramLinkPreview, linkPreview],
+  );
+  const compactLinkPreviewSiteName = cleanText(linkPreview?.siteName || linkPreviewDomain || '');
+  const compactLinkPreviewTitle = cleanText(
+    linkPreview?.title || linkPreview?.siteName || linkPreviewDomain || linkPreview?.url || '',
+  );
 
   const cardModel = buildCardBehaviorModel({
     kind: 'post',
     actorType: isCommunityPost ? 'community' : 'fan',
     actorName: isCommunityPost ? communityName || 'Fællesskab' : authorDisplayName,
-    postLinkUrl: undefined, // Posts don't have embedded links in current data model
+    postLinkUrl: !bodyContent && !m0 ? (linkPreview?.url ?? undefined) : undefined,
   });
+
+  const handleOpenLinkPreview = (event?: GestureResponderEvent) => {
+    event?.stopPropagation?.();
+
+    if (!linkPreview?.url) {
+      return;
+    }
+
+    Linking.openURL(linkPreview.url).catch((error) => {
+      logger.warn('[FanPostCard] Failed to open link preview URL', {
+        postId: post.id,
+        url: linkPreview.url,
+        error,
+      });
+    });
+  };
 
   // Compute onOpenDetail based on model
   const computedOnOpenDetail =
@@ -551,6 +611,47 @@ export function FanPostCard({
           })}
         </Text>
       ) : null}
+      {linkPreview?.url ? (
+        <Pressable style={styles.linkPreviewCard} onPress={handleOpenLinkPreview}>
+          {linkPreviewImageUrl ? (
+            <Image
+              source={{ uri: linkPreviewImageUrl }}
+              style={styles.linkPreviewImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={styles.linkPreviewIconWrap}>
+              <Ionicons
+                name={isInstagramLinkPreview ? 'logo-instagram' : 'link-outline'}
+                size={theme.components.icon.size.md}
+                color={theme.colors.text.secondary}
+              />
+            </View>
+          )}
+          <View style={styles.linkPreviewTextWrap}>
+            {compactLinkPreviewSiteName ? (
+              <Text
+                variant="small"
+                color="secondary"
+                numberOfLines={1}
+                style={styles.linkPreviewSiteName}
+              >
+                {compactLinkPreviewSiteName}
+              </Text>
+            ) : null}
+            {compactLinkPreviewTitle ? (
+              <Text
+                variant="bodyBold"
+                color="primary"
+                numberOfLines={2}
+                style={styles.linkPreviewTitle}
+              >
+                {compactLinkPreviewTitle}
+              </Text>
+            ) : null}
+          </View>
+        </Pressable>
+      ) : null}
       {/* BASELINE: Deterministic media rendering - no silent failures */}
       {!m0 ? null : (
         <View style={styles.mediaOuter}>
@@ -673,6 +774,43 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: theme.spacing[2],
+  },
+  linkPreviewCard: {
+    marginTop: theme.spacing[1],
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: theme.spacing[2],
+    borderWidth: theme.layout.borderWidth,
+    borderColor: theme.colors.border.default,
+    borderRadius: theme.radius.sm,
+    backgroundColor: theme.colors.bg.subtle,
+    overflow: 'hidden',
+  },
+  linkPreviewImage: {
+    width: theme.spacing[16],
+    height: theme.spacing[16],
+    backgroundColor: theme.colors.border.default,
+  },
+  linkPreviewIconWrap: {
+    width: theme.spacing[16],
+    height: theme.spacing[16],
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.border.default,
+  },
+  linkPreviewTextWrap: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: 'center',
+    gap: theme.spacing[1],
+    paddingVertical: theme.spacing[2],
+    paddingRight: theme.spacing[3],
+  },
+  linkPreviewSiteName: {
+    textTransform: 'uppercase',
+  },
+  linkPreviewTitle: {
+    fontWeight: '600',
   },
   // FULL-BLEED: Media wrapper with negative margins
   mediaOuter: {

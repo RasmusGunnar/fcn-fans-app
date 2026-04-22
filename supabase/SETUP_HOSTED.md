@@ -201,7 +201,7 @@ project ref and sync secret.
 
 Authoritative Weekly Top Fan publish rule:
 
-- Generate/publish every Monday at 12:00 Europe/Copenhagen
+- Generate/publish every Wednesday at 12:00 Europe/Copenhagen
 - Publish the winner for the previous completed Monday-based week
 - Keep the Edge Function gate and pg_cron schedule aligned with this rule
 

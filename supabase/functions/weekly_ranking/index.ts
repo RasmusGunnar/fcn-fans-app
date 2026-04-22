@@ -1,5 +1,10 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+import {
+  createAdminClient,
+  json,
+  requireAuthenticatedUser,
+} from '../_shared/push.ts';
 
 type PostRow = {
   id: string;
@@ -68,13 +73,6 @@ const POST_RECEIVED_LIKES_CAP = 5;
 const COMMENT_RECEIVED_LIKES_CAP = 3;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const FCN_TEAM_NAME_MATCHERS = ['nordsjalland', 'nordsjaelland'];
-
-function json(status: number, payload: unknown) {
-  return new Response(JSON.stringify(payload), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
@@ -342,34 +340,30 @@ function sortRowsByCreatedAtAsc<T extends { created_at: string }>(rows: T[]): T[
 
 serve(async (req) => {
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      return json(500, {
-        error: 'Missing Supabase configuration',
-        details: 'SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY must be configured',
-      });
+    const requestData = await readRequest(req);
+    const auth = await requireAuthenticatedUser(req);
+    if (auth.response) {
+      return auth.response;
     }
 
-    const requestData = await readRequest(req);
-    console.log('[weekly_ranking] request body', requestData);
-    const userId =
-      typeof requestData?.userId === 'string' && requestData.userId.trim().length > 0
-        ? requestData.userId.trim()
-        : null;
+    const userId = typeof auth.user?.id === 'string' && auth.user.id.trim().length > 0
+      ? auth.user.id.trim()
+      : null;
+
+    console.log('[weekly_ranking] request context', {
+      authUserId: userId,
+      requestedUserId:
+        typeof requestData?.userId === 'string' && requestData.userId.trim().length > 0
+          ? requestData.userId.trim()
+          : null,
+    });
 
     if (!userId) {
-      console.log('[weekly_ranking] missing userId');
-      return json(400, { error: 'Missing userId' });
+      console.log('[weekly_ranking] missing authenticated user');
+      return json(401, { error: 'Missing authenticated user' });
     }
 
-    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    });
+    const adminClient = createAdminClient();
 
     const { weekStartDate, weekStartIso } = getCurrentWeekWindow(new Date());
     console.log('[weekly_ranking] query window', { userId, weekStartDate, weekStartIso });
