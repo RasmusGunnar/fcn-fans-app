@@ -810,7 +810,7 @@ export default function ProfileScreen() {
       </View>
 
       {/* Avatar Upload Banner - Always visible */}
-      {!uploadingAvatar && (
+      {false && !uploadingAvatar && (
         <Card style={[styles.avatarBanner, { marginBottom: spacing.md }]}>
           <View style={styles.bannerContent}>
             <View

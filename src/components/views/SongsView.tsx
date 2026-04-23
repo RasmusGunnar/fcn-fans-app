@@ -9,6 +9,7 @@ import { SONG_CATEGORY_LABELS, type Song } from '../../types/song';
 import { canEditSongs as canEditSongsPermission } from '../../utils/permissions';
 import { SongAccordionCard } from '../songs/SongAccordionCard';
 import { SongEditModal } from '../songs/SongEditModal';
+import { SongReaderModal } from '../songs/SongReaderModal';
 import { SongSuggestCard } from '../songs/SongSuggestCard';
 
 const theme = defaultTheme;
@@ -28,6 +29,7 @@ function SongSection({
   songs,
   expandedSongId,
   onToggle,
+  onOpenReader,
   canEdit,
   onEdit,
   onDelete,
@@ -36,6 +38,7 @@ function SongSection({
   songs: Song[];
   expandedSongId: string | null;
   onToggle: (songId: string) => void;
+  onOpenReader: (song: Song) => void;
   canEdit: boolean;
   onEdit: (song: Song) => void;
   onDelete: (song: Song) => void;
@@ -62,6 +65,7 @@ function SongSection({
             spotifyUrl={song.spotifyUrl ?? undefined}
             isExpanded={expandedSongId === song.id}
             onToggle={() => onToggle(song.id)}
+            onOpenReader={() => onOpenReader(song)}
             canEdit={canEdit}
             onPressEdit={() => onEdit(song)}
             onPressDelete={() => onDelete(song)}
@@ -80,6 +84,7 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
   const [source, setSource] = useState<'remote' | 'fallback'>('remote');
   const [expandedSongId, setExpandedSongId] = useState<string | null>(null);
   const [editingSong, setEditingSong] = useState<Song | null>(null);
+  const [readingSong, setReadingSong] = useState<Song | null>(null);
   const [activeFilter, setActiveFilter] = useState<Song['category']>('slagsang');
   const [saving, setSaving] = useState(false);
   const [deletingSongId, setDeletingSongId] = useState<string | null>(null);
@@ -188,6 +193,7 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
       setSongs((current) => current.filter((item) => item.id !== song.id));
       setExpandedSongId((current) => (current === song.id ? null : current));
       setEditingSong((current) => (current?.id === song.id ? null : current));
+      setReadingSong((current) => (current?.id === song.id ? null : current));
     } catch (error: any) {
       Alert.alert('Fejl', error?.message ?? 'Kunne ikke slette sangen.');
     } finally {
@@ -243,6 +249,7 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
         songs={activeSongs}
         expandedSongId={expandedSongId}
         onToggle={toggleSong}
+        onOpenReader={setReadingSong}
         canEdit={canEditSongs}
         onEdit={setEditingSong}
         onDelete={handleDeleteSong}
@@ -260,6 +267,11 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
           if (!saving && deletingSongId === null) setEditingSong(null);
         }}
         onSave={handleSaveSong}
+      />
+      <SongReaderModal
+        visible={!!readingSong}
+        song={readingSong}
+        onClose={() => setReadingSong(null)}
       />
     </View>
   );

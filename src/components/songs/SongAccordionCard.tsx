@@ -12,6 +12,7 @@ interface SongAccordionCardProps {
   spotifyUrl?: string;
   isExpanded: boolean;
   onToggle: () => void;
+  onOpenReader?: () => void;
   canEdit?: boolean;
   onPressEdit?: () => void;
   onPressDelete?: () => void;
@@ -32,6 +33,7 @@ export function SongAccordionCard({
   spotifyUrl,
   isExpanded,
   onToggle,
+  onOpenReader,
   canEdit = false,
   onPressEdit,
   onPressDelete,
@@ -56,7 +58,11 @@ export function SongAccordionCard({
 
       {isExpanded ? (
         <View style={styles.expandedContent}>
-          <View style={styles.lyricsContainer}>
+          <Pressable
+            onPress={onOpenReader}
+            style={styles.lyricsContainer}
+            disabled={!onOpenReader}
+          >
             <View style={styles.lyricsBlock}>
               {lyricLines.map((line, index) => (
                 <Text key={`${title}-line-${index}`} style={styles.lyrics}>
@@ -64,7 +70,7 @@ export function SongAccordionCard({
                 </Text>
               ))}
             </View>
-          </View>
+          </Pressable>
           {canEdit && (onPressEdit || onPressDelete) ? (
             <View style={styles.actions}>
               {onPressEdit ? (
