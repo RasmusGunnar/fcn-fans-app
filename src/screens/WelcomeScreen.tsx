@@ -104,8 +104,8 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       paddingBottom: theme.spacing[6],
     },
     logo: {
-      width: 168,
-      height: 168,
+      width: 224,
+      height: 224,
       marginBottom: theme.spacing[5],
     },
     textBlock: {

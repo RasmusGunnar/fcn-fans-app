@@ -77,16 +77,15 @@ function createStyles(theme: Theme) {
       overflow: 'visible' as const,
     },
     logoWrapper: {
-      width: theme.spacing[10],
-      height: theme.spacing[10],
-      marginRight: theme.spacing[1],
+      marginRight: theme.spacing[2],
       overflow: 'visible' as const,
       justifyContent: 'center',
       alignItems: 'center',
+      flexShrink: 0,
     },
     logo: {
-      width: theme.spacing[10],
-      height: theme.spacing[10],
+      width: theme.spacing[9],
+      height: theme.spacing[9],
     },
     textContainer: {
       flex: 1,
