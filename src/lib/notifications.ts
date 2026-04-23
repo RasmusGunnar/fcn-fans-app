@@ -71,6 +71,28 @@ async function clearStoredPushToken() {
   }
 }
 
+async function getRequiredPushSession(
+  userId: string,
+  reason: 'push token claim' | 'push test',
+) {
+  const { data, error } = await supabase.auth.getSession();
+
+  if (error) {
+    throw new Error(`Could not verify active session for ${reason}`);
+  }
+
+  const session = data.session;
+  if (!session?.access_token || !session.user?.id) {
+    throw new Error(`No active session for ${reason}`);
+  }
+
+  if (session.user.id !== userId) {
+    throw new Error(`Active session does not match ${reason} user`);
+  }
+
+  return session;
+}
+
 export async function registerForPushNotificationsAsync(options?: {
   promptIfNeeded?: boolean;
 }): Promise<PushRegistrationResult> {
@@ -128,6 +150,7 @@ export async function registerForPushNotificationsAsync(options?: {
 }
 
 export async function saveExpoPushToken(userId: string, token: string) {
+  const session = await getRequiredPushSession(userId, 'push token claim');
   const previousToken = await getStoredPushToken();
   const platform = Platform.OS === 'ios' ? 'ios' : 'android';
   const { data, error } = await supabase.functions.invoke('claim_push_token', {
@@ -135,6 +158,9 @@ export async function saveExpoPushToken(userId: string, token: string) {
       pushToken: token,
       previousToken: previousToken && previousToken !== token ? previousToken : null,
       platform,
+    },
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
     },
   });
 
@@ -224,6 +250,7 @@ export async function sendManualTestPush(userId: string): Promise<PushTestResult
   }
 
   try {
+    const session = await getRequiredPushSession(userId, 'push test');
     const { data, error } = await supabase.functions.invoke('send-push', {
       body: {
         toUserId: userId,
@@ -235,6 +262,9 @@ export async function sendManualTestPush(userId: string): Promise<PushTestResult
         data: {
           url: Linking.createURL('/'),
         },
+      },
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
       },
     });
 

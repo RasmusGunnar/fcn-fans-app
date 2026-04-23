@@ -206,6 +206,29 @@ async function updateNotificationLog(supabase: any, logId: string, patch: Record
     .eq('id', logId);
 }
 
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message.trim();
+  }
+
+  const normalized = String(error ?? '').trim();
+  return normalized || 'Unknown Expo transport error';
+}
+
+async function markBatchFailed(
+  supabase: any,
+  batch: ReservedNotification[],
+  errorMessage: string,
+) {
+  for (const notification of batch) {
+    await updateNotificationLog(supabase, notification.logId, {
+      status: 'failed',
+      sent_at: null,
+      error_message: errorMessage,
+    });
+  }
+}
+
 async function sendExpoBatch(messages: ReservedNotification[]): Promise<ExpoPushTicket[]> {
   const payload = messages.map((message) => ({
     to: message.pushToken,
@@ -589,7 +612,15 @@ export async function dispatchNotifications(
   let failed = 0;
 
   for (const batch of chunk(reserved, 100)) {
-    const tickets = await sendExpoBatch(batch);
+    let tickets: ExpoPushTicket[] = [];
+
+    try {
+      tickets = await sendExpoBatch(batch);
+    } catch (error) {
+      failed += batch.length;
+      await markBatchFailed(supabase, batch, getErrorMessage(error));
+      continue;
+    }
 
     for (let index = 0; index < batch.length; index += 1) {
       const notification = batch[index];

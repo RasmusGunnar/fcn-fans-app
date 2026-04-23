@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
 import { AppState, type AppStateStatus } from 'react-native';
 import { useAuth } from '../auth/AuthProvider';
@@ -19,13 +19,17 @@ Notifications.setNotificationHandler({
 });
 
 export function PushNotificationsBootstrap() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const syncedUserRef = useRef<string | null>(null);
   const handledResponseRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!user?.id) {
       syncedUserRef.current = null;
+      return;
+    }
+
+    if (!session?.access_token) {
       return;
     }
 
@@ -37,13 +41,13 @@ export function PushNotificationsBootstrap() {
     void syncPushNotifications(user.id, { promptIfNeeded: true }).catch((error) => {
       logger.warn('[PushNotificationsBootstrap] Token sync failed:', error);
     });
-  }, [user?.id]);
+  }, [session?.access_token, user?.id]);
 
   useEffect(() => {
     let currentAppState: AppStateStatus = AppState.currentState;
 
     const syncOnForeground = async () => {
-      if (!user?.id) {
+      if (!user?.id || !session?.access_token) {
         return;
       }
 
@@ -73,7 +77,7 @@ export function PushNotificationsBootstrap() {
     return () => {
       appStateSub.remove();
     };
-  }, [user?.id]);
+  }, [session?.access_token, user?.id]);
 
   useEffect(() => {
     const handleResponse = async (response: Notifications.NotificationResponse | null) => {
