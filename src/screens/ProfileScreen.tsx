@@ -315,7 +315,7 @@ export default function ProfileScreen() {
     setLoading(false);
   }, [user?.id, user?.email]);
 
-  const loadPushStatus = useCallback(async () => {
+  const loadPushStatus = useCallback(async (options?: { preserveMessage?: boolean }) => {
     if (!user?.id) return;
 
     setPushLoading(true);
@@ -324,6 +324,9 @@ export default function ProfileScreen() {
       setPushStatus(snapshot.status);
       setPushPermissionStatus(snapshot.permissionStatus);
       setPushTokenPreview(snapshot.savedTokenPreview);
+      if (options?.preserveMessage) {
+        return;
+      }
 
       if (snapshot.status === 'enabled') {
         setPushMessage('Push er klar på denne enhed.');
@@ -388,11 +391,6 @@ export default function ProfileScreen() {
     setPushLoading(true);
     try {
       const result = await syncPushNotifications(user.id);
-      setPushStatus(result.status);
-      setPushPermissionStatus(result.permissionStatus);
-      setPushTokenPreview(
-        result.token ? `${result.token.slice(0, 10)}...${result.token.slice(-6)}` : null,
-      );
 
       if (result.status === 'enabled') {
         setPushMessage('Push-notifikationer er nu aktiveret på denne enhed.');
@@ -403,9 +401,11 @@ export default function ProfileScreen() {
       } else {
         setPushMessage('Push er endnu ikke sat fuldt op.');
       }
+
+      await loadPushStatus({ preserveMessage: true });
     } catch (e: any) {
       console.error('[ProfileScreen] Push setup failed:', e);
-      setPushStatus('error');
+      await loadPushStatus({ preserveMessage: true });
       setPushMessage(e?.message ?? 'Push-opsætning fejlede.');
     } finally {
       setPushLoading(false);
@@ -423,9 +423,10 @@ export default function ProfileScreen() {
       } else {
         setPushMessage(result.errorMessage ?? 'Test-push kunne ikke sendes.');
       }
-      await loadPushStatus();
+      await loadPushStatus({ preserveMessage: true });
     } catch (e: any) {
       console.warn('[ProfileScreen] Push test failed:', e);
+      await loadPushStatus({ preserveMessage: true });
       setPushMessage(e?.message ?? 'Test-push kunne ikke sendes.');
     } finally {
       setPushTestLoading(false);

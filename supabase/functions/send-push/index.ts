@@ -41,6 +41,7 @@ Deno.serve(async (req) => {
     const supabase = createAdminClient();
     const pushToken = payload.pushToken?.trim() || null;
     let tokens: any[] = [];
+    let matchedRequestedToken = false;
 
     if (pushToken) {
       const { data, error } = await supabase
@@ -54,7 +55,13 @@ Deno.serve(async (req) => {
       }
 
       tokens = Array.isArray(data) ? data : [];
+      matchedRequestedToken = tokens.length > 0;
     } else {
+      tokens = await fetchPushTokensForUsers(supabase, [callerUserId]);
+      matchedRequestedToken = true;
+    }
+
+    if (pushToken && tokens.length === 0) {
       tokens = await fetchPushTokensForUsers(supabase, [callerUserId]);
     }
 
@@ -77,7 +84,12 @@ Deno.serve(async (req) => {
       })),
     );
 
-    return json(200, { ok: true, ...result });
+    return json(200, {
+      ok: true,
+      matchedRequestedToken,
+      requestedPushToken: pushToken,
+      ...result,
+    });
   } catch (error) {
     return json(500, { error: String(error) });
   }

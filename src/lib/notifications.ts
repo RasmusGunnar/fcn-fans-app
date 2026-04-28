@@ -235,9 +235,13 @@ export async function sendManualTestPush(userId: string): Promise<PushTestResult
   // - authenticated send-push edge function deployed
   // - working Expo projectId / physical device push setup
   const registration = await syncPushNotifications(userId, { promptIfNeeded: false });
-  const targetToken = registration.token ?? (await getStoredPushToken());
+  const snapshot = await getPushStatusSnapshot(userId);
+  const directTargetToken =
+    registration.status === 'enabled' && registration.saved && registration.token
+      ? registration.token
+      : null;
 
-  if (!targetToken || registration.status !== 'enabled') {
+  if (!directTargetToken && snapshot.status !== 'enabled') {
     return {
       status: 'not_ready',
       sentCount: 0,
@@ -254,11 +258,13 @@ export async function sendManualTestPush(userId: string): Promise<PushTestResult
     const { data, error } = await supabase.functions.invoke('send-push', {
       body: {
         toUserId: userId,
-        pushToken: targetToken,
+        ...(directTargetToken ? { pushToken: directTargetToken } : {}),
         title: 'FCN Fans test-push',
         body: 'Hvis du ser denne besked, virker push på denne enhed.',
         notificationType: 'manual_test',
-        dedupeKey: `manual_test:${userId}:${targetToken}:${Date.now()}`,
+        dedupeKey: directTargetToken
+          ? `manual_test:${userId}:${directTargetToken}:${Date.now()}`
+          : `manual_test:${userId}:${Date.now()}`,
         data: {
           url: Linking.createURL('/'),
         },
