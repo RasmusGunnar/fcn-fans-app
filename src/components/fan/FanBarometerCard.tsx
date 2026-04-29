@@ -2,10 +2,12 @@ import React from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
+  getFanLevelMinimumScore,
   getFanLevelLabel,
   getFanLevelName,
   getFanLevelPosition,
   getNextFanLevel,
+  getPointsBetweenFanLevels,
 } from '../../lib/fanbarometer';
 import { useTheme, type Theme } from '../../theme';
 import type { FanLevelKey } from '../../types/fan';
@@ -42,6 +44,15 @@ function normalizeScore(score: number | undefined): number {
   return Math.max(0, Math.round(score));
 }
 
+function normalizeProgress(progress: number | undefined): number | null {
+  if (typeof progress !== 'number' || !Number.isFinite(progress)) return null;
+  return Math.max(0, Math.min(1, progress));
+}
+
+function formatPointCount(points: number): string {
+  return `${Math.max(0, Math.round(points)).toLocaleString('da-DK')} point`;
+}
+
 function decodeUnicodeEscapes(input: string | null | undefined): string {
   if (typeof input !== 'string' || !input) {
     return '';
@@ -59,7 +70,9 @@ function cleanBarometerText(input: string | null | undefined): string {
 export function FanBarometerCard({
   level,
   score,
+  progress,
   nextLevel,
+  pointsToNext,
   state = 'ready',
   scoreLabel = 'FAN-SCORE',
   scoreValueText,
@@ -119,6 +132,14 @@ export function FanBarometerCard({
   const scoreValue = normalizeScore(score);
   const scoreDisplayValue = scoreValueText ?? scoreValue.toLocaleString('da-DK');
   const hasScoreBlock = showScoreBlock && (scoreValueText != null || typeof score === 'number');
+  const progressValue = normalizeProgress(progress);
+  const currentLevelMinScore = getFanLevelMinimumScore(level);
+  const nextLevelMinScore = resolvedNextLevel ? getFanLevelMinimumScore(resolvedNextLevel) : null;
+  const pointsBetweenLevels = getPointsBetweenFanLevels(level);
+  const safePointsToNext =
+    typeof pointsToNext === 'number' && Number.isFinite(pointsToNext)
+      ? Math.max(0, Math.ceil(pointsToNext))
+      : null;
   const hasSecondarySection =
     cleanBarometerText(secondarySectionValue).trim().length > 0;
   const cleanedCurrentLevelName = cleanBarometerText(currentLevelName) || currentLevelName;
@@ -127,6 +148,15 @@ export function FanBarometerCard({
   const cleanedSecondaryValue = cleanBarometerText(secondarySectionValue);
   const cleanedSecondaryNote = cleanBarometerText(secondarySectionNote);
   const cleanedFooterNote = cleanBarometerText(footerNote);
+  const progressionNote = cleanedNextLevelName
+    ? safePointsToNext !== null
+      ? `${formatPointCount(safePointsToNext)} til ${cleanedNextLevelName}.`
+      : `${cleanedNextLevelName} starter ved ${formatPointCount(nextLevelMinScore ?? 0)}${
+          pointsBetweenLevels !== null
+            ? ` (${formatPointCount(pointsBetweenLevels)} over nuværende niveau).`
+            : '.'
+        }`
+    : `Topniveau starter ved ${formatPointCount(currentLevelMinScore)}.`;
 
   return renderSurface(
     <>
@@ -199,10 +229,14 @@ export function FanBarometerCard({
             })}
           </View>
 
+          {progressValue !== null ? (
+            <View style={styles.progressBar}>
+              <View style={[styles.progressBarFill, { width: `${progressValue * 100}%` }]} />
+            </View>
+          ) : null}
+
           <Text variant="small" color="secondary" style={styles.nextStepNote}>
-            {cleanedNextLevelName
-              ? `Bliv mere aktiv for at nå ${cleanedNextLevelName}.`
-              : 'Bliv ved med at være aktiv og synlig i fællesskabet.'}
+            {progressionNote}
           </Text>
         </View>
       ) : null}
@@ -380,9 +414,10 @@ function createStyles(theme: Theme) {
       opacity: 1,
     },
     levelTrackSegmentCurrent: {
-      backgroundColor: theme.colors.bg.surface,
+      backgroundColor: theme.colors.primary,
       borderColor: theme.colors.primary,
       borderWidth: theme.layout.borderWidth,
+      opacity: 0.72,
     },
     levelTrackSegmentFuture: {
       backgroundColor: theme.colors.bg.subtle,
@@ -390,6 +425,17 @@ function createStyles(theme: Theme) {
     },
     nextStepNote: {
       maxWidth: '92%',
+    },
+    progressBar: {
+      height: theme.spacing[1],
+      borderRadius: theme.radius.pill,
+      backgroundColor: theme.colors.bg.subtle,
+      overflow: 'hidden',
+    },
+    progressBarFill: {
+      height: '100%',
+      borderRadius: theme.radius.pill,
+      backgroundColor: theme.colors.primary,
     },
     secondarySection: {
       gap: theme.spacing[1],

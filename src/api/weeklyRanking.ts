@@ -42,7 +42,11 @@ export async function fetchWeeklyRanking(): Promise<WeeklyRankingData | null> {
     }
 
     if (!data) {
-      return null;
+      return {
+        rank: null,
+        score: 0,
+        totalUsers: 0,
+      };
     }
 
     return {

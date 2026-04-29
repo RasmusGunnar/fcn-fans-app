@@ -246,7 +246,7 @@ export default function ProfileScreen() {
     }
 
     return {
-      value: 'Ingen aktivitet endnu',
+      value: '0 point i denne uge',
       note: 'Post, kommentér eller check ind for at komme i gang.',
     };
   }, [weeklyRanking]);
@@ -462,7 +462,7 @@ export default function ProfileScreen() {
   const handleSupportPress = useCallback(async () => {
     try {
       await openSupportEmail();
-    } catch (error: any) {
+    } catch {
       Alert.alert('Hjælp', `Kontakt ${SUPPORT_EMAIL}`);
     }
   }, []);
@@ -800,7 +800,7 @@ export default function ProfileScreen() {
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: theme.colors.bg.default }]}
-      contentContainerStyle={{ padding: spacing.md, paddingBottom: insets.bottom + 24 }}
+      contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}
     >
       {/* Simple header without red background */}
       <View style={styles.headerSection}>
@@ -960,16 +960,18 @@ export default function ProfileScreen() {
         </View>
       </Card>
 
-      <FanBarometerCard
-        level={fanLevel}
-        showScoreBlock={false}
-        showProgressSection
-        secondarySectionTitle="Denne uge"
-        secondarySectionValue={weeklyStatus.value}
-        secondarySectionNote={weeklyStatus.note}
-        footerNote="Fanstatus bygger på din samlede aktivitet i fællesskabet."
-        state={loading && !profile ? 'loading' : profile && liveFanLevel ? 'ready' : 'empty'}
-      />
+      <View style={styles.fanbarometerSection}>
+        <FanBarometerCard
+          level={fanLevel}
+          showScoreBlock={false}
+          showProgressSection
+          secondarySectionTitle="Denne uge"
+          secondarySectionValue={weeklyStatus.value}
+          secondarySectionNote={weeklyStatus.note}
+          footerNote="Fanstatus bygger på din samlede aktivitet i fællesskabet."
+          state={loading && !profile ? 'loading' : profile ? 'ready' : 'empty'}
+        />
+      </View>
 
       <SectionCard title="MINE TILMELDINGER" icon="ticket" styles={styles}>
         {myRegistrations.length > 0 ? (
@@ -1336,6 +1338,9 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     container: {
       flex: 1,
     },
+    scrollContent: {
+      padding: spacing.md,
+    },
     headerSection: {
       paddingTop: spacing.xl,
       paddingBottom: spacing.lg,
@@ -1401,6 +1406,9 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     profileCard: {
       marginBottom: spacing.md,
       backgroundColor: theme.colors.bg.surface,
+    },
+    fanbarometerSection: {
+      marginBottom: spacing.md,
     },
     avatarBanner: {
       flexDirection: 'row',

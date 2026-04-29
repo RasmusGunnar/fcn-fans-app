@@ -1,5 +1,5 @@
 import { logger } from '../lib/logger';
-import { getSafeFanLevelKey } from '../lib/fanLevel';
+import { getSafeFanLevelKey, isFanLevelKey } from '../lib/fanLevel';
 import { supabase } from '../lib/supabase';
 import { fetchPollVotes } from './pollService';
 import type { FeedWeeklyTopFanData } from '../types/feed';
@@ -41,9 +41,13 @@ type ReferencedCommentRow = {
 type WeeklyTopFanProfile = {
   display_name: string | null;
   avatar_url: string | null;
+  fan_level_key: FanLevelKey | null;
 };
 
-const WEEKLY_TOP_FAN_PROFILE_SELECT_ATTEMPTS = ['display_name, avatar_url'] as const;
+const WEEKLY_TOP_FAN_PROFILE_SELECT_ATTEMPTS = [
+  'display_name, avatar_url, fan_level_key',
+  'display_name, avatar_url',
+] as const;
 
 function extractHighlightText(body: string): string {
   const cleaned = body
@@ -91,7 +95,7 @@ async function fetchWeeklyTopFanProfile(userId: string): Promise<WeeklyTopFanPro
   for (const select of WEEKLY_TOP_FAN_PROFILE_SELECT_ATTEMPTS) {
     const { data, error } = await supabase
       .from('profiles')
-      .select(select)
+      .select(select as string)
       .eq('id', userId)
       .maybeSingle();
 
@@ -104,9 +108,19 @@ async function fetchWeeklyTopFanProfile(userId: string): Promise<WeeklyTopFanPro
       return null;
     }
 
+    const profile = data as {
+      display_name?: string | null;
+      avatar_url?: string | null;
+      fan_level_key?: unknown;
+    };
+
     return {
-      display_name: data.display_name ?? null,
-      avatar_url: data.avatar_url ?? null,
+      display_name: profile.display_name ?? null,
+      avatar_url: profile.avatar_url ?? null,
+      fan_level_key:
+        'fan_level_key' in profile && isFanLevelKey(profile.fan_level_key)
+          ? profile.fan_level_key
+          : null,
     };
   }
 
@@ -284,7 +298,7 @@ export async function fetchLatestPublishedWeeklyTopFan(
     displayName:
       profile?.display_name?.trim() || extractDisplayNameFromSubtitle(row.subtitle) || 'Fan',
     avatarUrl: profile?.avatar_url ?? null,
-    fanLevelKey: getSafeFanLevelKey(row.fan_level_key),
+    fanLevelKey: profile?.fan_level_key ?? getSafeFanLevelKey(row.fan_level_key),
     weeklyScore: row.weekly_score,
     reasonType: row.reason_type,
     referencePostId: row.reference_post_id,

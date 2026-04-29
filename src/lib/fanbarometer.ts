@@ -66,24 +66,6 @@ export const FAN_LEVELS_BY_KEY: Readonly<Record<FanLevelKey, FanLevelDefinition>
     {} as Record<FanLevelKey, FanLevelDefinition>,
   );
 
-function normalizeScore(score: number): number {
-  if (!Number.isFinite(score)) return 0;
-  return Math.max(0, score);
-}
-
-export function getFanLevelFromScore(score: number): FanLevelKey {
-  const normalizedScore = normalizeScore(score);
-
-  for (let i = FAN_LEVELS.length - 1; i >= 0; i -= 1) {
-    const level = FAN_LEVELS[i];
-    if (normalizedScore >= level.minScore) {
-      return level.key;
-    }
-  }
-
-  return 'new_fan';
-}
-
 export function getFanLevelLabel(level: FanLevelKey, mode: FanLevelLabelMode = 'full'): string {
   const definition = FAN_LEVELS_BY_KEY[level];
   return mode === 'short' ? definition.shortLabel : definition.fullLabel;
@@ -115,36 +97,17 @@ export function getNextFanLevel(level: FanLevelKey): FanLevelKey | null {
   return FAN_LEVELS[currentIndex + 1].key;
 }
 
-export function getPointsToNextLevel(score: number): number | null {
-  const normalizedScore = normalizeScore(score);
-  const currentLevel = getFanLevelFromScore(normalizedScore);
-  const nextLevel = getNextFanLevel(currentLevel);
+export function getFanLevelMinimumScore(level: FanLevelKey): number {
+  return FAN_LEVELS_BY_KEY[level].minScore;
+}
 
+export function getPointsBetweenFanLevels(level: FanLevelKey): number | null {
+  const nextLevel = getNextFanLevel(level);
   if (!nextLevel) {
     return null;
   }
 
+  const currentMinScore = FAN_LEVELS_BY_KEY[level].minScore;
   const nextMinScore = FAN_LEVELS_BY_KEY[nextLevel].minScore;
-  return Math.max(0, Math.ceil(nextMinScore - normalizedScore));
-}
-
-export function getProgressToNextLevel(score: number): number {
-  const normalizedScore = normalizeScore(score);
-  const currentLevel = getFanLevelFromScore(normalizedScore);
-  const nextLevel = getNextFanLevel(currentLevel);
-
-  if (!nextLevel) {
-    return 1;
-  }
-
-  const currentMinScore = FAN_LEVELS_BY_KEY[currentLevel].minScore;
-  const nextMinScore = FAN_LEVELS_BY_KEY[nextLevel].minScore;
-  const scoreRange = nextMinScore - currentMinScore;
-
-  if (scoreRange <= 0) {
-    return 1;
-  }
-
-  const rawProgress = (normalizedScore - currentMinScore) / scoreRange;
-  return Math.max(0, Math.min(1, rawProgress));
+  return Math.max(0, nextMinScore - currentMinScore);
 }

@@ -364,6 +364,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
     let homeFanActivities: FanActivity[] = [];
     let communityFeedEntries: CommunityFeedSource[] = [];
     let weeklyTopFanItem: Awaited<ReturnType<typeof fetchLatestPublishedWeeklyTopFan>> = null;
+    let refreshedProfileMap: Record<string, FeedProfileEntry> = {};
     const baseDate = new Date();
 
     // Fetch posts in separate try/catch so news_items errors don't block posts
@@ -399,6 +400,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
           logger.warn('[FeedProvider] Failed to fetch profiles:', e);
         }
       }
+      refreshedProfileMap = newProfileMap;
 
       if (!isCurrentRequest()) {
         return;
@@ -594,12 +596,16 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       if (weeklyTopFanItem?.userId) {
         setProfileMap((prev) => {
           const existingProfile = prev[weeklyTopFanItem!.userId];
+          const refreshedProfile = refreshedProfileMap[weeklyTopFanItem!.userId];
           const nextProfile: FeedProfileEntry = {
             username: existingProfile?.username ?? null,
             display_name: existingProfile?.display_name ?? weeklyTopFanItem!.displayName,
             avatar_url: existingProfile?.avatar_url ?? weeklyTopFanItem!.avatarUrl ?? null,
             fan_level_key:
-              existingProfile?.fan_level_key ?? weeklyTopFanItem!.fanLevelKey ?? null,
+              refreshedProfile?.fan_level_key ??
+              weeklyTopFanItem!.fanLevelKey ??
+              existingProfile?.fan_level_key ??
+              null,
           };
 
           if (
@@ -633,7 +639,16 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       const safeBusTripsArray = upcomingBusTrips ?? [];
       const safeFanActivitiesArray = homeFanActivities ?? [];
       const safeCommunityFeedEntries = communityFeedEntries ?? [];
-      const safeWeeklyTopFanItem = weeklyTopFanItem ?? null;
+      const refreshedWeeklyTopFanLevel = weeklyTopFanItem
+        ? refreshedProfileMap[weeklyTopFanItem.userId]?.fan_level_key
+        : null;
+      const safeWeeklyTopFanItem =
+        weeklyTopFanItem && refreshedWeeklyTopFanLevel
+          ? {
+              ...weeklyTopFanItem,
+              fanLevelKey: refreshedWeeklyTopFanLevel,
+            }
+          : weeklyTopFanItem;
       console.log(
         '[FeedProvider] injecting weekly_top_fan into feeds',
         safeWeeklyTopFanItem
