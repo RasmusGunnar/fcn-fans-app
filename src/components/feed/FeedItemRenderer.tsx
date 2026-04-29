@@ -76,7 +76,7 @@ export function FeedItemRenderer(props: FeedItemRendererProps): React.ReactEleme
         ? safeProfileMap[item.data.authorId] || {
             display_name: item.data.authorDisplayName ?? item.data.authorName ?? null,
             avatar_url: item.data.authorAvatarUrl ?? null,
-            fan_level_key: item.data.authorFanLevelKey ?? null,
+            fan_level_key: null,
           }
         : undefined;
       const categoryKey: CategoryKey = 'fan';

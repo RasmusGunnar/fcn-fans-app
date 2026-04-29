@@ -506,7 +506,7 @@ export function FanPostCard({
       ? cleanText(`${groupDisplay} · ${timeAgo}`)
       : timeAgo;
 
-  const authorFanLevel = fallbackAuthorFanLevelKey;
+  const authorFanLevel = isCommunityPost ? null : fallbackAuthorFanLevelKey;
   const hasRightSlot = postMenuOptions.length > 0;
   const mediaCountBadge = hasMultipleMedia ? (
     <View style={styles.mediaCountBadge}>
