@@ -339,14 +339,10 @@ function selectNextFixture(fixtures: Fixture[], now = new Date()): Fixture | nul
     return null;
   }
 
-  const nextHomeFixture = upcomingFixtures.find(isFcnHomeFixture);
-  return nextHomeFixture ?? upcomingFixtures[0] ?? null;
+  return upcomingFixtures[0] ?? null;
 }
 
 function compareActiveFixtures(a: Fixture, b: Fixture, now: Date): number {
-  const homeDiff = Number(isFcnHomeFixture(b)) - Number(isFcnHomeFixture(a));
-  if (homeDiff !== 0) return homeDiff;
-
   const distanceA = Math.abs(now.getTime() - toKickoffTimestamp(a.kickoff_at));
   const distanceB = Math.abs(now.getTime() - toKickoffTimestamp(b.kickoff_at));
   if (distanceA !== distanceB) return distanceA - distanceB;
@@ -373,8 +369,7 @@ export function selectPrimaryFixture(fixtures: Fixture[], now = new Date()): Fix
     return null;
   }
 
-  const nextHomeFixture = upcomingFixtures.find(isFcnHomeFixture);
-  return nextHomeFixture ?? upcomingFixtures[0] ?? null;
+  return upcomingFixtures[0] ?? null;
 }
 
 export async function fetchUpcomingFcntFixtures(limit = 30): Promise<Fixture[]> {

@@ -329,13 +329,6 @@ function isValidWeeklyTopFanForHome(item: FeedItem, baseDate = new Date()): bool
   return true;
 }
 
-function isWeeklyTopFanItem(
-  item: FeedItem | RankedHomeFeedEntry | null | undefined,
-): boolean {
-  if (!item) return false;
-  return 'item' in item ? item.item.kind === 'weekly_top_fan' : item.kind === 'weekly_top_fan';
-}
-
 function compareFeedItemsByDate(a: FeedItem, b: FeedItem): number {
   const timeDiff = toTimestamp(getHomeSortDate(b)) - toTimestamp(getHomeSortDate(a));
   if (timeDiff !== 0) return timeDiff;
@@ -651,7 +644,6 @@ function compareRankedHomeFeedEntries(a: RankedHomeFeedEntry, b: RankedHomeFeedE
 
 function applyHomeRankingGuardrails(entries: RankedHomeFeedEntry[]): RankedHomeFeedEntry[] {
   const top: RankedHomeFeedEntry[] = [];
-  const deferredWeeklyTopFanCards: RankedHomeFeedEntry[] = [];
   const deferredSystemCards: RankedHomeFeedEntry[] = [];
   const rest: RankedHomeFeedEntry[] = [];
   let systemCardsInTopWindow = 0;
@@ -660,11 +652,6 @@ function applyHomeRankingGuardrails(entries: RankedHomeFeedEntry[]): RankedHomeF
     const isSystemCard = Boolean(entry.item.data.isSystemCard);
 
     if (top.length < HOME_RANKING_V1.guardrails.topWindow) {
-      if (isWeeklyTopFanItem(entry)) {
-        deferredWeeklyTopFanCards.push(entry);
-        return;
-      }
-
       if (
         isSystemCard &&
         systemCardsInTopWindow >= HOME_RANKING_V1.guardrails.maxSystemCardsInTopWindow
@@ -691,25 +678,7 @@ function applyHomeRankingGuardrails(entries: RankedHomeFeedEntry[]): RankedHomeF
     top.push(deferredSystemCards.shift()!);
   }
 
-  return [...top, ...deferredWeeklyTopFanCards, ...deferredSystemCards, ...rest];
-}
-
-function pinWeeklyTopFanToFront(entries: RankedHomeFeedEntry[]): RankedHomeFeedEntry[] {
-  const weeklyTopFanIndex = entries.findIndex((entry) => isWeeklyTopFanItem(entry));
-  if (weeklyTopFanIndex <= 0) {
-    return entries;
-  }
-
-  const pinnedEntries = [...entries];
-  const [weeklyTopFanEntry] = pinnedEntries.splice(weeklyTopFanIndex, 1);
-
-  pinnedEntries.unshift(weeklyTopFanEntry);
-  console.log('[homeFeed] pinned weekly_top_fan to top of home feed', {
-    id: weeklyTopFanEntry.item.id,
-    previousIndex: weeklyTopFanIndex,
-  });
-
-  return pinnedEntries;
+  return [...top, ...deferredSystemCards, ...rest];
 }
 
 function applyHomeCommunityGuardrails(
@@ -982,7 +951,7 @@ export function sortHomeFeedItems(items: FeedItem[], baseDate = new Date()): Fee
   const guardedEntries = applyHomeFanActivityGuardrails(
     applyHomeCommunityGuardrails(applyHomeRankingGuardrails(rankedEntries), auditContext),
   );
-  const finalEntries = pinWeeklyTopFanToFront(guardedEntries);
+  const finalEntries = guardedEntries;
   logHomeRankingDebug(finalEntries);
   logHomeFeedAudit(finalEntries, auditContext, safeItems, relevantItems);
 

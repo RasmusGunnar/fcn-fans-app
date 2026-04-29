@@ -124,7 +124,7 @@ export default function LoginScreen({ route, navigation }: Props) {
   const isFormValid = email.trim().includes('@') && !!password && password.length >= 6;
   const isSignup = mode === 'signup';
   const showAppleAuth = Platform.OS === 'ios';
-  const showFacebookAuth = false;
+  const showFacebookAuth = true;
   const showSocialDivider = showAppleAuth || showFacebookAuth;
 
   const handleOpenLegalDocument = async (kind: 'privacy' | 'terms') => {
