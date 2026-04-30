@@ -909,7 +909,7 @@ export default function ProfileScreen() {
               </Text>
             </View>
             <View style={styles.badges}>
-              <FanLevelBadge level={fanLevel} size="md" labelMode="short" />
+              <FanLevelBadge level={fanLevel} size="md" />
               {ownedCount > 0 && (
                 <Badge
                   label={`Ejer af ${ownedCount} fællesskab${ownedCount > 1 ? 'er' : ''}`}

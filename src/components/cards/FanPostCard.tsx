@@ -563,7 +563,7 @@ export function FanPostCard({
         nameLine={cardModel.nameLine}
         fallbackTitle={headerTitle}
         subtitle={headerSubtitle}
-        inlineBadge={<FanLevelBadge level={authorFanLevel} size="sm" labelMode="short" />}
+        inlineBadge={<FanLevelBadge level={authorFanLevel} size="sm" />}
         onPressAuthor={
           !isCommunityPost && postAuthorId
             ? () => navigation.navigate('PublicProfile', { userId: postAuthorId })

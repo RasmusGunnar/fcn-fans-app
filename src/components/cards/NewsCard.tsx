@@ -317,7 +317,7 @@ export function NewsCard({
         nameLine={cardModel.nameLine}
         fallbackTitle={authorName}
         subtitle={timeAgo}
-        inlineBadge={<FanLevelBadge level={actorFanLevel} size="sm" labelMode="short" />}
+        inlineBadge={<FanLevelBadge level={actorFanLevel} size="sm" />}
         onPressAuthor={
           actorUserId
             ? () => navigation.navigate('PublicProfile', { userId: actorUserId })

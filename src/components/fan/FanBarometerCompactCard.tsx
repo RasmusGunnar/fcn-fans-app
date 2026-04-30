@@ -38,7 +38,7 @@ export function FanBarometerCompactCard({
         </View>
       ) : (
         <View style={styles.identityBlock}>
-          <FanLevelBadge level={level} size="md" labelMode="short" />
+          <FanLevelBadge level={level} size="md" />
           <Text variant="body" color="primary" style={styles.levelName}>
             {getFanLevelLabel(level, 'full')}
           </Text>

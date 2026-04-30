@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import { getFanLevelLabel } from '../../lib/fanbarometer';
+import { getFanLevelName } from '../../lib/fanbarometer';
 import { getShadowStyle, useTheme, type Theme } from '../../theme';
 import type { FanLevelKey } from '../../types/fan';
 import { Text } from '../ui';
@@ -9,13 +9,11 @@ import { getFanLevelTone, ShieldIcon } from './ShieldIcon';
 export type FanLevelBadgeProps = {
   level?: FanLevelKey | null;
   size?: 'sm' | 'md';
-  labelMode?: 'short' | 'full';
 };
 
 export function FanLevelBadge({
   level,
   size = 'md',
-  labelMode = 'short',
 }: FanLevelBadgeProps) {
   const theme = useTheme();
   const styles = createStyles(theme);
@@ -25,7 +23,7 @@ export function FanLevelBadge({
     return null;
   }
 
-  const label = getFanLevelLabel(level, labelMode);
+  const label = getFanLevelName(level);
   const tone = getFanLevelTone(theme, level);
   const isSmall = size === 'sm';
 
@@ -35,7 +33,7 @@ export function FanLevelBadge({
       <Text
         variant={isSmall ? 'small' : 'caption'}
         color="primary"
-        numberOfLines={labelMode === 'short' ? 1 : undefined}
+        numberOfLines={1}
         style={[
           styles.label,
           isSmall ? styles.labelSm : styles.labelMd,

@@ -256,7 +256,7 @@ export default function PublicProfileScreen() {
         {userPosts.length} opslag · {commentedOnCount} kommentarer
       </Text>
       <View style={styles.badgeWrap}>
-        <FanLevelBadge level={fanLevel} size="md" labelMode="short" />
+        <FanLevelBadge level={fanLevel} size="md" />
         <Text variant="small" color="secondary" style={styles.badgeDescription}>
           {levelDescription}
         </Text>

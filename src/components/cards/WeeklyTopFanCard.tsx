@@ -242,7 +242,7 @@ export function WeeklyTopFanCard({
           </Text>
 
           <View style={styles.badgeShell}>
-            <FanLevelBadge level={fanLevelKey} size="sm" labelMode="short" />
+            <FanLevelBadge level={fanLevelKey} size="sm" />
           </View>
         </View>
 
