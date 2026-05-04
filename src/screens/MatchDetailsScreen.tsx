@@ -880,17 +880,14 @@ export default function MatchDetailsScreen() {
                 variant="inline"
                 maxInlineComments={Infinity}
                 titleOverride="Kampsnak"
-                composerPlaceholder="Del stemningen før kamp..."
-                quickActionMode="submit"
-                quickActionFeedbackForValue={(value) =>
-                  value === 'Jeg er på vej' ? 'Du er på vej 🔴' : 'Du deltager i snakken'
-                }
+                composerPlaceholder="Skriv om stemningen før kamp..."
+                quickActionMode="prefill"
                 replyModeLabel="Svar"
                 quickActionChips={[
-                  'Jeg er på vej',
-                  'Mødes før kamp?',
-                  'Hvem er på stadion?',
-                  'Mit bud på kampen',
+                  'Mit bud: FCN vinder ...',
+                  'Jeg varmer op ved ...',
+                  'Jeg står/sidder på ...',
+                  'Hvem mødes før kamp?',
                 ]}
               />
             </Card>
