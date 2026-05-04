@@ -3,7 +3,9 @@
 // NO hardcoded numbers or color strings allowed.
 
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import DateTimePicker, {
+  type DateTimePickerEvent,
+} from '@react-native-community/datetimepicker';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -11,11 +13,13 @@ import {
   Alert,
   Keyboard,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   TextInput,
+  type GestureResponderEvent,
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -39,6 +43,11 @@ import { defaultTheme as theme } from '../theme';
 
 type CreateFanActivityRouteProp = RouteProp<RootStackParamList, 'CreateFanActivity'>;
 type FanActivityTypeValue = 'fanmarch' | 'bustur' | 'tifo' | 'fanbar' | 'andet';
+type DateTimePickerTarget = 'startDate' | 'startTime' | 'endDate' | 'endTime';
+type ActiveDateTimePicker = {
+  target: DateTimePickerTarget;
+  mode: 'date' | 'time';
+};
 
 type FanActivityTypeOption = {
   value: FanActivityTypeValue;
@@ -176,6 +185,8 @@ export default function CreateFanActivityScreen() {
   const locationRef = useRef<TextInput>(null);
   const ctaLabelRef = useRef<TextInput>(null);
   const ctaUrlRef = useRef<TextInput>(null);
+  const dateTimePressStartRef = useRef<{ pageX: number; pageY: number } | null>(null);
+  const didDragDateTimeRowRef = useRef(false);
 
   const [type, setType] = useState<FanActivityTypeValue | ''>('');
   const [title, setTitle] = useState('');
@@ -190,10 +201,10 @@ export default function CreateFanActivityScreen() {
   const [startsAt, setStartsAt] = useState<Date>(() => getDefaultStartDate());
   const [endsAt, setEndsAt] = useState<Date>(() => getDefaultEndDate(getDefaultStartDate()));
   const [hasEndAt, setHasEndAt] = useState(false);
-  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
-  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
-  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
-  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
+  const [activeDateTimePicker, setActiveDateTimePicker] = useState<ActiveDateTimePicker | null>(
+    null,
+  );
+  const [pendingDateTimeValue, setPendingDateTimeValue] = useState<Date | null>(null);
   const [availableCommunities, setAvailableCommunities] = useState<FanActivityCommunity[]>([]);
   const [resolvedCommunity, setResolvedCommunity] = useState<FanActivityCommunity | null>(null);
   const [communityResolutionSource, setCommunityResolutionSource] =
@@ -233,7 +244,7 @@ export default function CreateFanActivityScreen() {
     return getSenderHelperText(parentType, communityResolutionSource, isCommunityLocked);
   }, [communityResolutionSource, isCommunityLocked, parentType, resolvedCommunity]);
 
-  const focusField = (ref: React.RefObject<TextInput>) => {
+  const focusField = (ref: React.RefObject<TextInput | null>) => {
     ref.current?.focus();
   };
 
@@ -385,47 +396,127 @@ export default function CreateFanActivityScreen() {
     registrationPaymentInstructions,
   ]);
 
-  const handleStartDateChange = (_event: unknown, selectedDate?: Date) => {
-    setShowStartDatePicker(false);
-    if (!selectedDate) return;
+  const getDateTimePickerValue = (target: DateTimePickerTarget): Date =>
+    target === 'startDate' || target === 'startTime' ? startsAt : endsAt;
 
-    setStartsAt((current) => {
-      const nextStart = withUpdatedDate(current, selectedDate);
-      if (hasEndAt && endsAt < nextStart) {
-        setEndsAt(getDefaultEndDate(nextStart));
+  const getDateTimePickerTitle = (target: DateTimePickerTarget): string => {
+    switch (target) {
+      case 'startDate':
+        return 'Vælg startdato';
+      case 'startTime':
+        return 'Vælg starttid';
+      case 'endDate':
+        return 'Vælg slutdato';
+      case 'endTime':
+        return 'Vælg sluttid';
+    }
+  };
+
+  const getDateTimePickerMinimumDate = (target: DateTimePickerTarget): Date | undefined => {
+    if (target === 'startDate') return new Date();
+    if (target === 'endDate') return startsAt;
+    return undefined;
+  };
+
+  const applyDateTimePickerValue = (target: DateTimePickerTarget, selectedDate: Date) => {
+    if (target === 'startDate') {
+      setStartsAt((current) => {
+        const nextStart = withUpdatedDate(current, selectedDate);
+        if (hasEndAt && endsAt < nextStart) {
+          setEndsAt(getDefaultEndDate(nextStart));
+        }
+        return nextStart;
+      });
+      return;
+    }
+
+    if (target === 'startTime') {
+      setStartsAt((current) => {
+        const nextStart = withUpdatedTime(current, selectedDate);
+        if (hasEndAt && endsAt < nextStart) {
+          setEndsAt(getDefaultEndDate(nextStart));
+        }
+        return nextStart;
+      });
+      return;
+    }
+
+    if (target === 'endDate') {
+      setEndsAt((current) => withUpdatedDate(current, selectedDate));
+      return;
+    }
+
+    setEndsAt((current) => withUpdatedTime(current, selectedDate));
+  };
+
+  const closeDateTimePicker = () => {
+    setActiveDateTimePicker(null);
+    setPendingDateTimeValue(null);
+  };
+
+  const handleDateTimePickerChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
+    if (!activeDateTimePicker) return;
+
+    if (Platform.OS === 'android') {
+      const picker = activeDateTimePicker;
+      closeDateTimePicker();
+      if (event.type === 'set' && selectedDate) {
+        applyDateTimePickerValue(picker.target, selectedDate);
       }
-      return nextStart;
+      return;
+    }
+
+    if (event.type === 'set' && selectedDate) {
+      setPendingDateTimeValue(selectedDate);
+    }
+  };
+
+  const handleConfirmDateTimePicker = () => {
+    if (activeDateTimePicker && pendingDateTimeValue) {
+      applyDateTimePickerValue(activeDateTimePicker.target, pendingDateTimeValue);
+    }
+    closeDateTimePicker();
+  };
+
+  const handleDateTimePressIn = (event: GestureResponderEvent) => {
+    const { pageX, pageY } = event.nativeEvent;
+    dateTimePressStartRef.current = { pageX, pageY };
+    didDragDateTimeRowRef.current = false;
+  };
+
+  const handleDateTimePressMove = (event: GestureResponderEvent) => {
+    const start = dateTimePressStartRef.current;
+    if (!start) return;
+
+    const { pageX, pageY } = event.nativeEvent;
+    if (Math.hypot(pageX - start.pageX, pageY - start.pageY) > theme.spacing[2]) {
+      didDragDateTimeRowRef.current = true;
+    }
+  };
+
+  const handleOpenDateTimePicker = (target: DateTimePickerTarget) => {
+    if (didDragDateTimeRowRef.current) {
+      dateTimePressStartRef.current = null;
+      didDragDateTimeRowRef.current = false;
+      return;
+    }
+
+    Keyboard.dismiss();
+    setPendingDateTimeValue(getDateTimePickerValue(target));
+    setActiveDateTimePicker({
+      target,
+      mode: target === 'startDate' || target === 'endDate' ? 'date' : 'time',
     });
-  };
-
-  const handleStartTimeChange = (_event: unknown, selectedTime?: Date) => {
-    setShowStartTimePicker(false);
-    if (!selectedTime) return;
-
-    setStartsAt((current) => {
-      const nextStart = withUpdatedTime(current, selectedTime);
-      if (hasEndAt && endsAt < nextStart) {
-        setEndsAt(getDefaultEndDate(nextStart));
-      }
-      return nextStart;
-    });
-  };
-
-  const handleEndDateChange = (_event: unknown, selectedDate?: Date) => {
-    setShowEndDatePicker(false);
-    if (!selectedDate) return;
-
-    setEndsAt((current) => withUpdatedDate(current, selectedDate));
-  };
-
-  const handleEndTimeChange = (_event: unknown, selectedTime?: Date) => {
-    setShowEndTimePicker(false);
-    if (!selectedTime) return;
-
-    setEndsAt((current) => withUpdatedTime(current, selectedTime));
+    dateTimePressStartRef.current = null;
   };
 
   const handleToggleEndAt = () => {
+    if (didDragDateTimeRowRef.current) {
+      dateTimePressStartRef.current = null;
+      didDragDateTimeRowRef.current = false;
+      return;
+    }
+
     if (hasEndAt) {
       setHasEndAt(false);
       return;
@@ -702,7 +793,12 @@ export default function CreateFanActivityScreen() {
               Dato og tid
             </Text>
 
-            <Pressable style={styles.dateTimeRow} onPress={() => setShowStartDatePicker(true)}>
+            <Pressable
+              style={styles.dateTimeRow}
+              onPressIn={handleDateTimePressIn}
+              onTouchMove={handleDateTimePressMove}
+              onPress={() => handleOpenDateTimePicker('startDate')}
+            >
               <View style={styles.dateTimeIcon}>
                 <Ionicons
                   name="calendar-outline"
@@ -725,7 +821,12 @@ export default function CreateFanActivityScreen() {
               />
             </Pressable>
 
-            <Pressable style={styles.dateTimeRow} onPress={() => setShowStartTimePicker(true)}>
+            <Pressable
+              style={styles.dateTimeRow}
+              onPressIn={handleDateTimePressIn}
+              onTouchMove={handleDateTimePressMove}
+              onPress={() => handleOpenDateTimePicker('startTime')}
+            >
               <View style={styles.dateTimeIcon}>
                 <Ionicons
                   name="time-outline"
@@ -748,7 +849,12 @@ export default function CreateFanActivityScreen() {
               />
             </Pressable>
 
-            <Pressable style={styles.inlineToggle} onPress={handleToggleEndAt}>
+            <Pressable
+              style={styles.inlineToggle}
+              onPressIn={handleDateTimePressIn}
+              onTouchMove={handleDateTimePressMove}
+              onPress={handleToggleEndAt}
+            >
               <Ionicons
                 name={hasEndAt ? 'remove-circle-outline' : 'add-circle-outline'}
                 size={theme.components.icon.size.sm}
@@ -761,7 +867,12 @@ export default function CreateFanActivityScreen() {
 
             {hasEndAt ? (
               <View style={styles.endTimeBlock}>
-                <Pressable style={styles.dateTimeRow} onPress={() => setShowEndDatePicker(true)}>
+                <Pressable
+                  style={styles.dateTimeRow}
+                  onPressIn={handleDateTimePressIn}
+                  onTouchMove={handleDateTimePressMove}
+                  onPress={() => handleOpenDateTimePicker('endDate')}
+                >
                   <View style={styles.dateTimeIcon}>
                     <Ionicons
                       name="calendar-clear-outline"
@@ -784,7 +895,12 @@ export default function CreateFanActivityScreen() {
                   />
                 </Pressable>
 
-                <Pressable style={styles.dateTimeRow} onPress={() => setShowEndTimePicker(true)}>
+                <Pressable
+                  style={styles.dateTimeRow}
+                  onPressIn={handleDateTimePressIn}
+                  onTouchMove={handleDateTimePressMove}
+                  onPress={() => handleOpenDateTimePicker('endTime')}
+                >
                   <View style={styles.dateTimeIcon}>
                     <Ionicons
                       name="time-outline"
@@ -809,43 +925,6 @@ export default function CreateFanActivityScreen() {
               </View>
             ) : null}
 
-            {showStartDatePicker ? (
-              <DateTimePicker
-                value={startsAt}
-                mode="date"
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                onChange={handleStartDateChange}
-                minimumDate={new Date()}
-              />
-            ) : null}
-
-            {showStartTimePicker ? (
-              <DateTimePicker
-                value={startsAt}
-                mode="time"
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                onChange={handleStartTimeChange}
-              />
-            ) : null}
-
-            {showEndDatePicker ? (
-              <DateTimePicker
-                value={endsAt}
-                mode="date"
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                onChange={handleEndDateChange}
-                minimumDate={startsAt}
-              />
-            ) : null}
-
-            {showEndTimePicker ? (
-              <DateTimePicker
-                value={endsAt}
-                mode="time"
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                onChange={handleEndTimeChange}
-              />
-            ) : null}
           </Card>
 
           <Card style={styles.card}>
@@ -1121,6 +1200,62 @@ export default function CreateFanActivityScreen() {
           />
         </View>
       </KeyboardAvoidingView>
+
+      {Platform.OS === 'android' && activeDateTimePicker ? (
+        <DateTimePicker
+          value={pendingDateTimeValue ?? getDateTimePickerValue(activeDateTimePicker.target)}
+          mode={activeDateTimePicker.mode}
+          display="default"
+          onChange={handleDateTimePickerChange}
+          minimumDate={getDateTimePickerMinimumDate(activeDateTimePicker.target)}
+          positiveButton={{ label: 'OK' }}
+          negativeButton={{ label: 'Annuller' }}
+          is24Hour
+        />
+      ) : null}
+
+      {Platform.OS === 'ios' && activeDateTimePicker ? (
+        <Modal visible transparent animationType="slide" onRequestClose={closeDateTimePicker}>
+          <View style={styles.dateTimePickerOverlay}>
+            <Pressable style={styles.dateTimePickerBackdrop} onPress={closeDateTimePicker} />
+
+            <View
+              style={[
+                styles.dateTimePickerSheet,
+                { paddingBottom: insets.bottom + theme.spacing[4] },
+              ]}
+            >
+              <View style={styles.dateTimePickerHandle} />
+              <View style={styles.dateTimePickerHeader}>
+                <Text variant="h3" color="primary" style={styles.dateTimePickerTitle}>
+                  {getDateTimePickerTitle(activeDateTimePicker.target)}
+                </Text>
+                <Pressable style={styles.dateTimePickerCloseButton} onPress={closeDateTimePicker}>
+                  <Ionicons
+                    name="close"
+                    size={theme.components.icon.size.sm}
+                    color={theme.colors.text.secondary}
+                  />
+                </Pressable>
+              </View>
+
+              <DateTimePicker
+                value={pendingDateTimeValue ?? getDateTimePickerValue(activeDateTimePicker.target)}
+                mode={activeDateTimePicker.mode}
+                display="spinner"
+                onChange={handleDateTimePickerChange}
+                minimumDate={getDateTimePickerMinimumDate(activeDateTimePicker.target)}
+                is24Hour
+              />
+
+              <View style={styles.dateTimePickerActions}>
+                <OutlineButton title="Annuller" onPress={closeDateTimePicker} />
+                <PrimaryButton title="OK" onPress={handleConfirmDateTimePicker} />
+              </View>
+            </View>
+          </View>
+        </Modal>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -1283,6 +1418,50 @@ const styles = StyleSheet.create({
   dateTimeValue: {
     fontWeight: '700',
     marginTop: theme.spacing[1],
+  },
+  dateTimePickerOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: theme.colors.overlay.medium,
+  },
+  dateTimePickerBackdrop: {
+    flex: 1,
+  },
+  dateTimePickerSheet: {
+    backgroundColor: theme.colors.bg.card,
+    borderTopLeftRadius: theme.radius.lg,
+    borderTopRightRadius: theme.radius.lg,
+    borderWidth: theme.layout.borderHairline,
+    borderColor: theme.colors.border.default,
+    paddingHorizontal: theme.spacing[4],
+    paddingTop: theme.spacing[3],
+    gap: theme.spacing[3],
+  },
+  dateTimePickerHandle: {
+    alignSelf: 'center',
+    width: theme.spacing[10],
+    height: theme.spacing[1],
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.border.default,
+  },
+  dateTimePickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing[3],
+  },
+  dateTimePickerTitle: {
+    flex: 1,
+    fontWeight: '700',
+  },
+  dateTimePickerCloseButton: {
+    width: theme.spacing[9],
+    height: theme.spacing[9],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dateTimePickerActions: {
+    gap: theme.spacing[2],
   },
   inlineToggle: {
     flexDirection: 'row',
