@@ -93,8 +93,8 @@ function normalizeContentTypeLabel(label?: string | null): string | null {
   return cleanedLabel || null;
 }
 
-function buildOverline(weekNumber: number | null): string {
-  return weekNumber ? `Topfan \u00b7 Uge ${weekNumber}` : 'Seneste topfan';
+function buildOverline(): string {
+  return 'Ugens topfan';
 }
 
 function buildStatusLine(weekNumber: number | null): string {
@@ -154,7 +154,7 @@ export function WeeklyTopFanCard({
   const weekNumber = getIsoWeekNumber(weekStartDate);
   const cleanedDisplayName = cleanCardText(displayName).trim() || 'Fan';
   const normalizedContentTypeLabel = normalizeContentTypeLabel(contentTypeLabel);
-  const overline = buildOverline(weekNumber);
+  const overline = buildOverline();
   const statusLine = buildStatusLine(weekNumber);
   const resolvedSubtitle = buildHeroSummary(
     weekNumber,
