@@ -92,7 +92,7 @@ function buildMapsDestination(event: Event): string | null {
 function buildMapsUrl(event: Event): string | null {
   if (event.lat != null && event.lng != null) {
     return Platform.OS === 'ios'
-      ? `http://maps.apple.com/?ll=${event.lat},${event.lng}`
+      ? `http://maps.apple.com/?daddr=${event.lat},${event.lng}&dirflg=d`
       : `https://www.google.com/maps/search/?api=1&query=${event.lat},${event.lng}`;
   }
 
@@ -101,7 +101,7 @@ function buildMapsUrl(event: Event): string | null {
 
   const encoded = encodeURIComponent(destination);
   return Platform.OS === 'ios'
-    ? `http://maps.apple.com/?q=${encoded}`
+    ? `http://maps.apple.com/?daddr=${encoded}&dirflg=d`
     : `https://www.google.com/maps/search/?api=1&query=${encoded}`;
 }
 

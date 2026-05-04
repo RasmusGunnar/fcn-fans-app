@@ -21,7 +21,7 @@ export function buildMatchMapsUrl(
 ): string | null {
   if (fixture.lat != null && fixture.lng != null) {
     return Platform.OS === 'ios'
-      ? `http://maps.apple.com/?ll=${fixture.lat},${fixture.lng}`
+      ? `http://maps.apple.com/?daddr=${fixture.lat},${fixture.lng}&dirflg=d`
       : `https://www.google.com/maps/search/?api=1&query=${fixture.lat},${fixture.lng}`;
   }
 
@@ -30,6 +30,6 @@ export function buildMatchMapsUrl(
 
   const encoded = encodeURIComponent(venueLabel);
   return Platform.OS === 'ios'
-    ? `http://maps.apple.com/?q=${encoded}`
+    ? `http://maps.apple.com/?daddr=${encoded}&dirflg=d`
     : `https://www.google.com/maps/search/?api=1&query=${encoded}`;
 }
