@@ -885,8 +885,6 @@ export default function MatchDetailsScreen() {
                 replyModeLabel="Svar"
                 quickActionChips={[
                   'Mit bud: FCN vinder ...',
-                  'Jeg varmer op ved ...',
-                  'Jeg står/sidder på ...',
                   'Hvem mødes før kamp?',
                 ]}
               />

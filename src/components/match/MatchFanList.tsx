@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useMemo } from 'react';
-import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
+import { Pressable, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import { Avatar } from '../Avatar';
 import { useTheme } from '../../theme';
 import { Text } from '../ui';
@@ -21,6 +21,11 @@ interface MatchFanListProps {
   emptyText?: string;
   variant?: 'compact' | 'full';
   style?: StyleProp<ViewStyle>;
+  highfiveEnabled?: boolean;
+  currentUserId?: string | null;
+  highfivedUserIds?: ReadonlySet<string>;
+  pendingHighfiveUserIds?: ReadonlySet<string>;
+  onHighfive?: (userId: string) => void;
 }
 
 export function MatchFanList({
@@ -30,6 +35,11 @@ export function MatchFanList({
   emptyText,
   variant = 'compact',
   style,
+  highfiveEnabled = false,
+  currentUserId,
+  highfivedUserIds,
+  pendingHighfiveUserIds,
+  onHighfive,
 }: MatchFanListProps) {
   const theme = useTheme();
   const styles = createStyles(theme);
@@ -60,6 +70,17 @@ export function MatchFanList({
     <View style={[styles.container, isCompact ? styles.containerCompact : null, style]}>
       {visibleItems.map((item) => {
         const isCheckedIn = item.status === 'checked_in';
+        const hasHighfived = highfivedUserIds?.has(item.userId) ?? false;
+        const isPendingHighfive = pendingHighfiveUserIds?.has(item.userId) ?? false;
+        const canShowHighfive =
+          !isCompact &&
+          highfiveEnabled &&
+          isCheckedIn &&
+          !!currentUserId &&
+          item.userId !== currentUserId &&
+          typeof onHighfive === 'function';
+        const highfiveDisabled = hasHighfived || isPendingHighfive;
+        const highfiveLabel = hasHighfived ? 'Highfivet' : 'Highfive';
 
         return (
           <View
@@ -84,29 +105,57 @@ export function MatchFanList({
               </Text>
             </View>
 
-            <View
-              style={[
-                styles.statusPill,
-                isCheckedIn ? styles.statusPillCheckedIn : styles.statusPillGoing,
-              ]}
-            >
-              {isCheckedIn ? (
-                <Ionicons
-                  name="checkmark"
-                  size={theme.components.icon.size.sm - 2}
-                  color={theme.colors.text.inverse}
-                />
+            <View style={styles.trailing}>
+              {canShowHighfive ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`${highfiveLabel} ${item.displayName || 'fan'}`}
+                  disabled={highfiveDisabled}
+                  onPress={() => onHighfive?.(item.userId)}
+                  style={({ pressed }) => [
+                    styles.highfiveButton,
+                    hasHighfived ? styles.highfiveButtonDone : null,
+                    highfiveDisabled ? styles.highfiveButtonDisabled : null,
+                    pressed && !highfiveDisabled ? styles.highfiveButtonPressed : null,
+                  ]}
+                >
+                  <Text
+                    variant="small"
+                    style={[
+                      styles.highfiveLabel,
+                      hasHighfived ? styles.highfiveLabelDone : null,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {highfiveLabel}
+                  </Text>
+                </Pressable>
               ) : null}
-              <Text
-                variant="small"
+
+              <View
                 style={[
-                  styles.statusLabel,
-                  isCheckedIn ? styles.statusLabelCheckedIn : styles.statusLabelGoing,
+                  styles.statusPill,
+                  isCheckedIn ? styles.statusPillCheckedIn : styles.statusPillGoing,
                 ]}
-                numberOfLines={1}
               >
-                {isCheckedIn ? 'Tjekket ind' : 'Kommer'}
-              </Text>
+                {isCheckedIn ? (
+                  <Ionicons
+                    name="checkmark"
+                    size={theme.components.icon.size.sm - 2}
+                    color={theme.colors.text.inverse}
+                  />
+                ) : null}
+                <Text
+                  variant="small"
+                  style={[
+                    styles.statusLabel,
+                    isCheckedIn ? styles.statusLabelCheckedIn : styles.statusLabelGoing,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {isCheckedIn ? 'Tjekket ind' : 'Kommer'}
+                </Text>
+              </View>
             </View>
           </View>
         );
@@ -157,6 +206,43 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     name: {
       flex: 1,
       fontWeight: '700',
+    },
+    trailing: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'flex-end',
+      gap: theme.spacing[2],
+      flexShrink: 0,
+    },
+    highfiveButton: {
+      minHeight: theme.spacing[7],
+      borderRadius: theme.radius.pill,
+      borderWidth: theme.layout.borderHairline,
+      borderColor: theme.colors.primary,
+      backgroundColor: theme.colors.bg.surface,
+      paddingHorizontal: theme.spacing[2],
+      paddingVertical: theme.spacing[1],
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexShrink: 0,
+    },
+    highfiveButtonPressed: {
+      opacity: 0.74,
+      transform: [{ scale: 0.97 }],
+    },
+    highfiveButtonDone: {
+      backgroundColor: theme.colors.bg.subtle,
+      borderColor: theme.colors.border.default,
+    },
+    highfiveButtonDisabled: {
+      opacity: 0.72,
+    },
+    highfiveLabel: {
+      color: theme.colors.primary,
+      fontWeight: '700',
+    },
+    highfiveLabelDone: {
+      color: theme.colors.text.secondary,
     },
     statusPill: {
       minHeight: theme.spacing[7],

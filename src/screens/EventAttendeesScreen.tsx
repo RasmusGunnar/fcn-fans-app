@@ -1,11 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
-import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAuth } from '../auth/AuthProvider';
 import { MatchFanList, type MatchFanListItem } from '../components/match/MatchFanList';
 import { Card, Text } from '../components/ui';
 import { fetchMatchCheckIns } from '../services/checkins';
+import { createMatchHighfive, fetchSentMatchHighfives } from '../services/matchHighfives';
 import { logger } from '../lib/logger';
 import type { EventAttendeesParams } from '../navigation/types';
 import { fetchAttendees } from '../services/attendance';
@@ -34,6 +37,7 @@ export default function EventAttendeesScreen() {
   const route = useRoute<EventAttendeesRouteProp>();
   const theme = useTheme();
   const styles = createStyles(theme);
+  const { user } = useAuth();
 
   const entityId = 'entityId' in route.params ? route.params.entityId : route.params.eventId;
   const entityType = route.params.entityType ?? 'event';
@@ -58,6 +62,8 @@ export default function EventAttendeesScreen() {
   const [attendees, setAttendees] = useState<Attendee[]>([]);
   const [loading, setLoading] = useState(!isCombinedMatchFans);
   const [error, setError] = useState<string | null>(null);
+  const [highfivedUserIds, setHighfivedUserIds] = useState<Set<string>>(() => new Set());
+  const [pendingHighfiveUserIds, setPendingHighfiveUserIds] = useState<Set<string>>(() => new Set());
 
   const loadAttendees = async () => {
     if (isCombinedMatchFans) {
@@ -110,6 +116,96 @@ export default function EventAttendeesScreen() {
     [attendeeItems, isCombinedMatchFans, prefilledFans],
   );
   const totalCount = displayItems.length;
+  const checkedInUserIds = useMemo(
+    () => displayItems.filter((item) => item.status === 'checked_in').map((item) => item.userId),
+    [displayItems],
+  );
+  const currentUserIsCheckedIn = !!(user?.id && checkedInUserIds.includes(user.id));
+  const highfiveActionsEnabled = entityType === 'match' && currentUserIsCheckedIn;
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadHighfives = async () => {
+      if (!highfiveActionsEnabled || !user?.id) {
+        setHighfivedUserIds(new Set());
+        setPendingHighfiveUserIds(new Set());
+        return;
+      }
+
+      try {
+        const sentHighfives = await fetchSentMatchHighfives({
+          matchId: entityId,
+          fromUserId: user.id,
+          toUserIds: checkedInUserIds,
+        });
+
+        if (mounted) {
+          setHighfivedUserIds(new Set(sentHighfives));
+        }
+      } catch (loadError) {
+        logger.error('Error loading match highfives:', loadError);
+      }
+    };
+
+    loadHighfives();
+
+    return () => {
+      mounted = false;
+    };
+  }, [checkedInUserIds, entityId, highfiveActionsEnabled, user?.id]);
+
+  const handleHighfive = useCallback(
+    async (toUserId: string) => {
+      if (!highfiveActionsEnabled || !user?.id) return;
+      if (toUserId === user.id) return;
+      if (!checkedInUserIds.includes(toUserId)) return;
+      if (highfivedUserIds.has(toUserId) || pendingHighfiveUserIds.has(toUserId)) return;
+
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+
+      setHighfivedUserIds((current) => {
+        const next = new Set(current);
+        next.add(toUserId);
+        return next;
+      });
+      setPendingHighfiveUserIds((current) => {
+        const next = new Set(current);
+        next.add(toUserId);
+        return next;
+      });
+
+      try {
+        await createMatchHighfive({
+          matchId: entityId,
+          fromUserId: user.id,
+          toUserId,
+        });
+      } catch (highfiveError: any) {
+        logger.error('Error creating match highfive:', highfiveError);
+        setHighfivedUserIds((current) => {
+          const next = new Set(current);
+          next.delete(toUserId);
+          return next;
+        });
+        Alert.alert('Fejl', highfiveError?.message || 'Kunne ikke sende highfive.');
+      } finally {
+        setPendingHighfiveUserIds((current) => {
+          const next = new Set(current);
+          next.delete(toUserId);
+          return next;
+        });
+      }
+    },
+    [
+      checkedInUserIds,
+      entityId,
+      highfiveActionsEnabled,
+      highfivedUserIds,
+      pendingHighfiveUserIds,
+      user?.id,
+    ],
+  );
 
   const renderSummary = () => (
     <Card variant="raised" style={styles.summaryCard}>
@@ -200,7 +296,16 @@ export default function EventAttendeesScreen() {
         ) : (
           <ScrollView contentContainerStyle={styles.listContent}>
             {renderSummary()}
-            <MatchFanList items={displayItems} variant="full" style={styles.attendeeList} />
+            <MatchFanList
+              items={displayItems}
+              variant="full"
+              style={styles.attendeeList}
+              highfiveEnabled={highfiveActionsEnabled}
+              currentUserId={user?.id}
+              highfivedUserIds={highfivedUserIds}
+              pendingHighfiveUserIds={pendingHighfiveUserIds}
+              onHighfive={handleHighfive}
+            />
           </ScrollView>
         )}
       </View>
