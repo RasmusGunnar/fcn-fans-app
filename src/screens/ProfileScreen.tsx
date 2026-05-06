@@ -1102,48 +1102,52 @@ export default function ProfileScreen() {
             color={theme.colors.primary}
           />
         </View>
-        <View style={styles.pushStatusRow}>
-          <View style={styles.pushStatusCopy}>
-            <Text style={[styles.pushStatusTitle, { color: theme.colors.text.primary }]}>
-              Push-status: {getPushStatusLabel()}
-            </Text>
-            <Text style={[styles.pushStatusBody, { color: theme.colors.text.secondary }]}>
-              {pushMessage ?? 'Aktivér push og send en test til denne enhed.'}
-            </Text>
-            <Text style={[styles.pushMeta, { color: theme.colors.text.secondary }]}>
-              Tilladelse: {pushPermissionStatus}
-            </Text>
-            {pushTokenPreview ? (
-              <Text style={[styles.pushMeta, { color: theme.colors.text.secondary }]}>
-                Token: {pushTokenPreview}
-              </Text>
-            ) : null}
-          </View>
-          <Pill label={getPushStatusLabel()} />
-        </View>
-        <View style={styles.pushActionRow}>
-          <View style={styles.pushActionButton}>
-            <OutlineButton
-              title={pushLoading ? 'Tjekker...' : 'Aktivér push'}
-              onPress={handlePushSetup}
-              disabled={pushLoading || pushTestLoading}
-            />
-          </View>
-          {pushStatus === 'enabled' ? (
-            <View style={styles.pushActionButton}>
-              <OutlineButton
-                title={pushTestLoading ? 'Sender test...' : 'Send test-push'}
-                onPress={handleSendPushTest}
-                disabled={pushLoading || pushTestLoading}
-              />
+        {__DEV__ ? (
+          <>
+            <View style={styles.pushStatusRow}>
+              <View style={styles.pushStatusCopy}>
+                <Text style={[styles.pushStatusTitle, { color: theme.colors.text.primary }]}>
+                  Push-status: {getPushStatusLabel()}
+                </Text>
+                <Text style={[styles.pushStatusBody, { color: theme.colors.text.secondary }]}>
+                  {pushMessage ?? 'Aktivér push og send en test til denne enhed.'}
+                </Text>
+                <Text style={[styles.pushMeta, { color: theme.colors.text.secondary }]}>
+                  Tilladelse: {pushPermissionStatus}
+                </Text>
+                {pushTokenPreview ? (
+                  <Text style={[styles.pushMeta, { color: theme.colors.text.secondary }]}>
+                    Token: {pushTokenPreview}
+                  </Text>
+                ) : null}
+              </View>
+              <Pill label={getPushStatusLabel()} />
             </View>
-          ) : null}
-          {pushStatus === 'denied' ? (
-            <View style={styles.pushActionButton}>
-              <OutlineButton title="Åbn indstillinger" onPress={handleOpenDeviceSettings} />
+            <View style={styles.pushActionRow}>
+              <View style={styles.pushActionButton}>
+                <OutlineButton
+                  title={pushLoading ? 'Tjekker...' : 'Aktivér push'}
+                  onPress={handlePushSetup}
+                  disabled={pushLoading || pushTestLoading}
+                />
+              </View>
+              {pushStatus === 'enabled' ? (
+                <View style={styles.pushActionButton}>
+                  <OutlineButton
+                    title={pushTestLoading ? 'Sender test...' : 'Send test-push'}
+                    onPress={handleSendPushTest}
+                    disabled={pushLoading || pushTestLoading}
+                  />
+                </View>
+              ) : null}
+              {pushStatus === 'denied' ? (
+                <View style={styles.pushActionButton}>
+                  <OutlineButton title="Åbn indstillinger" onPress={handleOpenDeviceSettings} />
+                </View>
+              ) : null}
             </View>
-          ) : null}
-        </View>
+          </>
+        ) : null}
         <View style={[styles.pushPreferencesList, { borderTopColor: theme.colors.border.default }]}>
           <View style={styles.pushPreferenceRow}>
             <View style={styles.pushPreferenceCopy}>

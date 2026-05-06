@@ -84,8 +84,8 @@ function createStyles(theme: Theme) {
       flexShrink: 0,
     },
     logo: {
-      width: theme.spacing[9],
-      height: theme.spacing[9],
+      width: theme.spacing[10],
+      height: theme.spacing[10],
     },
     textContainer: {
       flex: 1,

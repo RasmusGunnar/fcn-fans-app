@@ -468,8 +468,8 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       marginBottom: theme.spacing[1],
     },
     logoSurface: {
-      width: theme.spacing[16] + theme.spacing[5],
-      height: theme.spacing[16] + theme.spacing[5],
+      width: theme.spacing[16] + theme.spacing[7],
+      height: theme.spacing[16] + theme.spacing[7],
       borderRadius: theme.radius.pill,
       alignItems: 'center',
       justifyContent: 'center',
@@ -479,18 +479,18 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       marginBottom: theme.spacing[3],
     },
     logoSurfaceCompact: {
-      width: theme.spacing[12] + theme.spacing[3],
-      height: theme.spacing[12] + theme.spacing[3],
+      width: theme.spacing[12] + theme.spacing[5],
+      height: theme.spacing[12] + theme.spacing[5],
       marginBottom: theme.spacing[2],
     },
     logo: {
-      width: theme.spacing[16] * 2,
-      height: theme.spacing[16] * 2,
+      width: theme.spacing[16] * 2 + theme.spacing[2],
+      height: theme.spacing[16] * 2 + theme.spacing[2],
       alignSelf: 'center',
     },
     logoCompact: {
-      width: theme.spacing[11] * 2,
-      height: theme.spacing[11] * 2,
+      width: theme.spacing[11] * 2 + theme.spacing[2],
+      height: theme.spacing[11] * 2 + theme.spacing[2],
     },
     heroTitle: {
       fontSize: 28,
