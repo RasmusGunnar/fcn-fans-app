@@ -1,6 +1,8 @@
-import { Linking } from 'react-native';
+import { Linking, Platform } from 'react-native';
 
-export const SUPPORT_EMAIL = 'support@fcnfans.dk';
+export const SUPPORT_EMAIL = 'fcnfans.support@gmail.com';
+const SUPPORT_EMAIL_SUBJECT = 'Support – FCN Fans';
+const APP_VERSION = '0.1.0';
 
 const PRIVACY_POLICY_URL =
   process.env.EXPO_PUBLIC_PRIVACY_POLICY_URL?.trim() || 'https://fcnfans.dk/privacy';
@@ -16,7 +18,17 @@ function createSupportMailto(kind: LegalDocumentKind) {
 }
 
 function createGeneralSupportMailto() {
-  return `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Support til FCN Fans app')}`;
+  const body = [
+    '',
+    '',
+    '---',
+    'App: FCN Fans',
+    `Version: ${APP_VERSION}`,
+    `Platform: ${Platform.OS}`,
+    `OS version: ${String(Platform.Version)}`,
+  ].join('\n');
+
+  return `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(SUPPORT_EMAIL_SUBJECT)}&body=${encodeURIComponent(body)}`;
 }
 
 async function openUrl(url: string) {

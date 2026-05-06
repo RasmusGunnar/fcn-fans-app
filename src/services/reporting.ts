@@ -19,7 +19,7 @@ type ConfirmAndSubmitReportInput = {
 };
 
 const DEFAULT_REPORT_REASON = 'reported_in_app';
-const SUPPORT_EMAIL = 'support@fcnfans.dk';
+const SUPPORT_EMAIL = 'fcnfans.support@gmail.com';
 
 export async function submitReport({
   reporterUserId,
