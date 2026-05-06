@@ -1,6 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import { getFanLevelLabel } from '../../lib/fanbarometer';
+import { getFanLevelLabel, getPointsToNextFanLevel } from '../../lib/fanbarometer';
 import { useTheme, type Theme } from '../../theme';
 import type { FanLevelKey } from '../../types/fan';
 import { Card, Text } from '../ui';
@@ -8,15 +8,24 @@ import { FanLevelBadge } from './FanLevelBadge';
 
 export type FanBarometerCompactCardProps = {
   level: FanLevelKey;
+  score?: number;
+  pointsToNext?: number | null;
   state?: 'ready' | 'loading';
 };
 
 export function FanBarometerCompactCard({
   level,
+  score,
+  pointsToNext,
   state = 'ready',
 }: FanBarometerCompactCardProps) {
   const theme = useTheme();
   const styles = createStyles(theme);
+  const remainingPointsToNextLevel = getPointsToNextFanLevel({ level, score, pointsToNext });
+  const progressionText =
+    remainingPointsToNextLevel !== null
+      ? `+${remainingPointsToNextLevel.toLocaleString('da-DK')} point til næste level`
+      : null;
 
   return (
     <Card variant="raised" style={styles.card}>
@@ -42,6 +51,11 @@ export function FanBarometerCompactCard({
           <Text variant="body" color="primary" style={styles.levelName}>
             {getFanLevelLabel(level, 'full')}
           </Text>
+          {progressionText ? (
+            <Text variant="small" color="secondary" style={styles.progressionText}>
+              {progressionText}
+            </Text>
+          ) : null}
         </View>
       )}
     </Card>
@@ -68,6 +82,9 @@ function createStyles(theme: Theme) {
     },
     levelName: {
       flexShrink: 1,
+      maxWidth: '100%',
+    },
+    progressionText: {
       maxWidth: '100%',
     },
     loadingBlock: {

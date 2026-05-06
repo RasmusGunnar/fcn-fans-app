@@ -2,8 +2,9 @@ import { Linking } from 'react-native';
 
 export const SUPPORT_EMAIL = 'support@fcnfans.dk';
 
-const PRIVACY_POLICY_URL = process.env.EXPO_PUBLIC_PRIVACY_POLICY_URL?.trim() || null;
-const TERMS_OF_USE_URL = process.env.EXPO_PUBLIC_TERMS_URL?.trim() || null;
+const PRIVACY_POLICY_URL =
+  process.env.EXPO_PUBLIC_PRIVACY_POLICY_URL?.trim() || 'https://fcnfans.dk/privacy';
+const TERMS_OF_USE_URL = process.env.EXPO_PUBLIC_TERMS_URL?.trim() || 'https://fcnfans.dk/terms';
 
 type LegalDocumentKind = 'privacy' | 'terms';
 

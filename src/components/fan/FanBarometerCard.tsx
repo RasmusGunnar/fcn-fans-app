@@ -8,6 +8,7 @@ import {
   getFanLevelPosition,
   getNextFanLevel,
   getPointsBetweenFanLevels,
+  getPointsToNextFanLevel,
 } from '../../lib/fanbarometer';
 import { useTheme, type Theme } from '../../theme';
 import type { FanLevelKey } from '../../types/fan';
@@ -140,6 +141,11 @@ export function FanBarometerCard({
     typeof pointsToNext === 'number' && Number.isFinite(pointsToNext)
       ? Math.max(0, Math.ceil(pointsToNext))
       : null;
+  const remainingPointsToNextLevel = getPointsToNextFanLevel({
+    level,
+    score: typeof score === 'number' ? scoreValue : null,
+    pointsToNext: safePointsToNext,
+  });
   const hasSecondarySection =
     cleanBarometerText(secondarySectionValue).trim().length > 0;
   const cleanedCurrentLevelName = cleanBarometerText(currentLevelName) || currentLevelName;
@@ -149,8 +155,8 @@ export function FanBarometerCard({
   const cleanedSecondaryNote = cleanBarometerText(secondarySectionNote);
   const cleanedFooterNote = cleanBarometerText(footerNote);
   const progressionNote = cleanedNextLevelName
-    ? safePointsToNext !== null
-      ? `${formatPointCount(safePointsToNext)} til ${cleanedNextLevelName}.`
+    ? remainingPointsToNextLevel !== null
+      ? `+${formatPointCount(remainingPointsToNextLevel)} til næste level`
       : `${cleanedNextLevelName} starter ved ${formatPointCount(nextLevelMinScore ?? 0)}${
           pointsBetweenLevels !== null
             ? ` (${formatPointCount(pointsBetweenLevels)} over nuværende niveau).`

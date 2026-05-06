@@ -111,3 +111,29 @@ export function getPointsBetweenFanLevels(level: FanLevelKey): number | null {
   const nextMinScore = FAN_LEVELS_BY_KEY[nextLevel].minScore;
   return Math.max(0, nextMinScore - currentMinScore);
 }
+
+export function getPointsToNextFanLevel({
+  level,
+  score,
+  pointsToNext,
+}: {
+  level: FanLevelKey;
+  score?: number | null;
+  pointsToNext?: number | null;
+}): number | null {
+  const nextLevel = getNextFanLevel(level);
+  if (!nextLevel) {
+    return null;
+  }
+
+  if (typeof pointsToNext === 'number' && Number.isFinite(pointsToNext)) {
+    return Math.max(0, Math.ceil(pointsToNext));
+  }
+
+  const nextMinScore = FAN_LEVELS_BY_KEY[nextLevel].minScore;
+  if (typeof score === 'number' && Number.isFinite(score)) {
+    return Math.max(0, Math.ceil(nextMinScore - Math.max(0, score)));
+  }
+
+  return getPointsBetweenFanLevels(level);
+}

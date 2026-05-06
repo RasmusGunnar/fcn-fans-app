@@ -63,7 +63,6 @@ import {
 } from '../services/fanActivityRegistrations';
 import { deleteMyAccount } from '../services/accountDeletion';
 import {
-  hasConfiguredLegalUrl,
   openLegalDocument,
   openSupportEmail,
   SUPPORT_EMAIL,
@@ -444,13 +443,7 @@ export default function ProfileScreen() {
 
   const handleOpenLegalDocument = useCallback(async (kind: 'privacy' | 'terms') => {
     try {
-      const result = await openLegalDocument(kind);
-      if (result.mode === 'support_fallback') {
-        Alert.alert(
-          kind === 'privacy' ? 'Privatlivspolitik' : 'Brugsvilkår',
-          'Den endelige webside er ikke sat op endnu. Vi åbner din mailapp, så du kan kontakte support.',
-        );
-      }
+      await openLegalDocument(kind);
     } catch (error: any) {
       Alert.alert(
         'Kunne ikke åbne link',
@@ -1277,11 +1270,7 @@ export default function ProfileScreen() {
         <ProfileRow
           icon="shield-checkmark"
           title="Privatlivspolitik"
-          subtitle={
-            hasConfiguredLegalUrl('privacy')
-              ? 'Åbner den aktuelle privatlivspolitik'
-              : 'Åbner support-mail, indtil webadressen er live'
-          }
+          subtitle="Åbner den aktuelle privatlivspolitik"
           onPress={() => {
             void handleOpenLegalDocument('privacy');
           }}
@@ -1290,11 +1279,7 @@ export default function ProfileScreen() {
         <ProfileRow
           icon="document-text"
           title="Brugsvilkår"
-          subtitle={
-            hasConfiguredLegalUrl('terms')
-              ? 'Åbner de aktuelle brugsvilkår'
-              : 'Åbner support-mail, indtil webadressen er live'
-          }
+          subtitle="Åbner de aktuelle brugsvilkår"
           onPress={() => {
             void handleOpenLegalDocument('terms');
           }}
