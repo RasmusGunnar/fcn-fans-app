@@ -132,9 +132,11 @@ export async function fetchLatestPublishedWeeklyTopFan(
 ): Promise<FeedWeeklyTopFanData | null> {
   const expectedWeekStart = getLatestPublishedWeeklyTopFanWeekStart(baseDate);
 
-  console.log('[weeklyTopFanApi] fetching published weekly_top_fan row for expected week', {
-    expectedWeekStart,
-  });
+  if (__DEV__) {
+    console.log('[weeklyTopFanApi] fetching published weekly_top_fan row for expected week', {
+      expectedWeekStart,
+    });
+  }
 
   const { data, error } = await supabase
     .from('weekly_top_fan')
@@ -165,10 +167,12 @@ export async function fetchLatestPublishedWeeklyTopFan(
 
   if (error) {
     logger.warn('[weeklyTopFanApi] fetchLatestPublishedWeeklyTopFan failed:', error);
-    console.log('[weeklyTopFanApi] fetch failed', {
-      message: error.message,
-      name: error.name,
-    });
+    if (__DEV__) {
+      console.log('[weeklyTopFanApi] fetch failed', {
+        message: error.message,
+        name: error.name,
+      });
+    }
     return null;
   }
 
@@ -192,24 +196,28 @@ export async function fetchLatestPublishedWeeklyTopFan(
       'id' | 'week_start_date' | 'generated_at' | 'created_at'
     > | null) || null;
 
-    console.log('[weeklyTopFanApi] no published weekly_top_fan row found for expected week', {
-      expectedWeekStart,
-      latestAvailableWeekStart: fallbackRow?.week_start_date ?? null,
-      latestAvailableId: fallbackRow?.id ?? null,
-      latestAvailableGeneratedAt: fallbackRow?.generated_at ?? null,
-      latestAvailableCreatedAt: fallbackRow?.created_at ?? null,
-    });
+    if (__DEV__) {
+      console.log('[weeklyTopFanApi] no published weekly_top_fan row found for expected week', {
+        expectedWeekStart,
+        latestAvailableWeekStart: fallbackRow?.week_start_date ?? null,
+        latestAvailableId: fallbackRow?.id ?? null,
+        latestAvailableGeneratedAt: fallbackRow?.generated_at ?? null,
+        latestAvailableCreatedAt: fallbackRow?.created_at ?? null,
+      });
+    }
     return null;
   }
 
-  console.log('[weeklyTopFanApi] expected published row', {
-    id: row.id,
-    weekStartDate: row.week_start_date,
-    expectedWeekStart,
-    userId: row.user_id,
-    createdAt: row.created_at,
-    generatedAt: row.generated_at,
-  });
+  if (__DEV__) {
+    console.log('[weeklyTopFanApi] expected published row', {
+      id: row.id,
+      weekStartDate: row.week_start_date,
+      expectedWeekStart,
+      userId: row.user_id,
+      createdAt: row.created_at,
+      generatedAt: row.generated_at,
+    });
+  }
 
   const profile = await fetchWeeklyTopFanProfile(row.user_id);
   let contentTypeLabel: string | null = null;
@@ -284,10 +292,12 @@ export async function fetchLatestPublishedWeeklyTopFan(
     }
   } catch (enrichmentError) {
     logger.warn('[weeklyTopFanApi] failed to enrich weekly_top_fan row:', enrichmentError);
-    console.log('[weeklyTopFanApi] enrichment failed, using snapshot fallback', {
-      id: row.id,
-      weekStartDate: row.week_start_date,
-    });
+    if (__DEV__) {
+      console.log('[weeklyTopFanApi] enrichment failed, using snapshot fallback', {
+        id: row.id,
+        weekStartDate: row.week_start_date,
+      });
+    }
   }
 
   const item: FeedWeeklyTopFanData = {
@@ -316,14 +326,16 @@ export async function fetchLatestPublishedWeeklyTopFan(
     votesCount,
   };
 
-  console.log('[weeklyTopFanApi] mapped weekly_top_fan item', {
-    id: item.id,
-    weekStartDate: item.weekStartDate,
-    userId: item.userId,
-    hasAvatar: Boolean(item.avatarUrl),
-    hasReferencePost: Boolean(item.referencePostId),
-    hasReferenceComment: Boolean(item.referenceCommentId),
-  });
+  if (__DEV__) {
+    console.log('[weeklyTopFanApi] mapped weekly_top_fan item', {
+      id: item.id,
+      weekStartDate: item.weekStartDate,
+      userId: item.userId,
+      hasAvatar: Boolean(item.avatarUrl),
+      hasReferencePost: Boolean(item.referencePostId),
+      hasReferenceComment: Boolean(item.referenceCommentId),
+    });
+  }
 
   return item;
 }

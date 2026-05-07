@@ -111,7 +111,7 @@ export default function HomeScreen() {
   const nextMatchAttendanceRefresh = nextMatchAttendance.refresh;
   const nextMatchCheckInRefresh = nextMatchCheckIn.refresh;
 
-  // Rate-limit focus refetches (skip if last fetch was < 5 s ago)
+  // Rate-limit focus refetches (skip if last fetch was < 30 s ago)
   const lastFocusFetchRef = useRef<number>(0);
 
   // Defensive: FeedContext now assembles a dedicated home feed.
@@ -151,7 +151,9 @@ export default function HomeScreen() {
   );
 
   useEffect(() => {
-    console.log('[HOME] mounted');
+    if (__DEV__) {
+      console.log('[HOME] mounted');
+    }
   }, []);
 
   useEffect(() => {
@@ -177,7 +179,7 @@ export default function HomeScreen() {
     setLoadingFixture(true);
     const fixture = await fetchPrimaryFixture();
 
-    if (fixture) {
+    if (__DEV__ && fixture) {
       console.log('[HOME][NEXT_MATCH] selected fixture', {
         id: fixture.id,
         opponents: `${fixture.home_team} vs ${fixture.away_team}`,
@@ -185,7 +187,7 @@ export default function HomeScreen() {
         reason:
           'Selected the shared primary FC Nordsjaelland fixture, which keeps an active match selected through the live/post-match buffer before switching to the next one.',
       });
-    } else {
+    } else if (__DEV__) {
       console.log('[HOME][NEXT_MATCH] selected fixture', {
         id: null,
         opponents: null,
@@ -208,9 +210,13 @@ export default function HomeScreen() {
 
   const triggerFeedFetch = useCallback(
     async (source: 'focus' | 'refresh') => {
-      console.log('[HOME] feed fetch trigger', { source });
+      if (__DEV__) {
+        console.log('[HOME] feed fetch trigger', { source });
+      }
       await fetchPosts();
-      console.log('[HOME] feed fetch success', { source });
+      if (__DEV__) {
+        console.log('[HOME] feed fetch success', { source });
+      }
     },
     [fetchPosts],
   );
@@ -227,7 +233,7 @@ export default function HomeScreen() {
       // Refresh feed when returning from other screens (e.g. after creating an event)
       const now = Date.now();
       const elapsed = now - lastFocusFetchRef.current;
-      if (elapsed >= 2000) {
+      if (elapsed >= 30000) {
         lastFocusFetchRef.current = now;
         void triggerFeedFetch('focus');
       }
@@ -290,7 +296,9 @@ export default function HomeScreen() {
     }
 
     const key = getFeedItemKey(item);
-    console.log('[HOME] rendering item', { index, key, kind: item.kind, id: item.id });
+    if (__DEV__) {
+      console.log('[HOME] rendering item', { index, key, kind: item.kind, id: item.id });
+    }
     const likeState = safeLikeMap[key] || { liked: false, likes: 0 };
     const commentCount = safeCommentCountMap[key] || 0;
     const commentPreviews = safeCommentPreviewMap[key] || [];
@@ -369,12 +377,14 @@ export default function HomeScreen() {
   useEffect(() => {
     if (!matchForBadge) return;
 
-    console.log('[HOME][MATCH] badge render', {
-      fixtureId: matchForBadge.id,
-      hasHero: Boolean(matchForBadge.coverUrl),
-      hasHomeLogo: Boolean(matchForBadge.homeLogo),
-      hasAwayLogo: Boolean(matchForBadge.awayLogo),
-    });
+    if (__DEV__) {
+      console.log('[HOME][MATCH] badge render', {
+        fixtureId: matchForBadge.id,
+        hasHero: Boolean(matchForBadge.coverUrl),
+        hasHomeLogo: Boolean(matchForBadge.homeLogo),
+        hasAwayLogo: Boolean(matchForBadge.awayLogo),
+      });
+    }
   }, [matchForBadge]);
 
   const nextMatchCountdownLabel = useMemo(() => {
@@ -599,6 +609,9 @@ export default function HomeScreen() {
       data={safeHomeFeedItems}
       keyExtractor={(item) => getFeedItemKey(item)}
       renderItem={renderFeedItem}
+      initialNumToRender={5}
+      maxToRenderPerBatch={5}
+      windowSize={7}
       ItemSeparatorComponent={() => <View style={styles.feedSeparator} />}
       style={styles.container}
       automaticallyAdjustKeyboardInsets

@@ -302,7 +302,9 @@ export function FanPostCard({
     if (loggedVideoMountRef.current === signature) return;
 
     loggedVideoMountRef.current = signature;
-    console.log('[HOME][VIDEO] mount', { postId: post.id, uri: mediaUri });
+    if (__DEV__) {
+      console.log('[HOME][VIDEO] mount', { postId: post.id, uri: mediaUri });
+    }
   }, [mediaUri, post.id, shouldRenderNativeVideo]);
 
   // BASELINE: Remove complex video state management - keep only essential edit handlers

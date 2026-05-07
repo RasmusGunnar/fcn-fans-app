@@ -375,7 +375,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
           'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets, poll_data, link_preview',
         )
         .order('created_at', { ascending: false })
-        .limit(50);
+        .limit(25);
 
       if (fetchError) {
         throw fetchError;
@@ -413,11 +413,13 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
 
       // Transform DB posts to Post type with normalized media
       transformedPosts = (postsData || []).map((dbPost) => {
-        console.log('[FeedContext] mapped post', {
-          id: dbPost.id,
-          hasPollData: !!dbPost.poll_data,
-          pollData: dbPost.poll_data,
-        });
+        if (__DEV__) {
+          console.log('[FeedContext] mapped post', {
+            id: dbPost.id,
+            hasPollData: !!dbPost.poll_data,
+            pollData: dbPost.poll_data,
+          });
+        }
 
         return withPostAuthorProfile(
           {
@@ -459,7 +461,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
 
     // Fetch news items in separate try/catch
     try {
-      newsItems = await fetchNewsItems(50);
+      newsItems = await fetchNewsItems(25);
 
       // Build community map from news items and posts
       const communityIds = newsItems
@@ -567,9 +569,9 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
     // Fetch event-like Home sources separately from posts/news.
     try {
       const results = await Promise.allSettled([
-        fetchEventsUpcoming(20),
-        fetchBusTripsUpcoming(20),
-        fetchHomeFanActivities(16),
+        fetchEventsUpcoming(10),
+        fetchBusTripsUpcoming(10),
+        fetchHomeFanActivities(8),
       ]);
       upcomingEvents = results[0].status === 'fulfilled' ? results[0].value : [];
       upcomingBusTrips = results[1].status === 'fulfilled' ? results[1].value : [];
@@ -583,16 +585,18 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
 
     try {
       weeklyTopFanItem = await fetchLatestPublishedWeeklyTopFan(baseDate);
-      console.log(
-        '[FeedProvider] weekly_top_fan fetch result',
-        weeklyTopFanItem
-          ? {
-              id: weeklyTopFanItem.id,
-              weekStartDate: weeklyTopFanItem.weekStartDate,
-              userId: weeklyTopFanItem.userId,
-            }
-          : null,
-      );
+      if (__DEV__) {
+        console.log(
+          '[FeedProvider] weekly_top_fan fetch result',
+          weeklyTopFanItem
+            ? {
+                id: weeklyTopFanItem.id,
+                weekStartDate: weeklyTopFanItem.weekStartDate,
+                userId: weeklyTopFanItem.userId,
+              }
+            : null,
+        );
+      }
       if (weeklyTopFanItem?.userId) {
         setProfileMap((prev) => {
           const existingProfile = prev[weeklyTopFanItem!.userId];
@@ -625,9 +629,11 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (e: any) {
       logger.warn('[FeedProvider] fetchLatestPublishedWeeklyTopFan failed:', e?.message || e);
-      console.log('[FeedProvider] weekly_top_fan fetch threw, continuing without card', {
-        message: e?.message ?? String(e),
-      });
+      if (__DEV__) {
+        console.log('[FeedProvider] weekly_top_fan fetch threw, continuing without card', {
+          message: e?.message ?? String(e),
+        });
+      }
       weeklyTopFanItem = null;
     }
 
@@ -649,15 +655,17 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
               fanLevelKey: refreshedWeeklyTopFanLevel,
             }
           : weeklyTopFanItem;
-      console.log(
-        '[FeedProvider] injecting weekly_top_fan into feeds',
-        safeWeeklyTopFanItem
-          ? {
-              id: safeWeeklyTopFanItem.id,
-              weekStartDate: safeWeeklyTopFanItem.weekStartDate,
-            }
-          : null,
-      );
+      if (__DEV__) {
+        console.log(
+          '[FeedProvider] injecting weekly_top_fan into feeds',
+          safeWeeklyTopFanItem
+            ? {
+                id: safeWeeklyTopFanItem.id,
+                weekStartDate: safeWeeklyTopFanItem.weekStartDate,
+              }
+            : null,
+        );
+      }
       const nextFeedItems = buildFeedItemsFromSources({
         posts: safePostsArray,
         newsItems: safeNewsArray,
@@ -676,11 +684,13 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         weeklyTopFanItem: safeWeeklyTopFanItem,
         baseDate,
       });
-      console.log('[FeedProvider] weekly_top_fan injected state', {
-        feedHasCard: nextFeedItems.some((item) => item.kind === 'weekly_top_fan'),
-        homeHasCardBeforeRanking: nextHomeFeedItems.some((item) => item.kind === 'weekly_top_fan'),
-        weeklyTopFanId: safeWeeklyTopFanItem?.id ?? null,
-      });
+      if (__DEV__) {
+        console.log('[FeedProvider] weekly_top_fan injected state', {
+          feedHasCard: nextFeedItems.some((item) => item.kind === 'weekly_top_fan'),
+          homeHasCardBeforeRanking: nextHomeFeedItems.some((item) => item.kind === 'weekly_top_fan'),
+          weeklyTopFanId: safeWeeklyTopFanItem?.id ?? null,
+        });
+      }
 
       if (!isCurrentRequest()) {
         return;
@@ -825,10 +835,12 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         withFeedEngagementSummary(nextHomeFeedItems, mergedLikeMap, newCommentCountMap),
         baseDate,
       );
-      console.log('[FeedProvider] weekly_top_fan after home ranking', {
-        homeHasCardAfterRanking: rankedHomeFeedItems.some((item) => item.kind === 'weekly_top_fan'),
-        weeklyTopFanId: safeWeeklyTopFanItem?.id ?? null,
-      });
+      if (__DEV__) {
+        console.log('[FeedProvider] weekly_top_fan after home ranking', {
+          homeHasCardAfterRanking: rankedHomeFeedItems.some((item) => item.kind === 'weekly_top_fan'),
+          weeklyTopFanId: safeWeeklyTopFanItem?.id ?? null,
+        });
+      }
 
       // ── Rehydrate likedByMe from likes_v2 for current user ──
       try {

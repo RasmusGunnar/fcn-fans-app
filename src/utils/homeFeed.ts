@@ -313,19 +313,23 @@ function isValidWeeklyTopFanForHome(item: FeedItem, baseDate = new Date()): bool
   );
 
   if (!hasRequiredData) {
-    console.log('[homeFeed] dropping weekly_top_fan due to missing required data', {
-      id: item.id,
-      weekStartDate: item.data.weekStartDate ?? null,
-      userId: item.data.userId ?? null,
-    });
+    if (__DEV__) {
+      console.log('[homeFeed] dropping weekly_top_fan due to missing required data', {
+        id: item.id,
+        weekStartDate: item.data.weekStartDate ?? null,
+        userId: item.data.userId ?? null,
+      });
+    }
     return false;
   }
 
-  console.log('[homeFeed] allowing weekly_top_fan into home feed', {
-    id: item.id,
-    weekStartDate: item.data.weekStartDate,
-    latestExpectedWeekStart: getLatestPublishedWeeklyTopFanWeekStart(baseDate),
-  });
+  if (__DEV__) {
+    console.log('[homeFeed] allowing weekly_top_fan into home feed', {
+      id: item.id,
+      weekStartDate: item.data.weekStartDate,
+      latestExpectedWeekStart: getLatestPublishedWeeklyTopFanWeekStart(baseDate),
+    });
+  }
   return true;
 }
 
@@ -886,18 +890,22 @@ export function sortHomeFeedItems(items: FeedItem[], baseDate = new Date()): Fee
       }
 
       if (hasValidWeeklyTopFan) {
-        console.log('[homeFeed] dropping duplicate weekly_top_fan item', {
-          id: item.id,
-          weekStartDate: item.data.weekStartDate,
-        });
+        if (__DEV__) {
+          console.log('[homeFeed] dropping duplicate weekly_top_fan item', {
+            id: item.id,
+            weekStartDate: item.data.weekStartDate,
+          });
+        }
         return false;
       }
 
       hasValidWeeklyTopFan = true;
-      console.log('[homeFeed] keeping weekly_top_fan item', {
-        id: item.id,
-        weekStartDate: item.data.weekStartDate,
-      });
+      if (__DEV__) {
+        console.log('[homeFeed] keeping weekly_top_fan item', {
+          id: item.id,
+          weekStartDate: item.data.weekStartDate,
+        });
+      }
       return true;
     }
 
