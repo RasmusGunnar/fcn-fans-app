@@ -104,12 +104,15 @@ export async function uploadAvatar(userId: string): Promise<string | null> {
     // Convert base64 to Uint8Array (reliable for Supabase in Expo)
     const bytes = base64ToUint8Array(base64);
 
+    // Store each upload at a fresh path so public image URLs change immediately.
+    const filePath = `${userId}/avatar-${Date.now()}.jpg`;
+
     if (__DEV__) {
       const fileInfo = await FileSystem.getInfoAsync(asset.uri);
       logger.log('[AvatarUpload]', {
         localSize: fileInfo.exists && !fileInfo.isDirectory ? fileInfo.size : 'unknown',
         blobSize: bytes.length,
-        path: `${userId}.jpg`,
+        path: filePath,
       });
     }
 
@@ -118,9 +121,6 @@ export async function uploadAvatar(userId: string): Promise<string | null> {
       Alert.alert('Fejl', 'Billedet kunne ikke konverteres (0 bytes)');
       throw new Error('Image byte array is empty (0 bytes). Cannot upload empty file.');
     }
-
-    // Create file path: userId/avatar.jpg (RLS policies allow upload in user's own folder)
-    const filePath = `${userId}/avatar.jpg`;
 
     // Upload to Supabase Storage using byte array
     const { data: uploadData, error: uploadError } = await supabase.storage
@@ -167,7 +167,7 @@ export async function uploadAvatar(userId: string): Promise<string | null> {
     }
 
     // Save ONLY the path in profiles.avatar_url (not "avatars/"+path)
-    // Path format: "userId/avatar.jpg"
+    // Path format: "userId/avatar-timestamp.jpg"
     if (__DEV__) {
       logger.log('[AvatarUpload] Saving path to DB:', filePath);
     }
@@ -189,7 +189,7 @@ export async function uploadAvatar(userId: string): Promise<string | null> {
       logger.log('[AvatarUpload] Success! Path:', filePath);
     }
 
-    // Return path (cache buster added by component for display refresh)
+    // Return the storage path; Avatar resolves it to a public URL for display.
     return filePath;
   } catch (error: any) {
     logger.warn('[uploadAvatar] Unexpected error:', error);

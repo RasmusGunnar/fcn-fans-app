@@ -5,7 +5,7 @@
     "scheme": "fcnfans",
     "version": "0.1.0",
     "orientation": "portrait",
-    "icon": "./assets/NewLogo.png",
+    "icon": "./assets/app-icon.png",
     "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/splash.png",

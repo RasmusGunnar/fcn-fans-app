@@ -26,7 +26,6 @@ import { OutlineButton } from '../components/ui/OutlineButton';
 import { spacing } from '../theme';
 import { useTheme } from '../theme';
 import { uploadAvatar } from '../lib/uploadAvatar';
-import { getPublicUrl } from '../lib/storageUrl';
 import { Avatar } from '../components/Avatar';
 import { supabase } from '../lib/supabase';
 import { ensureProfile } from '../lib/profile';
@@ -275,11 +274,7 @@ export default function ProfileScreen() {
         prev.trim().length === 0 ? profileResult?.display_name || user?.email || '' : prev,
       );
       if (profileResult?.avatar_url) {
-        const existingAvatar = profileResult.avatar_url;
-        const resolvedAvatar = existingAvatar.startsWith('http')
-          ? existingAvatar
-          : getPublicUrl('avatars', existingAvatar);
-        setAvatarUrlInput((prev) => (prev === null ? resolvedAvatar : prev));
+        setAvatarUrlInput((prev) => (prev === null ? profileResult.avatar_url : prev));
       }
     }
 
@@ -642,13 +637,7 @@ export default function ProfileScreen() {
       const refreshed = await fetchMyProfile(user.id);
       if (refreshed) {
         setProfile(refreshed);
-        const refreshedAvatar = refreshed.avatar_url;
-        const resolvedAvatar = refreshedAvatar
-          ? refreshedAvatar.startsWith('http')
-            ? refreshedAvatar
-            : getPublicUrl('avatars', refreshedAvatar)
-          : null;
-        setAvatarUrlInput(resolvedAvatar ?? avatarUrlInput);
+        setAvatarUrlInput(refreshed.avatar_url ?? avatarUrlInput);
       } else {
         setProfile((prev) =>
           prev
@@ -681,15 +670,8 @@ export default function ProfileScreen() {
     setUploadingAvatar(false);
 
     if (avatarPath) {
-      const publicUrl = avatarPath.startsWith('http')
-        ? avatarPath
-        : getPublicUrl('avatars', avatarPath);
-      if (!publicUrl) {
-        Alert.alert('Fejl', 'Kunne ikke hente billed-URL. Prøv igen.');
-        return;
-      }
-      setAvatarUrlInput(publicUrl);
-      setProfile((prev) => (prev ? { ...prev, avatar_url: publicUrl } : null));
+      setAvatarUrlInput(avatarPath);
+      setProfile((prev) => (prev ? { ...prev, avatar_url: avatarPath } : null));
       Alert.alert('Succes!', 'Profilbillede opdateret');
     } else {
       Alert.alert('Fejl', 'Kunne ikke uploade billede. Prøv igen.');

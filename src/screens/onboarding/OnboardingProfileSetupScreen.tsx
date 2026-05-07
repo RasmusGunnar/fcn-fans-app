@@ -17,7 +17,6 @@ import { Avatar } from '../../components/Avatar';
 import { Text } from '../../components/ui';
 import { logger } from '../../lib/logger';
 import { ensureProfile } from '../../lib/profile';
-import { getPublicUrl } from '../../lib/storageUrl';
 import { supabase } from '../../lib/supabase';
 import { uploadAvatar } from '../../lib/uploadAvatar';
 import type { OnboardingStackParamList } from '../../navigation/OnboardingStack';
@@ -114,16 +113,7 @@ export default function OnboardingProfileSetupScreen({ navigation, route }: Prop
       return;
     }
 
-    const publicUrl = avatarPath.startsWith('http')
-      ? avatarPath
-      : getPublicUrl('avatars', avatarPath);
-
-    if (!publicUrl) {
-      Alert.alert('Fejl', 'Kunne ikke hente billed-URL. Prøv igen.');
-      return;
-    }
-
-    setAvatarUrlInput(publicUrl);
+    setAvatarUrlInput(avatarPath);
   };
 
   const handleContinue = async () => {
