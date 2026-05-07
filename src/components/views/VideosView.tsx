@@ -27,6 +27,42 @@ interface Video {
 
 const videos: Video[] = [
   {
+    id: 'caleb-yirenkyi-skills-2026',
+    title: 'Caleb Yirenkyi: mål og assists',
+    description: 'Højdepunkter med det unge FCN-talent: teknik, mål og oplæg.',
+    url: 'https://www.youtube.com/watch?v=Wg7VZXVpxKA',
+    year: '2026',
+    tag: 'Spiller',
+    thumbnail: { uri: 'https://i.ytimg.com/vi/Wg7VZXVpxKA/hqdefault.jpg' },
+  },
+  {
+    id: 'fcn-talentfabrik-2026',
+    title: 'Sådan skaber FCN talenter',
+    description: 'Bold ser på, hvorfor FCN igen og igen udvikler store talenter.',
+    url: 'https://www.youtube.com/watch?v=7sNH5dVFGpI',
+    year: '2026',
+    tag: 'Akademi',
+    thumbnail: { uri: 'https://i.ytimg.com/vi/7sNH5dVFGpI/hqdefault.jpg' },
+  },
+  {
+    id: 'fcn-beholdt-stjernerne-2026',
+    title: 'Hvis FCN beholdt stjernerne',
+    description: 'Et bud på FCN-holdet, hvis tidligere profiler stadig var samlet.',
+    url: 'https://www.youtube.com/watch?v=xGTK_fEK7Ow',
+    year: '2026',
+    tag: 'Analyse',
+    thumbnail: { uri: 'https://i.ytimg.com/vi/xGTK_fEK7Ow/hqdefault.jpg' },
+  },
+  {
+    id: 'fcn-fan-for-en-dag-2025',
+    title: 'FCN-fan for en dag',
+    description: 'Mandsholdet besøger Farum og mærker stemningen som FCN-fan.',
+    url: 'https://www.youtube.com/watch?v=9svVpyAt8ZU',
+    year: '2025',
+    tag: 'Fans',
+    thumbnail: { uri: 'https://i.ytimg.com/vi/9svVpyAt8ZU/hqdefault.jpg' },
+  },
+  {
     id: 'mesterskab-2012',
     title: 'Mesterskabskampen – guld 2012',
     description: 'FCN sikrer mesterskabet med 3-0 over AC Horsens.',
@@ -34,51 +70,6 @@ const videos: Video[] = [
     year: '2012',
     tag: 'Highlights',
     thumbnail: { uri: 'https://i.ytimg.com/vi/7IGuaIGKg4c/hqdefault.jpg' },
-  },
-  {
-    id: 'fcn-highlights-2025',
-    title: 'FCN Highlights 2024/25',
-    description: 'Sæsonens bedste øjeblikke',
-    url: 'https://youtube.com/results?search_query=FC+Nordsjælland+highlights',
-    year: '2025',
-    tag: 'Highlights',
-    thumbnail: undefined,
-  },
-  {
-    id: 'fcn-match-vs-br',
-    title: 'FCN vs Brøndby',
-    description: 'Superligakamp - fuld kamp',
-    url: 'https://youtube.com/results?search_query=FC+Nordsjælland+vs+Brøndby',
-    year: '2025',
-    tag: 'Kamp',
-    thumbnail: undefined,
-  },
-  {
-    id: 'fcn-interview',
-    title: 'Tränerin interview',
-    description: 'Eksklusiv samtale om sæsonen',
-    url: 'https://youtube.com',
-    year: '2025',
-    tag: 'Interview',
-    thumbnail: undefined,
-  },
-  {
-    id: 'fcn-academy',
-    title: 'FCN Akademi',
-    description: 'Unge talenter i træning',
-    url: 'https://youtube.com',
-    year: '2024',
-    tag: 'Akademi',
-    thumbnail: undefined,
-  },
-  {
-    id: 'fcn-supporters',
-    title: 'Fans celebration',
-    description: 'FCN supporters højdepunkter',
-    url: 'https://youtube.com',
-    year: '2024',
-    tag: 'Fans',
-    thumbnail: undefined,
   },
 ];
 
@@ -91,7 +82,7 @@ function VideoCard({ video }: { video: Video }) {
       } else {
         Alert.alert('Fejl', `Kan ikke åbne video: ${video.url}`);
       }
-    } catch (error) {
+    } catch {
       Alert.alert('Fejl', 'Kunne ikke åbne videoen.');
     }
   };
