@@ -353,10 +353,12 @@ export function FanPostCard({
             inlineBadge={
               authorFanLevel ? <FanLevelBadge level={authorFanLevel} size="sm" /> : undefined
             }
+            rightSlot={
+              (showEditOption || showDeleteOption) && postMenuOptions.length > 0 ? (
+                <OptionsMenu options={postMenuOptions} />
+              ) : undefined
+            }
           />
-          {(showEditOption || showDeleteOption) && postMenuOptions.length > 0 ? (
-            <OptionsMenu options={postMenuOptions} />
-          ) : null}
         </>
       )}
       {isEditing ? (
