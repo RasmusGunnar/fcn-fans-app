@@ -8,6 +8,9 @@ import EventsScreen from '../screens/EventsScreen';
 import HashtagScreen from '../screens/HashtagScreen';
 import MatchDetailsScreen from '../screens/MatchDetailsScreen';
 import PublicProfileScreen from '../screens/PublicProfileScreen';
+import { logPerformanceEvent } from '../utils/performanceTiming';
+
+logPerformanceEvent('LazyStack', 'module-evaluated', { stackName: 'EventsStack' });
 
 const Stack = createNativeStackNavigator();
 

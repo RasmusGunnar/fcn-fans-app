@@ -4,8 +4,8 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import { AVPlaybackStatus, ResizeMode, Video } from 'expo-av';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { GestureResponderEvent, Pressable, StyleSheet, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState, GestureResponderEvent, Pressable, StyleSheet, View } from 'react-native';
 import { defaultTheme } from '../../theme';
 
 const theme = defaultTheme;
@@ -41,18 +41,26 @@ export interface FeedVideoProps {
   uri: string;
   /** Whether this video should be playing (viewability-driven). */
   isActive: boolean;
-  /** Whether the host app is in the foreground. */
-  isAppActive: boolean;
+  /** Controlled inline audio state owned by the containing feed card. */
+  muted: boolean;
+  /** Opens fullscreen playback when the video surface is tapped. */
+  onPress?: (event: GestureResponderEvent) => void;
+  /** Toggles the controlled inline audio state. */
+  onToggleMuted: () => void;
   /** Width/height from media metadata, used to pick aspect ratio. */
   naturalWidth?: number;
   naturalHeight?: number;
+  /** Uploaded thumbnail shown while the video is loading. */
+  posterUri?: string;
+  /** Called once the current video has loaded enough to play. */
+  onReady?: () => void;
   /** Called when playback error occurs. */
   onError?: (error: any) => void;
 }
 
 /**
  * Instagram-style feed video:
- *  - Autoplay/pause driven by `isActive` + `isAppActive`.
+ *  - Autoplay/pause driven by `isActive` + internal AppState foreground tracking.
  *  - Autoplay is muted by default; explicit control toggles sound.
  *  - Loops.
  *  - Aspect ratio derived from natural size (or 4:5 fallback).
@@ -60,58 +68,160 @@ export interface FeedVideoProps {
 export function FeedVideo({
   uri,
   isActive,
-  isAppActive,
+  muted,
+  onPress,
+  onToggleMuted,
   naturalWidth,
   naturalHeight,
+  posterUri,
+  onReady,
   onError,
 }: FeedVideoProps) {
   const videoRef = useRef<Video>(null);
-  const [isMuted, setIsMuted] = useState(true);
+  const didNotifyReadyRef = useRef(false);
+  const mountedAtRef = useRef(Date.now());
   const [detectedRatio, setDetectedRatio] = useState<VideoRatio | null>(null);
+  const [appActive, setAppActive] = useState(AppState.currentState === 'active');
+
+  // Track whether the host app is in the foreground so we pause on background
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      setAppActive(state === 'active');
+    });
+    return () => subscription.remove();
+  }, []);
+
+  // Debug: log mount/unmount per video URI
+  useEffect(() => {
+    if (__DEV__) {
+      console.log('[FeedVideo] mounted', { uri });
+    }
+    return () => {
+      if (__DEV__) {
+        console.log('[FeedVideo] unmounted', { uri });
+      }
+    };
+  }, [uri]);
 
   // If we have metadata from the post, use it; else wait for onLoad
   const metaRatio = naturalWidth && naturalHeight ? pickRatio(naturalWidth, naturalHeight) : null;
+  const videoSource = useMemo(() => ({ uri }), [uri]);
+  const posterSource = useMemo(() => (posterUri ? { uri: posterUri } : undefined), [posterUri]);
 
   const finalRatio = metaRatio ?? detectedRatio ?? '4:5';
 
   // Play or pause based on active state
-  const shouldPlay = isActive && isAppActive;
-  const effectiveMuted = isMuted || !shouldPlay;
+  const shouldPlay = isActive && appActive;
+  const effectiveMuted = muted || !shouldPlay;
+
+  // Debug: log whenever playback intent changes
+  useEffect(() => {
+    if (__DEV__) {
+      console.log('[FeedVideo] shouldPlay →', shouldPlay, { uri });
+    }
+  }, [shouldPlay, uri]);
 
   useEffect(() => {
-    setIsMuted(true);
+    didNotifyReadyRef.current = false;
   }, [uri]);
+
+  useEffect(
+    () => () => {
+      void videoRef.current?.unloadAsync().catch(() => {});
+    },
+    [uri],
+  );
+
+  // Unload the native player when this item becomes inactive (e.g. another
+  // video takes focus) so we never hold more than one loaded player at a time.
+  useEffect(() => {
+    if (!isActive) {
+      void videoRef.current?.unloadAsync().catch(() => {});
+    }
+  }, [isActive]);
 
   // Detect natural size from loaded video if metadata wasn't provided
   const handleLoad = useCallback(
     (status: AVPlaybackStatus) => {
       if (!status.isLoaded) return;
+      if (shouldPlay) {
+        void videoRef.current?.playAsync().catch((error) => {
+          onError?.(error);
+        });
+      }
       if (!metaRatio && (status as any).naturalSize) {
         const ns = (status as any).naturalSize as { width: number; height: number };
         setDetectedRatio(pickRatio(ns.width, ns.height));
       }
     },
-    [metaRatio],
+    [metaRatio, onError, shouldPlay],
+  );
+  const handlePlaybackStatusUpdate = useCallback(
+    (status: AVPlaybackStatus) => {
+      if (!status.isLoaded || !status.isPlaying || didNotifyReadyRef.current) {
+        return;
+      }
+
+      didNotifyReadyRef.current = true;
+      if (__DEV__) {
+        console.log('[FeedVideo] ready/playing', {
+          uri,
+          msSinceMount: Date.now() - mountedAtRef.current,
+        });
+      }
+      onReady?.();
+    },
+    [onReady, uri],
   );
 
-  const toggleMute = useCallback((event?: GestureResponderEvent) => {
-    event?.stopPropagation();
-    setIsMuted((prev) => !prev);
-  }, []);
+  const toggleMute = useCallback(
+    (event?: GestureResponderEvent) => {
+      event?.stopPropagation();
+      onToggleMuted();
+    },
+    [onToggleMuted],
+  );
 
   return (
     <View style={[styles.container, { aspectRatio: ratioToNumber(finalRatio) }]}>
       <Video
         ref={videoRef}
-        source={{ uri }}
+        source={videoSource}
         style={styles.video}
         resizeMode={ResizeMode.COVER}
         shouldPlay={shouldPlay}
         isLooping
         isMuted={effectiveMuted}
+        usePoster={Boolean(posterUri)}
+        posterSource={posterSource}
+        posterStyle={styles.video}
         onLoad={handleLoad}
-        onError={onError}
+        onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
+        onError={(error) => {
+          if (__DEV__) {
+            console.warn('[FeedVideo] playback error', { uri, error });
+          }
+          onError?.(error);
+        }}
       />
+      <Pressable
+        style={styles.mediaPressTarget}
+        onPress={onPress}
+        disabled={!onPress}
+        accessibilityRole="button"
+        accessibilityLabel="Åbn video i fuld skærm"
+      />
+      {!shouldPlay ? (
+        <View style={styles.playOverlay} pointerEvents="none">
+          <View style={styles.playButton}>
+            <Ionicons
+              name="play"
+              size={theme.components.icon.size.lg}
+              color={theme.colors.text.inverse}
+            />
+          </View>
+        </View>
+      ) : null}
       <Pressable
         style={styles.muteButton}
         onPress={toggleMute}
@@ -139,6 +249,22 @@ const styles = StyleSheet.create({
   video: {
     width: '100%',
     height: '100%',
+  },
+  mediaPressTarget: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  playOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  playButton: {
+    width: theme.spacing[12],
+    height: theme.spacing[12],
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.overlay.medium,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   muteButton: {
     position: 'absolute',

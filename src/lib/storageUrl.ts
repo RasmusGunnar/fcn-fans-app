@@ -1,5 +1,4 @@
 import { supabase } from './supabase';
-import { logger } from './logger';
 
 /**
  * Get the public URL for a storage object.
@@ -14,11 +13,5 @@ export function getPublicUrl(bucket: string, path?: string | null): string | nul
   }
 
   const { data } = supabase.storage.from(bucket).getPublicUrl(path);
-  const url = data.publicUrl;
-
-  if (__DEV__) {
-    console.log('[getPublicUrl]', { bucket, path, url });
-  }
-
-  return url;
+  return data.publicUrl;
 }

@@ -1,7 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, Image } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useTheme, Theme } from '../theme';
+
+const AVATAR_DEBUG_ENABLED =
+  __DEV__ && process.env.EXPO_PUBLIC_AVATAR_DEBUG?.trim().toLowerCase() === 'true';
 
 interface AvatarProps {
   userId?: string;
@@ -15,12 +18,12 @@ const pathCache = new Map<string, string>();
 
 export function Avatar({ userId, avatarUrl, size = 32, label }: AvatarProps) {
   const theme = useTheme();
-  const styles = createStyles(theme);
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [resolvedUri, setResolvedUri] = useState<string | null>(null);
   const [currentCandidateIndex, setCurrentCandidateIndex] = useState(0);
 
   // Build candidate paths
-  const candidatePaths = React.useMemo(() => {
+  const candidatePaths = useMemo(() => {
     const paths: string[] = [];
 
     // If avatarUrl starts with http, use it directly
@@ -60,13 +63,15 @@ export function Avatar({ userId, avatarUrl, size = 32, label }: AvatarProps) {
     if (pathCache.has(cacheKey)) {
       const cachedUri = pathCache.get(cacheKey)!;
       setResolvedUri(cachedUri);
-      console.log('[AvatarDebug]', {
-        userId,
-        avatarUrl,
-        tried: candidatePaths,
-        finalUri: cachedUri,
-        source: 'cache',
-      });
+      if (AVATAR_DEBUG_ENABLED) {
+        console.log('[AvatarDebug]', {
+          userId,
+          avatarUrl,
+          tried: candidatePaths,
+          finalUri: cachedUri,
+          source: 'cache',
+        });
+      }
       return;
     }
 
@@ -89,13 +94,15 @@ export function Avatar({ userId, avatarUrl, size = 32, label }: AvatarProps) {
     } else {
       // All candidates failed
       setResolvedUri(null);
-      console.log('[AvatarDebug]', {
-        userId,
-        avatarUrl,
-        tried: candidatePaths,
-        finalUri: null,
-        result: 'all-failed',
-      });
+      if (AVATAR_DEBUG_ENABLED) {
+        console.log('[AvatarDebug]', {
+          userId,
+          avatarUrl,
+          tried: candidatePaths,
+          finalUri: null,
+          result: 'all-failed',
+        });
+      }
     }
   };
 
@@ -106,13 +113,15 @@ export function Avatar({ userId, avatarUrl, size = 32, label }: AvatarProps) {
       const cacheKey = candidatePaths.join('|');
       pathCache.set(cacheKey, resolvedUri);
 
-      console.log('[AvatarDebug]', {
-        userId,
-        avatarUrl,
-        tried: candidatePaths,
-        finalUri: resolvedUri,
-        candidateIndex: currentCandidateIndex,
-      });
+      if (AVATAR_DEBUG_ENABLED) {
+        console.log('[AvatarDebug]', {
+          userId,
+          avatarUrl,
+          tried: candidatePaths,
+          finalUri: resolvedUri,
+          candidateIndex: currentCandidateIndex,
+        });
+      }
     }
   };
 

@@ -6,6 +6,9 @@ import CommunityMembersScreen from '../screens/CommunityMembersScreen';
 import CreateCommunityScreen from '../screens/CreateCommunityScreen';
 import HashtagScreen from '../screens/HashtagScreen';
 import PublicProfileScreen from '../screens/PublicProfileScreen';
+import { logPerformanceEvent } from '../utils/performanceTiming';
+
+logPerformanceEvent('LazyStack', 'module-evaluated', { stackName: 'CommunitiesStack' });
 
 const Stack = createNativeStackNavigator();
 

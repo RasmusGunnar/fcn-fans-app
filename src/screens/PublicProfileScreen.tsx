@@ -29,7 +29,7 @@ export default function PublicProfileScreen() {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const route = useRoute() as any;
   const userId: string | undefined = route?.params?.userId;
-  const { user } = useAuth();
+  const { user, isAppAdmin } = useAuth();
   const {
     posts,
     profileMap,
@@ -183,6 +183,8 @@ export default function PublicProfileScreen() {
             authorProfile={profile}
             communityMap={communityMap}
             profileMap={effectiveProfileMap}
+            currentUserId={user?.id}
+            currentIsAppAdmin={isAppAdmin}
             liked={likeState.liked}
             likes={likeState.likes}
             commentsCount={commentCount}
@@ -201,6 +203,7 @@ export default function PublicProfileScreen() {
     },
     [
       effectiveProfileMap,
+      isAppAdmin,
       communityMap,
       likeMap,
       commentCountMap,

@@ -1,10 +1,11 @@
-import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { Alert, Platform } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { Alert } from 'react-native';
+import { logger } from './logger';
 
-// Maximum video duration in seconds (enforced by expo-image-picker videoMaxDuration)
-const MAX_VIDEO_SECONDS = 60;
-// Asset duration from expo-image-picker is in milliseconds
+export const MAX_VIDEO_SECONDS = 60;
+const MAX_IMAGE_WIDTH = 1600;
+const IMAGE_COMPRESSION = 0.85;
 const MS_PER_SECOND = 1000;
 
 export type MediaType = 'image' | 'video';
@@ -12,6 +13,7 @@ export type MediaType = 'image' | 'video';
 export type PickedMedia = {
   uri: string;
   type: MediaType;
+  base64?: string | null;
   mimeType?: string | null;
   width?: number | null;
   height?: number | null;
@@ -22,8 +24,8 @@ export type PickedMedia = {
 export type MediaAsset = PickedMedia;
 
 export async function ensurePermissions(): Promise<boolean> {
-  const { status: libStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (libStatus !== 'granted') {
+  const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (status !== 'granted') {
     Alert.alert('Tilladelse mangler', 'Giv adgang til mediebibliotek for at fortsætte.');
     return false;
   }
@@ -31,223 +33,176 @@ export async function ensurePermissions(): Promise<boolean> {
 }
 
 export async function ensureCameraPermissions(): Promise<boolean> {
-  const { status: camStatus } = await ImagePicker.requestCameraPermissionsAsync();
-  if (camStatus !== 'granted') {
+  const { status } = await ImagePicker.requestCameraPermissionsAsync();
+  if (status !== 'granted') {
     Alert.alert('Tilladelse mangler', 'Giv adgang til kameraet for at fortsætte.');
     return false;
   }
   return true;
 }
 
-export async function pickFromLibrary(): Promise<PickedMedia | null> {
-  const hasPermission = await ensurePermissions();
-  if (!hasPermission) return null;
-
-  const res = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ImagePicker.MediaTypeOptions.All,
-    quality: 0.8,
-    allowsEditing: false,
-    videoMaxDuration: 60,
-  });
-  if (res.canceled) return null;
-  const asset = res.assets?.[0];
-  if (!asset?.uri) {
-    Alert.alert('Fejl', 'Kunne ikke læse filen. Prøv igen.');
-    return null;
+function detectMediaType(asset: ImagePicker.ImagePickerAsset): MediaType {
+  if (asset.type === 'video') {
+    return 'video';
   }
 
-  let detectedType: MediaType = asset.type === 'video' ? 'video' : 'image';
-  if (asset.type !== 'video' && asset.uri) {
-    const lowerUri = asset.uri.toLowerCase();
-    if (
-      lowerUri.includes('.mp4') ||
-      lowerUri.includes('.mov') ||
-      lowerUri.includes('.m4v') ||
-      lowerUri.includes('video')
-    ) {
-      detectedType = 'video';
-    }
+  const checkableValue =
+    `${asset.mimeType ?? ''} ${asset.fileName ?? ''} ${asset.uri}`.toLowerCase();
+  return /\.(mp4|mov|m4v|webm)(?:$|[?#\s])/.test(checkableValue) ||
+    checkableValue.includes('video/')
+    ? 'video'
+    : 'image';
+}
+
+function isVideoWithinDurationLimit(duration?: number | null): boolean {
+  if (!duration) {
+    return true;
   }
 
-  if (detectedType === 'video' && asset.duration) {
-    const durationSeconds = asset.duration / MS_PER_SECOND;
-    if (durationSeconds > MAX_VIDEO_SECONDS) {
-      Alert.alert('Videoen er for lang', `Maksimal varighed er ${MAX_VIDEO_SECONDS} sekunder. Du valgte en video på ${Math.round(durationSeconds)} sekunder.`);
-      return null;
-    }
+  const durationSeconds = duration / MS_PER_SECOND;
+  if (durationSeconds <= MAX_VIDEO_SECONDS) {
+    return true;
   }
 
-  if (detectedType === 'image') {
-    const originalMimeType = asset.mimeType || 'unknown';
-    const isHeic =
-      originalMimeType.toLowerCase().includes('heic') ||
-      originalMimeType.toLowerCase().includes('heif') ||
-      asset.uri.toLowerCase().includes('.heic') ||
-      asset.uri.toLowerCase().includes('.heif');
+  Alert.alert(
+    'Videoen er for lang',
+    `Maksimal varighed er ${MAX_VIDEO_SECONDS} sekunder. Videoen er ${Math.round(durationSeconds)} sekunder.`,
+  );
+  return false;
+}
 
-    console.log('[pickFromLibrary] Converting image to JPEG', {
-      originalUri: asset.uri,
-      originalMimeType,
-      isHeic,
-      platform: Platform.OS,
+async function convertImageToJpeg(
+  asset: ImagePicker.ImagePickerAsset,
+): Promise<PickedMedia | null> {
+  try {
+    const actions: ImageManipulator.Action[] =
+      asset.width && asset.width > MAX_IMAGE_WIDTH ? [{ resize: { width: MAX_IMAGE_WIDTH } }] : [];
+    const result = await ImageManipulator.manipulateAsync(asset.uri, actions, {
+      compress: IMAGE_COMPRESSION,
+      format: ImageManipulator.SaveFormat.JPEG,
+      base64: true,
     });
 
-    const manipResult = await ImageManipulator.manipulateAsync(
-      asset.uri,
-      [],
-      { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG, base64: false },
-    );
+    if (!result.base64) {
+      throw new Error('JPEG conversion returned no image data');
+    }
 
-    console.log('[pickFromLibrary] JPEG conversion complete', {
-      convertedUri: manipResult.uri,
-      convertedMimeType: 'image/jpeg',
-      width: manipResult.width,
-      height: manipResult.height,
+    logger.log('[mediaPicker] Image converted to JPEG', {
+      width: result.width,
+      height: result.height,
+      originalMimeType: asset.mimeType ?? null,
     });
 
     return {
-      uri: manipResult.uri,
+      uri: result.uri,
       type: 'image',
-      width: manipResult.width,
-      height: manipResult.height,
+      base64: result.base64,
       mimeType: 'image/jpeg',
+      width: result.width,
+      height: result.height,
       fileName: asset.fileName ?? null,
     };
+  } catch (error) {
+    logger.error('[mediaPicker] JPEG conversion failed:', error);
+    Alert.alert('Fejl', 'Kunne ikke behandle billedet. Prøv igen.');
+    return null;
+  }
+}
+
+async function mapPickerAsset(asset: ImagePicker.ImagePickerAsset): Promise<PickedMedia | null> {
+  const type = detectMediaType(asset);
+  if (type === 'image') {
+    return convertImageToJpeg(asset);
+  }
+
+  if (!isVideoWithinDurationLimit(asset.duration)) {
+    return null;
   }
 
   return {
     uri: asset.uri,
     type: 'video',
+    base64: null,
+    mimeType: asset.mimeType ?? 'video/mp4',
     width: asset.width ?? null,
     height: asset.height ?? null,
     duration: asset.duration ?? null,
-    mimeType: asset.mimeType ?? null,
     fileName: asset.fileName ?? null,
   };
+}
+
+export async function pickFromLibrary(): Promise<PickedMedia | null> {
+  if (!(await ensurePermissions())) {
+    return null;
+  }
+
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images', 'videos'],
+    quality: 0.8,
+    allowsEditing: false,
+    videoMaxDuration: MAX_VIDEO_SECONDS,
+    base64: false,
+  });
+  if (result.canceled || !result.assets?.[0]?.uri) {
+    return null;
+  }
+
+  return mapPickerAsset(result.assets[0]);
 }
 
 export async function pickImageFromLibrary(): Promise<PickedMedia | null> {
-  const hasPermission = await ensurePermissions();
-  if (!hasPermission) return null;
-
-  const res = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ImagePicker.MediaTypeOptions.Images,
-    quality: 0.9,
-    allowsEditing: false,
-  });
-  if (res.canceled) return null;
-  const asset = res.assets?.[0];
-  if (!asset?.uri) {
-    Alert.alert('Fejl', 'Kunne ikke læse billedfilen. Prøv igen.');
+  if (!(await ensurePermissions())) {
     return null;
   }
 
-  const originalMimeType = asset.mimeType || 'unknown';
-  const isHeic =
-    originalMimeType.toLowerCase().includes('heic') ||
-    originalMimeType.toLowerCase().includes('heif') ||
-    asset.uri.toLowerCase().includes('.heic') ||
-    asset.uri.toLowerCase().includes('.heif');
-
-  console.log('[pickImageFromLibrary] Converting image to JPEG', {
-    originalUri: asset.uri,
-    originalMimeType,
-    isHeic,
-    platform: Platform.OS,
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'],
+    quality: 0.9,
+    allowsEditing: false,
+    base64: false,
   });
+  if (result.canceled || !result.assets?.[0]?.uri) {
+    return null;
+  }
 
-  const manipResult = await ImageManipulator.manipulateAsync(
-    asset.uri,
-    [],
-    { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG, base64: false },
-  );
-
-  return {
-    uri: manipResult.uri,
-    type: 'image',
-    width: manipResult.width,
-    height: manipResult.height,
-    mimeType: 'image/jpeg',
-    fileName: asset.fileName ?? null,
-  };
+  return convertImageToJpeg(result.assets[0]);
 }
 
 export async function pickCameraPhoto(): Promise<PickedMedia | null> {
-  const hasPermission = await ensureCameraPermissions();
-  if (!hasPermission) return null;
-
-  const res = await ImagePicker.launchCameraAsync({
-    mediaTypes: ImagePicker.MediaTypeOptions.Images,
-    quality: 0.9,
-  });
-  if (res.canceled) return null;
-  const asset = res.assets?.[0];
-  if (!asset?.uri) {
-    Alert.alert('Fejl', 'Kunne ikke læse billedfilen. Prøv igen.');
+  if (!(await ensureCameraPermissions())) {
     return null;
   }
 
-  // Convert to JPEG to avoid HEIC/format issues
-  const originalMimeType = asset.mimeType || 'unknown';
-  console.log('[pickCameraPhoto] Converting camera image to JPEG', {
-    originalUri: asset.uri,
-    originalMimeType,
+  const result = await ImagePicker.launchCameraAsync({
+    mediaTypes: ['images'],
+    quality: 0.9,
+    allowsEditing: false,
+    base64: false,
   });
+  if (result.canceled || !result.assets?.[0]?.uri) {
+    return null;
+  }
 
-  const manipResult = await ImageManipulator.manipulateAsync(
-    asset.uri,
-    [], // No transformations, just format conversion
-    { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG, base64: false },
-  );
-
-  console.log('[pickCameraPhoto] JPEG conversion complete', {
-    convertedUri: manipResult.uri,
-    convertedMimeType: 'image/jpeg',
-    width: manipResult.width,
-    height: manipResult.height,
-  });
-
-  return {
-    uri: manipResult.uri,
-    type: 'image',
-    width: manipResult.width,
-    height: manipResult.height,
-    mimeType: 'image/jpeg',
-    fileName: asset.fileName ?? null,
-  };
+  return convertImageToJpeg(result.assets[0]);
 }
 
 export async function recordVideo(): Promise<PickedMedia | null> {
-  const hasPermission = await ensureCameraPermissions();
-  if (!hasPermission) return null;
-
-  const res = await ImagePicker.launchCameraAsync({
-    mediaTypes: ImagePicker.MediaTypeOptions.Videos,
-    quality: 1,
-    videoMaxDuration: 60,
-  });
-  if (res.canceled) return null;
-  const asset = res.assets?.[0];
-  if (!asset?.uri) {
-    Alert.alert('Fejl', 'Kunne ikke læse videofilen. Prøv igen.');
+  if (!(await ensureCameraPermissions())) {
     return null;
   }
-  if (asset.duration) {
-    const durationSeconds = asset.duration / MS_PER_SECOND;
-    if (durationSeconds > MAX_VIDEO_SECONDS) {
-      Alert.alert('Videoen er for lang', `Maksimal varighed er ${MAX_VIDEO_SECONDS} sekunder. Du oprettede en video på ${Math.round(durationSeconds)} sekunder.`);
-      return null;
-    }
+
+  const result = await ImagePicker.launchCameraAsync({
+    mediaTypes: ['videos'],
+    quality: 1,
+    allowsEditing: false,
+    videoMaxDuration: MAX_VIDEO_SECONDS,
+    base64: false,
+  });
+  if (result.canceled || !result.assets?.[0]?.uri) {
+    return null;
   }
-  return {
-    uri: asset.uri,
-    type: 'video',
-    width: asset.width ?? null,
-    height: asset.height ?? null,
-    duration: asset.duration ?? null,
-    mimeType: asset.mimeType ?? null,
-    fileName: asset.fileName ?? null,
-  };
+
+  return mapPickerAsset(result.assets[0]);
 }
 
 export async function pickCameraVideo(): Promise<PickedMedia | null> {

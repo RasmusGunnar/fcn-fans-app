@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "skipLibCheck": true
+  },
+  "include": [
+    "src/components/MediaArticleCandidateCard.tsx",
+    "src/screens/AdminMediaArticlesScreen.tsx",
+    "src/services/mediaArticleApi.ts",
+    "src/utils/mediaArticleCandidates.ts"
+  ]
+}

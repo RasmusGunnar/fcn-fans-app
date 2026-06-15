@@ -30,19 +30,10 @@ export function CardActions({
   const iconSize = theme.spacing[5];
 
   const handleToggleLike = () => {
-    if (__DEV__) {
-      console.log('[CardActions] Like toggle clicked:', {
-        before: { liked, likes },
-        willToggle: !liked,
-      });
-    }
     onToggleLike();
   };
 
   const handlePressComment = () => {
-    if (__DEV__) {
-      console.log('[CardActions] Comment button clicked, handler type:', typeof onPressComment);
-    }
     onPressComment();
   };
 

@@ -42,11 +42,7 @@ CREATE POLICY "delete own comments_v2" ON public.comments_v2
 -- Allow app_admin role to delete any comment
 DROP POLICY IF EXISTS "admin delete comments_v2" ON public.comments_v2;
 CREATE POLICY "admin delete comments_v2" ON public.comments_v2
-  FOR DELETE USING (
-    auth.uid() IN (
-      SELECT id FROM public.profiles WHERE app_role = 'app_admin'
-    )
-  );
+  FOR DELETE USING (public.is_app_admin());
 
 -- Add comment counts function (optional, for future optimization)
 CREATE OR REPLACE FUNCTION public.get_comment_count(p_target_type comment_target_type, p_target_id text)

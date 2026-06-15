@@ -48,6 +48,17 @@ const WEEKLY_TOP_FAN_PROFILE_SELECT_ATTEMPTS = [
   'display_name, avatar_url, fan_level_key',
   'display_name, avatar_url',
 ] as const;
+const WEEKLY_TOP_FAN_DEBUG_ENABLED =
+  __DEV__ &&
+  process.env.EXPO_PUBLIC_WEEKLY_TOP_FAN_DEBUG?.trim().toLowerCase() === 'true';
+
+function logWeeklyTopFanWarning(message: string, details?: unknown): void {
+  if (!WEEKLY_TOP_FAN_DEBUG_ENABLED) {
+    return;
+  }
+
+  logger.warn(message, details);
+}
 
 function extractHighlightText(body: string): string {
   const cleaned = body
@@ -84,7 +95,7 @@ async function countRows(
   const { count, error } = await query;
 
   if (error) {
-    logger.warn(`[weeklyTopFanApi] countRows failed for ${table}:`, error);
+    logWeeklyTopFanWarning(`[weeklyTopFanApi] countRows failed for ${table}:`, error);
     return null;
   }
 
@@ -100,7 +111,10 @@ async function fetchWeeklyTopFanProfile(userId: string): Promise<WeeklyTopFanPro
       .maybeSingle();
 
     if (error) {
-      logger.warn('[weeklyTopFanApi] profile lookup failed for select:', { select, error });
+      logWeeklyTopFanWarning('[weeklyTopFanApi] profile lookup failed for select:', {
+        select,
+        error,
+      });
       continue;
     }
 
@@ -132,7 +146,7 @@ export async function fetchLatestPublishedWeeklyTopFan(
 ): Promise<FeedWeeklyTopFanData | null> {
   const expectedWeekStart = getLatestPublishedWeeklyTopFanWeekStart(baseDate);
 
-  if (__DEV__) {
+  if (WEEKLY_TOP_FAN_DEBUG_ENABLED) {
     console.log('[weeklyTopFanApi] fetching published weekly_top_fan row for expected week', {
       expectedWeekStart,
     });
@@ -166,8 +180,8 @@ export async function fetchLatestPublishedWeeklyTopFan(
     .maybeSingle();
 
   if (error) {
-    logger.warn('[weeklyTopFanApi] fetchLatestPublishedWeeklyTopFan failed:', error);
-    if (__DEV__) {
+    logWeeklyTopFanWarning('[weeklyTopFanApi] fetchLatestPublishedWeeklyTopFan failed:', error);
+    if (WEEKLY_TOP_FAN_DEBUG_ENABLED) {
       console.log('[weeklyTopFanApi] fetch failed', {
         message: error.message,
         name: error.name,
@@ -188,7 +202,10 @@ export async function fetchLatestPublishedWeeklyTopFan(
       .maybeSingle();
 
     if (fallbackError) {
-      logger.warn('[weeklyTopFanApi] fallback latest published weekly_top_fan lookup failed:', fallbackError);
+      logWeeklyTopFanWarning(
+        '[weeklyTopFanApi] fallback latest published weekly_top_fan lookup failed:',
+        fallbackError,
+      );
     }
 
     const fallbackRow = (fallbackData as Pick<
@@ -196,7 +213,7 @@ export async function fetchLatestPublishedWeeklyTopFan(
       'id' | 'week_start_date' | 'generated_at' | 'created_at'
     > | null) || null;
 
-    if (__DEV__) {
+    if (WEEKLY_TOP_FAN_DEBUG_ENABLED) {
       console.log('[weeklyTopFanApi] no published weekly_top_fan row found for expected week', {
         expectedWeekStart,
         latestAvailableWeekStart: fallbackRow?.week_start_date ?? null,
@@ -208,7 +225,7 @@ export async function fetchLatestPublishedWeeklyTopFan(
     return null;
   }
 
-  if (__DEV__) {
+  if (WEEKLY_TOP_FAN_DEBUG_ENABLED) {
     console.log('[weeklyTopFanApi] expected published row', {
       id: row.id,
       weekStartDate: row.week_start_date,
@@ -246,7 +263,7 @@ export async function fetchLatestPublishedWeeklyTopFan(
         ]);
 
       if (postError) {
-        logger.warn('[weeklyTopFanApi] referenced post lookup failed:', postError);
+        logWeeklyTopFanWarning('[weeklyTopFanApi] referenced post lookup failed:', postError);
       }
 
       const post = (postData as ReferencedPostRow | null) || null;
@@ -281,7 +298,10 @@ export async function fetchLatestPublishedWeeklyTopFan(
         ]);
 
       if (commentError) {
-        logger.warn('[weeklyTopFanApi] referenced comment lookup failed:', commentError);
+        logWeeklyTopFanWarning(
+          '[weeklyTopFanApi] referenced comment lookup failed:',
+          commentError,
+        );
       }
 
       const comment = (commentData as ReferencedCommentRow | null) || null;
@@ -291,8 +311,11 @@ export async function fetchLatestPublishedWeeklyTopFan(
       commentsCount = replyCount;
     }
   } catch (enrichmentError) {
-    logger.warn('[weeklyTopFanApi] failed to enrich weekly_top_fan row:', enrichmentError);
-    if (__DEV__) {
+    logWeeklyTopFanWarning(
+      '[weeklyTopFanApi] failed to enrich weekly_top_fan row:',
+      enrichmentError,
+    );
+    if (WEEKLY_TOP_FAN_DEBUG_ENABLED) {
       console.log('[weeklyTopFanApi] enrichment failed, using snapshot fallback', {
         id: row.id,
         weekStartDate: row.week_start_date,
@@ -326,7 +349,7 @@ export async function fetchLatestPublishedWeeklyTopFan(
     votesCount,
   };
 
-  if (__DEV__) {
+  if (WEEKLY_TOP_FAN_DEBUG_ENABLED) {
     console.log('[weeklyTopFanApi] mapped weekly_top_fan item', {
       id: item.id,
       weekStartDate: item.weekStartDate,

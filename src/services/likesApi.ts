@@ -106,8 +106,12 @@ export async function fetchCommentPreviews(
   const resultMap = new Map<string, CommentPreview[]>();
 
   try {
-    // Fetch latest 2 comments for each target
-    // MVP: Simple query per target (can be optimized with RPC later)
+    const commentsByTarget = new Map<
+      string,
+      { id: string; author_id: string; text: string; created_at: string }[]
+    >();
+
+    // Keep the existing per-target limit semantics, but hydrate all authors in one query.
     await Promise.all(
       targetIds.map(async (targetId) => {
         const { data, error } = await supabase
@@ -122,47 +126,60 @@ export async function fetchCommentPreviews(
           if (__DEV__) {
             logger.warn(`[fetchCommentPreviews] Error for ${targetId}:`, error);
           }
-          resultMap.set(targetId, []);
+          commentsByTarget.set(targetId, []);
           return;
         }
 
-        // Fetch author info (display_name, avatar_url) for the comments
-        const commentsWithAuthors = await Promise.all(
-          (data || []).map(async (comment) => {
-            const { data: profile, error: profileError } = await supabase
-              .from('profiles')
-              .select('id, display_name, avatar_url')
-              .eq('id', comment.author_id)
-              .single();
-
-            if (__DEV__ && profileError) {
-              logger.warn(
-                `[fetchCommentPreviews] Profile fetch error for ${comment.author_id.substring(0, 8)}:`,
-                profileError.message,
-              );
-            }
-
-            // Guard against undefined profile
-            if (!profile) {
-              return {
-                ...comment,
-                author_display_name: null,
-                author_avatar_url: null,
-              };
-            }
-
-            return {
-              ...comment,
-              author_display_name: profile.display_name || null,
-              author_avatar_url: profile.avatar_url || null,
-            };
-          }),
-        );
-
-        // Reverse to show oldest first (Instagram style)
-        resultMap.set(targetId, commentsWithAuthors.reverse());
+        commentsByTarget.set(targetId, data || []);
       }),
     );
+
+    const authorIds = [
+      ...new Set(
+        Array.from(commentsByTarget.values())
+          .flat()
+          .map((comment) => comment.author_id)
+          .filter(Boolean),
+      ),
+    ];
+    const profileMap = new Map<
+      string,
+      { display_name: string | null; avatar_url: string | null }
+    >();
+
+    if (authorIds.length > 0) {
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, display_name, avatar_url')
+        .in('id', authorIds);
+
+      if (profilesError) {
+        if (__DEV__) {
+          logger.warn('[fetchCommentPreviews] Batched profile fetch failed:', profilesError);
+        }
+      } else {
+        (profiles || []).forEach((profile) => {
+          profileMap.set(profile.id, {
+            display_name: profile.display_name ?? null,
+            avatar_url: profile.avatar_url ?? null,
+          });
+        });
+      }
+    }
+
+    targetIds.forEach((targetId) => {
+      const commentsWithAuthors = (commentsByTarget.get(targetId) || []).map((comment) => {
+        const profile = profileMap.get(comment.author_id);
+        return {
+          ...comment,
+          author_display_name: profile?.display_name ?? null,
+          author_avatar_url: profile?.avatar_url ?? null,
+        };
+      });
+
+      // Reverse to show oldest first (Instagram style).
+      resultMap.set(targetId, commentsWithAuthors.reverse());
+    });
   } catch (err) {
     if (__DEV__) {
       logger.warn('[fetchCommentPreviews] Error:', err);

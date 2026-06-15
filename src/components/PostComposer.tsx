@@ -1,33 +1,39 @@
+import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { useAuth } from '../auth/AuthProvider';
+import { useEntityAutocomplete } from '../hooks/useEntityAutocomplete';
 import { logger } from '../lib/logger';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  Pressable,
-  Image,
-  ActivityIndicator,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { Card } from './ui/Card';
-import { PrimaryButton } from './PrimaryButton';
-import { useTheme, Theme } from '../theme';
-import { PickedMedia, pickFromLibrary, pickCameraPhoto, recordVideo } from '../lib/mediaPicker';
-import { uploadMediaToSupabase } from '../lib/upload';
-import { useAuth } from '../auth/AuthProvider';
+  pickCameraPhoto,
+  pickFromLibrary,
+  recordVideo,
+  type PickedMedia,
+} from '../lib/mediaPicker';
 import { supabase } from '../lib/supabase';
-import { EntityAutocompleteList } from './composer/EntityAutocompleteList';
+import { uploadMediaToSupabase } from '../lib/upload';
 import { createMentionNotifications } from '../services/mentionNotifications';
-import { fetchLinkPreview } from '../services/newsApi';
 import { triggerMentionPush } from '../services/mentionPushApi';
+import { fetchLinkPreview } from '../services/newsApi';
 import { persistPostEntities } from '../services/postEntities';
-import { useEntityAutocomplete } from '../hooks/useEntityAutocomplete';
-import { useFeed } from '../state/FeedContext';
-import { Post } from '../types/post';
-import type { Actor } from '../types/news';
 import { triggerCommunityPostPush } from '../services/postPushApi';
+import { useFeed } from '../state/FeedContext';
+import { type Theme, useTheme } from '../theme';
+import type { Actor } from '../types/news';
+import { normalizePostType, type Post } from '../types/post';
 import { extractFirstUrl, normalizeLinkPreview } from '../utils/linkPreview';
+import { buildPostInsertPayload, shouldSyncPostToHome } from '../utils/postComposerPayload';
+import { EntityAutocompleteList } from './composer/EntityAutocompleteList';
+import { PrimaryButton } from './PrimaryButton';
+import { Card } from './ui/Card';
 
 interface PostComposerProps {
   onSuccess?: () => void;
@@ -36,7 +42,6 @@ interface PostComposerProps {
 }
 
 export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProps) {
-  logger.log('[PostComposer] Component mounted');
   const theme = useTheme();
   const styles = createStyles(theme);
   const { user } = useAuth();
@@ -65,9 +70,7 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
   });
 
   const refocusInput = useCallback(() => {
-    requestAnimationFrame(() => {
-      inputRef.current?.focus();
-    });
+    requestAnimationFrame(() => inputRef.current?.focus());
   }, []);
 
   const handleSelectMentionSuggestion = useCallback(
@@ -87,51 +90,94 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
   );
 
   const handlePickLibrary = async () => {
-    logger.log('[PostComposer] Pick from library clicked');
     try {
       const asset = await pickFromLibrary();
       if (asset) {
-        logger.log('[PostComposer] Media selected from library');
         setAttachment(asset);
-      } else {
-        logger.log('[PostComposer] Library picker cancelled (no asset returned)');
       }
-    } catch (e: any) {
-      logger.error('[PostComposer] Pick library error:', e);
-      alert('Kunne ikke vælge medie: ' + (e?.message || e));
+    } catch (error: any) {
+      logger.error('[PostComposer] Pick library error:', error);
+      alert('Kunne ikke vælge medie: ' + (error?.message || error));
     }
   };
 
   const handlePickCamera = async () => {
-    logger.log('[PostComposer] Take photo clicked');
     try {
       const asset = await pickCameraPhoto();
       if (asset) {
-        logger.log('[PostComposer] Photo taken');
         setAttachment(asset);
-      } else {
-        logger.log('[PostComposer] Camera cancelled (no asset returned)');
       }
-    } catch (e: any) {
-      logger.error('[PostComposer] Camera error:', e);
-      alert('Kunne ikke tage billede: ' + (e?.message || e));
+    } catch (error: any) {
+      logger.error('[PostComposer] Camera error:', error);
+      alert('Kunne ikke tage billede: ' + (error?.message || error));
     }
   };
 
   const handleRecordVideo = async () => {
-    logger.log('[PostComposer] Record video clicked');
     try {
       const asset = await recordVideo();
       if (asset) {
-        logger.log('[PostComposer] Video recorded');
         setAttachment(asset);
-      } else {
-        logger.log('[PostComposer] Video recording cancelled (no asset returned)');
       }
-    } catch (e: any) {
-      logger.error('[PostComposer] Record video error:', e);
-      alert('Kunne ikke optage video: ' + (e?.message || e));
+    } catch (error: any) {
+      logger.error('[PostComposer] Record video error:', error);
+      alert('Kunne ikke optage video: ' + (error?.message || error));
     }
+  };
+
+  const runPostPublishSideEffects = async (postId: string, publishedText: string) => {
+    let mentionedProfiles: Awaited<ReturnType<typeof persistPostEntities>>['mentionedProfiles'] =
+      [];
+
+    try {
+      ({ mentionedProfiles } = await persistPostEntities(postId, publishedText));
+    } catch (error) {
+      logger.warn('[PostComposer] persistPostEntities failed:', { postId, error });
+    }
+
+    void (async () => {
+      if (mentionedProfiles.length > 0 && user?.id) {
+        const [notificationResult, pushResult] = await Promise.allSettled([
+          createMentionNotifications({
+            mentionedUsernames: mentionedProfiles
+              .map((profile) => profile.username)
+              .filter((username): username is string => Boolean(username)),
+            actorId: user.id,
+            postId,
+            entityType: 'post',
+            entityId: postId,
+          }),
+          triggerMentionPush({
+            actorUserId: user.id,
+            mentionedUserIds: mentionedProfiles.map((profile) => profile.id),
+            entityType: 'post',
+            entityId: postId,
+            postId,
+            previewText: publishedText,
+          }),
+        ]);
+
+        if (notificationResult.status === 'rejected') {
+          logger.warn('[PostComposer] createMentionNotifications failed:', {
+            postId,
+            error: notificationResult.reason,
+          });
+        }
+        if (pushResult.status === 'rejected' || !pushResult.value) {
+          logger.warn('[PostComposer] triggerMentionPush failed:', {
+            postId,
+            error: pushResult.status === 'rejected' ? pushResult.reason : 'non-ok response',
+          });
+        }
+      }
+
+      if (actor?.type === 'community') {
+        const didTriggerCommunityPush = await triggerCommunityPostPush(postId);
+        if (!didTriggerCommunityPush) {
+          logger.warn('[PostComposer] triggerCommunityPostPush returned false', { postId });
+        }
+      }
+    })();
   };
 
   const handlePublish = async () => {
@@ -140,221 +186,136 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
       alert('Skriv noget før du udgiver!');
       return;
     }
+    if (!user?.id) {
+      alert('Du skal være logget ind for at oprette et opslag.');
+      return;
+    }
 
     setLoading(true);
-    let mediaArray: Post['media'] = [];
-    const firstUrl = extractFirstUrl(normalizedText);
-    let linkPreview = null;
+    let media: Post['media'] = [];
 
     try {
-      // Upload attachment if present (reuse existing upload flow)
-      if (attachment && user?.id) {
-        logger.log('[PostComposer] Uploading attachment for user', { userId: user.id });
+      if (attachment) {
         const uploaded = await uploadMediaToSupabase(user.id, attachment);
-
-        // Sanity check: path must exist after upload
-        if (!uploaded.path) {
-          throw new Error(`Upload returned invalid result - path: ${uploaded.path}`);
-        }
-
-        // Save bucket + path structure (NOT URLs) - exactly as existing code does
-        mediaArray = [
+        media = [
           {
-            bucket: 'post-media',
+            bucket: uploaded.bucket,
             path: uploaded.path,
             type: uploaded.type,
+            mimeType: uploaded.mimeType,
             width: uploaded.width,
             height: uploaded.height,
+            duration: uploaded.duration,
+            ...(uploaded.thumbnail_path && uploaded.thumbnail_bucket
+              ? {
+                  thumbnail_path: uploaded.thumbnail_path,
+                  thumbnail_bucket: uploaded.thumbnail_bucket,
+                }
+              : {}),
           },
         ];
-        logger.log('[PostComposer] Attachment uploaded', {
-          bucket: 'post-media',
+        logger.log('[PostComposer] Upload result', {
+          type: uploaded.type,
+          bucket: uploaded.bucket,
           path: uploaded.path,
+          thumbnailPath: uploaded.thumbnail_path ?? null,
         });
-      } else if (attachment && !user?.id) {
-        throw new Error('Vedhæftning valgt men bruger ikke logget ind');
       }
-    } catch (e: any) {
-      logger.error('[PostComposer] Upload error', e);
-      alert('Upload fejlede: ' + (e?.message ?? String(e)));
+    } catch (error: any) {
+      logger.error('[PostComposer] Upload error', error);
+      alert('Upload fejlede: ' + (error?.message ?? String(error)));
       setLoading(false);
       return;
     }
 
+    let linkPreview = null;
+    const firstUrl = extractFirstUrl(normalizedText);
     if (firstUrl) {
       try {
         linkPreview = await fetchLinkPreview(firstUrl);
       } catch (error) {
-        logger.warn('[PostComposer] Link preview fetch failed, continuing without preview', {
+        logger.warn('[PostComposer] Link preview fetch failed; publishing without preview', {
           url: firstUrl,
           error,
         });
       }
     }
 
-    // Insert post and fetch it back from DB to ensure consistency (exactly as existing code)
-    let dbPost: Post | null = null;
+    const insertPayload = buildPostInsertPayload(user.id, normalizedText, actor, feedTargets, {
+      media,
+      linkPreview,
+    });
+    logger.log('[PostComposer] Insert payload', {
+      actor_type: insertPayload.actor_type,
+      actor_id: insertPayload.actor_id,
+      community_id: 'community_id' in insertPayload ? insertPayload.community_id : null,
+      feed_targets: insertPayload.feed_targets,
+      mediaLength: insertPayload.media.length,
+      media_type: 'media_type' in insertPayload ? insertPayload.media_type : null,
+    });
+
+    let dbPost: Post;
     try {
-      if (user?.id) {
-        const resolvedActorType = actor?.type ?? 'user';
-        const resolvedActorId = actor?.type === 'community' ? actor.id : user.id;
-        const resolvedFeedTargets =
-          Array.isArray(feedTargets) && feedTargets.length > 0
-            ? feedTargets
-            : actor?.type === 'community'
-              ? [`community:${actor.id}`]
-              : ['home'];
-
-        const { data, error } = await supabase
-          .from('posts')
-          .insert({
-            author_id: user.id,
-            actor_type: resolvedActorType,
-            actor_id: resolvedActorId,
-            text: normalizedText,
-            media: mediaArray,
-            feed_targets: resolvedFeedTargets,
-            link_preview: linkPreview,
-            media_type: attachment?.type ?? null,
-            ...(actor?.type === 'community' ? { community_id: actor.id } : {}),
-          })
-          .select(
-            'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets, link_preview',
-          );
-        if (error) throw error;
-
-        if (data && data[0]) {
-          const dbRecord = data[0];
-          const actorDisplayName =
-            actor?.type === 'community' ? actor.name : (user?.email ?? 'Ukendt');
-          const actorAvatarUrl = actor?.type === 'community' ? (actor.avatarUrl ?? null) : null;
-          // DB-returned post is the source of truth
-          dbPost = {
-            id: dbRecord.id,
-            authorName: user?.email ?? 'Ukendt',
-            authorId: dbRecord.author_id,
-            actorType: dbRecord.actor_type ?? 'user',
-            actorId: dbRecord.actor_id ?? dbRecord.author_id,
-            actorDisplayName,
-            actorAvatarUrl,
-            communityName: actor?.type === 'community' ? actor.name : undefined,
-            communityId: dbRecord.community_id ?? null,
-            feedTargets: dbRecord.feed_targets ?? ['home'],
-            createdAt: dbRecord.created_at || new Date().toISOString(),
-            text: dbRecord.text,
-            linkPreview: normalizeLinkPreview(dbRecord.link_preview),
-            likesCount: 0,
-            commentsCount: 0,
-            likedByMe: false,
-            media: dbRecord.media, // Use DB media (may be parsed as array or string)
-          };
-          logger.log('[PostComposer] Post inserted and fetched from DB:', {
-            postId: dbPost.id,
-            media: dbPost.media,
-          });
-
-          const { mentionedProfiles } = await persistPostEntities(
-            dbRecord.id,
-            dbRecord.text ?? normalizedText,
-          );
-
-          void (async () => {
-            if (mentionedProfiles.length > 0) {
-              const [mentionNotificationsResult, mentionPushResult] = await Promise.allSettled([
-                createMentionNotifications({
-                  mentionedUsernames: mentionedProfiles
-                    .map((profile) => profile.username)
-                    .filter((username): username is string => Boolean(username)),
-                  actorId: user.id,
-                  postId: dbRecord.id,
-                  entityType: 'post',
-                  entityId: dbRecord.id,
-                }),
-                triggerMentionPush({
-                  actorUserId: user.id,
-                  mentionedUserIds: mentionedProfiles.map((profile) => profile.id),
-                  entityType: 'post',
-                  entityId: dbRecord.id,
-                  postId: dbRecord.id,
-                  previewText: dbRecord.text ?? normalizedText,
-                }),
-              ]);
-
-              if (mentionNotificationsResult.status === 'rejected') {
-                logger.warn('[PostComposer] createMentionNotifications failed:', {
-                  postId: dbRecord.id,
-                  error: mentionNotificationsResult.reason,
-                });
-              }
-
-              if (mentionPushResult.status === 'rejected') {
-                logger.warn('[PostComposer] triggerMentionPush failed:', {
-                  postId: dbRecord.id,
-                  error: mentionPushResult.reason,
-                });
-              } else if (!mentionPushResult.value) {
-                logger.warn('[PostComposer] triggerMentionPush returned false', {
-                  postId: dbRecord.id,
-                });
-              }
-            }
-
-            if (actor?.type === 'community') {
-              try {
-                const didTriggerCommunityPush = await triggerCommunityPostPush(dbRecord.id);
-                if (!didTriggerCommunityPush) {
-                  logger.warn('[PostComposer] triggerCommunityPostPush returned false', {
-                    postId: dbRecord.id,
-                  });
-                }
-              } catch (error) {
-                logger.warn('[PostComposer] triggerCommunityPostPush failed:', {
-                  postId: dbRecord.id,
-                  error,
-                });
-              }
-            }
-          })();
-        }
+      const { data, error } = await supabase
+        .from('posts')
+        .insert(insertPayload)
+        .select(
+          'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets, link_preview, post_type',
+        )
+        .single();
+      if (error) {
+        throw error;
       }
-    } catch (e) {
-      logger.warn('[PostComposer] Insert post error', e);
+      if (!data) {
+        throw new Error('Databasen returnerede ikke det oprettede opslag.');
+      }
+
+      dbPost = {
+        id: data.id,
+        postType: normalizePostType(data.post_type),
+        authorName: user.email ?? 'Ukendt',
+        authorId: data.author_id,
+        actorType: data.actor_type ?? insertPayload.actor_type,
+        actorId: data.actor_id ?? insertPayload.actor_id,
+        actorDisplayName: actor?.type === 'community' ? actor.name : (user.email ?? 'Ukendt'),
+        actorAvatarUrl: actor?.type === 'community' ? (actor.avatarUrl ?? null) : null,
+        communityName: actor?.type === 'community' ? actor.name : undefined,
+        communityId: data.community_id ?? null,
+        feedTargets: Array.isArray(data.feed_targets)
+          ? data.feed_targets
+          : insertPayload.feed_targets,
+        createdAt: data.created_at || new Date().toISOString(),
+        text: data.text,
+        linkPreview: normalizeLinkPreview(data.link_preview),
+        likesCount: 0,
+        commentsCount: 0,
+        likedByMe: false,
+        media: data.media,
+      };
+
+      logger.log('[PostComposer] Inserted row', {
+        id: dbPost.id,
+        actor_type: dbPost.actorType,
+        actor_id: dbPost.actorId,
+        community_id: dbPost.communityId,
+        feed_targets: dbPost.feedTargets,
+        mediaLength: Array.isArray(dbPost.media) ? dbPost.media.length : 0,
+      });
+    } catch (error: any) {
+      logger.warn('[PostComposer] Insert post error', error);
+      alert('Opslaget kunne ikke gemmes: ' + (error?.message ?? 'Prøv igen'));
+      setLoading(false);
+      return;
     }
 
-    // Use DB-fetched post if available, otherwise fallback to locally constructed
-    const newPost: Post = dbPost || {
-      id: Date.now().toString(),
-      authorName: user?.email ?? 'Ukendt',
-      authorId: user?.id,
-      actorType: actor?.type ?? 'user',
-      actorId: actor?.type === 'community' ? actor.id : user?.id,
-      actorDisplayName: actor?.type === 'community' ? actor.name : (user?.email ?? 'Ukendt'),
-      actorAvatarUrl: actor?.type === 'community' ? (actor.avatarUrl ?? null) : null,
-      communityName: actor?.type === 'community' ? actor.name : undefined,
-      communityId: actor?.type === 'community' ? actor.id : null,
-      createdAt: new Date().toISOString(),
-      text: normalizedText,
-      linkPreview,
-      likesCount: 0,
-      commentsCount: 0,
-      likedByMe: false,
-      media: mediaArray,
-      feedTargets:
-        Array.isArray(feedTargets) && feedTargets.length > 0
-          ? feedTargets
-          : actor?.type === 'community'
-            ? [`community:${actor.id}`]
-            : ['home'],
-    };
+    await runPostPublishSideEffects(dbPost.id, dbPost.text);
 
-    addPost(newPost);
-
-    // Optional: Soft refresh to sync with DB (ensures no duplicates due to dedupe logic)
-    try {
-      await fetchPosts();
-    } catch (e) {
-      if (__DEV__) {
-        logger.log('[PostComposer] Post-creation refresh skipped:', e);
+    if (shouldSyncPostToHome(insertPayload.feed_targets)) {
+      addPost(dbPost);
+      try {
+        await fetchPosts();
+      } catch (error) {
+        logger.warn('[PostComposer] Post-creation Home refresh failed:', error);
       }
     }
 
@@ -363,7 +324,6 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
     setSelection({ start: 0, end: 0 });
     clearAutocomplete();
     setAttachment(null);
-    logger.log('[PostComposer] Post published successfully, calling onSuccess');
     onSuccess?.();
   };
 
@@ -433,12 +393,10 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
               <Ionicons name="camera" size={20} color={theme.colors.text.secondary} />
               <Text style={styles.imageButtonText}>Tag billede</Text>
             </Pressable>
-
             <Pressable style={styles.imageButton} onPress={handleRecordVideo} disabled={loading}>
               <Ionicons name="videocam" size={20} color={theme.colors.text.secondary} />
               <Text style={styles.imageButtonText}>Optag video</Text>
             </Pressable>
-
             <Pressable style={styles.imageButton} onPress={handlePickLibrary} disabled={loading}>
               <Ionicons name="images" size={20} color={theme.colors.text.secondary} />
               <Text style={styles.imageButtonText}>Vælg fra bibliotek</Text>
@@ -511,6 +469,20 @@ function createStyles(theme: Theme) {
       borderRadius: theme.radius.sm,
       backgroundColor: theme.colors.border.default,
     },
+    previewVideoPlaceholder: {
+      width: '100%',
+      height: 200,
+      borderRadius: theme.radius.sm,
+      backgroundColor: theme.colors.bg.subtle,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: theme.spacing[2],
+    },
+    previewVideoText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: theme.colors.text.secondary,
+    },
     removeAttachment: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -571,20 +543,6 @@ function createStyles(theme: Theme) {
     loadingOverlay: {
       marginTop: theme.spacing[2],
       alignItems: 'center',
-    },
-    previewVideoPlaceholder: {
-      width: '100%',
-      height: 200,
-      borderRadius: theme.radius.sm,
-      backgroundColor: theme.colors.bg.subtle,
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: theme.spacing[2],
-    },
-    previewVideoText: {
-      fontSize: 14,
-      fontWeight: '600',
-      color: theme.colors.text.secondary,
     },
   });
 }

@@ -2,10 +2,11 @@ import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { fetchCommentCounts, fetchCommentPreviews, fetchLikeStates, fetchMyLikedIds, type CommentPreview } from './likesApi';
 import type { FanLevelKey } from '../types/fan';
-import type { Post } from '../types/post';
+import { normalizePostType, type Post } from '../types/post';
 import { resolveAvatarUrl } from '../utils/avatar';
 import { normalizeLinkPreview } from '../utils/linkPreview';
 import { normalizeMedia } from '../utils/media';
+import { POST_ENGAGEMENT_TARGET_TYPE } from '../utils/postEngagement';
 
 type PostAuthorProfile = {
   display_name: string | null;
@@ -39,6 +40,7 @@ type PostRow = {
   feed_targets: unknown;
   poll_data: Post['poll_data'];
   link_preview: unknown;
+  post_type: unknown;
 };
 
 const PROFILE_SELECT_ATTEMPTS = [
@@ -125,7 +127,7 @@ export async function fetchPostDetailById(
   const { data, error } = await supabase
     .from('posts')
     .select(
-      'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets, poll_data, link_preview',
+      'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets, poll_data, link_preview, post_type',
     )
     .eq('id', normalizedPostId)
     .maybeSingle();
@@ -149,10 +151,12 @@ export async function fetchPostDetailById(
     await Promise.all([
       authorProfilePromise,
       fetchCommunityIdentity(communityIdentityId),
-      fetchLikeStates('post', [normalizedPostId]),
-      fetchCommentCounts('post', [normalizedPostId]),
-      fetchCommentPreviews('post', [normalizedPostId]),
-      currentUserId ? fetchMyLikedIds(currentUserId, 'post', [normalizedPostId]) : Promise.resolve(new Set<string>()),
+      fetchLikeStates(POST_ENGAGEMENT_TARGET_TYPE, [normalizedPostId]),
+      fetchCommentCounts(POST_ENGAGEMENT_TARGET_TYPE, [normalizedPostId]),
+      fetchCommentPreviews(POST_ENGAGEMENT_TARGET_TYPE, [normalizedPostId]),
+      currentUserId
+        ? fetchMyLikedIds(currentUserId, POST_ENGAGEMENT_TARGET_TYPE, [normalizedPostId])
+        : Promise.resolve(new Set<string>()),
     ]);
 
   const displayName = authorProfile?.display_name?.trim() || 'Fan';
@@ -166,6 +170,7 @@ export async function fetchPostDetailById(
 
   const post: Post = {
     id: row.id,
+    postType: normalizePostType(row.post_type),
     authorName: displayName,
     authorId: row.author_id,
     authorDisplayName: authorProfile?.display_name ?? null,

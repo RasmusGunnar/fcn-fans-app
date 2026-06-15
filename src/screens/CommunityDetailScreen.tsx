@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -9,6 +9,8 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Modal,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Platform,
   Pressable,
   ScrollView,
@@ -54,10 +56,16 @@ import { fetchPrimaryFixture, Fixture, formatDateDa } from '../services/fixtures
 import { useCreateSheet } from '../state/CreateSheetContext';
 import { useFeed } from '../state/FeedContext';
 import { useTheme } from '../theme';
-import { getFeedItemKey } from '../types/feed';
-import { Post } from '../types/post';
+import { getFeedItemKey, type FeedItem } from '../types/feed';
+import { normalizePostType, Post } from '../types/post';
+import { toPostFeedItem } from '../utils/homeFeed';
+import { normalizeMedia } from '../utils/media';
+import { normalizeLinkPreview } from '../utils/linkPreview';
 import { resolveAvatarUrl } from '../utils/avatar';
 import { resolveProfileDisplayName } from '../utils/actor';
+import { buildCommunityFeedTargetFilter } from '../utils/communityFeedTargets';
+import { getFeedItemVisibleMediaKind } from '../utils/homeStartupPerformance';
+import { selectActiveInlineVideoKey } from '../utils/videoPlaybackBehavior';
 
 type CommunityDetailRouteProp = RouteProp<
   { CommunityDetail: { id: string; title: string } },
@@ -70,10 +78,8 @@ export default function CommunityDetailScreen() {
   const { id } = route.params || {};
   const insets = useSafeAreaInsets();
   const theme = useTheme();
-  const USE_UNIFIED_COMMUNITY_FEED = true;
   const { user, isAppAdmin } = useAuth();
   const {
-    feedItems,
     profileMap,
     communityMap,
     likeMap,
@@ -86,7 +92,7 @@ export default function CommunityDetailScreen() {
     incrementCommentCount,
     addCommentPreview,
   } = useFeed();
-  const { openCreateSheet } = useCreateSheet();
+  const { openCreateSheet, visible: createSheetVisible } = useCreateSheet();
 
   const [community, setCommunity] = useState<CommunityData | null>(null);
   const [membership, setMembership] = useState<any>(null);
@@ -125,25 +131,86 @@ export default function CommunityDetailScreen() {
   const [postText, setPostText] = useState('');
   const [posts, setPosts] = useState<Post[]>([]);
   const [postLikes, setPostLikes] = useState<Record<string, boolean>>({});
+  const [communityPostFeedItems, setCommunityPostFeedItems] = useState<FeedItem[]>([]);
+  const [loadingCommunityFeed, setLoadingCommunityFeed] = useState(false);
 
-  const safeFeedItems = (Array.isArray(feedItems) ? feedItems : []).filter(Boolean);
+  // Scroll-driven single-video autoplay — same principle as Home feed.
+  // We track each feed card's y/height via onLayout refs and compare against
+  // the current scroll offset to find the first card that is ≥60% visible.
+  const [activeVideoKey, setActiveVideoKey] = useState<string | null>(null);
+  const scrollYRef = useRef(0);
+  const feedCardLayoutsRef = useRef<Record<string, { y: number; height: number }>>({});
+  const feedSectionYRef = useRef(0);
+  const scrollViewportHeightRef = useRef(0);
+  const isCommunityFeedFocusedRef = useRef(false);
+  // Track previous CreateSheet visibility so we reload the community feed
+  // exactly once when the sheet closes (e.g. after a new post is submitted).
+  const prevCreateSheetVisibleRef = useRef(false);
+
   const safeProfileMap = profileMap || {};
   const safeCommunityMap = communityMap || {};
   const safeLikeMap = likeMap || {};
   const safeCommentCountMap = commentCountMap || {};
   const safeCommentPreviewMap = commentPreviewMap || {};
 
-  const communityFeedItems = safeFeedItems.filter((item) => {
-    if (item.kind === 'post') {
-      const post = item.data as any;
-      const feedTargets = Array.isArray(post.feedTargets) ? post.feedTargets : [];
-      return feedTargets.includes(`community:${id}`) || post.communityId === id;
-    }
-    if (item.kind === 'news')
-      return item.data.actorType === 'community' && item.data.actorId === id;
-    if (item.kind === 'event' || item.kind === 'bus_trip') return item.data.organizerGroupId === id;
-    return false;
-  });
+  // communityFeedItems is now the dedicated query result; the global feedItems
+  // array is no longer used for community post rendering.
+  const communityFeedItems = communityPostFeedItems;
+
+  // Recompute the first sufficiently visible video for the current scroll position.
+  // Called on scroll events and when layouts change.
+  const recomputeActiveVideoKey = useCallback(() => {
+    const nextKey = isCommunityFeedFocusedRef.current
+      ? selectActiveInlineVideoKey(
+          feedCardLayoutsRef.current,
+          scrollYRef.current,
+          scrollViewportHeightRef.current,
+          feedSectionYRef.current,
+          0.6,
+        )
+      : null;
+
+    setActiveVideoKey((current) => (current === nextKey ? current : nextKey));
+  }, []);
+
+  const handleScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      scrollYRef.current = e.nativeEvent.contentOffset.y;
+      recomputeActiveVideoKey();
+    },
+    [recomputeActiveVideoKey],
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      isCommunityFeedFocusedRef.current = true;
+      const frame = requestAnimationFrame(recomputeActiveVideoKey);
+
+      return () => {
+        cancelAnimationFrame(frame);
+        isCommunityFeedFocusedRef.current = false;
+        setActiveVideoKey(null);
+      };
+    }, [recomputeActiveVideoKey]),
+  );
+
+  React.useEffect(() => {
+    const videoKeys = new Set(
+      communityFeedItems
+        .filter((item) => getFeedItemVisibleMediaKind(item) === 'video')
+        .map(getFeedItemKey),
+    );
+
+    Object.keys(feedCardLayoutsRef.current).forEach((key) => {
+      if (!videoKeys.has(key)) {
+        delete feedCardLayoutsRef.current[key];
+      }
+    });
+    setActiveVideoKey((current) => (current && !videoKeys.has(current) ? null : current));
+
+    const frame = requestAnimationFrame(recomputeActiveVideoKey);
+    return () => cancelAnimationFrame(frame);
+  }, [communityFeedItems, recomputeActiveVideoKey]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -189,8 +256,148 @@ export default function CommunityDetailScreen() {
     const communityEvents = await fetchEventsUpcoming(5, id);
     setEvents(communityEvents);
 
+    // Load community posts directly — dedicated query, not filtered from global feed
+    await loadCommunityFeed();
+
     setLoading(false);
   };
+
+  const loadCommunityFeed = useCallback(async () => {
+    if (!id) return;
+    setLoadingCommunityFeed(true);
+    try {
+      const communityTarget = `community:${id}`;
+      const feedTargetFilter = buildCommunityFeedTargetFilter(id);
+      logger.log('[CommunityFeed][query]', {
+        communityId: id,
+        communityTarget,
+        feedTargetFilter,
+      });
+
+      // The hosted feed_targets column is JSONB, so PostgREST needs a JSON
+      // containment operand. Passing a JS array serializes as PostgreSQL text[].
+      const { data, error } = await supabase
+        .from('posts')
+        .select(
+          'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets, poll_data, link_preview, post_type',
+        )
+        .contains('feed_targets', feedTargetFilter)
+        .order('created_at', { ascending: false })
+        .limit(30);
+
+      if (error) {
+        logger.warn('[CommunityFeed][query]', {
+          communityId: id,
+          communityTarget,
+          error,
+        });
+        return;
+      }
+
+      const rows = data ?? [];
+
+      // Self-contained profile fetch — do not rely on the global Home profileMap
+      // which only covers the 25 rows fetched for the home feed.
+      const authorIds = [...new Set(rows.map((r) => r.author_id).filter(Boolean))];
+      let resolvedProfiles: Record<
+        string,
+        { display_name: string | null; avatar_url: string | null; fan_level_key: string | null }
+      > = {};
+      if (authorIds.length > 0) {
+        const profileSelectAttempts = [
+          'id, display_name, avatar_url, fan_level_key',
+          'id, display_name, avatar_url',
+        ] as const;
+        for (const sel of profileSelectAttempts) {
+          const { data: profileRows, error: profileError } = await supabase
+            .from('profiles')
+            .select(sel)
+            .in('id', authorIds);
+          if (!profileError && profileRows) {
+            (profileRows as any[]).forEach((p) => {
+              resolvedProfiles[p.id] = {
+                display_name: p.display_name ?? null,
+                avatar_url: p.avatar_url ?? null,
+                fan_level_key: p.fan_level_key ?? null,
+              };
+            });
+            break;
+          }
+        }
+      }
+
+      // Resolve the community's own avatar URL for community-actor posts.
+      // We fetch it here so this function works correctly on CreateSheet-close
+      // reload as well as the initial load (where `community` state may not yet
+      // reflect the latest DB value inside this callback's closure).
+      let communityAvatarUrl: string | null = null;
+      const hasCommunityActorPosts = rows.some((r) => r.actor_type === 'community');
+      if (hasCommunityActorPosts) {
+        const { data: commRow } = await supabase
+          .from('communities')
+          .select('avatar_url, avatar_path')
+          .eq('id', id)
+          .single();
+        if (commRow) {
+          communityAvatarUrl = resolveAvatarUrl(commRow.avatar_url ?? commRow.avatar_path ?? null);
+        }
+      }
+
+      const feedItems: FeedItem[] = rows.map((dbPost) => {
+        const profile = resolvedProfiles[dbPost.author_id] ?? null;
+        const post: Post = {
+          id: dbPost.id,
+          postType: normalizePostType(dbPost.post_type),
+          authorName: profile?.display_name ?? 'Fan',
+          authorId: dbPost.author_id,
+          authorDisplayName: profile?.display_name ?? null,
+          authorAvatarUrl: profile?.avatar_url ?? null,
+          authorFanLevelKey: (profile?.fan_level_key as any) ?? null,
+          actorType: dbPost.actor_type ?? 'user',
+          actorId: dbPost.actor_id ?? dbPost.author_id,
+          actorDisplayName: dbPost.actor_type === 'community' ? null : (profile?.display_name ?? null),
+          actorAvatarUrl: dbPost.actor_type === 'community' ? communityAvatarUrl : null,
+          communityId: dbPost.community_id ?? null,
+          feedTargets: Array.isArray(dbPost.feed_targets)
+            ? dbPost.feed_targets
+            : [`community:${id}`],
+          createdAt: dbPost.created_at,
+          text: dbPost.text,
+          poll_data: dbPost.poll_data ?? null,
+          linkPreview: normalizeLinkPreview(dbPost.link_preview),
+          likesCount: 0,
+          commentsCount: 0,
+          likedByMe: false,
+          media: normalizeMedia(dbPost.media),
+        };
+        return toPostFeedItem(post);
+      });
+
+      logger.log('[CommunityFeed][rows]', {
+        communityId: id,
+        communityTarget,
+        rowCount: rows.length,
+        rowIds: rows.map((row) => row.id),
+        rendererItemKeys: feedItems.map((item) => getFeedItemKey(item)),
+      });
+      setCommunityPostFeedItems(feedItems);
+    } catch (err) {
+      logger.warn('[CommunityDetail] Community feed load error:', err);
+    } finally {
+      setLoadingCommunityFeed(false);
+    }
+  }, [id]);
+
+  // Reload the community feed whenever the global CreateSheet closes.
+  // This is the primary mechanism for showing a new post immediately after
+  // the user submits it from inside the community screen, because closing
+  // a Modal does not trigger a React Navigation focus event.
+  React.useEffect(() => {
+    if (prevCreateSheetVisibleRef.current && !createSheetVisible) {
+      loadCommunityFeed();
+    }
+    prevCreateSheetVisibleRef.current = createSheetVisible;
+  }, [createSheetVisible, loadCommunityFeed]);
 
   const handleJoinLeave = async () => {
     if (!membership) {
@@ -808,6 +1015,12 @@ export default function CommunityDetailScreen() {
         <ScrollView
           style={styles.scrollView}
           showsVerticalScrollIndicator={false}
+          scrollEventThrottle={100}
+          onScroll={handleScroll}
+          onLayout={(event) => {
+            scrollViewportHeightRef.current = event.nativeEvent.layout.height;
+            recomputeActiveVideoKey();
+          }}
           contentContainerStyle={[
             styles.scrollContent,
             { paddingBottom: insets.bottom + theme.spacing[6] + theme.spacing[4] },
@@ -947,7 +1160,13 @@ export default function CommunityDetailScreen() {
         </View>
 
         {/* 9. Feed Section */}
-        <View style={styles.section}>
+        <View
+          style={styles.section}
+          onLayout={(event) => {
+            feedSectionYRef.current = event.nativeEvent.layout.y;
+            recomputeActiveVideoKey();
+          }}
+        >
           <View style={styles.feedHeader}>
             <Text style={styles.sectionTitle}>FÆLLESSKAB FEED</Text>
             {isMember && (
@@ -956,33 +1175,48 @@ export default function CommunityDetailScreen() {
               </Pressable>
             )}
           </View>
-          {communityFeedItems.length > 0 ? (
+          {loadingCommunityFeed ? (
+            <ActivityIndicator size="small" />
+          ) : communityFeedItems.length > 0 ? (
             communityFeedItems.map((item) => {
               const key = getFeedItemKey(item);
+              const isVideoItem = getFeedItemVisibleMediaKind(item) === 'video';
               const likeState = safeLikeMap[key] || { liked: false, likes: 0 };
               const commentCount = safeCommentCountMap[key] || 0;
               const commentPreviews = safeCommentPreviewMap[key] || [];
 
               return (
-                <FeedItemRenderer
+                <View
                   key={key}
-                  item={item}
-                  itemKey={key}
-                  user={user}
-                  isAppAdmin={isAppAdmin}
-                  likeState={likeState}
-                  commentCount={commentCount}
-                  commentPreviews={commentPreviews}
-                  safeProfileMap={safeProfileMap}
-                  communityMap={safeCommunityMap}
-                  // @ts-ignore
-                  attendanceMap={attendanceMap}
-                  toggleLike={toggleLike}
-                  removePost={removePost}
-                  removeNews={removeNews}
-                  incrementCommentCount={incrementCommentCount}
-                  addCommentPreview={addCommentPreview}
-                />
+                  onLayout={
+                    isVideoItem
+                      ? (event) => {
+                          feedCardLayoutsRef.current[key] = event.nativeEvent.layout;
+                          recomputeActiveVideoKey();
+                        }
+                      : undefined
+                  }
+                >
+                  <FeedItemRenderer
+                    item={item}
+                    itemKey={key}
+                    user={user}
+                    isAppAdmin={isAppAdmin}
+                    likeState={likeState}
+                    commentCount={commentCount}
+                    commentPreviews={commentPreviews}
+                    safeProfileMap={safeProfileMap}
+                    communityMap={safeCommunityMap}
+                    // @ts-ignore
+                    attendanceMap={attendanceMap}
+                    toggleLike={toggleLike}
+                    removePost={removePost}
+                    removeNews={removeNews}
+                    incrementCommentCount={incrementCommentCount}
+                    addCommentPreview={addCommentPreview}
+                    isActiveVideo={isVideoItem && key === activeVideoKey}
+                  />
+                </View>
               );
             })
           ) : (

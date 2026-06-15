@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../auth/AuthProvider';
 import { ActorSelector } from '../components/ActorSelector';
 import { FeedTargetSelector } from '../components/FeedTargetSelector';
+import { MediaArticleComposer } from '../components/MediaArticleComposer';
 import { NewsComposer } from '../components/NewsComposer';
 import { PollComposer } from '../components/PollComposer';
 import { PostComposer } from '../components/PostComposer';
@@ -31,7 +32,7 @@ interface CreateSheetProps {
   initialActor?: Actor;
 }
 
-type ContentType = null | 'post' | 'news' | 'poll' | 'event';
+type ContentType = null | 'post' | 'media_article' | 'news' | 'poll' | 'event';
 
 export default function CreateSheet({
   visible,
@@ -42,7 +43,7 @@ export default function CreateSheet({
 }: CreateSheetProps) {
   const insets = useSafeAreaInsets();
   const { fetchPosts, profileMap, communityMap } = useFeed();
-  const { user } = useAuth();
+  const { user, isAppAdmin } = useAuth();
   const theme = useTheme();
 
   const [contentType, setContentType] = useState<ContentType>(null);
@@ -141,6 +142,10 @@ export default function CreateSheet({
     onClose();
   };
 
+  const handleMediaArticleSuccess = () => {
+    onClose();
+  };
+
   const handlePollSuccess = async () => {
     await fetchPosts();
     onClose();
@@ -201,6 +206,21 @@ export default function CreateSheet({
             <Text style={styles.choiceTitle}>Del nyhed</Text>
             <Text style={styles.choiceDescription}>Del en artikel via link med preview.</Text>
           </Pressable>
+
+          {isAppAdmin ? (
+            <Pressable
+              style={({ pressed }) => [styles.choiceCard, pressed && styles.choiceCardPressed]}
+              onPress={() => setContentType('media_article')}
+            >
+              <View style={[styles.choiceIcon, { backgroundColor: theme.colors.pill.green.bg }]}>
+                <Ionicons name="newspaper-outline" size={26} color={theme.colors.state.success} />
+              </View>
+              <Text style={styles.choiceTitle}>FCN i medierne</Text>
+              <Text style={styles.choiceDescription}>
+                {'Import\u00e9r en artikel til Home via URL.'}
+              </Text>
+            </Pressable>
+          ) : null}
 
           {canCreateAdminContent && (
             <>
@@ -326,6 +346,21 @@ export default function CreateSheet({
       );
     }
 
+    if (contentType === 'media_article') {
+      if (!isAppAdmin) {
+        return (
+          <View style={styles.placeholderSection}>
+            <Text style={styles.placeholderTitle}>Ingen adgang</Text>
+            <Text style={styles.placeholderDescription}>
+              Kun app-administratorer kan oprette medieartikler.
+            </Text>
+          </View>
+        );
+      }
+
+      return <MediaArticleComposer onSuccess={handleMediaArticleSuccess} />;
+    }
+
     if (contentType === 'poll') {
       return (
         <>
@@ -412,6 +447,8 @@ export default function CreateSheet({
               ? 'Hvad vil du oprette?'
               : contentType === 'post'
                 ? 'Opret opslag'
+                : contentType === 'media_article'
+                  ? 'FCN i medierne'
                 : contentType === 'news'
                   ? 'Del nyhed'
                   : contentType === 'poll'

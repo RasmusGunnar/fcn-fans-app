@@ -1,12 +1,11 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Alert } from 'react-native';
-import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Crypto from 'expo-crypto';
-import * as WebBrowser from 'expo-web-browser';
 import { removeCurrentPushToken } from '../lib/notifications';
 import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
 import { isSystemAdmin } from '../services/rbac';
+import { logPerformanceTiming, performanceNow } from '../utils/performanceTiming';
 
 type User = any;
 type Session = any;
@@ -124,6 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let mounted = true;
 
     const checkAdminStatus = async (userId: string) => {
+      const adminStartedAt = performanceNow();
       try {
         // Primary path: RPC function (bypasses RLS)
         const { data: rpcIsAdmin, error } = await supabase.rpc('is_app_admin');
@@ -134,36 +134,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           );
         }
 
-        let resolvedIsAdmin = !error && !!rpcIsAdmin;
-
-        // Fallback: direct self-row lookup in app_admins via existing RLS policy.
-        // This keeps the underlying source of truth the same while avoiding silent false negatives.
-        if (!resolvedIsAdmin) {
-          const directIsAdmin = await isSystemAdmin();
-          if (directIsAdmin && !rpcIsAdmin) {
-            logger.warn(
-              '[AuthProvider] Admin fallback activated: RPC returned false but app_admins lookup returned true',
-              {
-                userId,
-              },
-            );
-          }
-          resolvedIsAdmin = directIsAdmin;
-        }
+        // A successful false RPC result is authoritative. Only use the direct
+        // lookup when the RPC itself is unavailable.
+        const resolvedIsAdmin = error ? await isSystemAdmin() : !!rpcIsAdmin;
 
         if (mounted) {
           setIsAppAdmin(resolvedIsAdmin);
-          if (__DEV__) {
-            logger.log('[AuthProvider] Admin check result:', {
-              userId,
-              rpcIsAdmin: !error && !!rpcIsAdmin,
-              resolvedIsAdmin,
-            });
-          }
+          logPerformanceTiming('Auth', 'admin-profile', adminStartedAt, {
+            isAdmin: resolvedIsAdmin,
+            fallbackUsed: Boolean(error),
+          });
         }
       } catch (e) {
         logger.warn('[AuthProvider] Error checking admin status:', e);
         if (mounted) setIsAppAdmin(false);
+        logPerformanceTiming('Auth', 'admin-profile-error', adminStartedAt);
       }
     };
 
@@ -180,6 +165,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let mounted = true;
+    const sessionStartedAt = performanceNow();
 
     (async () => {
       try {
@@ -187,8 +173,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!mounted) return;
         setSession(data.session ?? null);
         setUser(data.session?.user ?? null);
+        logPerformanceTiming('Auth', 'session', sessionStartedAt, {
+          hasSession: Boolean(data.session),
+        });
       } catch (e) {
         logger.warn('Error getting session', e);
+        logPerformanceTiming('Auth', 'session-error', sessionStartedAt);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -287,6 +277,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signInWithApple = async () => {
     setLoading(true);
     try {
+      const AppleAuthentication = await import('expo-apple-authentication');
       const isAvailable = await AppleAuthentication.isAvailableAsync();
       if (!isAvailable) {
         throw new Error('Apple Sign In er ikke tilgængelig på denne enhed');
@@ -332,6 +323,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signInWithFacebook = async () => {
     setLoading(true);
     try {
+      const WebBrowser = await import('expo-web-browser');
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'facebook',
         options: {

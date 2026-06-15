@@ -141,6 +141,30 @@ export async function fetchMyProfile(userId: string): Promise<UserProfile | null
   }
 }
 
+export async function fetchStartupProfile(userId: string): Promise<UserProfile | null> {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, display_name')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error) {
+      logger.warn('[profileApi] Startup profile lookup failed:', error);
+      return null;
+    }
+
+    return normalizeUserProfile(
+      data
+        ? (data as Pick<UserProfile, 'id' | 'display_name'>)
+        : { id: userId, display_name: null },
+    );
+  } catch (err) {
+    logger.error('[profileApi] Unexpected error fetching startup profile:', err);
+    return null;
+  }
+}
+
 export async function fetchPublicProfileById(userId: string): Promise<UserProfile | null> {
   try {
     return await readProfileDirect(userId);

@@ -1,34 +1,53 @@
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AppState,
-  FlatList,
-  RefreshControl,
-  StyleSheet,
-  Text,
   View,
+  Text,
+  FlatList,
+  StyleSheet,
+  RefreshControl,
+  Pressable,
   ViewToken,
 } from 'react-native';
-import { useAuth } from '../auth/AuthProvider';
+import { useFocusEffect, useIsFocused, useNavigation } from '@react-navigation/native';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { AppHeader } from '../components/AppHeader';
-import { FeedItemRenderer } from '../components/feed/FeedItemRenderer';
 import NextMatchBadge from '../components/home/NextMatchBadge';
 import { Card } from '../components/ui/Card';
+import { FeedItemRenderer } from '../components/feed/FeedItemRenderer';
+import { FanFactionCard } from '../components/cards/FanFactionCard';
 import { useAttendance } from '../hooks/useAttendance';
 import { useMatchCheckIn } from '../hooks/useMatchCheckIn';
-import {
-  fetchPrimaryFixture,
-  formatShortDateDa,
-  type Fixture,
-} from '../services/fixtures';
-import { getMatchHeroUrl, getTeamHeroImage } from '../services/sportsdb';
 import { useFeed } from '../state/FeedContext';
-import { colors, defaultTheme, spacing } from '../theme';
-import type { FeedFanActivityData, FeedItem } from '../types/feed';
-import { getFeedItemKey } from '../types/feed';
+import { useAuth } from '../auth/AuthProvider';
+import { colors, spacing, defaultTheme as theme } from '../theme';
+import { getFeedItemKey, type FeedItem } from '../types/feed';
+import { filterHomeFeedItems, type HomeFeedFilter } from '../utils/homeFeedFilter';
+import {
+  buildHomeStartupMediaAudit,
+  getFeedItemVisibleMediaKind,
+} from '../utils/homeStartupPerformance';
+import { fetchPrimaryFixture, formatShortDateDa, type Fixture } from '../services/fixtures';
+import { getMatchHeroUrl, getTeamHeroImage } from '../services/sportsdb';
 import { buildMatchdayUiModel } from '../utils/matchdayUiModel';
-import { getPrimaryMediaKind } from '../utils/media';
+import {
+  getAppPerformanceStartedAt,
+  logPerformanceEvent,
+  logPerformanceTiming,
+  measurePerformanceWork,
+  performanceNow,
+  schedulePerformanceFrame,
+} from '../utils/performanceTiming';
+
+logPerformanceEvent('ScreenLifecycle', 'module-evaluated', { screen: 'HomeScreen' });
+
+const HOME_FEED_FILTER_OPTIONS: { value: HomeFeedFilter; label: string }[] = [
+  { value: 'all', label: 'Alle' },
+  { value: 'fan_posts', label: 'Fan Posts' },
+  { value: 'media_articles', label: 'FCN i medierne' },
+];
+const EMPTY_LIKE_STATE = { liked: false, likes: 0 };
+const EMPTY_COMMENT_PREVIEWS: never[] = [];
+let hasEnteredHomeScreen = false;
 
 function formatKickoffCountdown(kickoffAt: string, now: Date): string {
   const diffMs = new Date(kickoffAt).getTime() - now.getTime();
@@ -40,9 +59,10 @@ function formatKickoffCountdown(kickoffAt: string, now: Date): string {
   return `Afspark om ${Math.ceil(diffHours / 24)} dage`;
 }
 
-function buildCheckInSocialProof(
-  checkedInCount: number,
-): { countLabel?: string | null; text: string } {
+function buildCheckInSocialProof(checkedInCount: number): {
+  countLabel?: string | null;
+  text: string;
+} {
   if (checkedInCount <= 0) {
     return {
       countLabel: null,
@@ -59,28 +79,19 @@ function buildCheckInSocialProof(
   };
 }
 
-function getHomeFeedItemSpacingCompensation(kind: FeedItem['kind']): number {
-  switch (kind) {
-    case 'weekly_top_fan':
-      return defaultTheme.layout.listGap + defaultTheme.spacing[1];
-    case 'post':
-    case 'news':
-    case 'event':
-    case 'bus_trip':
-    case 'match':
-    case 'community':
-      return defaultTheme.layout.listGap;
-    case 'fan_activity':
-    default:
-      return 0;
-  }
-}
-
 export default function HomeScreen() {
+  if (!hasEnteredHomeScreen) {
+    hasEnteredHomeScreen = true;
+    logPerformanceEvent('ScreenLifecycle', 'component-first-entered', {
+      screen: 'HomeScreen',
+    });
+  }
+
   const navigation = useNavigation();
+  const isHomeFocused = useIsFocused();
   const tabBarHeight = useBottomTabBarHeight();
   const { user, isAppAdmin } = useAuth();
-  const styles = createStyles();
+  const styles = homeStyles;
   const {
     homeFeedItems,
     communityMap,
@@ -88,7 +99,6 @@ export default function HomeScreen() {
     likeMap,
     commentCountMap,
     commentPreviewMap,
-    attendanceMap,
     fetchPosts,
     removePost,
     removeNews,
@@ -97,12 +107,21 @@ export default function HomeScreen() {
     addCommentPreview,
     loading,
   } = useFeed();
+  const refreshing = loading;
   const [nextFixture, setNextFixture] = useState<Fixture | null>(null);
   const [loadingFixture, setLoadingFixture] = useState(false);
   const [nextFixtureHeroUrl, setNextFixtureHeroUrl] = useState<string | null>(null);
-  const [currentPlayingVideoPostId, setCurrentPlayingVideoPostId] = useState<string | null>(null);
-  const [isAppActive, setIsAppActive] = useState(true);
   const [now, setNow] = useState(() => new Date());
+  const [selectedFeedFilter, setSelectedFeedFilter] = useState<HomeFeedFilter>('all');
+  const appStartedAtRef = useRef(getAppPerformanceStartedAt());
+  const mountedAtRef = useRef(performanceNow());
+  const initialHomeItemCountRef = useRef(Array.isArray(homeFeedItems) ? homeFeedItems.length : 0);
+  const didLogFirstHomeRenderRef = useRef(false);
+  const didLogFeedItemsAvailableRef = useRef(false);
+  const didLogFirstFeedRenderRef = useRef(false);
+  const didLogStartupMediaAuditRef = useRef(false);
+  const didLogFlatListRenderedRef = useRef(false);
+  const feedItemsReadyAtRef = useRef<number | null>(null);
   const nextMatchAttendance = useAttendance({
     entityType: 'match',
     entityId: nextFixture?.id ?? '',
@@ -111,11 +130,32 @@ export default function HomeScreen() {
   const nextMatchAttendanceRefresh = nextMatchAttendance.refresh;
   const nextMatchCheckInRefresh = nextMatchCheckIn.refresh;
 
-  // Rate-limit focus refetches (skip if last fetch was < 30 s ago)
-  const lastFocusFetchRef = useRef<number>(0);
-
-  // Defensive: FeedContext now assembles a dedicated home feed.
-  const safeHomeFeedItems = (Array.isArray(homeFeedItems) ? homeFeedItems : []).filter(Boolean);
+  const safeHomeFeedItems = useMemo(
+    () =>
+      measurePerformanceWork(
+        'RenderBlock',
+        'HomeScreen-filter-valid-feed-items',
+        () => (Array.isArray(homeFeedItems) ? homeFeedItems : []).filter(Boolean),
+        { sourceItemCount: Array.isArray(homeFeedItems) ? homeFeedItems.length : 0 },
+      ),
+    [homeFeedItems],
+  );
+  const visibleFeedItems = useMemo(
+    () =>
+      measurePerformanceWork(
+        'RenderBlock',
+        'HomeScreen-filter-visible-feed-items',
+        () => filterHomeFeedItems(safeHomeFeedItems, selectedFeedFilter),
+        { sourceItemCount: safeHomeFeedItems.length, filter: selectedFeedFilter },
+      ),
+    [safeHomeFeedItems, selectedFeedFilter],
+  );
+  const filteredEmptyText =
+    selectedFeedFilter === 'fan_posts'
+      ? 'Ingen fanopslag endnu'
+      : selectedFeedFilter === 'media_articles'
+        ? 'Ingen artikler endnu'
+        : null;
 
   // Ensure all maps have safe defaults
   const safeProfileMap = profileMap || {};
@@ -123,48 +163,50 @@ export default function HomeScreen() {
   const safeCommentCountMap = commentCountMap || {};
   const safeCommentPreviewMap = commentPreviewMap || {};
 
-  // Track which video post is visible for autoplay
-  const handleViewableItemsChanged = useCallback(
-    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
-      const visibleVideoPost = viewableItems.find((viewableItem) => {
-        const feedItem = viewableItem.item as any;
-        if (!feedItem || feedItem.kind !== 'post') return false;
-        const post = feedItem.data as any;
-        return getPrimaryMediaKind(post?.media) === 'video';
-      });
+  const loadNextFixture = useCallback(async () => {
+    const startedAt = performanceNow();
+    setLoadingFixture(true);
+    try {
+      const fixture = await fetchPrimaryFixture();
+      setNextFixture(fixture);
 
-      if (visibleVideoPost?.item) {
-        setCurrentPlayingVideoPostId(getFeedItemKey(visibleVideoPost.item as any));
-      } else {
-        setCurrentPlayingVideoPostId(null);
+      let heroUrl = getMatchHeroUrl(fixture);
+      const homeTeamHeroId = fixture?.home_team_provider_id ?? fixture?.home_team_id ?? null;
+      if (!heroUrl && homeTeamHeroId) {
+        heroUrl = await getTeamHeroImage(homeTeamHeroId);
       }
-    },
-    [],
-  );
-
-  const viewabilityConfig = useMemo(
-    () => ({
-      viewAreaCoveragePercentThreshold: 70,
-      minimumViewTime: 100,
-    }),
-    [],
-  );
-
-  useEffect(() => {
-    if (__DEV__) {
-      console.log('[HOME] mounted');
+      setNextFixtureHeroUrl(heroUrl);
+    } finally {
+      setLoadingFixture(false);
+      logPerformanceTiming('HomeFocusWork', 'load-next-fixture', startedAt);
     }
   }, []);
 
   useEffect(() => {
-    const subscription = AppState.addEventListener('change', (state) => {
-      setIsAppActive(state === 'active');
-      if (state !== 'active') {
-        setCurrentPlayingVideoPostId(null);
+    fetchPosts();
+  }, [fetchPosts]);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      if (didLogFirstHomeRenderRef.current) {
+        return;
       }
+
+      didLogFirstHomeRenderRef.current = true;
+      logPerformanceEvent('ScreenLifecycle', 'first-render-committed', {
+        screen: 'HomeScreen',
+      });
+      logPerformanceEvent('ScreenLifecycle', 'first-visible-shell-rendered', {
+        screen: 'HomeScreen',
+        shell: 'feed',
+      });
+      logPerformanceTiming('HomeFirstRender', 'screen-rendered', appStartedAtRef.current, {
+        itemCount: initialHomeItemCountRef.current,
+        sinceHomeMountMs: Math.round(performanceNow() - mountedAtRef.current),
+      });
     });
 
-    return () => subscription.remove();
+    return () => cancelAnimationFrame(frame);
   }, []);
 
   useEffect(() => {
@@ -175,188 +217,148 @@ export default function HomeScreen() {
     return () => clearInterval(timer);
   }, []);
 
-  const loadNextFixture = async () => {
-    setLoadingFixture(true);
-    const fixture = await fetchPrimaryFixture();
-
-    if (__DEV__ && fixture) {
-      console.log('[HOME][NEXT_MATCH] selected fixture', {
-        id: fixture.id,
-        opponents: `${fixture.home_team} vs ${fixture.away_team}`,
-        kickoffAt: fixture.kickoff_at,
-        reason:
-          'Selected the shared primary FC Nordsjaelland fixture, which keeps an active match selected through the live/post-match buffer before switching to the next one.',
+  useFocusEffect(
+    useCallback(() => {
+      const focusStartedAt = performanceNow();
+      logPerformanceEvent('ScreenLifecycle', 'focus-effect-started', {
+        screen: 'HomeScreen',
       });
-    } else if (__DEV__) {
-      console.log('[HOME][NEXT_MATCH] selected fixture', {
-        id: null,
-        opponents: null,
-        kickoffAt: null,
-        reason: 'No primary FC Nordsjaelland fixture was available.',
+      const cancelFrame = schedulePerformanceFrame(() => {
+        logPerformanceTiming('ScreenLifecycle', 'focus-effect-finished', focusStartedAt, {
+          screen: 'HomeScreen',
+        });
+        logPerformanceEvent('ScreenLifecycle', 'focus-visible-shell-rendered', {
+          screen: 'HomeScreen',
+          shell: 'feed',
+        });
       });
-    }
 
-    setNextFixture(fixture);
-
-    // Resolve hero: try raw first, then team API
-    let hero = getMatchHeroUrl(fixture as any);
-    const homeTeamHeroId = fixture?.home_team_provider_id ?? fixture?.home_team_id ?? null;
-    if (!hero && homeTeamHeroId) {
-      hero = await getTeamHeroImage(homeTeamHeroId);
-    }
-    setNextFixtureHeroUrl(hero);
-    setLoadingFixture(false);
-  };
-
-  const triggerFeedFetch = useCallback(
-    async (source: 'focus' | 'refresh') => {
-      if (__DEV__) {
-        console.log('[HOME] feed fetch trigger', { source });
-      }
-      await fetchPosts();
-      if (__DEV__) {
-        console.log('[HOME] feed fetch success', { source });
-      }
-    },
-    [fetchPosts],
+      return cancelFrame;
+    }, []),
   );
 
   useFocusEffect(
-    React.useCallback(() => {
-      loadNextFixture();
+    useCallback(() => {
+      void loadNextFixture();
+    }, [loadNextFixture]),
+  );
 
+  useFocusEffect(
+    useCallback(() => {
       if (nextFixture?.id) {
         void nextMatchAttendanceRefresh();
         void nextMatchCheckInRefresh();
       }
-
-      // Refresh feed when returning from other screens (e.g. after creating an event)
-      const now = Date.now();
-      const elapsed = now - lastFocusFetchRef.current;
-      if (elapsed >= 30000) {
-        lastFocusFetchRef.current = now;
-        void triggerFeedFetch('focus');
-      }
-
-      // Pause video when screen loses focus (navigation blur)
-      return () => {
-        setCurrentPlayingVideoPostId(null);
-      };
-    }, [nextFixture?.id, nextMatchAttendanceRefresh, nextMatchCheckInRefresh, triggerFeedFetch]),
+    }, [nextFixture?.id, nextMatchAttendanceRefresh, nextMatchCheckInRefresh]),
   );
 
   useEffect(() => {
-    if (!nextFixture?.id) return;
-    void nextMatchAttendanceRefresh();
-    void nextMatchCheckInRefresh();
-  }, [nextFixture?.id, nextMatchAttendanceRefresh, nextMatchCheckInRefresh]);
+    if (didLogFeedItemsAvailableRef.current || safeHomeFeedItems.length === 0) {
+      return;
+    }
 
-  const handlePressFanActivity = useCallback(
-    (item: FeedFanActivityData) => {
-      if (item.parentType === 'match') {
-        (navigation as any).navigate('MatchDetails', {
-          fixtureId: item.parentId,
-          fanActivityId: item.id,
-        });
+    didLogFeedItemsAvailableRef.current = true;
+    feedItemsReadyAtRef.current = performanceNow();
+    logPerformanceEvent('ScreenLifecycle', 'data-ready', {
+      screen: 'HomeScreen',
+      itemCount: safeHomeFeedItems.length,
+    });
+    logPerformanceTiming('FeedItemsReady', 'home-data-received', appStartedAtRef.current, {
+      itemCount: safeHomeFeedItems.length,
+      sinceHomeMountMs: Math.round(performanceNow() - mountedAtRef.current),
+    });
+  }, [safeHomeFeedItems.length]);
+
+  useEffect(() => {
+    if (didLogFirstFeedRenderRef.current || visibleFeedItems.length === 0) {
+      return;
+    }
+
+    const frame = requestAnimationFrame(() => {
+      didLogFirstFeedRenderRef.current = true;
+      logPerformanceTiming('HomeFirstRender', 'first-feed-render', appStartedAtRef.current, {
+        itemCount: visibleFeedItems.length,
+        filter: selectedFeedFilter,
+        sinceHomeMountMs: Math.round(performanceNow() - mountedAtRef.current),
+      });
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [selectedFeedFilter, visibleFeedItems.length]);
+
+  useEffect(() => {
+    if (didLogStartupMediaAuditRef.current || visibleFeedItems.length === 0) {
+      return;
+    }
+
+    didLogStartupMediaAuditRef.current = true;
+    logPerformanceTiming('HomeFirstRender', 'startup-media-audit', appStartedAtRef.current, {
+      ...buildHomeStartupMediaAudit(visibleFeedItems),
+      filter: selectedFeedFilter,
+      sinceHomeMountMs: Math.round(performanceNow() - mountedAtRef.current),
+    });
+  }, [selectedFeedFilter, visibleFeedItems]);
+
+  const [factionLiked, setFactionLiked] = useState(false);
+  const [factionLikes, setFactionLikes] = useState(7);
+  const [activeVideoKey, setActiveVideoKey] = useState<string | null>(null);
+
+  // Reset active video when the feed filter changes so no stale player stays mounted
+  useEffect(() => {
+    setActiveVideoKey(null);
+  }, [selectedFeedFilter]);
+
+  // Stable viewability config — 65 % of item must be visible for at least 200 ms
+  const viewabilityConfigRef = useRef({
+    itemVisiblePercentThreshold: 65,
+    minimumViewTime: 200,
+  });
+
+  // Stable callback ref — never recreated, so FlatList never remounts cells
+  const onViewableItemsChangedRef = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    const firstVideo = viewableItems.find(
+      ({ item, isViewable }: ViewToken) =>
+        isViewable && getFeedItemVisibleMediaKind(item as FeedItem) === 'video',
+    );
+    const nextKey = firstVideo ? getFeedItemKey(firstVideo.item as FeedItem) : null;
+    setActiveVideoKey((prev) => {
+      if (prev === nextKey) return prev;
+      if (__DEV__) {
+        console.log('[HomeScreen] activeVideoKey →', nextKey);
+      }
+      return nextKey;
+    });
+  });
+
+  const toggleFactionLike = useCallback(() => {
+    setFactionLiked((currentLiked) => !currentLiked);
+    setFactionLikes((currentLikes) => currentLikes + (factionLiked ? -1 : 1));
+  }, [factionLiked]);
+
+  const handleFlatListContentSizeChange = useCallback(
+    (width: number, height: number) => {
+      if (didLogFlatListRenderedRef.current || visibleFeedItems.length === 0 || height <= 0) {
         return;
       }
 
-      const parentNavigation = navigation.getParent?.();
-      if (parentNavigation) {
-        (parentNavigation as any).navigate('Events', {
-          screen: 'EventDetails',
-          params: {
-            eventId: item.parentId,
-            fanActivityId: item.id,
-          },
-        });
-        return;
-      }
-
-      (navigation as any).navigate('Events', {
-        screen: 'EventDetails',
-        params: {
-          eventId: item.parentId,
-          fanActivityId: item.id,
-        },
+      didLogFlatListRenderedRef.current = true;
+      logPerformanceTiming('FlatListRendered', 'content-ready', appStartedAtRef.current, {
+        itemCount: visibleFeedItems.length,
+        width: Math.round(width),
+        height: Math.round(height),
+        sinceHomeMountMs: Math.round(performanceNow() - mountedAtRef.current),
+        sinceFeedItemsReadyMs:
+          feedItemsReadyAtRef.current == null
+            ? null
+            : Math.round(performanceNow() - feedItemsReadyAtRef.current),
       });
     },
-    [navigation],
+    [visibleFeedItems.length],
   );
 
-  const renderFeedItem = ({ item, index }: { item: any; index: number }) => {
-    if (!item?.kind || !item?.id || !item?.data) {
-      console.warn('[HOME] invalid item skipped', {
-        index,
-        hasKind: Boolean(item?.kind),
-        hasId: Boolean(item?.id),
-        hasData: Boolean(item?.data),
-      });
-      return null;
-    }
-
-    const key = getFeedItemKey(item);
-    if (__DEV__) {
-      console.log('[HOME] rendering item', { index, key, kind: item.kind, id: item.id });
-    }
-    const likeState = safeLikeMap[key] || { liked: false, likes: 0 };
-    const commentCount = safeCommentCountMap[key] || 0;
-    const commentPreviews = safeCommentPreviewMap[key] || [];
-    const isActiveVideo = key === currentPlayingVideoPostId;
-    const spacingCompensation = getHomeFeedItemSpacingCompensation(item.kind);
-
-    return (
-      <View style={spacingCompensation ? { marginBottom: -spacingCompensation } : undefined}>
-        <FeedItemRenderer
-          key={key}
-          item={item}
-          itemKey={key}
-          user={user}
-          isAppAdmin={isAppAdmin}
-          likeState={likeState}
-          commentCount={commentCount}
-          commentPreviews={commentPreviews}
-          safeProfileMap={safeProfileMap}
-          communityMap={communityMap || {}}
-          // @ts-ignore
-          attendanceMap={attendanceMap}
-          toggleLike={toggleLike}
-          removePost={removePost}
-          removeNews={removeNews}
-          incrementCommentCount={incrementCommentCount}
-          addCommentPreview={addCommentPreview}
-          isActiveVideo={isActiveVideo}
-          isAppActive={isAppActive}
-          onActivateVideo={() => setCurrentPlayingVideoPostId(key)}
-          onPressEvent={(eventId) => (navigation as any).navigate('EventDetails', { eventId })}
-          onPressBusTrip={(busTripId) =>
-            (navigation as any).navigate('BusTripDetails', { busTripId })
-          }
-          onPressMatch={(matchId) =>
-            (navigation as any).navigate('MatchDetails', { fixtureId: matchId })
-          }
-          onPressFanActivity={handlePressFanActivity}
-          onPressCommunity={(communityId, title) =>
-            (navigation as any).navigate('Communities', {
-              screen: 'CommunityDetail',
-              params: { id: communityId, title },
-            })
-          }
-          onPressProfile={(userId) =>
-            userId === user?.id
-              ? (navigation as any).navigate('Profile')
-              : (navigation as any).navigate('PublicProfile', { userId })
-          }
-          onPressPost={(postId) => (navigation as any).navigate('PostDetail', { postId })}
-        />
-      </View>
-    );
-  };
-
-  // Map nextFixture to matchForBadge for NextMatchBadge
   const matchForBadge = useMemo(
     () =>
-      nextFixture && nextFixtureHeroUrl
+      nextFixture
         ? {
             id: nextFixture.id,
             coverUrl: nextFixtureHeroUrl,
@@ -364,28 +366,15 @@ export default function HomeScreen() {
             awayTeam: nextFixture.away_team,
             homeLogo: nextFixture.home_logo_url ?? null,
             awayLogo: nextFixture.away_logo_url ?? null,
-            kickoff: nextFixture.kickoff_at ?? '',
+            kickoff: nextFixture.kickoff_at,
             venue: nextFixture.venue ?? null,
             venueCity: nextFixture.venue_city ?? null,
             title: `${nextFixture.home_team} vs ${nextFixture.away_team}`,
-            subtitle: nextFixture.kickoff_at ? formatShortDateDa(nextFixture.kickoff_at) : '',
+            subtitle: formatShortDateDa(nextFixture.kickoff_at),
           }
         : null,
     [nextFixture, nextFixtureHeroUrl],
   );
-
-  useEffect(() => {
-    if (!matchForBadge) return;
-
-    if (__DEV__) {
-      console.log('[HOME][MATCH] badge render', {
-        fixtureId: matchForBadge.id,
-        hasHero: Boolean(matchForBadge.coverUrl),
-        hasHomeLogo: Boolean(matchForBadge.homeLogo),
-        hasAwayLogo: Boolean(matchForBadge.awayLogo),
-      });
-    }
-  }, [matchForBadge]);
 
   const nextMatchCountdownLabel = useMemo(() => {
     if (!nextFixture?.kickoff_at) return null;
@@ -419,84 +408,8 @@ export default function HomeScreen() {
     nextMatchCheckIn.isCheckedIn,
     now,
   ]);
-  const nextMatchFansOverview = useMemo(() => {
-    const profileById = new Map<string, { displayName: string | null; avatarUrl: string | null }>();
-
-    nextMatchAttendance.profiles.forEach((profile) => {
-      profileById.set(profile.user_id, {
-        displayName: profile.display_name,
-        avatarUrl: profile.avatar_url,
-      });
-    });
-
-    nextMatchCheckIn.profiles.forEach((profile) => {
-      profileById.set(profile.user_id, {
-        displayName: profile.display_name,
-        avatarUrl: profile.avatar_url,
-      });
-    });
-
-    const merged = new Map<
-      string,
-      {
-        item: {
-          userId: string;
-          displayName: string | null;
-          avatarUrl: string | null;
-          status: 'checkin' | 'attendance';
-        };
-        order: number;
-      }
-    >();
-    let nextOrder = 0;
-
-    nextMatchAttendance.userIds.forEach((userId) => {
-      const profile = profileById.get(userId);
-      merged.set(userId, {
-        item: {
-          userId,
-          displayName: profile?.displayName ?? null,
-          avatarUrl: profile?.avatarUrl ?? null,
-          status: 'attendance',
-        },
-        order: nextOrder++,
-      });
-    });
-
-    nextMatchCheckIn.userIds.forEach((userId) => {
-      const profile = profileById.get(userId);
-      const existing = merged.get(userId);
-
-      merged.set(userId, {
-        item: {
-          userId,
-          displayName: profile?.displayName ?? existing?.item.displayName ?? null,
-          avatarUrl: profile?.avatarUrl ?? existing?.item.avatarUrl ?? null,
-          status: 'checkin',
-        },
-        order: existing?.order ?? nextOrder++,
-      });
-    });
-
-    return Array.from(merged.values())
-      .sort((left, right) => {
-        if (left.item.status !== right.item.status) {
-          return left.item.status === 'checkin' ? -1 : 1;
-        }
-
-        return left.order - right.order;
-      })
-      .map((entry) => entry.item);
-  }, [
-    nextMatchAttendance.profiles,
-    nextMatchAttendance.userIds,
-    nextMatchCheckIn.profiles,
-    nextMatchCheckIn.userIds,
-  ]);
 
   const nextMatchViewState = nextMatchUiModel?.viewState ?? 'pre_match';
-  const nextMatchPanelCount = nextMatchUiModel?.socialCount ?? 0;
-  const nextMatchPanelAvatars = nextMatchUiModel?.socialAvatars ?? [];
   const nextMatchPanelTitle = useMemo(() => {
     if (nextMatchViewState === 'matchday_action') {
       return nextMatchUiModel?.effectiveIsGoing
@@ -522,19 +435,14 @@ export default function HomeScreen() {
     }
 
     return undefined;
-  }, [nextMatchUiModel?.effectiveIsGoing, nextMatchUiModel?.previewMode, nextMatchViewState]);
+  }, [nextMatchUiModel?.effectiveIsGoing, nextMatchViewState]);
   const nextMatchSocialCopyOverride = useMemo(() => {
     if (nextMatchViewState === 'matchday_action' || nextMatchViewState === 'checked_in_confirmed') {
-      return buildCheckInSocialProof(
-        nextMatchCheckIn.countCheckedIn,
-      );
+      return buildCheckInSocialProof(nextMatchCheckIn.countCheckedIn);
     }
 
     return undefined;
-  }, [
-    nextMatchCheckIn.countCheckedIn,
-    nextMatchViewState,
-  ]);
+  }, [nextMatchCheckIn.countCheckedIn, nextMatchViewState]);
   const nextMatchPrimaryLabel =
     nextMatchViewState === 'checked_in_confirmed'
       ? undefined
@@ -551,6 +459,7 @@ export default function HomeScreen() {
       : nextMatchViewState === 'matchday_action'
         ? nextMatchCheckIn.loading
         : Boolean(nextMatchUiModel?.effectiveIsGoing) || nextMatchAttendance.loading;
+
   const handleOpenNextMatch = useCallback(() => {
     if (!matchForBadge) return;
     (navigation as any).navigate('MatchDetails', { fixtureId: matchForBadge.id });
@@ -563,17 +472,6 @@ export default function HomeScreen() {
       entityType: 'match',
       title: 'Fans til kampen',
       subtitle: 'Se hvem der kommer, og hvem der er tjekket ind',
-      prefilledFans: nextMatchFansOverview,
-    });
-  }, [navigation, nextFixture?.id, nextMatchFansOverview]);
-
-  const handleOpenNextMatchCheckedInFans = useCallback(() => {
-    if (!nextFixture?.id) return;
-    (navigation as any).navigate('EventAttendees', {
-      entityId: nextFixture.id,
-      entityType: 'match',
-      title: 'Tjekket ind på stadion',
-      mode: 'checkin',
     });
   }, [navigation, nextFixture?.id]);
 
@@ -583,53 +481,94 @@ export default function HomeScreen() {
     if (nextMatchViewState === 'matchday_action') {
       try {
         await nextMatchCheckIn.checkIn();
-        return;
       } catch {
-        return;
+        // The status panel remains in its previous state when check-in fails.
       }
+      return;
     }
 
     if (nextMatchViewState === 'pre_match' && !nextMatchAttendance.isGoing) {
       try {
         await nextMatchAttendance.toggleGoing();
-        return;
       } catch {
-        return;
+        // The attendance hook restores its optimistic state on failure.
       }
     }
   }, [
     nextFixture?.id,
-    nextMatchAttendance,
-    nextMatchCheckIn,
+    nextMatchAttendance.isGoing,
+    nextMatchAttendance.toggleGoing,
+    nextMatchCheckIn.checkIn,
     nextMatchViewState,
   ]);
 
+  const renderFeedItem = useCallback(
+    ({ item }: { item: FeedItem }) => {
+      const key = getFeedItemKey(item);
+      const likeState = safeLikeMap[key] || EMPTY_LIKE_STATE;
+      const commentCount = safeCommentCountMap[key] || 0;
+      const commentPreviews = safeCommentPreviewMap[key] || EMPTY_COMMENT_PREVIEWS;
+
+      return (
+        <FeedItemRenderer
+          item={item}
+          itemKey={key}
+          user={user}
+          isAppAdmin={isAppAdmin}
+          likeState={likeState}
+          commentCount={commentCount}
+          commentPreviews={commentPreviews}
+          safeProfileMap={safeProfileMap}
+          communityMap={communityMap}
+          toggleLike={toggleLike}
+          removePost={removePost}
+          removeNews={removeNews}
+          incrementCommentCount={incrementCommentCount}
+          addCommentPreview={addCommentPreview}
+          isActiveVideo={isHomeFocused && key === activeVideoKey}
+        />
+      );
+    },
+    [
+      addCommentPreview,
+      communityMap,
+      incrementCommentCount,
+      isAppAdmin,
+      isHomeFocused,
+      removeNews,
+      removePost,
+      safeCommentCountMap,
+      safeCommentPreviewMap,
+      safeLikeMap,
+      safeProfileMap,
+      toggleLike,
+      user,
+      activeVideoKey,
+    ],
+  );
+
   return (
-    <FlatList
-      data={safeHomeFeedItems}
-      keyExtractor={(item) => getFeedItemKey(item)}
+    <FlatList<FeedItem>
+      data={visibleFeedItems}
+      keyExtractor={getFeedItemKey}
       renderItem={renderFeedItem}
       initialNumToRender={5}
       maxToRenderPerBatch={5}
+      updateCellsBatchingPeriod={16}
       windowSize={7}
-      ItemSeparatorComponent={() => <View style={styles.feedSeparator} />}
+      viewabilityConfig={viewabilityConfigRef.current}
+      onViewableItemsChanged={onViewableItemsChangedRef.current}
+      onContentSizeChange={handleFlatListContentSizeChange}
       style={styles.container}
-      automaticallyAdjustKeyboardInsets
       contentContainerStyle={{ paddingBottom: tabBarHeight + spacing.lg }}
       refreshControl={
         <RefreshControl
-          refreshing={loading}
-          onRefresh={() => {
-            void triggerFeedFetch('refresh');
-          }}
+          refreshing={refreshing}
+          onRefresh={fetchPosts}
           tintColor={colors.fcnRed}
           colors={[colors.fcnRed]}
         />
       }
-      keyboardDismissMode="on-drag"
-      keyboardShouldPersistTaps="handled"
-      onViewableItemsChanged={handleViewableItemsChanged}
-      viewabilityConfig={viewabilityConfig}
       ListHeaderComponent={
         <>
           <AppHeader
@@ -637,16 +576,15 @@ export default function HomeScreen() {
             subtitle="Fan Fællesskab"
             onPressProfile={() => (navigation as any).navigate('Profile')}
           />
-          {/* Next Match Hero Badge - Edge to edge */}
-          {matchForBadge && (
+          {matchForBadge ? (
             <NextMatchBadge
               match={matchForBadge}
               countdownLabel={nextMatchCountdownLabel ?? undefined}
               matchStatusPanel={{
                 viewState: nextMatchViewState,
                 isGoing: nextMatchUiModel?.effectiveIsGoing ?? nextMatchAttendance.isGoing,
-                avatars: nextMatchPanelAvatars,
-                count: nextMatchPanelCount,
+                avatars: nextMatchUiModel?.socialAvatars ?? [],
+                count: nextMatchUiModel?.socialCount ?? 0,
                 titleOverride: nextMatchPanelTitle,
                 bodyOverride: nextMatchPanelBody,
                 socialCopyOverride: nextMatchSocialCopyOverride,
@@ -657,18 +595,18 @@ export default function HomeScreen() {
               onPressPrimaryAction={handleNextMatchPrimaryAction}
               onPressSocial={handleOpenNextMatchFans}
             />
-          )}
-          {loadingFixture && (
-            <View style={[styles.content, { paddingTop: spacing.lg }]}>
+          ) : null}
+          {loadingFixture ? (
+            <View style={[styles.content, styles.matchFallbackContent]}>
               <Card style={styles.card}>
                 <View style={styles.loadingContainer}>
                   <Text style={styles.loadingText}>Henter kampdata...</Text>
                 </View>
               </Card>
             </View>
-          )}
-          {!loadingFixture && !nextFixture && (
-            <View style={[styles.content, { paddingTop: spacing.lg }]}>
+          ) : null}
+          {!loadingFixture && !nextFixture ? (
+            <View style={[styles.content, styles.matchFallbackContent]}>
               <Card style={styles.card}>
                 <View style={styles.emptyContainer}>
                   <Text style={styles.emptyText}>Ingen kommende kampe endnu</Text>
@@ -676,8 +614,60 @@ export default function HomeScreen() {
                 </View>
               </Card>
             </View>
-          )}
+          ) : null}
+          <View style={styles.content}>
+            <View style={styles.feedFilterBar}>
+              {HOME_FEED_FILTER_OPTIONS.map((option) => {
+                const isSelected = selectedFeedFilter === option.value;
+
+                return (
+                  <Pressable
+                    key={option.value}
+                    style={[styles.feedFilterTab, isSelected && styles.feedFilterTabActive]}
+                    onPress={() => setSelectedFeedFilter(option.value)}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: isSelected }}
+                  >
+                    <Text
+                      style={[
+                        styles.feedFilterTabText,
+                        isSelected && styles.feedFilterTabTextActive,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {option.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {!loading && filteredEmptyText && visibleFeedItems.length === 0 ? (
+              <View style={styles.feedEmptyState}>
+                <Text style={styles.feedEmptyText}>{filteredEmptyText}</Text>
+              </View>
+            ) : null}
+          </View>
         </>
+      }
+      ListFooterComponent={
+        selectedFeedFilter === 'all' ? (
+          <View style={styles.content}>
+            <FanFactionCard
+              name="Ultras FCN"
+              members={89}
+              timeAgo="1 time siden"
+              description="FCN's mest passionerede fans. Vi støtter holdet gennem tykt og tyndt med sang, flag og uforbeholden støtte."
+              liked={factionLiked}
+              likes={factionLikes}
+              comments={1}
+              onToggleLike={toggleFactionLike}
+              onPressComment={() => console.log('Faction comment')}
+              onPressShare={() => console.log('Faction share')}
+              onPressJoin={() => console.log('Navigate to Faction')}
+            />
+          </View>
+        ) : null
       }
     />
   );
@@ -686,9 +676,50 @@ export default function HomeScreen() {
 const createStyles = () =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.bg },
-    feedSeparator: { height: defaultTheme.layout.listGap },
     content: { paddingHorizontal: spacing[0], paddingVertical: spacing.md },
+    matchFallbackContent: { paddingTop: spacing.lg },
     card: { marginBottom: spacing.md },
+    feedFilterBar: {
+      flexDirection: 'row',
+      gap: theme.spacing[1],
+      paddingHorizontal: theme.spacing[3],
+      marginBottom: theme.spacing[4],
+    },
+    feedFilterTab: {
+      flex: 1,
+      minHeight: theme.spacing[10],
+      paddingHorizontal: theme.spacing[1],
+      borderRadius: theme.radius.pill,
+      borderWidth: theme.layout.borderHairline,
+      borderColor: theme.colors.border.default,
+      backgroundColor: theme.colors.bg.surface,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    feedFilterTabActive: {
+      borderColor: colors.fcnRed,
+      backgroundColor: colors.fcnRed,
+    },
+    feedFilterTabText: {
+      color: colors.text,
+      fontSize: 12,
+      fontWeight: '600',
+      textAlign: 'center',
+    },
+    feedFilterTabTextActive: {
+      color: colors.card,
+    },
+    feedEmptyState: {
+      paddingHorizontal: theme.spacing[4],
+      paddingVertical: theme.spacing[10],
+      alignItems: 'center',
+    },
+    feedEmptyText: {
+      color: colors.subtext,
+      fontSize: 16,
+      fontWeight: '600',
+      textAlign: 'center',
+    },
     loadingContainer: { paddingVertical: spacing.xl, alignItems: 'center' },
     loadingText: { fontSize: 14, color: colors.subtext },
     emptyContainer: { paddingVertical: spacing.xl, alignItems: 'center' },
@@ -696,6 +727,4 @@ const createStyles = () =>
     emptySubtext: { fontSize: 14, color: colors.subtext },
   });
 
-
-
-
+const homeStyles = createStyles();

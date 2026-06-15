@@ -91,6 +91,23 @@ export function normalizeLinkPreview(value: unknown): LinkPreview | null {
   const description = readOptionalString(record.description);
   const imageUrl = normalizeHttpUrl(readOptionalString(record.imageUrl) ?? '');
   const siteName = readOptionalString(record.siteName);
+  const sourceName =
+    readOptionalString(record.sourceName) ?? readOptionalString(record.source_name);
+  const provider = readOptionalString(record.provider);
+  const faviconUrl = normalizeHttpUrl(
+    readOptionalString(record.faviconUrl) ?? readOptionalString(record.favicon_url) ?? '',
+  );
+  const iconUrl = normalizeHttpUrl(
+    readOptionalString(record.iconUrl) ?? readOptionalString(record.icon_url) ?? '',
+  );
+  const logoUrl = normalizeHttpUrl(
+    readOptionalString(record.logoUrl) ?? readOptionalString(record.logo_url) ?? '',
+  );
+  const sourceLogoUrl = normalizeHttpUrl(
+    readOptionalString(record.sourceLogoUrl) ??
+      readOptionalString(record.source_logo_url) ??
+      '',
+  );
   const hasVideo = typeof record.hasVideo === 'boolean' ? record.hasVideo : undefined;
 
   return {
@@ -99,6 +116,12 @@ export function normalizeLinkPreview(value: unknown): LinkPreview | null {
     ...(description ? { description } : {}),
     ...(imageUrl ? { imageUrl } : {}),
     ...(siteName ? { siteName } : {}),
+    ...(sourceName ? { sourceName } : {}),
+    ...(provider ? { provider } : {}),
+    ...(faviconUrl ? { faviconUrl } : {}),
+    ...(iconUrl ? { iconUrl } : {}),
+    ...(logoUrl ? { logoUrl } : {}),
+    ...(sourceLogoUrl ? { sourceLogoUrl } : {}),
     ...(hasVideo !== undefined ? { hasVideo } : {}),
   };
 }

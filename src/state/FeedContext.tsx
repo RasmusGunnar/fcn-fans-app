@@ -1,4 +1,5 @@
-import React, { createContext, useCallback, useEffect, useRef, useState } from 'react';
+import React, { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { InteractionManager } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
 import {
@@ -26,7 +27,7 @@ import { fetchLatestPublishedWeeklyTopFan } from '../services/weeklyTopFanApi';
 import { FeedItem } from '../types/feed';
 import type { FanLevelKey } from '../types/fan';
 import { NewsItem } from '../types/news';
-import { Post } from '../types/post';
+import { normalizePostType, type Post } from '../types/post';
 import {
   buildFeedItemsFromSources,
   buildHomeFeedItemsFromSources,
@@ -35,15 +36,19 @@ import {
   getHomeSortDate,
   HOME_FEED_AUDIT_DEBUG_ENABLED,
   isHomePost,
+  reconcileFeedItemIdentities,
   sortFeedItemsByDate,
   sortHomeFeedItems,
   toCommunityFeedItem,
   toPostFeedItem,
   withFeedEngagementSummary,
+  withFeedEngagementSummaryPreservingList,
 } from '../utils/homeFeed';
 import { resolveAvatarUrl } from '../utils/avatar';
 import { normalizeLinkPreview } from '../utils/linkPreview';
 import { normalizeMedia } from '../utils/media';
+import { logPerformanceTiming, performanceNow } from '../utils/performanceTiming';
+import { POST_ENGAGEMENT_TARGET_TYPE } from '../utils/postEngagement';
 import { targetKey } from '../utils/targetKey';
 
 type FeedProfileEntry = {
@@ -51,6 +56,11 @@ type FeedProfileEntry = {
   username: string | null;
   avatar_url: string | null;
   fan_level_key: FanLevelKey | null;
+};
+
+type EngagementCounts = {
+  likeMap: Record<string, { liked: boolean; likes: number }>;
+  commentCountMap: Record<string, number>;
 };
 
 const FEED_PROFILE_SELECT_ATTEMPTS = [
@@ -151,20 +161,220 @@ function mergeFetchedLikeMapPreservingLikedState(
   fetchedLikeMap: Record<string, { liked: boolean; likes: number }>,
 ): Record<string, { liked: boolean; likes: number }> {
   const mergedLikeMap = { ...previousLikeMap };
+  let changed = false;
 
   Object.entries(fetchedLikeMap).forEach(([key, fetchedState]) => {
     const previousState = previousLikeMap[key];
-    const shouldPreserveLikedTrue = previousState?.liked === true && fetchedState.liked !== true;
+    if (!previousState && fetchedState.liked !== true && fetchedState.likes === 0) {
+      return;
+    }
 
-    mergedLikeMap[key] = {
+    const shouldPreserveLikedTrue = previousState?.liked === true && fetchedState.liked !== true;
+    const nextState = {
       liked: shouldPreserveLikedTrue ? true : fetchedState.liked,
       likes: shouldPreserveLikedTrue
         ? Math.max(previousState?.likes ?? 0, fetchedState.likes)
         : fetchedState.likes,
     };
+
+    if (
+      !previousState ||
+      previousState.liked !== nextState.liked ||
+      previousState.likes !== nextState.likes
+    ) {
+      changed = true;
+      mergedLikeMap[key] = nextState;
+    }
   });
 
-  return mergedLikeMap;
+  return changed ? mergedLikeMap : previousLikeMap;
+}
+
+function mergeCommentCountMaps(
+  previousMap: Record<string, number>,
+  fetchedMap: Record<string, number>,
+): Record<string, number> {
+  let nextMap = previousMap;
+
+  Object.entries(fetchedMap).forEach(([key, count]) => {
+    if (!(key in previousMap) && count === 0) {
+      return;
+    }
+
+    if (previousMap[key] === count) {
+      return;
+    }
+
+    if (nextMap === previousMap) {
+      nextMap = { ...previousMap };
+    }
+    nextMap[key] = count;
+  });
+
+  return nextMap;
+}
+
+function mergeCommunityNames(
+  previousMap: Record<string, string>,
+  fetchedMap: Record<string, string>,
+): Record<string, string> {
+  let nextMap = previousMap;
+
+  Object.entries(fetchedMap).forEach(([communityId, name]) => {
+    if (previousMap[communityId] === name) {
+      return;
+    }
+
+    if (nextMap === previousMap) {
+      nextMap = { ...previousMap };
+    }
+    nextMap[communityId] = name;
+  });
+
+  return nextMap;
+}
+
+function mergeProfileEntries(
+  previousMap: Record<string, FeedProfileEntry>,
+  fetchedMap: Record<string, FeedProfileEntry>,
+): Record<string, FeedProfileEntry> {
+  let nextMap = previousMap;
+
+  Object.entries(fetchedMap).forEach(([userId, profile]) => {
+    const previousProfile = previousMap[userId];
+    if (
+      previousProfile?.display_name === profile.display_name &&
+      previousProfile?.username === profile.username &&
+      previousProfile?.avatar_url === profile.avatar_url &&
+      previousProfile?.fan_level_key === profile.fan_level_key
+    ) {
+      return;
+    }
+
+    if (nextMap === previousMap) {
+      nextMap = { ...previousMap };
+    }
+    nextMap[userId] = profile;
+  });
+
+  return nextMap;
+}
+
+function areCommentPreviewsEqual(
+  previous: CommentPreview[] | undefined,
+  next: CommentPreview[],
+): boolean {
+  if (previous === next) {
+    return true;
+  }
+  if (!previous || previous.length !== next.length) {
+    return false;
+  }
+
+  return previous.every(
+    (comment, index) =>
+      comment.id === next[index]?.id &&
+      comment.text === next[index]?.text &&
+      comment.created_at === next[index]?.created_at &&
+      comment.author_display_name === next[index]?.author_display_name &&
+      comment.author_avatar_url === next[index]?.author_avatar_url,
+  );
+}
+
+function mergeCommentPreviewMaps(
+  previousMap: Record<string, CommentPreview[]>,
+  fetchedMap: Record<string, CommentPreview[]>,
+): Record<string, CommentPreview[]> {
+  let nextMap = previousMap;
+
+  Object.entries(fetchedMap).forEach(([key, previews]) => {
+    const previousPreviews = previousMap[key];
+    if (
+      (!previousPreviews && previews.length === 0) ||
+      areCommentPreviewsEqual(previousPreviews, previews)
+    ) {
+      return;
+    }
+
+    if (nextMap === previousMap) {
+      nextMap = { ...previousMap };
+    }
+    nextMap[key] = previews;
+  });
+
+  return nextMap;
+}
+
+async function fetchEngagementCounts(
+  targetType: LikeTargetType,
+  targetIds: string[],
+): Promise<EngagementCounts> {
+  const [likes, comments] = await Promise.all([
+    fetchLikeStates(targetType, targetIds).catch((error) => {
+      logger.warn(`[FeedProvider] ${targetType} likes failed:`, error);
+      return new Map<string, { liked: boolean; likes: number }>();
+    }),
+    fetchCommentCounts(targetType, targetIds).catch((error) => {
+      logger.warn(`[FeedProvider] ${targetType} comment counts failed:`, error);
+      return new Map<string, number>();
+    }),
+  ]);
+  const likeMap: EngagementCounts['likeMap'] = {};
+  const commentCountMap: EngagementCounts['commentCountMap'] = {};
+
+  targetIds.forEach((id) => {
+    const key = targetKey(targetType, id);
+    likeMap[key] = likes.get(id) ?? { liked: false, likes: 0 };
+    commentCountMap[key] = comments.get(id) ?? 0;
+  });
+
+  return { likeMap, commentCountMap };
+}
+
+async function fetchEngagementPreviews(
+  targetType: LikeTargetType,
+  targetIds: string[],
+): Promise<Record<string, CommentPreview[]>> {
+  const previews = await fetchCommentPreviews(targetType, targetIds).catch((error) => {
+    logger.warn(`[FeedProvider] ${targetType} comment previews failed:`, error);
+    return new Map<string, CommentPreview[]>();
+  });
+  const previewMap: Record<string, CommentPreview[]> = {};
+
+  targetIds.forEach((id) => {
+    previewMap[targetKey(targetType, id)] = previews.get(id) ?? [];
+  });
+
+  return previewMap;
+}
+
+async function waitForSecondaryFeedWork(): Promise<void> {
+  await new Promise<void>((resolve) => {
+    const timeout = setTimeout(resolve, 100);
+    InteractionManager.runAfterInteractions(() => {
+      clearTimeout(timeout);
+      resolve();
+    });
+  });
+}
+
+async function loadSecondarySource<T>(
+  stage: string,
+  loader: () => Promise<T>,
+  fallback: T,
+): Promise<T> {
+  const startedAt = performanceNow();
+  try {
+    const result = await loader();
+    logPerformanceTiming('FeedFetch', stage, startedAt);
+    return result;
+  } catch (error) {
+    if (stage !== 'secondary-weekly-top-fan' || HOME_FEED_AUDIT_DEBUG_ENABLED) {
+      logger.warn(`[FeedProvider] ${stage} failed:`, error);
+    }
+    logPerformanceTiming('FeedFetch', `${stage}-error`, startedAt);
+    return fallback;
+  }
 }
 
 function mergeCommunityFeedEntries(
@@ -228,6 +438,7 @@ function logHomeFeedSnapshot(stage: string, items: FeedItem[], baseDate: Date) {
 }
 
 export function FeedProvider({ children }: { children: React.ReactNode }) {
+  const providerRenderStartedAt = performanceNow();
   const [posts, setPosts] = useState<Post[]>([]);
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
   const [homeFeedItems, setHomeFeedItems] = useState<FeedItem[]>([]);
@@ -241,6 +452,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
   >({});
   const localCommunityFeedEntriesRef = useRef<CommunityFeedSource[]>([]);
   const likeMapRef = useRef<Record<string, { liked: boolean; likes: number }>>({});
+  const commentCountMapRef = useRef<Record<string, number>>({});
   const fetchRequestIdRef = useRef(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -248,6 +460,10 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     likeMapRef.current = likeMap;
   }, [likeMap]);
+
+  useEffect(() => {
+    commentCountMapRef.current = commentCountMap;
+  }, [commentCountMap]);
 
   const patchFeedItemEngagement = useCallback(
     (
@@ -351,6 +567,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
   );
 
   const fetchPosts = useCallback(async () => {
+    const fetchStartedAt = performanceNow();
     const requestId = ++fetchRequestIdRef.current;
     const isCurrentRequest = () => fetchRequestIdRef.current === requestId;
 
@@ -365,14 +582,87 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
     let communityFeedEntries: CommunityFeedSource[] = [];
     let weeklyTopFanItem: Awaited<ReturnType<typeof fetchLatestPublishedWeeklyTopFan>> = null;
     let refreshedProfileMap: Record<string, FeedProfileEntry> = {};
+    let currentUserId: string | null = null;
     const baseDate = new Date();
+    let postEngagementCountsTask: Promise<void> = Promise.resolve();
+    let profileHydrationTask: Promise<void> = Promise.resolve();
+
+    const publishEngagementCounts = (counts: EngagementCounts, rerankHome: boolean) => {
+      if (!isCurrentRequest()) {
+        return;
+      }
+
+      const publicationStartedAt = performanceNow();
+      const mergedLikeMap = mergeFetchedLikeMapPreservingLikedState(
+        likeMapRef.current,
+        counts.likeMap,
+      );
+      const mergedCommentCountMap = mergeCommentCountMaps(
+        commentCountMapRef.current,
+        counts.commentCountMap,
+      );
+
+      likeMapRef.current = mergedLikeMap;
+      commentCountMapRef.current = mergedCommentCountMap;
+      setLikeMap(mergedLikeMap);
+      setCommentCountMap(mergedCommentCountMap);
+      setFeedItems((previousItems) =>
+        withFeedEngagementSummaryPreservingList(
+          previousItems,
+          mergedLikeMap,
+          mergedCommentCountMap,
+        ),
+      );
+      setHomeFeedItems((previousItems) => {
+        const summarizedItems = withFeedEngagementSummaryPreservingList(
+          previousItems,
+          mergedLikeMap,
+          mergedCommentCountMap,
+        );
+        const nextItems = rerankHome
+          ? sortHomeFeedItems(summarizedItems, baseDate)
+          : summarizedItems;
+        return reconcileFeedItemIdentities(previousItems, nextItems);
+      });
+      logPerformanceTiming('FeedPublication', 'engagement-state-enqueued', publicationStartedAt, {
+        likeCount: Object.keys(mergedLikeMap).length,
+        commentCount: Object.keys(mergedCommentCountMap).length,
+        rerankHome,
+      });
+    };
+
+    const publishCommentPreviews = (previews: Record<string, CommentPreview[]>) => {
+      if (!isCurrentRequest()) {
+        return;
+      }
+
+      const publicationStartedAt = performanceNow();
+      setCommentPreviewMap((previousMap) => mergeCommentPreviewMaps(previousMap, previews));
+      logPerformanceTiming('FeedPublication', 'comment-previews-enqueued', publicationStartedAt, {
+        targetCount: Object.keys(previews).length,
+      });
+    };
+
+    const authStartedAt = performanceNow();
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      currentUserId = session?.user?.id ?? null;
+    } catch (authError) {
+      logger.warn('[FeedProvider] Failed to read current session:', authError);
+    }
+    logPerformanceTiming('FeedFetch', 'session', authStartedAt, {
+      hasSession: Boolean(currentUserId),
+    });
 
     // Fetch posts in separate try/catch so news_items errors don't block posts
     try {
+      const postsFetchStartedAt = performanceNow();
       const { data: postsData, error: fetchError } = await supabase
         .from('posts')
         .select(
-          'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets, poll_data, link_preview',
+          'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets, poll_data, link_preview, post_type',
         )
         .order('created_at', { ascending: false })
         .limit(25);
@@ -380,78 +670,136 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       if (fetchError) {
         throw fetchError;
       }
+      logPerformanceTiming('FeedFetch', 'posts', postsFetchStartedAt, {
+        postCount: postsData?.length ?? 0,
+      });
 
-      // Fetch author profiles for all posts and keep the current viewer profile available
-      // so optimistic post inserts retain display name, avatar, and fan level in Home.
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const currentUserId = session?.user?.id ?? null;
-      const authorIds = [
-        ...new Set([...(postsData || []).map((p) => p.author_id), currentUserId].filter(Boolean)),
-      ];
-      const newProfileMap: Record<string, FeedProfileEntry> = {};
-
-      if (authorIds.length > 0) {
-        try {
-          const resolvedProfiles = await fetchFeedProfilesByIds(authorIds);
-          Object.assign(newProfileMap, resolvedProfiles);
-        } catch (e) {
-          logger.warn('[FeedProvider] Failed to fetch profiles:', e);
-        }
-      }
-      refreshedProfileMap = newProfileMap;
+      // Publish post rows before profile hydration so Home can render and calculate
+      // viewability while author metadata loads in the background.
+      const mappingStartedAt = performanceNow();
+      transformedPosts = (postsData || []).map((dbPost) => ({
+        id: dbPost.id,
+        postType: normalizePostType(dbPost.post_type),
+        authorName: 'Fan',
+        authorId: dbPost.author_id,
+        actorType: dbPost.actor_type ?? 'user',
+        actorId: dbPost.actor_id ?? dbPost.author_id,
+        actorDisplayName: dbPost.actor_type === 'community' ? null : 'Fan',
+        actorAvatarUrl: null,
+        communityId: dbPost.community_id ?? null,
+        feedTargets: Array.isArray(dbPost.feed_targets) ? dbPost.feed_targets : ['home'],
+        createdAt: dbPost.created_at,
+        text: dbPost.text,
+        poll_data: dbPost.poll_data ?? null,
+        linkPreview: normalizeLinkPreview(dbPost.link_preview),
+        likesCount: 0,
+        commentsCount: 0,
+        likedByMe: false,
+        media: normalizeMedia(dbPost.media),
+      }));
+      logPerformanceTiming('FeedMap', 'posts', mappingStartedAt, {
+        postCount: transformedPosts.length,
+        mediaArticleCount: transformedPosts.filter(
+          (post) => post.postType === 'media_article',
+        ).length,
+      });
+      logPerformanceTiming('FeedMap', 'media-preparation', mappingStartedAt, {
+        attachmentCount: transformedPosts.reduce(
+          (count, post) => count + (post.media?.length ?? 0),
+          0,
+        ),
+        mode: 'metadata-only',
+        eagerMediaUrlResolutionCount: 0,
+        eagerMediaPrefetchCount: 0,
+        eagerFaviconRequestCount: 0,
+      });
 
       if (!isCurrentRequest()) {
         return;
       }
 
-      setProfileMap((prev) => ({
-        ...prev,
-        ...newProfileMap,
-      }));
-
-      // Transform DB posts to Post type with normalized media
-      transformedPosts = (postsData || []).map((dbPost) => {
-        if (__DEV__) {
-          console.log('[FeedContext] mapped post', {
-            id: dbPost.id,
-            hasPollData: !!dbPost.poll_data,
-            pollData: dbPost.poll_data,
-          });
-        }
-
-        return withPostAuthorProfile(
-          {
-            id: dbPost.id,
-            authorName: newProfileMap[dbPost.author_id]?.display_name || 'Fan',
-            authorId: dbPost.author_id,
-            actorType: dbPost.actor_type ?? 'user',
-            actorId: dbPost.actor_id ?? dbPost.author_id,
-            actorDisplayName:
-              dbPost.actor_type === 'community'
-                ? null
-                : newProfileMap[dbPost.author_id]?.display_name || 'Fan',
-            actorAvatarUrl:
-              dbPost.actor_type === 'community'
-                ? null
-                : (newProfileMap[dbPost.author_id]?.avatar_url ?? null),
-            communityId: dbPost.community_id ?? null,
-            feedTargets: Array.isArray(dbPost.feed_targets) ? dbPost.feed_targets : ['home'],
-            createdAt: dbPost.created_at,
-            text: dbPost.text,
-            poll_data: dbPost.poll_data ?? null,
-            linkPreview: normalizeLinkPreview(dbPost.link_preview),
-            likesCount: 0, // TODO: Add likes support
-            commentsCount: 0, // TODO: Count comments
-            likedByMe: false,
-            media: normalizeMedia(dbPost.media), // Normalize media from DB
-          },
-          newProfileMap[dbPost.author_id],
-        );
+      const postsOnlyFeedItems = buildFeedItemsFromSources({
+        posts: transformedPosts,
+        newsItems: [],
+        events: [],
+        busTrips: [],
+        weeklyTopFanItem: null,
+        baseDate,
+      });
+      const postsOnlyHomeItems = sortHomeFeedItems(
+        buildHomeFeedItemsFromSources({
+          posts: transformedPosts,
+          newsItems: [],
+          events: [],
+          busTrips: [],
+          weeklyTopFanItem: null,
+          baseDate,
+        }),
+        baseDate,
+      );
+      const publicationStartedAt = performanceNow();
+      setPosts(transformedPosts);
+      setFeedItems(postsOnlyFeedItems);
+      setHomeFeedItems(postsOnlyHomeItems);
+      setLoading(false);
+      logPerformanceTiming('FeedPublication', 'posts-only-enqueued', publicationStartedAt, {
+        postCount: transformedPosts.length,
+        feedItemCount: postsOnlyFeedItems.length,
+        homeItemCount: postsOnlyHomeItems.length,
+      });
+      logPerformanceTiming('FeedItemsReady', 'posts-published', fetchStartedAt, {
+        itemCount: postsOnlyHomeItems.length,
+        profileHydrationPending: true,
+        secondaryFeedPending: true,
       });
 
-      setPosts(transformedPosts);
+      const postIds = transformedPosts.map((post) => post.id);
+      const postEngagementStartedAt = performanceNow();
+      postEngagementCountsTask = fetchEngagementCounts(
+        POST_ENGAGEMENT_TARGET_TYPE,
+        postIds,
+      ).then((counts) => {
+        publishEngagementCounts(counts, false);
+        logPerformanceTiming('FeedFetch', 'post-engagement-counts', postEngagementStartedAt, {
+          targetCount: postIds.length,
+        });
+      });
+
+      // Fetch author profiles for all posts and keep the current viewer profile available
+      // so optimistic post inserts retain display name, avatar, and fan level in Home.
+      const authorIds = [
+        ...new Set([...(postsData || []).map((p) => p.author_id), currentUserId].filter(Boolean)),
+      ];
+      profileHydrationTask = (async () => {
+        const newProfileMap: Record<string, FeedProfileEntry> = {};
+        const profilesStartedAt = performanceNow();
+        if (authorIds.length > 0) {
+          try {
+            const resolvedProfiles = await fetchFeedProfilesByIds(authorIds);
+            Object.assign(newProfileMap, resolvedProfiles);
+          } catch (e) {
+            logger.warn('[FeedProvider] Failed to fetch profiles:', e);
+          }
+        }
+        logPerformanceTiming('FeedFetch', 'profiles', profilesStartedAt, {
+          requestedCount: authorIds.length,
+          resolvedCount: Object.keys(newProfileMap).length,
+        });
+        refreshedProfileMap = newProfileMap;
+
+        if (!isCurrentRequest()) {
+          return;
+        }
+
+        const publicationStartedAt = performanceNow();
+        setProfileMap((prev) => mergeProfileEntries(prev, newProfileMap));
+        logPerformanceTiming('FeedPublication', 'profiles-enqueued', publicationStartedAt, {
+          profileCount: Object.keys(newProfileMap).length,
+        });
+        logPerformanceTiming('FeedFetch', 'profiles-applied', fetchStartedAt, {
+          itemCount: postsOnlyHomeItems.length,
+        });
+      })();
     } catch (e: any) {
       const errorMsg = e?.message || String(e);
       setError(errorMsg);
@@ -459,9 +807,166 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       // Don't return - continue to try fetching news
     }
 
+    const secondaryDeferredAt = performanceNow();
+    await waitForSecondaryFeedWork();
+    if (!isCurrentRequest()) {
+      return;
+    }
+    logPerformanceTiming('FeedFetch', 'secondary-work-started', secondaryDeferredAt);
+
+    const newsItemsTask = loadSecondarySource('secondary-news', () => fetchNewsItems(25), []);
+    const persistedCommunityFeedTask = loadSecondarySource(
+      'secondary-communities',
+      () => fetchHomeCommunityFeedItems(6),
+      [],
+    );
+    const upcomingEventsTask = loadSecondarySource(
+      'secondary-events',
+      () => fetchEventsUpcoming(10),
+      [],
+    );
+    const upcomingBusTripsTask = loadSecondarySource(
+      'secondary-bus-trips',
+      () => fetchBusTripsUpcoming(10),
+      [],
+    );
+    const homeFanActivitiesTask = loadSecondarySource(
+      'secondary-fan-activities',
+      () => fetchHomeFanActivities(8),
+      [],
+    );
+    const weeklyTopFanTask = loadSecondarySource(
+      'secondary-weekly-top-fan',
+      () => fetchLatestPublishedWeeklyTopFan(baseDate),
+      null,
+    );
+
+    // Publish the primary mixed sources as soon as they are ready. Slower discovery
+    // cards and weekly-top-fan enrichment continue in the background.
+    [newsItems, upcomingEvents, upcomingBusTrips] = await Promise.all([
+      newsItemsTask,
+      upcomingEventsTask,
+      upcomingBusTripsTask,
+    ]);
+    if (!isCurrentRequest()) {
+      return;
+    }
+
+    const coreBuildStartedAt = performanceNow();
+    const coreFeedItems = withFeedEngagementSummary(
+      buildFeedItemsFromSources({
+        posts: transformedPosts,
+        newsItems,
+        events: upcomingEvents,
+        busTrips: upcomingBusTrips,
+        weeklyTopFanItem: null,
+        baseDate,
+      }),
+      likeMapRef.current,
+      commentCountMapRef.current,
+    );
+    const coreHomeFeedItems = sortHomeFeedItems(
+      withFeedEngagementSummary(
+        buildHomeFeedItemsFromSources({
+          posts: transformedPosts,
+          newsItems,
+          events: upcomingEvents,
+          busTrips: upcomingBusTrips,
+          weeklyTopFanItem: null,
+          baseDate,
+        }),
+        likeMapRef.current,
+        commentCountMapRef.current,
+      ),
+      baseDate,
+    );
+    const corePublicationStartedAt = performanceNow();
+    setFeedItems((previousItems) =>
+      reconcileFeedItemIdentities(previousItems, coreFeedItems),
+    );
+    setHomeFeedItems((previousItems) =>
+      reconcileFeedItemIdentities(previousItems, coreHomeFeedItems),
+    );
+    logPerformanceTiming('FeedPublication', 'mixed-core-enqueued', corePublicationStartedAt, {
+      feedItemCount: coreFeedItems.length,
+      homeItemCount: coreHomeFeedItems.length,
+    });
+    logPerformanceTiming('FeedMap', 'secondary-core-build', coreBuildStartedAt, {
+      feedItemCount: coreFeedItems.length,
+      homeItemCount: coreHomeFeedItems.length,
+    });
+    logPerformanceTiming('FeedFetch', 'mixed-feed-built', fetchStartedAt, {
+      feedItemCount: coreFeedItems.length,
+      homeItemCount: coreHomeFeedItems.length,
+      sourceMode: 'core-first',
+      lowPriorityPending: true,
+    });
+    logPerformanceTiming('FeedItemsReady', 'mixed-feed-published', fetchStartedAt, {
+      feedItemCount: coreFeedItems.length,
+      homeItemCount: coreHomeFeedItems.length,
+      engagementPending: true,
+      lowPriorityPending: true,
+    });
+    logHomeFeedSnapshot('core', coreHomeFeedItems, baseDate);
+
+    const corePostIds = transformedPosts.map((post) => post.id);
+    const coreNewsIds = newsItems.map((newsItem) => newsItem.id);
+    const coreEventIds = upcomingEvents.map((event) => event.id);
+    const coreBusTripIds = upcomingBusTrips.map((busTrip) => busTrip.id);
+    let secondaryEngagementComplete = false;
+    const secondaryEngagementTask = (async () => {
+      const engagementStartedAt = performanceNow();
+      const [newsEngagement, eventEngagement, busTripEngagement] = await Promise.all([
+        fetchEngagementCounts('news', coreNewsIds),
+        fetchEngagementCounts('event', coreEventIds),
+        fetchEngagementCounts('bus_trip', coreBusTripIds),
+      ]);
+      publishEngagementCounts(
+        {
+          likeMap: {
+            ...newsEngagement.likeMap,
+            ...eventEngagement.likeMap,
+            ...busTripEngagement.likeMap,
+          },
+          commentCountMap: {
+            ...newsEngagement.commentCountMap,
+            ...eventEngagement.commentCountMap,
+            ...busTripEngagement.commentCountMap,
+          },
+        },
+        true,
+      );
+      logPerformanceTiming('FeedFetch', 'engagement', engagementStartedAt, {
+        targetCount: coreNewsIds.length + coreEventIds.length + coreBusTripIds.length,
+        mode: 'progressive-counts',
+      });
+      secondaryEngagementComplete = true;
+    })();
+    const secondaryPreviewsTask = (async () => {
+      await waitForSecondaryFeedWork();
+      const previewsStartedAt = performanceNow();
+      const previewMaps = await Promise.all([
+        fetchEngagementPreviews(POST_ENGAGEMENT_TARGET_TYPE, corePostIds),
+        fetchEngagementPreviews('news', coreNewsIds),
+        fetchEngagementPreviews('event', coreEventIds),
+        fetchEngagementPreviews('bus_trip', coreBusTripIds),
+      ]);
+      publishCommentPreviews(Object.assign({}, ...previewMaps));
+      logPerformanceTiming('FeedFetch', 'engagement-previews', previewsStartedAt, {
+        targetCount:
+          corePostIds.length +
+          coreNewsIds.length +
+          coreEventIds.length +
+          coreBusTripIds.length,
+        blocksMixedFeedPublication: false,
+      });
+    })();
+
+    let resolvedCommunityNames: Record<string, string> = {};
+
     // Fetch news items in separate try/catch
     try {
-      newsItems = await fetchNewsItems(25);
+      newsItems = await newsItemsTask;
 
       // Build community map from news items and posts
       const communityIds = newsItems
@@ -476,6 +981,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
 
       if (communityIds.length > 0 || postCommunityIds.length > 0) {
         const uniqueCommunityIds = [...new Set([...communityIds, ...postCommunityIds])];
+        const communityHydrationStartedAt = performanceNow();
         try {
           const { data: communities, error: commError } = await supabase
             .from('communities')
@@ -499,7 +1005,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
               return;
             }
 
-            setCommunityMap(newCommunityMap);
+            resolvedCommunityNames = newCommunityMap;
 
             transformedPosts = transformedPosts.map((post) => {
               if (post.actorType !== 'community') {
@@ -525,6 +1031,13 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
           }
         } catch (e) {
           logger.warn('[FeedProvider] Failed to fetch community names:', e);
+        } finally {
+          logPerformanceTiming(
+            'FeedFetch',
+            'secondary-community-identities',
+            communityHydrationStartedAt,
+            { requestedCount: uniqueCommunityIds.length },
+          );
         }
       }
     } catch (e: any) {
@@ -536,7 +1049,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       newsItems = [];
     }
 
-    const persistedCommunityFeedEntries = await fetchHomeCommunityFeedItems(6);
+    const persistedCommunityFeedEntries = await persistedCommunityFeedTask;
     communityFeedEntries = mergeCommunityFeedEntries(
       localCommunityFeedEntriesRef.current,
       persistedCommunityFeedEntries,
@@ -558,34 +1071,31 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (communityFeedEntries.length > 0) {
-      const recentCommunityMap: Record<string, string> = {};
+    if (
+      communityFeedEntries.length > 0 ||
+      Object.keys(resolvedCommunityNames).length > 0
+    ) {
+      const recentCommunityMap: Record<string, string> = {
+        ...resolvedCommunityNames,
+      };
       communityFeedEntries.forEach((community) => {
         recentCommunityMap[community.community_id] = community.name;
       });
-      setCommunityMap((prev) => ({ ...prev, ...recentCommunityMap }));
+      setCommunityMap((previousMap) =>
+        mergeCommunityNames(previousMap, recentCommunityMap),
+      );
     }
 
     // Fetch event-like Home sources separately from posts/news.
-    try {
-      const results = await Promise.allSettled([
-        fetchEventsUpcoming(10),
-        fetchBusTripsUpcoming(10),
-        fetchHomeFanActivities(8),
-      ]);
-      upcomingEvents = results[0].status === 'fulfilled' ? results[0].value : [];
-      upcomingBusTrips = results[1].status === 'fulfilled' ? results[1].value : [];
-      homeFanActivities = results[2].status === 'fulfilled' ? results[2].value : [];
-    } catch (e: any) {
-      logger.warn('[FeedProvider] fetchEventsUpcoming/busTrips/fanActivities failed:', e?.message || e);
-      upcomingEvents = [];
-      upcomingBusTrips = [];
-      homeFanActivities = [];
-    }
+    [upcomingEvents, upcomingBusTrips, homeFanActivities] = await Promise.all([
+      upcomingEventsTask,
+      upcomingBusTripsTask,
+      homeFanActivitiesTask,
+    ]);
 
     try {
-      weeklyTopFanItem = await fetchLatestPublishedWeeklyTopFan(baseDate);
-      if (__DEV__) {
+      weeklyTopFanItem = await weeklyTopFanTask;
+      if (HOME_FEED_AUDIT_DEBUG_ENABLED) {
         console.log(
           '[FeedProvider] weekly_top_fan fetch result',
           weeklyTopFanItem
@@ -597,44 +1107,18 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
             : null,
         );
       }
-      if (weeklyTopFanItem?.userId) {
-        setProfileMap((prev) => {
-          const existingProfile = prev[weeklyTopFanItem!.userId];
-          const refreshedProfile = refreshedProfileMap[weeklyTopFanItem!.userId];
-          const nextProfile: FeedProfileEntry = {
-            username: existingProfile?.username ?? null,
-            display_name: existingProfile?.display_name ?? weeklyTopFanItem!.displayName,
-            avatar_url: existingProfile?.avatar_url ?? weeklyTopFanItem!.avatarUrl ?? null,
-            fan_level_key:
-              refreshedProfile?.fan_level_key ??
-              weeklyTopFanItem!.fanLevelKey ??
-              existingProfile?.fan_level_key ??
-              null,
-          };
-
-          if (
-            existingProfile &&
-            existingProfile.display_name === nextProfile.display_name &&
-            existingProfile.avatar_url === nextProfile.avatar_url &&
-            existingProfile.fan_level_key === nextProfile.fan_level_key
-          ) {
-            return prev;
-          }
-
-          return {
-            ...prev,
-            [weeklyTopFanItem!.userId]: nextProfile,
-          };
-        });
-      }
     } catch (e: any) {
-      logger.warn('[FeedProvider] fetchLatestPublishedWeeklyTopFan failed:', e?.message || e);
-      if (__DEV__) {
+      if (HOME_FEED_AUDIT_DEBUG_ENABLED) {
+        logger.warn('[FeedProvider] fetchLatestPublishedWeeklyTopFan failed:', e?.message || e);
         console.log('[FeedProvider] weekly_top_fan fetch threw, continuing without card', {
           message: e?.message ?? String(e),
         });
       }
       weeklyTopFanItem = null;
+    }
+    await profileHydrationTask;
+    if (!isCurrentRequest()) {
+      return;
     }
 
     // Merge posts, news, events, and bus trips into combined feed
@@ -655,7 +1139,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
               fanLevelKey: refreshedWeeklyTopFanLevel,
             }
           : weeklyTopFanItem;
-      if (__DEV__) {
+      if (HOME_FEED_AUDIT_DEBUG_ENABLED) {
         console.log(
           '[FeedProvider] injecting weekly_top_fan into feeds',
           safeWeeklyTopFanItem
@@ -666,6 +1150,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
             : null,
         );
       }
+      const mixedFeedBuildStartedAt = performanceNow();
       const nextFeedItems = buildFeedItemsFromSources({
         posts: safePostsArray,
         newsItems: safeNewsArray,
@@ -684,10 +1169,16 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         weeklyTopFanItem: safeWeeklyTopFanItem,
         baseDate,
       });
-      if (__DEV__) {
+      logPerformanceTiming('FeedMap', 'secondary-low-priority-build', mixedFeedBuildStartedAt, {
+        feedItemCount: nextFeedItems.length,
+        homeItemCount: nextHomeFeedItems.length,
+      });
+      if (HOME_FEED_AUDIT_DEBUG_ENABLED) {
         console.log('[FeedProvider] weekly_top_fan injected state', {
           feedHasCard: nextFeedItems.some((item) => item.kind === 'weekly_top_fan'),
-          homeHasCardBeforeRanking: nextHomeFeedItems.some((item) => item.kind === 'weekly_top_fan'),
+          homeHasCardBeforeRanking: nextHomeFeedItems.some(
+            (item) => item.kind === 'weekly_top_fan',
+          ),
           weeklyTopFanId: safeWeeklyTopFanItem?.id ?? null,
         });
       }
@@ -696,8 +1187,47 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      setFeedItems(nextFeedItems);
+      logPerformanceTiming('FeedFetch', 'low-priority-feed-built', fetchStartedAt, {
+        feedItemCount: nextFeedItems.length,
+        homeItemCount: nextHomeFeedItems.length,
+        sourceMode: 'deferred-expansion',
+      });
       logHomeFeedSnapshot('built', nextHomeFeedItems, baseDate);
+
+      const preliminaryFeedItems = withFeedEngagementSummary(
+        nextFeedItems,
+        likeMapRef.current,
+        commentCountMapRef.current,
+      );
+      const preliminaryHomeItems = sortHomeFeedItems(
+        withFeedEngagementSummary(
+          nextHomeFeedItems,
+          likeMapRef.current,
+          commentCountMapRef.current,
+        ),
+        baseDate,
+      );
+      const expandedPublicationStartedAt = performanceNow();
+      setFeedItems((previousItems) =>
+        reconcileFeedItemIdentities(previousItems, preliminaryFeedItems),
+      );
+      setHomeFeedItems((previousItems) =>
+        reconcileFeedItemIdentities(previousItems, preliminaryHomeItems),
+      );
+      logPerformanceTiming(
+        'FeedPublication',
+        'mixed-expanded-enqueued',
+        expandedPublicationStartedAt,
+        {
+          feedItemCount: preliminaryFeedItems.length,
+          homeItemCount: preliminaryHomeItems.length,
+        },
+      );
+      logPerformanceTiming('FeedItemsReady', 'mixed-feed-expanded', fetchStartedAt, {
+        feedItemCount: preliminaryFeedItems.length,
+        homeItemCount: preliminaryHomeItems.length,
+        engagementPending: !secondaryEngagementComplete,
+      });
 
       // Fetch like and comment counts for all feed items
       // Note: get_like_state_v2 doesn't support user context, so liked will always be false
@@ -709,148 +1239,43 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       const eventIds = safeEventsArray.map((e) => e.id);
       const busTripIds = safeBusTripsArray.map((b) => b.id);
 
-      // Fetch likes, comments, and previews for each kind in parallel
-      // Wrap each in try-catch to ensure we get Maps even if individual fetch fails
-      const [
-        postLikes,
-        postComments,
-        postPreviews,
-        newsLikes,
-        newsComments,
-        newsPreviews,
-        eventLikes,
-        eventComments,
-        eventPreviews,
-        busTripLikes,
-        busTripComments,
-        busTripPreviews,
-      ] = await Promise.all([
-        fetchLikeStates('post', postIds).catch((err) => {
-          logger.warn('[FeedProvider] postLikes failed:', err);
-          return new Map();
-        }),
-        fetchCommentCounts('post', postIds).catch((err) => {
-          logger.warn('[FeedProvider] postComments failed:', err);
-          return new Map();
-        }),
-        fetchCommentPreviews('post', postIds).catch((err) => {
-          logger.warn('[FeedProvider] postPreviews failed:', err);
-          return new Map();
-        }),
-        fetchLikeStates('news', newsIds).catch((err) => {
-          logger.warn('[FeedProvider] newsLikes failed:', err);
-          return new Map();
-        }),
-        fetchCommentCounts('news', newsIds).catch((err) => {
-          logger.warn('[FeedProvider] newsComments failed:', err);
-          return new Map();
-        }),
-        fetchCommentPreviews('news', newsIds).catch((err) => {
-          logger.warn('[FeedProvider] newsPreviews failed:', err);
-          return new Map();
-        }),
-        fetchLikeStates('event', eventIds).catch((err) => {
-          logger.warn('[FeedProvider] eventLikes failed:', err);
-          return new Map();
-        }),
-        fetchCommentCounts('event', eventIds).catch((err) => {
-          logger.warn('[FeedProvider] eventComments failed:', err);
-          return new Map();
-        }),
-        fetchCommentPreviews('event', eventIds).catch((err) => {
-          logger.warn('[FeedProvider] eventPreviews failed:', err);
-          return new Map();
-        }),
-        fetchLikeStates('bus_trip', busTripIds).catch((err) => {
-          logger.warn('[FeedProvider] busTripLikes failed:', err);
-          return new Map();
-        }),
-        fetchCommentCounts('bus_trip', busTripIds).catch((err) => {
-          logger.warn('[FeedProvider] busTripComments failed:', err);
-          return new Map();
-        }),
-        fetchCommentPreviews('bus_trip', busTripIds).catch((err) => {
-          logger.warn('[FeedProvider] busTripPreviews failed:', err);
-          return new Map();
-        }),
-      ]);
-
-      // Ensure all Maps are valid (in case catch returns undefined)
-      const safePostLikes = postLikes || new Map();
-      const safePostComments = postComments || new Map();
-      const safePostPreviews = postPreviews || new Map();
-      const safeNewsLikes = newsLikes || new Map();
-      const safeNewsComments = newsComments || new Map();
-      const safeNewsPreviews = newsPreviews || new Map();
-      const safeEventLikes = eventLikes || new Map();
-      const safeEventComments = eventComments || new Map();
-      const safeEventPreviews = eventPreviews || new Map();
-      const safeBusTripLikes = busTripLikes || new Map();
-      const safeBusTripComments = busTripComments || new Map();
-      const safeBusTripPreviews = busTripPreviews || new Map();
-
-      // Build maps with "${kind}:${id}" keys
-      const newLikeMap: Record<string, { liked: boolean; likes: number }> = {};
-      const newCommentCountMap: Record<string, number> = {};
-      const newCommentPreviewMap: Record<string, CommentPreview[]> = {};
-
-      postIds.forEach((id) => {
-        const key = targetKey('post', id);
-        newLikeMap[key] = safePostLikes.get(id) || { liked: false, likes: 0 };
-        newCommentCountMap[key] = safePostComments.get(id) || 0;
-        newCommentPreviewMap[key] = safePostPreviews.get(id) || [];
-      });
-
-      newsIds.forEach((id) => {
-        const key = targetKey('news', id);
-        newLikeMap[key] = safeNewsLikes.get(id) || { liked: false, likes: 0 };
-        newCommentCountMap[key] = safeNewsComments.get(id) || 0;
-        newCommentPreviewMap[key] = safeNewsPreviews.get(id) || [];
-      });
-
-      eventIds.forEach((id) => {
-        const key = targetKey('event', id);
-        newLikeMap[key] = safeEventLikes.get(id) || { liked: false, likes: 0 };
-        newCommentCountMap[key] = safeEventComments.get(id) || 0;
-        newCommentPreviewMap[key] = safeEventPreviews.get(id) || [];
-      });
-
-      busTripIds.forEach((id) => {
-        const key = targetKey('bus_trip', id);
-        newLikeMap[key] = safeBusTripLikes.get(id) || { liked: false, likes: 0 };
-        newCommentCountMap[key] = safeBusTripComments.get(id) || 0;
-        newCommentPreviewMap[key] = safeBusTripPreviews.get(id) || [];
-      });
-
-      const mergedLikeMap = mergeFetchedLikeMapPreservingLikedState(likeMapRef.current, newLikeMap);
+      await Promise.all([secondaryEngagementTask, postEngagementCountsTask]);
 
       if (!isCurrentRequest()) {
         return;
       }
 
-      likeMapRef.current = mergedLikeMap;
-      setLikeMap(mergedLikeMap);
-      setFeedItems(withFeedEngagementSummary(nextFeedItems, mergedLikeMap, newCommentCountMap));
+      const mergedLikeMap = likeMapRef.current;
       const rankedHomeFeedItems = sortHomeFeedItems(
-        withFeedEngagementSummary(nextHomeFeedItems, mergedLikeMap, newCommentCountMap),
+        withFeedEngagementSummary(
+          nextHomeFeedItems,
+          mergedLikeMap,
+          commentCountMapRef.current,
+        ),
         baseDate,
       );
-      if (__DEV__) {
+      logPerformanceTiming('FeedItemsReady', 'mixed-feed-engagement-applied', fetchStartedAt, {
+        feedItemCount: nextFeedItems.length,
+        homeItemCount: rankedHomeFeedItems.length,
+      });
+      if (HOME_FEED_AUDIT_DEBUG_ENABLED) {
         console.log('[FeedProvider] weekly_top_fan after home ranking', {
-          homeHasCardAfterRanking: rankedHomeFeedItems.some((item) => item.kind === 'weekly_top_fan'),
+          homeHasCardAfterRanking: rankedHomeFeedItems.some(
+            (item) => item.kind === 'weekly_top_fan',
+          ),
           weeklyTopFanId: safeWeeklyTopFanItem?.id ?? null,
         });
       }
 
+      await secondaryPreviewsTask;
+
       // ── Rehydrate likedByMe from likes_v2 for current user ──
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        const currentUserId = session?.user?.id;
         if (currentUserId) {
           const [myPostLikes, myNewsLikes, myEventLikes, myBusTripLikes] = await Promise.all([
-            fetchMyLikedIds(currentUserId, 'post', postIds).catch(() => new Set<string>()),
+            fetchMyLikedIds(currentUserId, POST_ENGAGEMENT_TARGET_TYPE, postIds).catch(
+              () => new Set<string>(),
+            ),
             fetchMyLikedIds(currentUserId, 'news', newsIds).catch(() => new Set<string>()),
             fetchMyLikedIds(currentUserId, 'event', eventIds).catch(() => new Set<string>()),
             fetchMyLikedIds(currentUserId, 'bus_trip', busTripIds).catch(() => new Set<string>()),
@@ -865,7 +1290,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
               }
             }
           };
-          patchLiked('post', postIds, myPostLikes);
+          patchLiked(POST_ENGAGEMENT_TARGET_TYPE, postIds, myPostLikes);
           patchLiked('news', newsIds, myNewsLikes);
           patchLiked('event', eventIds, myEventLikes);
           patchLiked('bus_trip', busTripIds, myBusTripLikes);
@@ -887,11 +1312,6 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
 
       // ── Batch fetch attendance for events and bus trips ──
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        const currentUserId = session?.user?.id;
-
         const allAttendableIds = [...eventIds, ...busTripIds];
         if (allAttendableIds.length > 0) {
           // Fetch all RSVPs for events & bus trips
@@ -943,9 +1363,6 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      setCommentCountMap(newCommentCountMap);
-      setCommentPreviewMap(newCommentPreviewMap);
-      setHomeFeedItems(rankedHomeFeedItems);
       logHomeFeedSnapshot('final', rankedHomeFeedItems, baseDate);
     } catch (e: any) {
       logger.error('[FeedProvider] Error merging feed:', e?.message || e);
@@ -953,6 +1370,9 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
 
     if (isCurrentRequest()) {
       setLoading(false);
+      logPerformanceTiming('FeedFetch', 'complete', fetchStartedAt, {
+        postCount: transformedPosts.length,
+      });
     }
   }, []);
 
@@ -1072,7 +1492,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       commentsCount: number;
       commentPreviews: CommentPreview[];
     }) => {
-      const key = targetKey('post', postId);
+      const key = targetKey(POST_ENGAGEMENT_TARGET_TYPE, postId);
 
       setLikeMap((prev) => {
         if (prev[key]) {
@@ -1115,7 +1535,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
   const toggleLike = useCallback(
     async (kind: LikeTargetType, id: string, userId: string) => {
       const key = targetKey(kind, id);
-      const currentState = likeMap[key] || { liked: false, likes: 0 };
+      const currentState = likeMapRef.current[key] || { liked: false, likes: 0 };
 
       // Optimistic update
       const newLiked = !currentState.liked;
@@ -1174,17 +1594,19 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         );
       }
     },
-    [likeMap, patchFeedItemEngagement],
+    [patchFeedItemEngagement],
   );
 
   const incrementCommentCount = useCallback(
     (kind: LikeTargetType, id: string) => {
       const key = targetKey(kind, id);
-      const nextCommentCount = (commentCountMap[key] || 0) + 1;
-      setCommentCountMap((prev) => ({
-        ...prev,
+      const nextCommentCount = (commentCountMapRef.current[key] || 0) + 1;
+      const nextCommentCountMap = {
+        ...commentCountMapRef.current,
         [key]: nextCommentCount,
-      }));
+      };
+      commentCountMapRef.current = nextCommentCountMap;
+      setCommentCountMap(nextCommentCountMap);
       setFeedItems((prev) =>
         patchFeedItemEngagement(prev, kind, id, { commentCount: nextCommentCount }),
       );
@@ -1192,7 +1614,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         patchFeedItemEngagement(prev, kind, id, { commentCount: nextCommentCount }),
       );
     },
-    [commentCountMap, patchFeedItemEngagement],
+    [patchFeedItemEngagement],
   );
 
   const addCommentPreview = useCallback(
@@ -1211,30 +1633,67 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
+  const contextValue = useMemo<FeedContextType>(
+    () => ({
+      posts,
+      feedItems,
+      homeFeedItems,
+      communityMap,
+      profileMap,
+      likeMap,
+      commentCountMap,
+      commentPreviewMap,
+      attendanceMap,
+      addPost,
+      addCommunityFeedItem,
+      removePost,
+      removeNews,
+      fetchPosts,
+      hydratePostEngagement,
+      toggleLike,
+      incrementCommentCount,
+      addCommentPreview,
+      loading,
+      error,
+    }),
+    [
+      addCommentPreview,
+      addCommunityFeedItem,
+      addPost,
+      attendanceMap,
+      commentCountMap,
+      commentPreviewMap,
+      communityMap,
+      error,
+      feedItems,
+      fetchPosts,
+      homeFeedItems,
+      hydratePostEngagement,
+      incrementCommentCount,
+      likeMap,
+      loading,
+      posts,
+      profileMap,
+      removeNews,
+      removePost,
+      toggleLike,
+    ],
+  );
+
+  useEffect(() => {
+    logPerformanceTiming('FeedPublication', 'context-value-committed', providerRenderStartedAt, {
+      postCount: contextValue.posts.length,
+      feedItemCount: contextValue.feedItems.length,
+      homeItemCount: contextValue.homeFeedItems.length,
+      profileCount: Object.keys(contextValue.profileMap).length,
+      communityCount: Object.keys(contextValue.communityMap).length,
+      loading: contextValue.loading,
+    });
+  }, [contextValue, providerRenderStartedAt]);
+
   return (
     <FeedContext.Provider
-      value={{
-        posts,
-        feedItems,
-        homeFeedItems,
-        communityMap,
-        profileMap,
-        likeMap,
-        commentCountMap,
-        commentPreviewMap,
-        attendanceMap,
-        addPost,
-        addCommunityFeedItem,
-        removePost,
-        removeNews,
-        fetchPosts,
-        hydratePostEngagement,
-        toggleLike,
-        incrementCommentCount,
-        addCommentPreview,
-        loading,
-        error,
-      }}
+      value={contextValue}
     >
       {children}
     </FeedContext.Provider>

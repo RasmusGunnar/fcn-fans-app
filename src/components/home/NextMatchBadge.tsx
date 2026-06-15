@@ -9,7 +9,7 @@ import type { MatchViewState } from '../../utils/matchdayState';
 interface NextMatchBadgeProps {
   match: {
     id: string;
-    coverUrl: string;
+    coverUrl: string | null;
     homeTeam: string;
     awayTeam: string;
     homeLogo: string | null;
@@ -60,6 +60,9 @@ const NextMatchBadge: React.FC<NextMatchBadgeProps> = ({
   const cleanedSubtitle = cleanText(match.subtitle);
   const cleanedVenue = cleanText(match.venue);
   const cleanedVenueCity = cleanText(match.venueCity);
+  const coverSource = match.coverUrl
+    ? { uri: match.coverUrl }
+    : require('../../../assets/stadium-hero.png');
 
   return (
     <View style={styles.wrapper}>
@@ -70,7 +73,7 @@ const NextMatchBadge: React.FC<NextMatchBadgeProps> = ({
       >
         <View style={styles.badgeCard}>
           <ImageBackground
-            source={{ uri: match.coverUrl }}
+            source={coverSource}
             style={styles.heroBackground}
             imageStyle={styles.heroBackground}
           >
@@ -98,7 +101,11 @@ const NextMatchBadge: React.FC<NextMatchBadgeProps> = ({
               <View style={styles.matchupRow}>
                 {match.homeLogo ? (
                   <View style={styles.teamLogoContainer}>
-                    <Image source={{ uri: match.homeLogo }} style={styles.teamLogo} resizeMode="contain" />
+                    <Image
+                      source={{ uri: match.homeLogo }}
+                      style={styles.teamLogo}
+                      resizeMode="contain"
+                    />
                   </View>
                 ) : (
                   <View style={[styles.teamLogoContainer, styles.teamLogoPlaceholder]}>
@@ -110,7 +117,11 @@ const NextMatchBadge: React.FC<NextMatchBadgeProps> = ({
 
                 {match.awayLogo ? (
                   <View style={styles.teamLogoContainer}>
-                    <Image source={{ uri: match.awayLogo }} style={styles.teamLogo} resizeMode="contain" />
+                    <Image
+                      source={{ uri: match.awayLogo }}
+                      style={styles.teamLogo}
+                      resizeMode="contain"
+                    />
                   </View>
                 ) : (
                   <View style={[styles.teamLogoContainer, styles.teamLogoPlaceholder]}>
@@ -124,7 +135,7 @@ const NextMatchBadge: React.FC<NextMatchBadgeProps> = ({
                 {normalizedCountdownLabel ? (
                   <Text style={styles.countdownText}>{normalizedCountdownLabel}</Text>
                 ) : null}
-                {(cleanedVenue || cleanedVenueCity) ? (
+                {cleanedVenue || cleanedVenueCity ? (
                   <Text style={styles.venueText}>
                     {cleanedVenue && cleanedVenueCity
                       ? `${cleanedVenue}, ${cleanedVenueCity}`
@@ -300,4 +311,3 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => {
     },
   });
 };
-

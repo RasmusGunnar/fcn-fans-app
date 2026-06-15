@@ -6,6 +6,11 @@ import { targetKey } from './targetKey';
 import type { FeedFanActivityData, FeedItem, FeedWeeklyTopFanData } from '../types/feed';
 import type { NewsItem } from '../types/news';
 import type { Post } from '../types/post';
+import { reconcileFeedItemIdentities } from './feedPublication';
+import { toPostFeedItem } from './postFeedItem';
+
+export { toPostFeedItem } from './postFeedItem';
+export { reconcileFeedItemIdentities } from './feedPublication';
 
 const COPENHAGEN_TIMEZONE = 'Europe/Copenhagen';
 const WEEKLY_TOP_FAN_PUBLISH_WEEKDAY = 'Wed';
@@ -313,7 +318,7 @@ function isValidWeeklyTopFanForHome(item: FeedItem, baseDate = new Date()): bool
   );
 
   if (!hasRequiredData) {
-    if (__DEV__) {
+    if (HOME_FEED_AUDIT_DEBUG_ENABLED) {
       console.log('[homeFeed] dropping weekly_top_fan due to missing required data', {
         id: item.id,
         weekStartDate: item.data.weekStartDate ?? null,
@@ -323,7 +328,7 @@ function isValidWeeklyTopFanForHome(item: FeedItem, baseDate = new Date()): bool
     return false;
   }
 
-  if (__DEV__) {
+  if (HOME_FEED_AUDIT_DEBUG_ENABLED) {
     console.log('[homeFeed] allowing weekly_top_fan into home feed', {
       id: item.id,
       weekStartDate: item.data.weekStartDate,
@@ -811,7 +816,7 @@ function applyHomeFanActivityGuardrails(entries: RankedHomeFeedEntry[]): RankedH
 
     const [nextEntry] = remaining.splice(candidateIndex >= 0 ? candidateIndex : 0, 1);
     if (!nextEntry) {
-      if (__DEV__) {
+      if (HOME_FEED_AUDIT_DEBUG_ENABLED) {
         logger.warn('[homeFeed] Skipped empty entry during fan_activity guardrail pass.');
       }
       continue;
@@ -890,7 +895,7 @@ export function sortHomeFeedItems(items: FeedItem[], baseDate = new Date()): Fee
       }
 
       if (hasValidWeeklyTopFan) {
-        if (__DEV__) {
+        if (HOME_FEED_AUDIT_DEBUG_ENABLED) {
           console.log('[homeFeed] dropping duplicate weekly_top_fan item', {
             id: item.id,
             weekStartDate: item.data.weekStartDate,
@@ -900,7 +905,7 @@ export function sortHomeFeedItems(items: FeedItem[], baseDate = new Date()): Fee
       }
 
       hasValidWeeklyTopFan = true;
-      if (__DEV__) {
+      if (HOME_FEED_AUDIT_DEBUG_ENABLED) {
         console.log('[homeFeed] keeping weekly_top_fan item', {
           id: item.id,
           weekStartDate: item.data.weekStartDate,
@@ -964,29 +969,6 @@ export function sortHomeFeedItems(items: FeedItem[], baseDate = new Date()): Fee
   logHomeFeedAudit(finalEntries, auditContext, safeItems, relevantItems);
 
   return finalEntries.map((entry) => entry.item);
-}
-
-export function toPostFeedItem(post: Post, baseDate = new Date()): FeedItem {
-  const sortDate = toIsoOrNull(post.createdAt);
-  const expiresAt = toIsoOrNull(post.poll_data?.expires_at ?? null);
-  const isActivePoll = Boolean(expiresAt && toTimestamp(expiresAt) > baseDate.getTime());
-  const likeCount = typeof post.likesCount === 'number' ? post.likesCount : 0;
-  const commentCount = typeof post.commentsCount === 'number' ? post.commentsCount : 0;
-
-  return {
-    kind: 'post',
-    id: post.id,
-    data: {
-      ...post,
-      sortDate,
-      expiresAt,
-      isActivePoll,
-      isSystemCard: false,
-      likeCount,
-      commentCount,
-      engagementCount: likeCount + commentCount,
-    },
-  };
 }
 
 function toNewsFeedItem(newsItem: NewsItem): FeedItem {
@@ -1272,6 +1254,15 @@ export function withFeedEngagementSummary(
         const likeCount = item.data.likesCount ?? item.data.likeCount ?? 0;
         const commentCount = item.data.commentsCount ?? item.data.commentCount ?? 0;
         const votesCount = item.data.votesCount ?? 0;
+        const engagementCount = likeCount + commentCount + votesCount;
+
+        if (
+          item.data.likeCount === likeCount &&
+          item.data.commentCount === commentCount &&
+          item.data.engagementCount === engagementCount
+        ) {
+          return item;
+        }
 
         return {
           ...item,
@@ -1279,7 +1270,7 @@ export function withFeedEngagementSummary(
             ...item.data,
             likeCount,
             commentCount,
-            engagementCount: likeCount + commentCount + votesCount,
+            engagementCount,
           },
         };
       }
@@ -1289,6 +1280,17 @@ export function withFeedEngagementSummary(
         const likeCount = likeMap[key]?.likes ?? item.data.likeCount ?? item.data.likesCount ?? 0;
         const commentCount =
           commentCountMap[key] ?? item.data.commentCount ?? item.data.commentsCount ?? 0;
+        const engagementCount = likeCount + commentCount;
+
+        if (
+          item.data.likesCount === likeCount &&
+          item.data.commentsCount === commentCount &&
+          item.data.likeCount === likeCount &&
+          item.data.commentCount === commentCount &&
+          item.data.engagementCount === engagementCount
+        ) {
+          return item;
+        }
 
         return {
           ...item,
@@ -1298,7 +1300,7 @@ export function withFeedEngagementSummary(
             commentsCount: commentCount,
             likeCount,
             commentCount,
-            engagementCount: likeCount + commentCount,
+            engagementCount,
           },
         };
       }
@@ -1308,6 +1310,17 @@ export function withFeedEngagementSummary(
         const likeCount = likeMap[key]?.likes ?? item.data.likeCount ?? item.data.likesCount ?? 0;
         const commentCount =
           commentCountMap[key] ?? item.data.commentCount ?? item.data.commentsCount ?? 0;
+        const engagementCount = likeCount + commentCount;
+
+        if (
+          item.data.likesCount === likeCount &&
+          item.data.commentsCount === commentCount &&
+          item.data.likeCount === likeCount &&
+          item.data.commentCount === commentCount &&
+          item.data.engagementCount === engagementCount
+        ) {
+          return item;
+        }
 
         return {
           ...item,
@@ -1317,7 +1330,7 @@ export function withFeedEngagementSummary(
             commentsCount: commentCount,
             likeCount,
             commentCount,
-            engagementCount: likeCount + commentCount,
+            engagementCount,
           },
         };
       }
@@ -1326,6 +1339,15 @@ export function withFeedEngagementSummary(
         const key = targetKey(item.kind, item.id);
         const likeCount = likeMap[key]?.likes ?? item.data.likeCount ?? 0;
         const commentCount = commentCountMap[key] ?? item.data.commentCount ?? 0;
+        const engagementCount = likeCount + commentCount;
+
+        if (
+          item.data.likeCount === likeCount &&
+          item.data.commentCount === commentCount &&
+          item.data.engagementCount === engagementCount
+        ) {
+          return item;
+        }
 
         return {
           ...item,
@@ -1333,7 +1355,7 @@ export function withFeedEngagementSummary(
             ...item.data,
             likeCount,
             commentCount,
-            engagementCount: likeCount + commentCount,
+            engagementCount,
           },
         };
       }
@@ -1342,6 +1364,15 @@ export function withFeedEngagementSummary(
         const key = targetKey(item.kind, item.id);
         const likeCount = likeMap[key]?.likes ?? item.data.likeCount ?? 0;
         const commentCount = commentCountMap[key] ?? item.data.commentCount ?? 0;
+        const engagementCount = likeCount + commentCount;
+
+        if (
+          item.data.likeCount === likeCount &&
+          item.data.commentCount === commentCount &&
+          item.data.engagementCount === engagementCount
+        ) {
+          return item;
+        }
 
         return {
           ...item,
@@ -1349,7 +1380,7 @@ export function withFeedEngagementSummary(
             ...item.data,
             likeCount,
             commentCount,
-            engagementCount: likeCount + commentCount,
+            engagementCount,
           },
         };
       }
@@ -1358,6 +1389,15 @@ export function withFeedEngagementSummary(
         const key = targetKey(item.kind, item.id);
         const likeCount = likeMap[key]?.likes ?? item.data.likeCount ?? 0;
         const commentCount = commentCountMap[key] ?? item.data.commentCount ?? 0;
+        const engagementCount = likeCount + commentCount;
+
+        if (
+          item.data.likeCount === likeCount &&
+          item.data.commentCount === commentCount &&
+          item.data.engagementCount === engagementCount
+        ) {
+          return item;
+        }
 
         return {
           ...item,
@@ -1365,24 +1405,48 @@ export function withFeedEngagementSummary(
             ...item.data,
             likeCount,
             commentCount,
-            engagementCount: likeCount + commentCount,
+            engagementCount,
           },
         };
       }
 
-      case 'fan_activity':
+      case 'fan_activity': {
+        const likeCount = item.data.likeCount ?? 0;
+        const commentCount = item.data.commentCount ?? 0;
+        const engagementCount = item.data.engagementCount ?? 0;
+
+        if (
+          item.data.likeCount === likeCount &&
+          item.data.commentCount === commentCount &&
+          item.data.engagementCount === engagementCount
+        ) {
+          return item;
+        }
+
         return {
           ...item,
           data: {
             ...item.data,
-            likeCount: item.data.likeCount ?? 0,
-            commentCount: item.data.commentCount ?? 0,
-            engagementCount: item.data.engagementCount ?? 0,
+            likeCount,
+            commentCount,
+            engagementCount,
           },
         };
+      }
 
       default:
         return item;
     }
   });
+}
+
+export function withFeedEngagementSummaryPreservingList(
+  items: FeedItem[],
+  likeMap: LikeMap,
+  commentCountMap: CommentCountMap,
+): FeedItem[] {
+  return reconcileFeedItemIdentities(
+    items,
+    withFeedEngagementSummary(items, likeMap, commentCountMap),
+  );
 }

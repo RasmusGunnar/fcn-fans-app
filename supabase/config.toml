@@ -27,6 +27,10 @@ verify_jwt = false
 [functions.parse-link]
 verify_jwt = false
 
+# Manual app-admin ingestion into the private media article review queue.
+[functions.ingest-media-article-candidates]
+verify_jwt = true
+
 # weekly_top_fan: cron-driven editorial feed card generation via x-sync-secret.
 [functions.weekly_top_fan]
 verify_jwt = false

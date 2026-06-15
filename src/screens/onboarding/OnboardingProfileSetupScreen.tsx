@@ -4,10 +4,13 @@ import {
   Alert,
   Animated,
   Image,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,7 +25,6 @@ import { uploadAvatar } from '../../lib/uploadAvatar';
 import type { OnboardingStackParamList } from '../../navigation/OnboardingStack';
 import { fetchMyProfile } from '../../services/profileApi';
 import { useTheme } from '../../theme';
-import { isCompactDevice } from '../../utils/isCompactDevice';
 import { normalizeDisplayNameToUsername } from '../../utils/username';
 
 type Props = NativeStackScreenProps<OnboardingStackParamList, 'OnboardingProfile'>;
@@ -55,6 +57,7 @@ export default function OnboardingProfileSetupScreen({ navigation, route }: Prop
   const entranceTranslateY = useRef(new Animated.Value(10)).current;
   const hasAvatar = !!avatarUrlInput;
   const appLogo = require('../../../assets/NewLogo.png');
+  const { width, height } = useWindowDimensions();
 
   useEffect(() => {
     Animated.parallel([
@@ -208,7 +211,9 @@ export default function OnboardingProfileSetupScreen({ navigation, route }: Prop
     }
   };
 
-  const compact = isCompactDevice();
+  const shortestSide = Math.min(width, height);
+  const compact = shortestSide < 700;
+  const isTabletLayout = shortestSide >= 700;
   const Content = (
     <>
       {/* Removed manual back button from onboarding profile setup */}
@@ -236,15 +241,17 @@ export default function OnboardingProfileSetupScreen({ navigation, route }: Prop
         </View>
 
         <View style={styles.profileSection}>
-          <Pressable onPress={handleUploadAvatar} style={styles.avatarTouchTarget}>
-            <View style={styles.avatarSurface}>
-              <Avatar
-                userId={user?.id}
-                avatarUrl={avatarUrlInput}
-                size={theme.spacing[11] + theme.spacing[11]}
-                label={displayNameInput || user?.email || 'Fan'}
-              />
-            </View>
+          <View style={styles.avatarPicker}>
+            <Pressable onPress={handleUploadAvatar} style={styles.avatarTouchTarget}>
+              <View style={styles.avatarSurface}>
+                <Avatar
+                  userId={user?.id}
+                  avatarUrl={avatarUrlInput}
+                  size={theme.spacing[11] + theme.spacing[11]}
+                  label={displayNameInput || user?.email || 'Fan'}
+                />
+              </View>
+            </Pressable>
             <Text style={styles.avatarHint}>
               {uploadingAvatar
                 ? 'Henter billede...'
@@ -252,7 +259,7 @@ export default function OnboardingProfileSetupScreen({ navigation, route }: Prop
                   ? 'Skift profilbillede'
                   : 'Vælg profilbillede'}
             </Text>
-          </Pressable>
+          </View>
 
           <View style={styles.inputSection}>
             <Text style={styles.inputLabel}>Kaldenavn</Text>
@@ -291,17 +298,19 @@ export default function OnboardingProfileSetupScreen({ navigation, route }: Prop
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
-      {compact ? (
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoidingView}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
         <ScrollView
-          contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
+          contentContainerStyle={[styles.scrollContent, compact && styles.compactScrollContent]}
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.content}>{Content}</View>
+          <View style={[styles.content, isTabletLayout && styles.tabletContent]}>{Content}</View>
         </ScrollView>
-      ) : (
-        <View style={styles.content}>{Content}</View>
-      )}
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -312,10 +321,24 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       flex: 1,
       backgroundColor: theme.colors.bg.canvas,
     },
+    keyboardAvoidingView: {
+      flex: 1,
+    },
+    scrollContent: {
+      flexGrow: 1,
+    },
+    compactScrollContent: {
+      justifyContent: 'center',
+    },
     content: {
       flex: 1,
       paddingHorizontal: theme.spacing[6],
       paddingBottom: theme.spacing[4],
+    },
+    tabletContent: {
+      alignSelf: 'center',
+      width: '100%',
+      maxWidth: 560,
     },
     heroSection: {
       alignItems: 'center',
@@ -347,12 +370,12 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       maxWidth: theme.spacing[16] + theme.spacing[16] + theme.spacing[16],
     },
     profileSection: {
-      flex: 1,
       alignItems: 'center',
+      marginBottom: theme.spacing[4],
+      width: '100%',
     },
-    avatarSection: {
+    avatarPicker: {
       alignItems: 'center',
-      marginBottom: theme.spacing[6],
       justifyContent: 'center',
     },
     avatarTouchTarget: {
@@ -367,7 +390,6 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       shadowRadius: 14,
       shadowOffset: { width: 0, height: 4 },
       elevation: theme.elevation.sm.android,
-      marginBottom: theme.spacing[1],
     },
     avatarSurface: {
       width: 96,

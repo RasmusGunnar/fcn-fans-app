@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -61,11 +61,17 @@ import {
   type FanActivityRegistrationStatus,
 } from '../services/fanActivityRegistrations';
 import { deleteMyAccount } from '../services/accountDeletion';
+import { openLegalDocument, openSupportEmail, SUPPORT_EMAIL } from '../lib/legal';
 import {
-  openLegalDocument,
-  openSupportEmail,
-  SUPPORT_EMAIL,
-} from '../lib/legal';
+  logPerformanceEvent,
+  logPerformanceTiming,
+  performanceNow,
+  schedulePerformanceFrame,
+} from '../utils/performanceTiming';
+
+logPerformanceEvent('ScreenLifecycle', 'module-evaluated', { screen: 'ProfileScreen' });
+
+let hasEnteredProfileScreen = false;
 
 function isUsernameConflictError(error: any): boolean {
   const message = String(error?.message ?? '').toLowerCase();
@@ -184,6 +190,13 @@ function ProfileRow({
 }
 
 export default function ProfileScreen() {
+  if (!hasEnteredProfileScreen) {
+    hasEnteredProfileScreen = true;
+    logPerformanceEvent('ScreenLifecycle', 'component-first-entered', {
+      screen: 'ProfileScreen',
+    });
+  }
+
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { user, signOut, isAppAdmin } = useAuth();
@@ -219,6 +232,24 @@ export default function ProfileScreen() {
   const [weeklyRanking, setWeeklyRanking] = useState<WeeklyRankingData | null>(null);
   const [myRegistrations, setMyRegistrations] = useState<FanActivityRegistrationListItem[]>([]);
   const [deleteAccountLoading, setDeleteAccountLoading] = useState(false);
+  const hasLoadedDataRef = useRef(false);
+  const isLoadingDataRef = useRef(false);
+  const didLogFirstCommitRef = useRef(false);
+
+  useEffect(() => {
+    return schedulePerformanceFrame(() => {
+      if (didLogFirstCommitRef.current) return;
+      didLogFirstCommitRef.current = true;
+      logPerformanceEvent('ScreenLifecycle', 'first-render-committed', {
+        screen: 'ProfileScreen',
+      });
+      logPerformanceEvent('ScreenLifecycle', 'first-visible-shell-rendered', {
+        screen: 'ProfileScreen',
+        shell: 'screen-root',
+      });
+    });
+  }, []);
+
   const liveFanLevel = isFanLevelKey(profile?.fan_level_key) ? profile.fan_level_key : null;
   const fanLevel = liveFanLevel ?? 'new_fan';
   const weeklyStatus = useMemo(() => {
@@ -254,97 +285,144 @@ export default function ProfileScreen() {
       setLoading(false);
       return;
     }
-
-    setLoading(true);
-
-    const results = await Promise.allSettled([
-      fetchMyProfile(user.id),
-      fetchMyCommunities(user.id),
-      fetchMyUpcomingItems(user.id),
-      countOwnedCommunities(user.id),
-      fetchWeeklyRanking(),
-      fetchMyFanActivityRegistrations(),
-    ]);
-
-    // Extract profile
-    if (results[0].status === 'fulfilled') {
-      const profileResult = results[0].value;
-      setProfile(profileResult);
-      setDisplayNameInput((prev) =>
-        prev.trim().length === 0 ? profileResult?.display_name || user?.email || '' : prev,
-      );
-      if (profileResult?.avatar_url) {
-        setAvatarUrlInput((prev) => (prev === null ? profileResult.avatar_url : prev));
-      }
+    if (isLoadingDataRef.current) {
+      logPerformanceEvent('ProfileWork', 'load-data-skipped', {
+        reason: 'request-in-flight',
+      });
+      return;
     }
 
-    // Extract communities
-    if (results[1].status === 'fulfilled') {
-      setOwnerCommunities(results[1].value.ownerCommunities);
-      setMemberCommunities(results[1].value.memberCommunities);
+    const loadDataStartedAt = performanceNow();
+    isLoadingDataRef.current = true;
+    if (!hasLoadedDataRef.current) {
+      setLoading(true);
     }
 
-    // Extract upcoming items
-    if (results[2].status === 'fulfilled') {
-      setUpcomingItems(results[2].value);
-    }
-
-    // Extract owned count
-    if (results[3].status === 'fulfilled') {
-      setOwnedCount(results[3].value);
-    }
-
-    if (results[4].status === 'fulfilled') {
-      setWeeklyRanking(results[4].value);
-    } else {
-      setWeeklyRanking(null);
-    }
-
-    if (results[5].status === 'fulfilled') {
-      setMyRegistrations(results[5].value);
-    } else {
-      setMyRegistrations([]);
-    }
-
-    setLoading(false);
-  }, [user?.id, user?.email]);
-
-  const loadPushStatus = useCallback(async (options?: { preserveMessage?: boolean }) => {
-    if (!user?.id) return;
-
-    setPushLoading(true);
     try {
-      const snapshot = await getPushStatusSnapshot(user.id);
-      setPushStatus(snapshot.status);
-      setPushPermissionStatus(snapshot.permissionStatus);
-      setPushTokenPreview(snapshot.savedTokenPreview);
-      if (options?.preserveMessage) {
-        return;
+      const loadProfileStartedAt = performanceNow();
+      const profileTask = fetchMyProfile(user.id).finally(() => {
+        logPerformanceTiming('ProfileWork', 'load-profile', loadProfileStartedAt);
+      });
+      const communitiesTask = fetchMyCommunities(user.id);
+      const upcomingItemsTask = fetchMyUpcomingItems(user.id);
+      const ownedCommunitiesTask = countOwnedCommunities(user.id);
+      const weeklyRankingTask = fetchWeeklyRanking();
+      const registrationsTask = fetchMyFanActivityRegistrations();
+      const loadStatsStartedAt = performanceNow();
+      const statsCompletion = Promise.allSettled([
+        communitiesTask,
+        upcomingItemsTask,
+        ownedCommunitiesTask,
+        weeklyRankingTask,
+        registrationsTask,
+      ]).then(() => {
+        logPerformanceTiming('ProfileWork', 'load-stats', loadStatsStartedAt);
+      });
+      const results = await Promise.allSettled([
+        profileTask,
+        communitiesTask,
+        upcomingItemsTask,
+        ownedCommunitiesTask,
+        weeklyRankingTask,
+        registrationsTask,
+      ]);
+      await statsCompletion;
+
+      // Extract profile
+      if (results[0].status === 'fulfilled') {
+        const profileResult = results[0].value;
+        setProfile(profileResult);
+        setDisplayNameInput((prev) =>
+          prev.trim().length === 0 ? profileResult?.display_name || user?.email || '' : prev,
+        );
+        if (profileResult?.avatar_url) {
+          setAvatarUrlInput((prev) => (prev === null ? profileResult.avatar_url : prev));
+        }
       }
 
-      if (snapshot.status === 'enabled') {
-        setPushMessage('Push er klar på denne enhed.');
-      } else if (snapshot.status === 'denied') {
-        setPushMessage('Push er afvist på denne enhed. Åbn indstillinger for at aktivere igen.');
-      } else if (snapshot.status === 'not_setup') {
-        setPushMessage('Aktivér push for at modtage notifikationer på denne enhed.');
+      // Extract communities
+      if (results[1].status === 'fulfilled') {
+        setOwnerCommunities(results[1].value.ownerCommunities);
+        setMemberCommunities(results[1].value.memberCommunities);
+      }
+
+      // Extract upcoming items
+      if (results[2].status === 'fulfilled') {
+        setUpcomingItems(results[2].value);
+      }
+
+      // Extract owned count
+      if (results[3].status === 'fulfilled') {
+        setOwnedCount(results[3].value);
+      }
+
+      if (results[4].status === 'fulfilled') {
+        setWeeklyRanking(results[4].value);
       } else {
-        setPushMessage('Kunne ikke læse push-status lige nu.');
+        setWeeklyRanking(null);
+      }
+
+      if (results[5].status === 'fulfilled') {
+        setMyRegistrations(results[5].value);
+      } else {
+        setMyRegistrations([]);
       }
     } finally {
-      setPushLoading(false);
+      isLoadingDataRef.current = false;
+      hasLoadedDataRef.current = true;
+      setLoading(false);
+      logPerformanceTiming('ProfileWork', 'load-data', loadDataStartedAt);
+      schedulePerformanceFrame(() => {
+        logPerformanceEvent('ScreenLifecycle', 'data-ready', {
+          screen: 'ProfileScreen',
+        });
+      });
     }
-  }, [user?.id]);
+  }, [user?.id, user?.email]);
+
+  const loadPushStatus = useCallback(
+    async (options?: { preserveMessage?: boolean }) => {
+      if (!user?.id) return;
+
+      const startedAt = performanceNow();
+      setPushLoading(true);
+      try {
+        const snapshot = await getPushStatusSnapshot(user.id);
+        setPushStatus(snapshot.status);
+        setPushPermissionStatus(snapshot.permissionStatus);
+        setPushTokenPreview(snapshot.savedTokenPreview);
+        if (options?.preserveMessage) {
+          return;
+        }
+
+        if (snapshot.status === 'enabled') {
+          setPushMessage('Push er klar på denne enhed.');
+        } else if (snapshot.status === 'denied') {
+          setPushMessage('Push er afvist på denne enhed. Åbn indstillinger for at aktivere igen.');
+        } else if (snapshot.status === 'not_setup') {
+          setPushMessage('Aktivér push for at modtage notifikationer på denne enhed.');
+        } else {
+          setPushMessage('Kunne ikke læse push-status lige nu.');
+        }
+      } finally {
+        setPushLoading(false);
+        logPerformanceTiming('ProfileWork', 'load-push-status', startedAt);
+      }
+    },
+    [user?.id],
+  );
 
   const loadPushPreferences = useCallback(async () => {
     if (!user?.id) return;
 
+    const startedAt = performanceNow();
     setPushPreferencesLoading(true);
     try {
       const preferences = await getPushPreferences(user.id);
       setPushPreferences(preferences);
     } finally {
       setPushPreferencesLoading(false);
+      logPerformanceTiming('ProfileWork', 'load-preferences', startedAt);
     }
   }, [user?.id]);
 
@@ -354,28 +432,40 @@ export default function ProfileScreen() {
       return;
     }
 
-    const count = await getUnreadNotificationsCount(user.id);
-    setNotificationUnreadCount(count);
+    const startedAt = performanceNow();
+    try {
+      const count = await getUnreadNotificationsCount(user.id);
+      setNotificationUnreadCount(count);
+    } finally {
+      logPerformanceTiming('ProfileWork', 'load-notification-count', startedAt);
+    }
   }, [user?.id]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  useEffect(() => {
-    loadPushStatus();
-  }, [loadPushStatus]);
-
-  useEffect(() => {
-    loadPushPreferences();
-  }, [loadPushPreferences]);
 
   useFocusEffect(
     React.useCallback(() => {
-      loadData();
-      loadPushStatus();
-      loadPushPreferences();
-      loadNotificationUnreadCount();
+      const focusStartedAt = performanceNow();
+      logPerformanceEvent('ScreenLifecycle', 'focus-effect-started', {
+        screen: 'ProfileScreen',
+      });
+      const cancelFrame = schedulePerformanceFrame(() => {
+        logPerformanceEvent('ScreenLifecycle', 'focus-visible-shell-rendered', {
+          screen: 'ProfileScreen',
+          shell: 'screen-root',
+        });
+      });
+      const tasks = [
+        loadData(),
+        loadPushStatus(),
+        loadPushPreferences(),
+        loadNotificationUnreadCount(),
+      ];
+      void Promise.allSettled(tasks).then(() => {
+        logPerformanceTiming('ScreenLifecycle', 'focus-effect-finished', focusStartedAt, {
+          screen: 'ProfileScreen',
+        });
+      });
+
+      return cancelFrame;
     }, [loadData, loadPushStatus, loadPushPreferences, loadNotificationUnreadCount]),
   );
 
@@ -715,9 +805,7 @@ export default function ProfileScreen() {
     }
   };
 
-  const getRegistrationStatusVariant = (
-    status: FanActivityRegistrationStatus,
-  ): BadgeVariant => {
+  const getRegistrationStatusVariant = (status: FanActivityRegistrationStatus): BadgeVariant => {
     switch (status) {
       case 'confirmed':
         return 'success';
@@ -963,23 +1051,15 @@ export default function ProfileScreen() {
             return (
               <Pressable
                 key={registration.id}
-                style={[
-                  styles.registrationRow,
-                  { borderBottomColor: theme.colors.border.default },
-                ]}
+                style={[styles.registrationRow, { borderBottomColor: theme.colors.border.default }]}
                 onPress={() => navigateToRegistration(registration.id)}
               >
                 <View style={styles.registrationRowCopy}>
-                  <Text
-                    style={[styles.registrationRowTitle, { color: theme.colors.text.primary }]}
-                  >
+                  <Text style={[styles.registrationRowTitle, { color: theme.colors.text.primary }]}>
                     {title}
                   </Text>
                   <Text
-                    style={[
-                      styles.registrationRowSubtitle,
-                      { color: theme.colors.text.secondary },
-                    ]}
+                    style={[styles.registrationRowSubtitle, { color: theme.colors.text.secondary }]}
                   >
                     {subtitle}
                   </Text>
@@ -990,11 +1070,7 @@ export default function ProfileScreen() {
                     variant={getRegistrationStatusVariant(registration.status)}
                     size="sm"
                   />
-                  <Ionicons
-                    name="chevron-forward"
-                    size={16}
-                    color={theme.colors.text.secondary}
-                  />
+                  <Ionicons name="chevron-forward" size={16} color={theme.colors.text.secondary} />
                 </View>
               </Pressable>
             );
@@ -1238,13 +1314,22 @@ export default function ProfileScreen() {
           styles={styles}
         />
         {isAppAdmin && (
-          <ProfileRow
-            icon="shield-checkmark"
-            title="Fanfraktion-anmodninger"
-            subtitle="Administrér afventende anmodninger"
-            onPress={() => (navigation as any).navigate('AdminFanFactionRequests')}
-            styles={styles}
-          />
+          <>
+            <ProfileRow
+              icon="newspaper"
+              title="FCN i medierne"
+              subtitle="Administrér importerede artikler"
+              onPress={() => (navigation as any).navigate('AdminMediaArticles')}
+              styles={styles}
+            />
+            <ProfileRow
+              icon="shield-checkmark"
+              title="Fanfraktion-anmodninger"
+              subtitle="Administrér afventende anmodninger"
+              onPress={() => (navigation as any).navigate('AdminFanFactionRequests')}
+              styles={styles}
+            />
+          </>
         )}
         <ProfileRow
           icon="help-circle"

@@ -15,11 +15,13 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MediaAudioBootstrap } from '../components/MediaAudioBootstrap';
 import { Text } from '../components/ui';
 import { logger } from '../lib/logger';
 import type { RootStackParamList } from '../navigation/types';
 import { useTheme, type Theme } from '../theme';
 import type { ResolvedMediaItem } from '../utils/media';
+import { toggleVideoMuted, VIDEO_MUTED_BY_DEFAULT } from '../utils/videoPlaybackBehavior';
 
 type MediaViewerRoute = RouteProp<RootStackParamList, 'MediaViewer'>;
 
@@ -42,6 +44,7 @@ export default function MediaViewerScreen() {
   const initialIndex = clampIndex(route.params?.initialIndex ?? 0, items.length);
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [isAppActive, setIsAppActive] = useState(true);
+  const [isMuted, setIsMuted] = useState(VIDEO_MUTED_BY_DEFAULT);
 
   useEffect(() => {
     if (items.length === 0) {
@@ -52,6 +55,10 @@ export default function MediaViewerScreen() {
   useEffect(() => {
     setCurrentIndex(initialIndex);
   }, [initialIndex]);
+
+  useEffect(() => {
+    setIsMuted(VIDEO_MUTED_BY_DEFAULT);
+  }, [currentIndex]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
@@ -124,21 +131,37 @@ export default function MediaViewerScreen() {
             ]}
           >
             {item.type === 'video' ? (
-              <Video
-                source={{ uri: item.uri }}
-                style={styles.media}
-                resizeMode={ResizeMode.CONTAIN}
-                shouldPlay={isCurrent}
-                isLooping
-                isMuted={false}
-                useNativeControls
-                onError={(error) => {
-                  logger.error('[MediaViewerScreen] Video playback error', {
-                    uri: item.uri,
-                    error,
-                  });
-                }}
-              />
+              <>
+                <Video
+                  source={{ uri: item.uri }}
+                  style={styles.media}
+                  resizeMode={ResizeMode.CONTAIN}
+                  shouldPlay={isCurrent}
+                  isLooping
+                  isMuted={isMuted}
+                  useNativeControls
+                  onError={(error) => {
+                    logger.error('[MediaViewerScreen] Video playback error', {
+                      uri: item.uri,
+                      error,
+                    });
+                  }}
+                />
+                {index === currentIndex ? (
+                  <Pressable
+                    style={[styles.soundButton, { bottom: insets.bottom + theme.spacing[16] }]}
+                    onPress={() => setIsMuted((current) => toggleVideoMuted(current))}
+                    accessibilityRole="button"
+                    accessibilityLabel={isMuted ? 'Slå lyd til' : 'Slå lyd fra'}
+                  >
+                    <Ionicons
+                      name={isMuted ? 'volume-mute' : 'volume-high'}
+                      size={theme.spacing[6]}
+                      color={theme.colors.text.inverse}
+                    />
+                  </Pressable>
+                ) : null}
+              </>
             ) : (
               <Image source={{ uri: item.uri }} style={styles.media} resizeMode="contain" />
             )}
@@ -146,13 +169,25 @@ export default function MediaViewerScreen() {
         </View>
       );
     },
-    [currentIndex, height, insets.bottom, insets.top, isAppActive, isFocused, styles, theme, width],
+    [
+      currentIndex,
+      height,
+      insets.bottom,
+      insets.top,
+      isAppActive,
+      isFocused,
+      isMuted,
+      styles,
+      theme,
+      width,
+    ],
   );
 
   const pageLabel = `${currentIndex + 1} / ${Math.max(items.length, 1)}`;
 
   return (
     <View style={styles.container}>
+      <MediaAudioBootstrap />
       <StatusBar style="light" />
 
       <FlatList
@@ -224,6 +259,16 @@ function createStyles(theme: Theme) {
     media: {
       width: '100%',
       height: '100%',
+    },
+    soundButton: {
+      position: 'absolute',
+      right: theme.spacing[4],
+      width: theme.spacing[11],
+      height: theme.spacing[11],
+      borderRadius: theme.radius.pill,
+      backgroundColor: theme.colors.overlay.heavy,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     topBar: {
       position: 'absolute',

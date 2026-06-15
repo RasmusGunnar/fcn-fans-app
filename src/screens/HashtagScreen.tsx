@@ -9,11 +9,11 @@ import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { useFeed } from '../state/FeedContext';
 import { useTheme, type Theme } from '../theme';
-import type { Post } from '../types/post';
+import { normalizePostType, type Post } from '../types/post';
 import { extractHashtags } from '../utils/extractHashtags';
 import { normalizeLinkPreview } from '../utils/linkPreview';
 import { normalizeMedia } from '../utils/media';
-import { targetKey } from '../utils/targetKey';
+import { getPostEngagementIdentity, POST_ENGAGEMENT_TARGET_TYPE } from '../utils/postEngagement';
 
 type HashtagPostRow = {
   id: string;
@@ -27,6 +27,7 @@ type HashtagPostRow = {
   feed_targets: string[] | null;
   poll_data: Post['poll_data'];
   link_preview: unknown;
+  post_type: unknown;
 };
 
 type HashtagCommentRow = {
@@ -35,7 +36,7 @@ type HashtagCommentRow = {
 };
 
 const HASHTAG_POST_SELECT =
-  'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets, poll_data, link_preview';
+  'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets, poll_data, link_preview, post_type';
 
 function normalizeTag(value: string | undefined): string {
   return (value ?? '').replace('#', '').trim().toLowerCase();
@@ -45,7 +46,7 @@ export default function HashtagScreen() {
   const route = useRoute() as any;
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const { user } = useAuth();
+  const { user, isAppAdmin } = useAuth();
   const {
     posts,
     profileMap,
@@ -101,6 +102,7 @@ export default function HashtagScreen() {
 
       return {
         id: row.id,
+        postType: normalizePostType(row.post_type),
         authorName: authorProfile?.display_name || 'Fan',
         authorId: row.author_id ?? undefined,
         authorDisplayName: authorProfile?.display_name ?? null,
@@ -172,7 +174,7 @@ export default function HashtagScreen() {
         supabase
           .from('comments_v2')
           .select('target_id, text')
-          .eq('target_type', 'post')
+          .eq('target_type', POST_ENGAGEMENT_TARGET_TYPE)
           .ilike('text', `%#${tag}%`),
       ]);
 
@@ -239,7 +241,7 @@ export default function HashtagScreen() {
   const renderItem = useCallback(
     ({ item }: { item: Post }) => {
       const authorProfile = item.authorId ? profileMap[item.authorId] : undefined;
-      const key = targetKey('post', item.id);
+      const key = getPostEngagementIdentity(item.id).key;
       const likeState = likeMap[key] || { liked: false, likes: 0 };
       const commentCount = commentCountMap[key] || 0;
       const previews = commentPreviewMap[key] || [];
@@ -251,19 +253,21 @@ export default function HashtagScreen() {
             authorProfile={authorProfile}
             communityMap={communityMap}
             profileMap={profileMap}
+            currentUserId={user?.id}
+            currentIsAppAdmin={isAppAdmin}
             liked={likeState.liked}
             likes={likeState.likes}
             commentsCount={commentCount}
             commentPreviews={previews}
             onToggleLike={() => {
               if (user?.id) {
-                void toggleLike('post', item.id, user.id);
+                void toggleLike(POST_ENGAGEMENT_TARGET_TYPE, item.id, user.id);
               }
             }}
             onDeleted={handleDeleted}
             onNewComment={(comment) => {
-              incrementCommentCount('post', item.id);
-              addCommentPreview('post', item.id, comment);
+              incrementCommentCount(POST_ENGAGEMENT_TARGET_TYPE, item.id);
+              addCommentPreview(POST_ENGAGEMENT_TARGET_TYPE, item.id, comment);
             }}
           />
         </View>
@@ -276,6 +280,7 @@ export default function HashtagScreen() {
       communityMap,
       handleDeleted,
       incrementCommentCount,
+      isAppAdmin,
       likeMap,
       profileMap,
       styles.cardWrap,

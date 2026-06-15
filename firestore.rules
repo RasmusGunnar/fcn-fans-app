@@ -1,2 +1,2 @@
-// Firestore rules file - not executable JavaScript in the app.
+log// Firestore rules file - not executable JavaScript in the app.
 // Keep this file reserved for security rules. The previous JS/TS content was moved to src/firebase.ts for app usage.

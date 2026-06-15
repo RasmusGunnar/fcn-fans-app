@@ -87,141 +87,21 @@ export const COMMUNITY_MEDIA_BUCKET = 'community-media';
 const COMMUNITY_COVER_MAX_WIDTH = 1600;
 const WILD_TIGERS_COMMUNITY_NAME = 'wild tigers';
 
-function hasMissingCommunityColumnError(
-  error: { message?: string | null } | null,
-  column: string,
-): boolean {
-  const message = error?.message?.toLowerCase() ?? '';
-  return message.includes(column.toLowerCase()) && message.includes('column');
-}
-
 async function fetchBaseCommunitiesRows(): Promise<{
   data: Community[] | null;
   error: { message?: string | null } | null;
   appliedFilters: string;
 }> {
-  const attempts = [
-    {
-      appliedFilters: 'visibility + is_active + is_deleted + is_hidden',
-      columns: ['visibility', 'is_active', 'is_deleted', 'is_hidden'],
-      run: () =>
-        supabase
-          .from('communities')
-          .select('*')
-          .or('visibility.eq.public,visibility.is.null')
-          .eq('is_active', true)
-          .not('is_deleted', 'is', 'true')
-          .not('is_hidden', 'is', 'true')
-          .order('name', { ascending: true }),
-    },
-    {
-      appliedFilters: 'visibility + is_active + is_deleted',
-      columns: ['visibility', 'is_active', 'is_deleted'],
-      run: () =>
-        supabase
-          .from('communities')
-          .select('*')
-          .or('visibility.eq.public,visibility.is.null')
-          .eq('is_active', true)
-          .not('is_deleted', 'is', 'true')
-          .order('name', { ascending: true }),
-    },
-    {
-      appliedFilters: 'visibility + is_active',
-      columns: ['visibility', 'is_active'],
-      run: () =>
-        supabase
-          .from('communities')
-          .select('*')
-          .or('visibility.eq.public,visibility.is.null')
-          .eq('is_active', true)
-          .order('name', { ascending: true }),
-    },
-    {
-      appliedFilters: 'is_active + is_deleted + is_hidden',
-      columns: ['is_active', 'is_deleted', 'is_hidden'],
-      run: () =>
-        supabase
-          .from('communities')
-          .select('*')
-          .eq('is_active', true)
-          .not('is_deleted', 'is', 'true')
-          .not('is_hidden', 'is', 'true')
-          .order('name', { ascending: true }),
-    },
-    {
-      appliedFilters: 'is_active + is_deleted',
-      columns: ['is_active', 'is_deleted'],
-      run: () =>
-        supabase
-          .from('communities')
-          .select('*')
-          .eq('is_active', true)
-          .not('is_deleted', 'is', 'true')
-          .order('name', { ascending: true }),
-    },
-    {
-      appliedFilters: 'is_active',
-      columns: ['is_active'],
-      run: () =>
-        supabase.from('communities').select('*').eq('is_active', true).order('name', {
-          ascending: true,
-        }),
-    },
-    {
-      appliedFilters: 'visibility only',
-      columns: ['visibility'],
-      run: () =>
-        supabase
-          .from('communities')
-          .select('*')
-          .or('visibility.eq.public,visibility.is.null')
-          .order('name', { ascending: true }),
-    },
-    {
-      appliedFilters: 'legacy fallback',
-      columns: [],
-      run: () => supabase.from('communities').select('*').order('name', { ascending: true }),
-    },
-  ] as const;
-
-  let lastError: { message?: string | null } | null = null;
-
-  for (const attempt of attempts) {
-    const { data, error } = await attempt.run();
-
-    if (!error) {
-      return {
-        data: (data as Community[] | null) ?? [],
-        error: null,
-        appliedFilters: attempt.appliedFilters,
-      };
-    }
-
-    lastError = error;
-    const missingColumn = attempt.columns.find((column) =>
-      hasMissingCommunityColumnError(error, column),
-    );
-
-    if (!missingColumn) {
-      return {
-        data: null,
-        error,
-        appliedFilters: attempt.appliedFilters,
-      };
-    }
-
-    logger.warn('[communities] Base query column unavailable, retrying with fallback filters:', {
-      missingColumn,
-      attemptedFilters: attempt.appliedFilters,
-      message: error.message,
-    });
-  }
+  const { data, error } = await supabase
+    .from('communities')
+    .select('*')
+    .or('visibility.eq.public,visibility.is.null')
+    .order('name', { ascending: true });
 
   return {
-    data: null,
-    error: lastError,
-    appliedFilters: 'unresolved fallback',
+    data: error ? null : ((data as Community[] | null) ?? []),
+    error,
+    appliedFilters: 'visibility',
   };
 }
 
@@ -887,10 +767,7 @@ export async function updateCommunity(
       updates: updateBody,
     });
 
-    const { error } = await supabase
-      .from('communities')
-      .update(updateBody)
-      .eq('id', communityId);
+    const { error } = await supabase.from('communities').update(updateBody).eq('id', communityId);
 
     if (error) {
       logger.error('[communities] Error updating community:', {

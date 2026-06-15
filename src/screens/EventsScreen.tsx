@@ -26,7 +26,16 @@ import { fetchFeedUpcoming, type FeedItem } from '../services/eventsApi';
 import { useFeed } from '../state/FeedContext';
 import { defaultTheme as theme } from '../theme';
 import type { FeedItem as HomeFeedItem } from '../types/feed';
+import {
+  logPerformanceEvent,
+  logPerformanceTiming,
+  measurePerformanceWork,
+  performanceNow,
+  schedulePerformanceFrame,
+} from '../utils/performanceTiming';
 import { targetKey } from '../utils/targetKey';
+
+logPerformanceEvent('ScreenLifecycle', 'module-evaluated', { screen: 'EventsScreen' });
 
 type ViewMode = 'list' | 'map';
 type EventFilterKey = 'all' | 'matches' | 'events';
@@ -51,8 +60,16 @@ const FARUM_REGION: Region = {
   latitudeDelta: 0.5,
   longitudeDelta: 0.5,
 };
+let hasEnteredEventsScreen = false;
 
 export default function EventsScreen() {
+  if (!hasEnteredEventsScreen) {
+    hasEnteredEventsScreen = true;
+    logPerformanceEvent('ScreenLifecycle', 'component-first-entered', {
+      screen: 'EventsScreen',
+    });
+  }
+
   const navigation = useNavigation();
   const tabBarHeight = useBottomTabBarHeight();
   const mapRef = useRef<MapView>(null);
@@ -82,6 +99,7 @@ export default function EventsScreen() {
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedEventType, setSelectedEventType] = useState<EventFilterKey>('all');
   const [selectedItem, setSelectedItem] = useState<MapItem | null>(null);
+  const didLogFirstCommitRef = useRef(false);
 
   const eventFilterSegments = [
     { key: 'all', label: 'Alle' },
@@ -91,13 +109,38 @@ export default function EventsScreen() {
 
   const snapPoints = useMemo(() => ['20%', '45%', '85%'], []);
 
-  const loadFeed = async () => {
+  const loadFeed = useCallback(async () => {
+    const startedAt = performanceNow();
     // fetchFeedUpcoming already fetches matches + bus_trips + events and
     // returns them sorted chronologically by start time.
-    const feedItems = await fetchFeedUpcoming();
-    setFeed(feedItems);
-    setLoading(false);
-  };
+    try {
+      const feedItems = await fetchFeedUpcoming();
+      setFeed(feedItems);
+      setLoading(false);
+      schedulePerformanceFrame(() => {
+        logPerformanceEvent('ScreenLifecycle', 'data-ready', {
+          screen: 'EventsScreen',
+          itemCount: feedItems.length,
+        });
+      });
+    } finally {
+      logPerformanceTiming('EventsWork', 'load-feed', startedAt);
+    }
+  }, []);
+
+  useEffect(() => {
+    return schedulePerformanceFrame(() => {
+      if (didLogFirstCommitRef.current) return;
+      didLogFirstCommitRef.current = true;
+      logPerformanceEvent('ScreenLifecycle', 'first-render-committed', {
+        screen: 'EventsScreen',
+      });
+      logPerformanceEvent('ScreenLifecycle', 'first-visible-shell-rendered', {
+        screen: 'EventsScreen',
+        shell: 'screen-root',
+      });
+    });
+  }, []);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -105,10 +148,23 @@ export default function EventsScreen() {
     setRefreshing(false);
   };
 
-  // On focus: optionally trigger fixture sync (admin-only, 30 min rate-limit), then load feed.
+  // Load visible content first. Optional admin sync runs afterward and refreshes
+  // the list again only if it completes successfully.
   useFocusEffect(
     React.useCallback(() => {
-      const syncThenLoad = async () => {
+      const focusStartedAt = performanceNow();
+      logPerformanceEvent('ScreenLifecycle', 'focus-effect-started', {
+        screen: 'EventsScreen',
+      });
+      const cancelFrame = schedulePerformanceFrame(() => {
+        logPerformanceEvent('ScreenLifecycle', 'focus-visible-shell-rendered', {
+          screen: 'EventsScreen',
+          shell: 'screen-root',
+        });
+      });
+      const loadThenSync = async () => {
+        await loadFeed();
+
         const now = Date.now();
         const THIRTY_MIN = 30 * 60 * 1000;
         if (user && isAppAdmin && now - lastSyncRef.current > THIRTY_MIN) {
@@ -117,17 +173,25 @@ export default function EventsScreen() {
           try {
             const { data, error } = await supabase.functions.invoke('sync-fixtures');
             if (error) console.warn('[EventsScreen] sync-fixtures error:', error);
-            else if (__DEV__) console.log('[EventsScreen] sync-fixtures result:', data);
+            else {
+              if (__DEV__) console.log('[EventsScreen] sync-fixtures result:', data);
+              await loadFeed();
+            }
           } catch (e) {
             console.warn('[EventsScreen] sync-fixtures call failed:', e);
           }
         } else {
           console.log('[EventsScreen] focus → sync skipped (not admin or rate-limited)');
         }
-        await loadFeed();
       };
-      syncThenLoad();
-    }, [user, isAppAdmin]),
+      void loadThenSync().finally(() => {
+        logPerformanceTiming('ScreenLifecycle', 'focus-effect-finished', focusStartedAt, {
+          screen: 'EventsScreen',
+        });
+      });
+
+      return cancelFrame;
+    }, [isAppAdmin, loadFeed, user]),
   );
 
   // ── Map items (only entries with lat/lng) ──────────────────────────────────
@@ -171,76 +235,106 @@ export default function EventsScreen() {
     return null;
   }
 
-  const overviewFeed = useMemo(() => feed.filter((item) => item.kind !== 'bus_trip'), [feed]);
+  const overviewFeed = useMemo(
+    () =>
+      measurePerformanceWork(
+        'RenderBlock',
+        'EventsScreen-filter-overview-feed',
+        () => feed.filter((item) => item.kind !== 'bus_trip'),
+        { itemCount: feed.length },
+      ),
+    [feed],
+  );
 
-  const filteredFeed = useMemo(() => {
-    if (selectedEventType === 'all') {
-      return overviewFeed;
-    }
+  const filteredFeed = useMemo(
+    () =>
+      measurePerformanceWork(
+        'RenderBlock',
+        'EventsScreen-filter-selected-feed',
+        () => {
+          if (selectedEventType === 'all') {
+            return overviewFeed;
+          }
 
-    const kindMap: Record<Exclude<EventFilterKey, 'all'>, 'match' | 'event'> = {
-      matches: 'match',
-      events: 'event',
-    };
+          const kindMap: Record<Exclude<EventFilterKey, 'all'>, 'match' | 'event'> = {
+            matches: 'match',
+            events: 'event',
+          };
 
-    return overviewFeed.filter((item) => item.kind === kindMap[selectedEventType]);
-  }, [overviewFeed, selectedEventType]);
+          return overviewFeed.filter((item) => item.kind === kindMap[selectedEventType]);
+        },
+        { itemCount: overviewFeed.length, filter: selectedEventType },
+      ),
+    [overviewFeed, selectedEventType],
+  );
 
   const mapItems: MapItem[] = useMemo(
     () =>
-      filteredFeed
-        .map((item): MapItem | null => {
-          if (item.kind === 'match') {
-            const lat = toCoordinateNumber(item.lat);
-            const lng = toCoordinateNumber(item.lng);
-            if (lat == null || lng == null) return null;
-            return {
-              id: item.id,
-              kind: 'match',
-              title: `${item.home} - ${item.away}`,
-              datetime: item.kickoffAt,
-              lat,
-              lng,
-              venue: item.venue || undefined,
-              subtitle: item.venue || item.venueCity || undefined,
-              logoUrl: item.homeLogo,
-              feedItem: item,
-            };
-          }
-          if (item.kind === 'event') {
-            const lat = toCoordinateNumber(item.lat);
-            const lng = toCoordinateNumber(item.lng);
-            if (lat == null || lng == null) return null;
-            return {
-              id: item.id,
-              kind: 'event',
-              title: item.title,
-              datetime: item.startAt,
-              lat,
-              lng,
-              subtitle: item.location || undefined,
-              logoUrl: getEventOrganizerLogo(item),
-              feedItem: item,
-            };
-          }
-          return null;
-        })
-        .filter((item): item is MapItem => item !== null),
+      measurePerformanceWork(
+        'RenderBlock',
+        'EventsScreen-build-map-items',
+        () =>
+          filteredFeed
+            .map((item): MapItem | null => {
+              if (item.kind === 'match') {
+                const lat = toCoordinateNumber(item.lat);
+                const lng = toCoordinateNumber(item.lng);
+                if (lat == null || lng == null) return null;
+                return {
+                  id: item.id,
+                  kind: 'match',
+                  title: `${item.home} - ${item.away}`,
+                  datetime: item.kickoffAt,
+                  lat,
+                  lng,
+                  venue: item.venue || undefined,
+                  subtitle: item.venue || item.venueCity || undefined,
+                  logoUrl: item.homeLogo,
+                  feedItem: item,
+                };
+              }
+              if (item.kind === 'event') {
+                const lat = toCoordinateNumber(item.lat);
+                const lng = toCoordinateNumber(item.lng);
+                if (lat == null || lng == null) return null;
+                return {
+                  id: item.id,
+                  kind: 'event',
+                  title: item.title,
+                  datetime: item.startAt,
+                  lat,
+                  lng,
+                  subtitle: item.location || undefined,
+                  logoUrl: getEventOrganizerLogo(item),
+                  feedItem: item,
+                };
+              }
+              return null;
+            })
+            .filter((item): item is MapItem => item !== null),
+        { itemCount: filteredFeed.length },
+      ),
     [filteredFeed, profileMap, communityMap],
   );
 
   const mapRenderItems = useMemo(
-    () => {
-      if (selectedEventType !== 'matches') {
-        return mapItems;
-      }
+    () =>
+      measurePerformanceWork(
+        'RenderBlock',
+        'EventsScreen-sort-map-items',
+        () => {
+          if (selectedEventType !== 'matches') {
+            return mapItems;
+          }
 
-      return [...mapItems].sort((a, b) => {
-        const timeDiff = toDateTimestamp(b.datetime) - toDateTimestamp(a.datetime);
-        if (timeDiff !== 0) return timeDiff;
-        return `${a.kind}:${a.id}`.localeCompare(`${b.kind}:${b.id}`);
-      });
-    },
+          return [...mapItems].sort((a, b) => {
+            const timeDiff = toDateTimestamp(b.datetime) - toDateTimestamp(a.datetime);
+            if (timeDiff !== 0) return timeDiff;
+            return `${a.kind}:${a.id}`.localeCompare(`${b.kind}:${b.id}`);
+          });
+        },
+        { itemCount: mapItems.length, filter: selectedEventType },
+      ),
     [mapItems, selectedEventType],
   );
 
@@ -550,10 +644,7 @@ export default function EventsScreen() {
                     zIndex={index + 1}
                     flat={false}
                   >
-                    <MapMarkerIcon
-                      logoUrl={item.logoUrl}
-                      type={item.kind}
-                    />
+                    <MapMarkerIcon logoUrl={item.logoUrl} type={item.kind} />
                   </Marker>
                 ))}
               </MapView>

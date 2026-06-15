@@ -3,9 +3,12 @@
  * Prevents console spam in production builds
  */
 
+const INFO_LOGS_ENABLED =
+  __DEV__ && process.env.EXPO_PUBLIC_DEBUG_LOGS?.trim().toLowerCase() === 'true';
+
 export const logger = {
   log: (...args: any[]) => {
-    if (__DEV__) {
+    if (INFO_LOGS_ENABLED) {
       console.log(...args);
     }
   },
@@ -20,7 +23,7 @@ export const logger = {
     }
   },
   debug: (...args: any[]) => {
-    if (__DEV__) {
+    if (INFO_LOGS_ENABLED) {
       console.debug(...args);
     }
   },

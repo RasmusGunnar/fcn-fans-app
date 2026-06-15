@@ -1,22 +1,32 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { NavigationContainer, getStateFromPath as defaultGetStateFromPath } from '@react-navigation/native';
 import * as Linking from 'expo-linking';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-import { AuthStack } from './AuthStack';
-import { OnboardingStack } from './OnboardingStack';
-import { AppTabs } from './AppTabs';
 import { useAuth } from '../auth/AuthProvider';
-import CreateFanActivityScreen from '../screens/CreateFanActivityScreen';
-import CreateNewEventScreen from '../screens/CreateNewEventScreen';
 import LoadingScreen from '../screens/LoadingScreen';
-import MediaViewerScreen from '../screens/MediaViewerScreen';
-import { fetchMyProfile, type UserProfile } from '../services/profileApi';
+import { fetchStartupProfile, type UserProfile } from '../services/profileApi';
 import { supabase } from '../lib/supabase';
-import { logger } from '../lib/logger';
 import { navigationRef } from './navigationRef';
+import {
+  logPerformanceEvent,
+  logPerformanceTiming,
+  performanceNow,
+  setPerformanceActiveRoute,
+  startJsThreadLagDetector,
+} from '../utils/performanceTiming';
+import { AppTabs } from './AppTabs';
 
 const Stack = createNativeStackNavigator();
+const AuthStack = React.lazy(() =>
+  import('./AuthStack').then((module) => ({ default: module.AuthStack })),
+);
+const OnboardingStack = React.lazy(() =>
+  import('./OnboardingStack').then((module) => ({ default: module.OnboardingStack })),
+);
+const CreateFanActivityScreen = React.lazy(() => import('../screens/CreateFanActivityScreen'));
+const CreateNewEventScreen = React.lazy(() => import('../screens/CreateNewEventScreen'));
+const MediaViewerScreen = React.lazy(() => import('../screens/MediaViewerScreen'));
 
 function normalizeFanActivityDetailPath(path: string): string {
   const normalizedPath = path.replace(/^\/+/, '');
@@ -50,31 +60,50 @@ function Inner() {
   const { user, loading } = useAuth();
   const [profileLoading, setProfileLoading] = useState(true);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const loadedProfileUserIdRef = useRef<string | null>(null);
+  const profileRequestIdRef = useRef(0);
 
   const loadProfile = useCallback(async () => {
+    const requestId = ++profileRequestIdRef.current;
+
     if (!user?.id) {
       setProfile(null);
       setProfileLoading(false);
+      loadedProfileUserIdRef.current = null;
       return;
     }
 
-    setProfileLoading(true);
+    const isInitialLoadForUser = loadedProfileUserIdRef.current !== user.id;
+    if (isInitialLoadForUser) {
+      setProfileLoading(true);
+    }
+    const profileStartedAt = performanceNow();
 
     try {
-      const result = await fetchMyProfile(user.id);
-      logger.log('[RootNavigator] Profile load result', {
-        profileLoading: false,
-        profile: result,
-        display_name: result?.display_name ?? null,
-        avatar_url: result?.avatar_url ?? null,
-        onboarding_complete: result?.onboarding_complete ?? null,
+      const result = await fetchStartupProfile(user.id);
+      if (profileRequestIdRef.current !== requestId) {
+        return;
+      }
+      logPerformanceTiming('Profile', 'startup-profile', profileStartedAt, {
+        found: Boolean(result),
+        hasDisplayName: Boolean(result?.display_name?.trim()),
+        blockingNavigation: isInitialLoadForUser,
       });
       setProfile(result);
     } catch (error) {
-      logger.warn('[RootNavigator] Profile load failed', error);
+      if (profileRequestIdRef.current !== requestId) {
+        return;
+      }
+      logPerformanceTiming('Profile', 'startup-profile-error', profileStartedAt, {
+        message: error instanceof Error ? error.message : String(error),
+        blockingNavigation: isInitialLoadForUser,
+      });
       setProfile(null);
     } finally {
-      setProfileLoading(false);
+      if (profileRequestIdRef.current === requestId) {
+        loadedProfileUserIdRef.current = user.id;
+        setProfileLoading(false);
+      }
     }
   }, [user?.id]);
 
@@ -107,53 +136,44 @@ function Inner() {
   }, [loadProfile, user?.id]);
 
   if (loading || profileLoading) {
-    logger.log('[RootNavigator] Rendering LoadingScreen', {
-      loading,
-      profileLoading,
-      profile,
-      display_name: profile?.display_name ?? null,
-      avatar_url: profile?.avatar_url ?? null,
-      onboarding_complete: profile?.onboarding_complete ?? null,
-    });
     return <LoadingScreen />;
   }
 
   if (!user) {
-    logger.log('[RootNavigator] Rendering AuthStack', {
-      loading,
-      profileLoading,
-      profile,
-      display_name: profile?.display_name ?? null,
-      avatar_url: profile?.avatar_url ?? null,
-      onboarding_complete: profile?.onboarding_complete ?? null,
-    });
     return <AuthStack />;
   }
 
   if (profile && !hasCompletedCoreProfile(profile)) {
-    logger.log('[RootNavigator] Rendering OnboardingStack', {
-      loading,
-      profileLoading,
-      profile,
-      display_name: profile?.display_name,
-      avatar_url: profile?.avatar_url,
-      onboarding_complete: profile?.onboarding_complete,
-    });
     return <OnboardingStack />;
   }
 
-  logger.log('[RootNavigator] Rendering AppTabs', {
-    loading,
-    profileLoading,
-    profile,
-    display_name: profile?.display_name,
-    avatar_url: profile?.avatar_url,
-    onboarding_complete: profile?.onboarding_complete,
-  });
   return <AppTabs />;
 }
 
 export function RootNavigator() {
+  const previousRouteNameRef = useRef<string | null>(null);
+
+  useEffect(() => startJsThreadLagDetector(), []);
+
+  const handleNavigationReady = useCallback(() => {
+    const routeName = navigationRef.getCurrentRoute()?.name ?? null;
+    previousRouteNameRef.current = routeName;
+    setPerformanceActiveRoute(routeName);
+    logPerformanceEvent('Navigation', 'container-ready', { routeName });
+  }, []);
+
+  const handleNavigationStateChange = useCallback(() => {
+    const nextRouteName = navigationRef.getCurrentRoute()?.name ?? null;
+    const previousRouteName = previousRouteNameRef.current;
+
+    setPerformanceActiveRoute(nextRouteName);
+    logPerformanceEvent('Navigation', 'state-changed', {
+      previousRoute: previousRouteName,
+      nextRoute: nextRouteName,
+    });
+    previousRouteNameRef.current = nextRouteName;
+  }, []);
+
   const linking = {
     prefixes: [Linking.createURL('/'), 'fcnfans://'],
     config: {
@@ -190,25 +210,32 @@ export function RootNavigator() {
   };
 
   return (
-    <NavigationContainer ref={navigationRef} linking={linking}>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="Main" component={Inner} />
-        <Stack.Screen
-          name="CreateNewEvent"
-          component={CreateNewEventScreen}
-          options={{ presentation: 'modal' }}
-        />
-        <Stack.Screen
-          name="CreateFanActivity"
-          component={CreateFanActivityScreen}
-          options={{ presentation: 'modal' }}
-        />
-        <Stack.Screen
-          name="MediaViewer"
-          component={MediaViewerScreen}
-          options={{ presentation: 'fullScreenModal', animation: 'fade', gestureEnabled: true }}
-        />
-      </Stack.Navigator>
-    </NavigationContainer>
+    <Suspense fallback={<LoadingScreen />}>
+      <NavigationContainer
+        ref={navigationRef}
+        linking={linking}
+        onReady={handleNavigationReady}
+        onStateChange={handleNavigationStateChange}
+      >
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="Main" component={Inner} />
+          <Stack.Screen
+            name="CreateNewEvent"
+            component={CreateNewEventScreen}
+            options={{ presentation: 'modal' }}
+          />
+          <Stack.Screen
+            name="CreateFanActivity"
+            component={CreateFanActivityScreen}
+            options={{ presentation: 'modal' }}
+          />
+          <Stack.Screen
+            name="MediaViewer"
+            component={MediaViewerScreen}
+            options={{ presentation: 'fullScreenModal', animation: 'fade', gestureEnabled: true }}
+          />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </Suspense>
   );
 }

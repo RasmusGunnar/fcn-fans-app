@@ -1,6 +1,7 @@
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppHeader } from '../components/AppHeader';
 import { Badge } from '../components/ui/Badge';
@@ -11,7 +12,15 @@ import { SongsView } from '../components/views/SongsView';
 import { VideosView as VideosViewComponent } from '../components/views/VideosView';
 import { supabase } from '../lib/supabase';
 import { defaultTheme } from '../theme';
+import {
+  logPerformanceEvent,
+  logPerformanceTiming,
+  performanceNow,
+  schedulePerformanceFrame,
+} from '../utils/performanceTiming';
 import { buildStandingsSections, type StandingsRow } from '../utils/standings';
+
+logPerformanceEvent('ScreenLifecycle', 'module-evaluated', { screen: 'LibraryScreen' });
 
 const theme = defaultTheme;
 
@@ -33,6 +42,7 @@ const segments = [
   { key: 'links', label: 'Links' },
   { key: 'videos', label: 'Videoer' },
 ] as const satisfies readonly { key: LibrarySegmentKey; label: string }[];
+let hasEnteredLibraryScreen = false;
 
 function normalizeTeamName(name: string): string {
   return name
@@ -265,8 +275,54 @@ function StandingsView() {
 }
 
 export default function LibraryScreen() {
+  if (!hasEnteredLibraryScreen) {
+    hasEnteredLibraryScreen = true;
+    logPerformanceEvent('ScreenLifecycle', 'component-first-entered', {
+      screen: 'LibraryScreen',
+    });
+  }
+
   const tabBarHeight = useBottomTabBarHeight();
   const [activeSegment, setActiveSegment] = useState<LibrarySegmentKey>('songs');
+  const didLogFirstCommitRef = useRef(false);
+
+  useEffect(() => {
+    return schedulePerformanceFrame(() => {
+      if (didLogFirstCommitRef.current) return;
+      didLogFirstCommitRef.current = true;
+      logPerformanceEvent('ScreenLifecycle', 'first-render-committed', {
+        screen: 'LibraryScreen',
+      });
+      logPerformanceEvent('ScreenLifecycle', 'first-visible-shell-rendered', {
+        screen: 'LibraryScreen',
+        shell: 'screen-root',
+      });
+      logPerformanceEvent('ScreenLifecycle', 'data-ready', {
+        screen: 'LibraryScreen',
+        segment: 'songs',
+      });
+    });
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      const focusStartedAt = performanceNow();
+      logPerformanceEvent('ScreenLifecycle', 'focus-effect-started', {
+        screen: 'LibraryScreen',
+      });
+      const cancelFrame = schedulePerformanceFrame(() => {
+        logPerformanceTiming('ScreenLifecycle', 'focus-effect-finished', focusStartedAt, {
+          screen: 'LibraryScreen',
+        });
+        logPerformanceEvent('ScreenLifecycle', 'focus-visible-shell-rendered', {
+          screen: 'LibraryScreen',
+          shell: 'screen-root',
+        });
+      });
+
+      return cancelFrame;
+    }, []),
+  );
 
   const handleSegmentPress = (segment: LibrarySegmentKey) => {
     setActiveSegment(segment);

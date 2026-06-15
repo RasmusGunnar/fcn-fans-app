@@ -177,6 +177,8 @@ begin
 end;
 $$ language plpgsql;
 
+drop trigger if exists set_member_since_trigger on public.profiles;
+
 create trigger set_member_since_trigger
   before insert on public.profiles
   for each row

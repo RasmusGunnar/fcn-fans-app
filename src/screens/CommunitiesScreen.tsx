@@ -13,11 +13,34 @@ import { AppHeader } from '../components/AppHeader';
 import { MapMarkerIcon } from '../components/MapMarkerIcon';
 import { Badge, Card, IconButton, SegmentedControl, Text } from '../components/ui';
 import { getPublicUrl } from '../lib/storageUrl';
-import { Community as CommunityData, getCommunities, sortCommunities } from '../services/communities';
+import {
+  Community as CommunityData,
+  getCommunities,
+  sortCommunities,
+} from '../services/communities';
 import { getMyCommunityRoles } from '../services/rbac';
 import { useTheme } from '../theme';
+import {
+  logPerformanceEvent,
+  logPerformanceTiming,
+  measurePerformanceWork,
+  performanceNow,
+  schedulePerformanceFrame,
+} from '../utils/performanceTiming';
 
-type CoordinateSource = 'lat' | 'lng' | 'latitude' | 'longitude' | 'coordinates.lat' | 'coordinates.lng' | 'coordinates.latitude' | 'coordinates.longitude';
+logPerformanceEvent('ScreenLifecycle', 'module-evaluated', {
+  screen: 'CommunitiesScreen',
+});
+
+type CoordinateSource =
+  | 'lat'
+  | 'lng'
+  | 'latitude'
+  | 'longitude'
+  | 'coordinates.lat'
+  | 'coordinates.lng'
+  | 'coordinates.latitude'
+  | 'coordinates.longitude';
 
 type NormalizedCommunityCoordinate = {
   latitude: number;
@@ -59,17 +82,19 @@ type RenderedMapCommunityItem = {
   overlapGroupSize: number;
 };
 
+const COMMUNITY_MAP_DEBUG_ENABLED =
+  __DEV__ && process.env.EXPO_PUBLIC_COMMUNITY_MAP_DEBUG?.trim().toLowerCase() === 'true';
+let hasEnteredCommunitiesScreen = false;
+
 type CommunityCoordinateRecord = CommunityData & {
   latitude?: unknown;
   longitude?: unknown;
-  coordinates?:
-    | {
-        lat?: unknown;
-        lng?: unknown;
-        latitude?: unknown;
-        longitude?: unknown;
-      }
-    | null;
+  coordinates?: {
+    lat?: unknown;
+    lng?: unknown;
+    latitude?: unknown;
+    longitude?: unknown;
+  } | null;
 };
 
 function parseCoordinateValue(value: unknown): number | null {
@@ -237,6 +262,13 @@ function spreadOverlappingCommunityMarkers(
 }
 
 export default function CommunitiesScreen() {
+  if (!hasEnteredCommunitiesScreen) {
+    hasEnteredCommunitiesScreen = true;
+    logPerformanceEvent('ScreenLifecycle', 'component-first-entered', {
+      screen: 'CommunitiesScreen',
+    });
+  }
+
   const navigation = useNavigation();
   const tabBarHeight = useBottomTabBarHeight();
   const theme = useTheme();
@@ -252,9 +284,22 @@ export default function CommunitiesScreen() {
   const [myCommunityRoles, setMyCommunityRoles] = useState<
     Record<string, 'owner' | 'admin' | 'member'>
   >({});
+  const hasLoadedCommunitiesRef = useRef(false);
+  const isLoadingCommunitiesRef = useRef(false);
+  const didLogFirstCommitRef = useRef(false);
 
   useEffect(() => {
-    loadCommunities();
+    return schedulePerformanceFrame(() => {
+      if (didLogFirstCommitRef.current) return;
+      didLogFirstCommitRef.current = true;
+      logPerformanceEvent('ScreenLifecycle', 'first-render-committed', {
+        screen: 'CommunitiesScreen',
+      });
+      logPerformanceEvent('ScreenLifecycle', 'first-visible-shell-rendered', {
+        screen: 'CommunitiesScreen',
+        shell: 'screen-root',
+      });
+    });
   }, []);
 
   useEffect(() => {
@@ -271,18 +316,66 @@ export default function CommunitiesScreen() {
     };
   }, []);
 
-  const loadCommunities = async () => {
-    setLoading(true);
-    const data = await getCommunities();
-    setBaseCommunities(data);
-    setLoading(false);
-  };
+  const loadCommunities = useCallback(async () => {
+    if (isLoadingCommunitiesRef.current) {
+      logPerformanceEvent('CommunitiesWork', 'load-communities-skipped', {
+        reason: 'request-in-flight',
+      });
+      return;
+    }
+
+    const startedAt = performanceNow();
+    let loadedCount = 0;
+    let dataReady = false;
+    isLoadingCommunitiesRef.current = true;
+    if (!hasLoadedCommunitiesRef.current) {
+      setLoading(true);
+    }
+
+    try {
+      const data = await getCommunities();
+      loadedCount = data.length;
+      dataReady = true;
+      setBaseCommunities(data);
+    } finally {
+      isLoadingCommunitiesRef.current = false;
+      hasLoadedCommunitiesRef.current = true;
+      setLoading(false);
+      logPerformanceTiming('CommunitiesWork', 'load-communities', startedAt, {
+        itemCount: loadedCount,
+      });
+      if (dataReady) {
+        schedulePerformanceFrame(() => {
+          logPerformanceEvent('ScreenLifecycle', 'data-ready', {
+            screen: 'CommunitiesScreen',
+            itemCount: loadedCount,
+          });
+        });
+      }
+    }
+  }, []);
 
   // Refetch communities when screen is focused (e.g., after admin approval of fan faction requests)
   useFocusEffect(
     useCallback(() => {
-      loadCommunities();
-    }, []),
+      const focusStartedAt = performanceNow();
+      logPerformanceEvent('ScreenLifecycle', 'focus-effect-started', {
+        screen: 'CommunitiesScreen',
+      });
+      const cancelFrame = schedulePerformanceFrame(() => {
+        logPerformanceEvent('ScreenLifecycle', 'focus-visible-shell-rendered', {
+          screen: 'CommunitiesScreen',
+          shell: hasLoadedCommunitiesRef.current ? 'content' : 'loading',
+        });
+      });
+      void loadCommunities().finally(() => {
+        logPerformanceTiming('ScreenLifecycle', 'focus-effect-finished', focusStartedAt, {
+          screen: 'CommunitiesScreen',
+        });
+      });
+
+      return cancelFrame;
+    }, [loadCommunities]),
   );
 
   const navigateToDetail = (id: string, title: string) => {
@@ -297,17 +390,33 @@ export default function CommunitiesScreen() {
   ] as const;
 
   const orderedBaseCommunities = useMemo(
-    () => sortCommunities(baseCommunities),
+    () =>
+      measurePerformanceWork(
+        'RenderBlock',
+        'CommunitiesScreen-sort',
+        () => sortCommunities(baseCommunities),
+        { itemCount: baseCommunities.length },
+      ),
     [baseCommunities],
   );
 
   const communitiesByTab = useMemo(
-    () => ({
-      all: orderedBaseCommunities,
-      fan_factions: orderedBaseCommunities.filter((community) => community.type === 'fan_faction'),
-      communities: orderedBaseCommunities.filter((community) => community.type === 'community'),
-      mine: orderedBaseCommunities.filter((community) => !!myCommunityRoles[community.id]),
-    }),
+    () =>
+      measurePerformanceWork(
+        'RenderBlock',
+        'CommunitiesScreen-build-segment-lists',
+        () => ({
+          all: orderedBaseCommunities,
+          fan_factions: orderedBaseCommunities.filter(
+            (community) => community.type === 'fan_faction',
+          ),
+          communities: orderedBaseCommunities.filter(
+            (community) => community.type === 'community',
+          ),
+          mine: orderedBaseCommunities.filter((community) => !!myCommunityRoles[community.id]),
+        }),
+        { itemCount: orderedBaseCommunities.length },
+      ),
     [myCommunityRoles, orderedBaseCommunities],
   );
 
@@ -317,7 +426,13 @@ export default function CommunitiesScreen() {
   );
 
   const normalizedFilteredCommunities = useMemo(
-    () => filteredCommunities.map((community) => normalizeCommunityCoordinate(community)),
+    () =>
+      measurePerformanceWork(
+        'RenderBlock',
+        'CommunitiesScreen-normalize-coordinates',
+        () => filteredCommunities.map((community) => normalizeCommunityCoordinate(community)),
+        { itemCount: filteredCommunities.length },
+      ),
     [filteredCommunities],
   );
 
@@ -336,84 +451,86 @@ export default function CommunitiesScreen() {
     [normalizedFilteredCommunities],
   );
 
-  const filteredCommunitiesDebug = useMemo(
-    () =>
-      normalizedFilteredCommunities.map((item) => ({
-        id: item.community.id,
-        name: item.community.name,
-        type: item.community.type,
-        lat: item.debug.lat,
-        lng: item.debug.lng,
-        latitude: item.debug.latitude,
-        longitude: item.debug.longitude,
-        coordinates: item.debug.coordinates,
-        location_label: item.debug.location_label,
-        place_name: item.debug.place_name,
-        geocoded_at: item.debug.geocoded_at,
-        normalizedLatitude: item.normalizedCoordinate?.latitude ?? null,
-        normalizedLongitude: item.normalizedCoordinate?.longitude ?? null,
-        latitudeSource: item.normalizedCoordinate?.latitudeSource ?? null,
-        longitudeSource: item.normalizedCoordinate?.longitudeSource ?? null,
-        exclusionReason: item.exclusionReason,
-      })),
-    [normalizedFilteredCommunities],
-  );
+  const filteredCommunitiesDebug = useMemo(() => {
+    if (!COMMUNITY_MAP_DEBUG_ENABLED) return [];
+    return normalizedFilteredCommunities.map((item) => ({
+      id: item.community.id,
+      name: item.community.name,
+      type: item.community.type,
+      lat: item.debug.lat,
+      lng: item.debug.lng,
+      latitude: item.debug.latitude,
+      longitude: item.debug.longitude,
+      coordinates: item.debug.coordinates,
+      location_label: item.debug.location_label,
+      place_name: item.debug.place_name,
+      geocoded_at: item.debug.geocoded_at,
+      normalizedLatitude: item.normalizedCoordinate?.latitude ?? null,
+      normalizedLongitude: item.normalizedCoordinate?.longitude ?? null,
+      latitudeSource: item.normalizedCoordinate?.latitudeSource ?? null,
+      longitudeSource: item.normalizedCoordinate?.longitudeSource ?? null,
+      exclusionReason: item.exclusionReason,
+    }));
+  }, [normalizedFilteredCommunities]);
 
-  const mapCommunitiesDebug = useMemo(
-    () =>
-      mapCommunities.map((item) => ({
-        id: item.community.id,
-        name: item.community.name,
-        type: item.community.type,
-        latitude: item.coordinate.latitude,
-        longitude: item.coordinate.longitude,
-        latitudeSource: item.coordinate.latitudeSource,
-        longitudeSource: item.coordinate.longitudeSource,
-      })),
-    [mapCommunities],
-  );
+  const mapCommunitiesDebug = useMemo(() => {
+    if (!COMMUNITY_MAP_DEBUG_ENABLED) return [];
+    return mapCommunities.map((item) => ({
+      id: item.community.id,
+      name: item.community.name,
+      type: item.community.type,
+      latitude: item.coordinate.latitude,
+      longitude: item.coordinate.longitude,
+      latitudeSource: item.coordinate.latitudeSource,
+      longitudeSource: item.coordinate.longitudeSource,
+    }));
+  }, [mapCommunities]);
 
-  const mapExcludedCommunitiesDebug = useMemo(
-    () =>
-      mapExcludedCommunities.map((item) => ({
-        id: item.community.id,
-        name: item.community.name,
-        type: item.community.type,
-        reason: item.exclusionReason,
-        lat: item.debug.lat,
-        lng: item.debug.lng,
-        latitude: item.debug.latitude,
-        longitude: item.debug.longitude,
-        coordinates: item.debug.coordinates,
-        location_label: item.debug.location_label,
-        place_name: item.debug.place_name,
-        geocoded_at: item.debug.geocoded_at,
-      })),
-    [mapExcludedCommunities],
-  );
+  const mapExcludedCommunitiesDebug = useMemo(() => {
+    if (!COMMUNITY_MAP_DEBUG_ENABLED) return [];
+    return mapExcludedCommunities.map((item) => ({
+      id: item.community.id,
+      name: item.community.name,
+      type: item.community.type,
+      reason: item.exclusionReason,
+      lat: item.debug.lat,
+      lng: item.debug.lng,
+      latitude: item.debug.latitude,
+      longitude: item.debug.longitude,
+      coordinates: item.debug.coordinates,
+      location_label: item.debug.location_label,
+      place_name: item.debug.place_name,
+      geocoded_at: item.debug.geocoded_at,
+    }));
+  }, [mapExcludedCommunities]);
 
   const renderedMarkerCommunities = useMemo(
-    () => spreadOverlappingCommunityMarkers(mapCommunities),
+    () =>
+      measurePerformanceWork(
+        'RenderBlock',
+        'CommunitiesScreen-spread-map-markers',
+        () => spreadOverlappingCommunityMarkers(mapCommunities),
+        { itemCount: mapCommunities.length },
+      ),
     [mapCommunities],
   );
 
-  const renderedMarkerDebug = useMemo(
-    () =>
-      renderedMarkerCommunities.map((item) => ({
-        id: item.community.id,
-        name: item.community.name,
-        type: item.community.type,
-        latitude: item.coordinate.latitude,
-        longitude: item.coordinate.longitude,
-        baseLatitude: item.baseCoordinate.latitude,
-        baseLongitude: item.baseCoordinate.longitude,
-        overlapIndex: item.overlapIndex,
-        overlapGroupSize: item.overlapGroupSize,
-        latitudeSource: item.baseCoordinate.latitudeSource,
-        longitudeSource: item.baseCoordinate.longitudeSource,
-      })),
-    [renderedMarkerCommunities],
-  );
+  const renderedMarkerDebug = useMemo(() => {
+    if (!COMMUNITY_MAP_DEBUG_ENABLED) return [];
+    return renderedMarkerCommunities.map((item) => ({
+      id: item.community.id,
+      name: item.community.name,
+      type: item.community.type,
+      latitude: item.coordinate.latitude,
+      longitude: item.coordinate.longitude,
+      baseLatitude: item.baseCoordinate.latitude,
+      baseLongitude: item.baseCoordinate.longitude,
+      overlapIndex: item.overlapIndex,
+      overlapGroupSize: item.overlapGroupSize,
+      latitudeSource: item.baseCoordinate.latitudeSource,
+      longitudeSource: item.baseCoordinate.longitudeSource,
+    }));
+  }, [renderedMarkerCommunities]);
 
   const mapCommunitiesKey = useMemo(
     () => renderedMarkerCommunities.map((item) => item.community.id).join(','),
@@ -426,6 +543,10 @@ export default function CommunitiesScreen() {
   );
 
   useEffect(() => {
+    if (!COMMUNITY_MAP_DEBUG_ENABLED) {
+      return;
+    }
+
     console.log('[CommunitiesScreen] selectedTab:', activeSegment);
     console.log('[CommunitiesScreen] filteredCommunities:', {
       count: filteredCommunitiesDebug.length,
@@ -451,10 +572,7 @@ export default function CommunitiesScreen() {
     mapExcludedCommunitiesDebug,
   ]);
 
-  const hasCoordsInFilteredCommunities = useMemo(
-    () => mapCommunities.length > 0,
-    [mapCommunities],
-  );
+  const hasCoordsInFilteredCommunities = useMemo(() => mapCommunities.length > 0, [mapCommunities]);
 
   const mapRegion = useMemo<Region | null>(() => {
     if (renderedMarkerCommunities.length === 0) return null;

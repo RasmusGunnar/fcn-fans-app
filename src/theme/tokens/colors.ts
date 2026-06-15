@@ -92,6 +92,9 @@ export const lightColors = {
 
   // Overlay colors for modals and sheets
   overlay: {
+    welcomeGradientTop: 'rgba(0, 0, 0, 0.06)',
+    welcomeGradientMiddle: 'rgba(0, 0, 0, 0.34)',
+    welcomeGradientBottom: 'rgba(0, 0, 0, 0.72)',
     light: 'rgba(0, 0, 0, 0.3)',
     medium: 'rgba(0, 0, 0, 0.4)',
     fullscreen: 'rgba(10, 10, 10, 0.98)',
@@ -195,6 +198,9 @@ export const darkColors = {
 
   // Overlay colors for modals and sheets
   overlay: {
+    welcomeGradientTop: 'rgba(0, 0, 0, 0.06)',
+    welcomeGradientMiddle: 'rgba(0, 0, 0, 0.34)',
+    welcomeGradientBottom: 'rgba(0, 0, 0, 0.72)',
     light: 'rgba(0, 0, 0, 0.3)',
     medium: 'rgba(0, 0, 0, 0.4)',
     fullscreen: 'rgba(10, 10, 10, 0.98)',

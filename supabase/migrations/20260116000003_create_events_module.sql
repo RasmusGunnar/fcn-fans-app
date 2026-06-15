@@ -182,11 +182,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS update_bus_trips_updated_at ON public.bus_trips;
 CREATE TRIGGER update_bus_trips_updated_at
   BEFORE UPDATE ON public.bus_trips
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_events_updated_at ON public.events;
 CREATE TRIGGER update_events_updated_at
   BEFORE UPDATE ON public.events
   FOR EACH ROW

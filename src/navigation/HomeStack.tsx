@@ -1,13 +1,16 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import EventAttendeesScreen from '../screens/EventAttendeesScreen';
-import HashtagScreen from '../screens/HashtagScreen';
 import HomeScreen from '../screens/HomeScreen';
-import MatchDetailsScreen from '../screens/MatchDetailsScreen';
-import PostDetailScreen from '../screens/PostDetailScreen';
-import PublicProfileScreen from '../screens/PublicProfileScreen';
+import { logPerformanceEvent } from '../utils/performanceTiming';
+
+logPerformanceEvent('LazyStack', 'module-evaluated', { stackName: 'HomeStack' });
 
 const Stack = createNativeStackNavigator();
+const EventAttendeesScreen = React.lazy(() => import('../screens/EventAttendeesScreen'));
+const HashtagScreen = React.lazy(() => import('../screens/HashtagScreen'));
+const MatchDetailsScreen = React.lazy(() => import('../screens/MatchDetailsScreen'));
+const PostDetailScreen = React.lazy(() => import('../screens/PostDetailScreen'));
+const PublicProfileScreen = React.lazy(() => import('../screens/PublicProfileScreen'));
 
 export function HomeStack() {
   return (

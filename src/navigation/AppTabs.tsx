@@ -1,11 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { Suspense } from 'react';
+import { InteractionManager, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import CreateSheet from '../screens/CreateSheet';
 import { CreateSheetProvider, useCreateSheet } from '../state/CreateSheetContext';
 import { colors } from '../theme';
+import { logPerformanceTiming, startNavigationTiming } from '../utils/performanceTiming';
 import { CommunitiesStack } from './CommunitiesStack';
 import { EventsStack } from './EventsStack';
 import { HomeStack } from './HomeStack';
@@ -13,6 +13,7 @@ import { LibraryStack } from './LibraryStack';
 import { ProfileStack } from './ProfileStack';
 
 const Tab = createBottomTabNavigator();
+const CreateSheet = React.lazy(() => import('../screens/CreateSheet'));
 
 const tabData = [
   {
@@ -41,7 +42,7 @@ const tabData = [
   },
 ];
 
-function CustomTabBar({ state, descriptors, navigation, tabs, showCreate }: any) {
+function CustomTabBar({ state, navigation, tabs, showCreate }: any) {
   const insets = useSafeAreaInsets();
   const {
     visible,
@@ -53,7 +54,6 @@ function CustomTabBar({ state, descriptors, navigation, tabs, showCreate }: any)
   } = useCreateSheet();
 
   const onPlusPress = () => {
-    console.log('[AppTabs] Plus button pressed - opening CreateSheet');
     openCreateSheet();
   };
 
@@ -63,10 +63,13 @@ function CustomTabBar({ state, descriptors, navigation, tabs, showCreate }: any)
   const renderTab = (tab: (typeof tabData)[0]) => {
     const route = state.routes.find((r: any) => r.name === tab.name);
     if (!route) return null;
-    const { options } = descriptors[route.key];
     const isFocused = state.index === state.routes.indexOf(route);
 
     const onPress = () => {
+      const navigationStartedAt = startNavigationTiming('bottom-tab', route.name, {
+        previousTab: state.routes[state.index]?.name ?? null,
+        isAlreadyFocused: isFocused,
+      });
       const event = navigation.emit({
         type: 'tabPress',
         target: route.key,
@@ -75,6 +78,13 @@ function CustomTabBar({ state, descriptors, navigation, tabs, showCreate }: any)
 
       if (!isFocused && !event.defaultPrevented) {
         navigation.navigate(route.name);
+        if (__DEV__) {
+          InteractionManager.runAfterInteractions(() => {
+            logPerformanceTiming('Navigation', 'tab-settled', navigationStartedAt, {
+              tab: route.name,
+            });
+          });
+        }
       }
     };
 
@@ -100,14 +110,16 @@ function CustomTabBar({ state, descriptors, navigation, tabs, showCreate }: any)
           </Pressable>
         ) : null}
       </View>
-      {showCreate ? (
-        <CreateSheet
-          visible={visible}
-          onClose={closeCreateSheet}
-          initialContentType={initialContentType}
-          initialFeedTargets={initialFeedTargets}
-          initialActor={initialActor}
-        />
+      {showCreate && visible ? (
+        <Suspense fallback={null}>
+          <CreateSheet
+            visible
+            onClose={closeCreateSheet}
+            initialContentType={initialContentType}
+            initialFeedTargets={initialFeedTargets}
+            initialActor={initialActor}
+          />
+        </Suspense>
       ) : null}
     </View>
   );
@@ -128,7 +140,11 @@ export function AppTabs() {
         <Tab.Screen name="Communities" component={CommunitiesStack} />
         <Tab.Screen name="Events" component={EventsStack} />
         <Tab.Screen name="Songs" component={LibraryStack} />
-        <Tab.Screen name="Profile" component={ProfileStack} options={{ tabBarButton: () => null }} />
+        <Tab.Screen
+          name="Profile"
+          component={ProfileStack}
+          options={{ tabBarButton: () => null }}
+        />
       </Tab.Navigator>
     </CreateSheetProvider>
   );

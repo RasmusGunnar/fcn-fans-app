@@ -1,6 +1,7 @@
 export { CardRoot } from './CardRoot';
 export { CardHeader } from './CardHeader';
 export { CardMedia } from './CardMedia';
+export { ArticlePreview } from './ArticlePreview';
 export { FanPostCard } from './FanPostCard';
 export { NewsCard } from './NewsCard';
 export { EventCard } from './EventCard';

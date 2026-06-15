@@ -9,7 +9,7 @@ import { useFeed } from '../state/FeedContext';
 import { FanPostCard } from '../components/cards/FanPostCard';
 import { PollCard } from '../components/PollCard';
 import { fetchPostDetailById, type PostDetailResult } from '../services/postsApi';
-import { targetKey } from '../utils/targetKey';
+import { getPostEngagementIdentity, POST_ENGAGEMENT_TARGET_TYPE } from '../utils/postEngagement';
 
 type PostDetailRouteParams = {
   postId?: string;
@@ -130,7 +130,7 @@ export default function PostDetailScreen() {
       },
     };
   }, [authorProfile, post?.authorId, profileMap]);
-  const engagementKey = post ? targetKey('post', post.id) : null;
+  const engagementKey = post ? getPostEngagementIdentity(post.id).key : null;
   const likeState =
     (engagementKey ? likeMap[engagementKey] : undefined) ?? {
       liked: detailData?.engagement.liked ?? post?.likedByMe ?? false,
@@ -207,13 +207,13 @@ export default function PostDetailScreen() {
           maxInlineComments={hasCommentContext ? Number.MAX_SAFE_INTEGER : 2}
           onToggleLike={() => {
             if (user?.id) {
-              void toggleLike('post', post.id, user.id);
+              void toggleLike(POST_ENGAGEMENT_TARGET_TYPE, post.id, user.id);
             }
           }}
           onDeleted={handleDeleted}
           onNewComment={(comment) => {
-            incrementCommentCount('post', post.id);
-            addCommentPreview('post', post.id, comment);
+            incrementCommentCount(POST_ENGAGEMENT_TARGET_TYPE, post.id);
+            addCommentPreview(POST_ENGAGEMENT_TARGET_TYPE, post.id, comment);
           }}
           bodyContent={
             post.poll_data ? <PollCard pollData={post.poll_data} postId={post.id} profileMap={postProfileMap} /> : undefined

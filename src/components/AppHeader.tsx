@@ -3,6 +3,7 @@ import { View, Text, Image, StyleSheet, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, Theme } from '../theme';
+import { startNavigationTiming } from '../utils/performanceTiming';
 
 interface AppHeaderProps {
   title: string;
@@ -26,6 +27,7 @@ export function AppHeader({
 
   const handleProfilePress = () => {
     if (onPressProfile) {
+      startNavigationTiming('profile-icon', 'Profile', { headerTitle: title });
       onPressProfile();
     } else {
       console.log('TODO: Navigate to profile');

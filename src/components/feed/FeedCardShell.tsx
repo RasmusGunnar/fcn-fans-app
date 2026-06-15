@@ -62,26 +62,30 @@ export function FeedCardShell({
   profileMap,
 }: FeedCardShellProps) {
   const [commentsOpen, setCommentsOpen] = useState(initiallyOpen);
-  const mentionLabels = useMemo(
-    () =>
-      Object.fromEntries(
-        Object.values(profileMap ?? {})
-          .filter(
-            (profile) =>
-              typeof profile.username === 'string' &&
-              profile.username.trim().length > 0 &&
-              typeof profile.display_name === 'string' &&
-              profile.display_name.trim().length > 0,
-          )
-          .map((profile) => [profile.username!.toLowerCase(), profile.display_name!.trim()]),
-      ),
-    [profileMap],
-  );
 
   // Use actions.comments directly from commentCountMap (passed from parent)
   const commentsCount = actions.comments ?? 0;
   const likesCount = actions.likes ?? 0;
   const liked = actions.liked ?? false;
+  const hasComments = commentsCount > 0;
+  const showPreview = !commentsOpen && hasComments && commentPreviews.length > 0;
+  const mentionLabels = useMemo(() => {
+    if (!commentsOpen && !showPreview) {
+      return {};
+    }
+
+    return Object.fromEntries(
+      Object.values(profileMap ?? {})
+        .filter(
+          (profile) =>
+            typeof profile.username === 'string' &&
+            profile.username.trim().length > 0 &&
+            typeof profile.display_name === 'string' &&
+            profile.display_name.trim().length > 0,
+        )
+        .map((profile) => [profile.username!.toLowerCase(), profile.display_name!.trim()]),
+    );
+  }, [commentsOpen, profileMap, showPreview]);
 
   // Helper to get display name for comment author
   const getAuthorDisplayName = (comment: CommentPreview): string => {
@@ -113,9 +117,6 @@ export function FeedCardShell({
       });
     }
   };
-
-  const hasComments = commentsCount > 0;
-  const showPreview = !commentsOpen && hasComments && commentPreviews.length > 0;
 
   return (
     <Card style={styles.card}>

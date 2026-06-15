@@ -3,18 +3,11 @@
 // DO NOT hardcode radius/spacing/colors/shadows; use theme tokens.
 // =====================================================
 
-import React from 'react';
-import {
-  Image,
-  ImageBackground,
-  Pressable,
-  StyleSheet,
-  Text as RNText,
-  View,
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { LinearGradient } from 'expo-linear-gradient';
+import React from 'react';
+import { Image, ImageBackground, Pressable, Text as RNText, StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { AuthStackParamList } from '../navigation/AuthStack';
 import { useTheme } from '../theme';
@@ -31,9 +24,9 @@ export default function WelcomeScreen({ navigation }: Props) {
     <ImageBackground source={heroImage} style={styles.background} resizeMode="cover">
       <LinearGradient
         colors={[
-          theme.colors.overlay.light,
-          theme.colors.overlay.medium,
-          theme.colors.overlay.heroScrim,
+          theme.colors.overlay.welcomeGradientTop,
+          theme.colors.overlay.welcomeGradientMiddle,
+          theme.colors.overlay.welcomeGradientBottom,
         ]}
         locations={[0, 0.58, 1]}
         style={styles.overlay}
@@ -56,11 +49,8 @@ export default function WelcomeScreen({ navigation }: Props) {
           </View>
 
           <View style={styles.bottomActions}>
-             <Pressable
-              style={({ pressed }) => [
-                styles.primaryButton,
-                pressed && styles.primaryButtonPressed,
-              ]}
+            <Pressable
+              style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
               onPress={() => navigation.navigate('Login', { mode: 'signup' })}
             >
               <RNText style={styles.primaryButtonText}>Kom i gang</RNText>
@@ -95,18 +85,18 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       paddingHorizontal: theme.spacing[6],
     },
     spacerTop: {
-      flex: 1.6,
+      flex: 2,
     },
     heroContent: {
-      flex: 3.4,
+      flex: 3,
       alignItems: 'center',
       justifyContent: 'flex-end',
-      paddingBottom: theme.spacing[6],
+      paddingBottom: theme.spacing[8],
     },
     logo: {
-      width: 224,
-      height: 224,
-      marginBottom: theme.spacing[5],
+      width: 260,
+      height: 260,
+      marginBottom: theme.spacing[10],
     },
     textBlock: {
       width: '100%',
@@ -114,34 +104,34 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       alignItems: 'center',
     },
     headline: {
-      color: theme.colors.text.inverse,
+      color: theme.colors.text.onSolid,
       fontSize: 34,
       lineHeight: 40,
       fontWeight: '800',
       textAlign: 'center',
-      marginBottom: theme.spacing[1],
+      marginBottom: theme.spacing[3],
     },
     subtitle: {
-      color: theme.colors.text.inverse,
-      fontSize: 17,
-      lineHeight: 26,
-      textAlign: 'center',
+      color: theme.colors.text.onSolid,
       opacity: 0.92,
+      fontSize: 18,
+      lineHeight: 28,
+      textAlign: 'center',
     },
     bottomActions: {
-      paddingBottom: theme.spacing[5],
-      gap: theme.spacing[2],
+      paddingBottom: theme.spacing[6],
+      gap: theme.spacing[4],
     },
     primaryButton: {
       width: '100%',
-      height: theme.spacing[12] + theme.spacing[1],
       borderRadius: theme.radius.pill,
       backgroundColor: theme.colors.primary,
       alignItems: 'center',
       justifyContent: 'center',
+      paddingVertical: theme.spacing[4],
     },
     primaryButtonText: {
-      color: theme.colors.text.inverse,
+      color: theme.colors.text.onSolid,
       fontSize: 19,
       lineHeight: 24,
       fontWeight: '700',
@@ -152,18 +142,14 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       paddingVertical: theme.spacing[2],
     },
     secondaryButtonText: {
-      color: theme.colors.text.inverse,
+      color: theme.colors.text.onSolid,
+      opacity: 0.96,
       fontSize: 17,
       lineHeight: 22,
       fontWeight: '600',
       textDecorationLine: 'underline',
-      opacity: 0.96,
     },
     pressed: {
       opacity: 0.85,
-    },
-    primaryButtonPressed: {
-      opacity: 0.92,
-      transform: [{ scale: 0.985 }],
     },
   });

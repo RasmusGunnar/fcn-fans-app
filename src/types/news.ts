@@ -23,6 +23,12 @@ export interface LinkPreview {
   description?: string;
   imageUrl?: string;
   siteName?: string;
+  sourceName?: string;
+  provider?: string;
+  faviconUrl?: string;
+  iconUrl?: string;
+  logoUrl?: string;
+  sourceLogoUrl?: string;
   hasVideo?: boolean;
 }
 

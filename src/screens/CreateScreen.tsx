@@ -1,22 +1,17 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRoute } from '@react-navigation/native';
 import { useFeed } from '../state/FeedContext';
-import { Post } from '../types/post';
+import { normalizePostType, type Post } from '../types/post';
 import { Card } from '../components/ui/Card';
-import { EntityAutocompleteList } from '../components/composer/EntityAutocompleteList';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { colors, spacing, radius } from '../theme';
-import { PickedMedia, pickFromLibrary } from '../lib/mediaPicker';
+import { MediaAsset, pickFromLibrary } from '../lib/mediaPicker';
 import { uploadMediaToSupabase } from '../lib/upload';
 import { useAuth } from '../auth/AuthProvider';
 import { supabase } from '../lib/supabase';
-import { useEntityAutocomplete } from '../hooks/useEntityAutocomplete';
-import { triggerMentionPush } from '../services/mentionPushApi';
-import { createMentionNotifications } from '../services/mentionNotifications';
-import { persistPostEntities } from '../services/postEntities';
 
 export default function CreateScreen() {
   const insets = useSafeAreaInsets();
@@ -24,53 +19,11 @@ export default function CreateScreen() {
   const { user } = useAuth();
   const route = useRoute() as any;
   const [text, setText] = useState('');
-  const [selection, setSelection] = useState({ start: 0, end: 0 });
-  const [isInputFocused, setIsInputFocused] = useState(false);
   const [audienceType, setAudienceType] = useState<'all' | 'community' | 'faction'>('all');
-  const [selectedCommunity] = useState('Farum Fans');
-  const [selectedFaction] = useState('Farum Fighters');
-  const [attachment, setAttachment] = useState<PickedMedia | null>(
+  const [selectedCommunity, setSelectedCommunity] = useState('Farum Fans');
+  const [selectedFaction, setSelectedFaction] = useState('Farum Fighters');
+  const [attachment, setAttachment] = useState<MediaAsset | null>(
     route?.params?.initialAttachment ?? null,
-  );
-  const [, setLoading] = useState(false);
-  const inputRef = useRef<TextInput | null>(null);
-  const {
-    activeMatch,
-    mentionSuggestions,
-    hashtagSuggestions,
-    visible,
-    handleSelectMention,
-    handleSelectHashtag,
-    clear: clearAutocomplete,
-  } = useEntityAutocomplete({
-    text,
-    selection,
-    isFocused: isInputFocused,
-    setText,
-    setSelection,
-    includeCommunityMentions: true,
-  });
-
-  const refocusInput = useCallback(() => {
-    requestAnimationFrame(() => {
-      inputRef.current?.focus();
-    });
-  }, []);
-
-  const handleSelectMentionSuggestion = useCallback(
-    (item: Parameters<typeof handleSelectMention>[0]) => {
-      handleSelectMention(item);
-      refocusInput();
-    },
-    [handleSelectMention, refocusInput],
-  );
-
-  const handleSelectHashtagSuggestion = useCallback(
-    (tag: string) => {
-      handleSelectHashtag(tag);
-      refocusInput();
-    },
-    [handleSelectHashtag, refocusInput],
   );
 
   const handlePublish = async () => {
@@ -89,7 +42,7 @@ export default function CreateScreen() {
           throw new Error(`Upload returned invalid result - path: ${uploaded.path}`);
         }
 
-        // Uploaded already has bucket from upload.ts, but verify it
+        // Save bucket + path structure (NOT URLs)
         mediaArray = [
           {
             bucket: 'post-media',
@@ -98,10 +51,7 @@ export default function CreateScreen() {
             width: uploaded.width,
             height: uploaded.height,
             ...(uploaded.thumbnail_path && uploaded.thumbnail_bucket
-              ? {
-                  thumbnail_path: uploaded.thumbnail_path,
-                  thumbnail_bucket: uploaded.thumbnail_bucket,
-                }
+              ? { thumbnail_path: uploaded.thumbnail_path, thumbnail_bucket: uploaded.thumbnail_bucket }
               : {}),
           },
         ];
@@ -123,94 +73,51 @@ export default function CreateScreen() {
     let dbPost: Post | null = null;
     try {
       if (user?.id) {
-        const insertPayload = {
-          author_id: user.id,
-          text: text.trim(),
-          media: mediaArray.length > 0 ? mediaArray : null,
-          media_type: mediaArray.length > 0 ? (mediaArray[0]?.type ?? 'image') : null,
-          ...(audienceType === 'community' && route?.params?.communityId
-            ? { community_id: route.params.communityId }
-            : {}),
-        };
-        console.log('[CreateScreen] DB INSERT payload:', {
-          author_id: insertPayload.author_id,
-          text_length: insertPayload.text.length,
-          media: insertPayload.media,
-          media_type: insertPayload.media_type,
-          community_id: insertPayload.community_id,
-        });
-
         const { data, error } = await supabase
           .from('posts')
-          .insert(insertPayload)
-          .select('id, created_at, author_id, text, media, community_id')
-          .single();
-
-        console.log('[CreateScreen] Insert response:', { error, dataExists: !!data });
+          .insert({
+            author_id: user.id,
+            text: text.trim(),
+            media: mediaArray,
+            ...(audienceType === 'community' && route?.params?.communityId
+              ? { community_id: route.params.communityId }
+              : {}),
+          })
+          .select('id, created_at, author_id, text, media, community_id, post_type');
         if (error) throw error;
 
-        if (!data) {
-          throw new Error('Insert succeeded but no data returned from database');
-        }
-
-        const { mentionedProfiles } = await persistPostEntities(data.id, data.text ?? text.trim());
-
-        if (mentionedProfiles.length > 0) {
-          void createMentionNotifications({
-            mentionedUsernames: mentionedProfiles
-              .map((profile) => profile.username)
-              .filter((username): username is string => Boolean(username)),
-            actorId: user.id,
-            postId: data.id,
-            entityType: 'post',
-            entityId: data.id,
-          });
-
-          void triggerMentionPush({
-            actorUserId: user.id,
-            mentionedUserIds: mentionedProfiles.map((profile) => profile.id),
-            entityType: 'post',
-            entityId: data.id,
-            postId: data.id,
-            previewText: data.text ?? text.trim(),
+        if (data && data[0]) {
+          const dbRecord = data[0];
+          // DB-returned post is the source of truth
+          dbPost = {
+            id: dbRecord.id,
+            postType: normalizePostType(dbRecord.post_type),
+            authorName: user?.email ?? 'Ukendt',
+            authorId: dbRecord.author_id,
+            communityId: dbRecord.community_id ?? null,
+            createdAt: dbRecord.created_at || new Date().toISOString(),
+            text: dbRecord.text,
+            communityName: audienceType === 'community' ? selectedCommunity : undefined,
+            factionName: audienceType === 'faction' ? selectedFaction : undefined,
+            likesCount: 0,
+            commentsCount: 0,
+            likedByMe: false,
+            media: dbRecord.media, // Use DB media (may be parsed as array or string)
+          };
+          console.log('[CreateScreen] Post inserted and fetched from DB:', {
+            postId: dbPost.id,
+            media: dbPost.media,
           });
         }
-
-        // DB-returned post is the source of truth
-        dbPost = {
-          id: data.id,
-          authorName: user?.email ?? 'Ukendt',
-          authorId: data.author_id,
-          communityId: data.community_id ?? null,
-          createdAt: data.created_at || new Date().toISOString(),
-          text: data.text,
-          communityName: audienceType === 'community' ? selectedCommunity : undefined,
-          factionName: audienceType === 'faction' ? selectedFaction : undefined,
-          likesCount: 0,
-          commentsCount: 0,
-          likedByMe: false,
-          media: data.media,
-        };
-        console.log('[CreateScreen] Post inserted successfully:', {
-          postId: dbPost.id,
-          media: dbPost.media,
-        });
       }
-    } catch (e: any) {
-      const errorMsg = e?.message || String(e);
-      console.error('[CreateScreen] INSERT FAILED:', errorMsg);
-      alert(
-        'Post fejlede: ' +
-          errorMsg +
-          '\n\nTjek: (1) Logget ind (2) Database forbinder (3) Policies tillader insert',
-      );
-      setLoading(false);
-      return;
+    } catch (e) {
+      console.warn('[CreateScreen] Insert post error', e);
     }
 
     // Use DB-fetched post if available, otherwise fallback to locally constructed
     const newPost: Post = dbPost || {
       id: Date.now().toString(),
+      postType: 'post',
       authorName: user?.email ?? 'Ukendt',
       authorId: user?.id,
       communityId:
@@ -241,10 +148,19 @@ export default function CreateScreen() {
     }
 
     setText('');
-    setSelection({ start: 0, end: 0 });
-    clearAutocomplete();
     setAudienceType('all');
     setAttachment(null);
+  };
+
+  const getAudienceDisplay = () => {
+    switch (audienceType) {
+      case 'community':
+        return selectedCommunity;
+      case 'faction':
+        return selectedFaction;
+      default:
+        return 'Alle fans';
+    }
   };
 
   return (
@@ -253,7 +169,7 @@ export default function CreateScreen() {
         <Text style={styles.title}>Nyt opslag</Text>
       </View>
 
-      <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView style={styles.content}>
         <Card style={{ marginBottom: spacing.md }}>
           <Text style={styles.label}>Publikum</Text>
           <View style={styles.audienceButtonsContainer}>
@@ -310,7 +226,6 @@ export default function CreateScreen() {
         <Card style={{ marginBottom: spacing.md }}>
           <Text style={styles.label}>Dit opslag</Text>
           <TextInput
-            ref={inputRef}
             style={styles.textInput}
             placeholder="Hvad er på dit hjerte?"
             placeholderTextColor={colors.subtext}
@@ -318,23 +233,6 @@ export default function CreateScreen() {
             numberOfLines={6}
             value={text}
             onChangeText={setText}
-            selection={selection}
-            onSelectionChange={({ nativeEvent }) => setSelection(nativeEvent.selection)}
-            onFocus={() => setIsInputFocused(true)}
-            onBlur={() => {
-              setTimeout(() => {
-                setIsInputFocused(false);
-                clearAutocomplete();
-              }, 0);
-            }}
-          />
-          <EntityAutocompleteList
-            visible={visible}
-            type={activeMatch?.type ?? null}
-            mentionSuggestions={mentionSuggestions}
-            hashtagSuggestions={hashtagSuggestions}
-            onSelectMention={handleSelectMentionSuggestion}
-            onSelectHashtag={handleSelectHashtagSuggestion}
           />
           {attachment && (
             <View style={styles.previewContainer}>

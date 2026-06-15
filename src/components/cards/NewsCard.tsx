@@ -2,11 +2,9 @@
 // All spacing, colors, and radius values must use theme.spacing[N], theme.colors.*, theme.radius.*
 // NO hardcoded numbers or color strings allowed.
 
-import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Image, Linking, Pressable, StyleSheet, View } from 'react-native';
-import { useAuth } from '../../auth/AuthProvider';
+import React from 'react';
+import { Alert, Linking, StyleSheet, View } from 'react-native';
 import { useCommunityRole } from '../../hooks/useCommunityRole';
 import { getSafeFanLevelKey } from '../../lib/fanLevel';
 import { logger } from '../../lib/logger';
@@ -17,15 +15,14 @@ import type { CategoryKey } from '../../theme/categories';
 import { NewsItem } from '../../types/news';
 import { canDeleteFeedItem } from '../../utils/permissions';
 import { resolveActorLine, type ProfileMap } from '../../utils/actor';
-import { sanitizeNewsHeroImageUrl } from '../../utils/newsMedia';
 import { cleanText } from '../../utils/text';
 import { Avatar } from '../Avatar';
 import { FanLevelBadge } from '../fan/FanLevelBadge';
 import { OptionsMenu, OptionsMenuOption } from '../OptionsMenu';
 import { Text } from '../ui';
 import { buildCardBehaviorModel } from './cardBehaviorModel';
+import { ArticlePreview } from './ArticlePreview';
 import { CardHeader } from './CardHeader';
-import { CardMedia } from './CardMedia';
 import { CardRoot } from './CardRoot';
 
 function getTimeAgo(isoDate: string): string {
@@ -41,43 +38,6 @@ function getTimeAgo(isoDate: string): string {
   if (diffHours < 24) return `For ${diffHours} time${diffHours > 1 ? 'r' : ''} siden`;
   if (diffDays < 7) return `For ${diffDays} dag${diffDays > 1 ? 'e' : ''} siden`;
   return date.toLocaleDateString('da-DK');
-}
-
-function getDomainLabel(
-  url: string | null | undefined,
-  options: { stripWww?: boolean } = {},
-): string | null {
-  const cleanedUrl = cleanText(url).trim();
-  if (!cleanedUrl) return null;
-
-  try {
-    const hostname = new URL(cleanedUrl).hostname || '';
-    const stripWww = options.stripWww ?? true;
-    return stripWww ? hostname.replace(/^www\./i, '') || null : hostname || null;
-  } catch {
-    return null;
-  }
-}
-
-function isInstagramUrl(url: string | null | undefined): boolean {
-  const domain = getDomainLabel(url, { stripWww: false })?.toLowerCase() || '';
-  return domain.includes('instagram.com') || domain === 'instagr.am';
-}
-
-function getLinkIconName(url: string | null | undefined): keyof typeof Ionicons.glyphMap {
-  const domain = getDomainLabel(url)?.toLowerCase() || '';
-
-  if (domain.includes('facebook.com') || domain === 'fb.watch') {
-    return 'logo-facebook';
-  }
-  if (domain.includes('instagram.com')) {
-    return 'logo-instagram';
-  }
-  if (domain.includes('youtube.com') || domain.includes('youtu.be')) {
-    return 'logo-youtube';
-  }
-
-  return 'link-outline';
 }
 
 interface NewsCardProps {
@@ -118,33 +78,17 @@ export function NewsCard({
   onDeleted = () => {},
 }: NewsCardProps) {
   const navigation = useNavigation<any>();
-  const { user, isAppAdmin } = useAuth();
-  const viewerUserId = currentUserId ?? user?.id;
-  const viewerIsAppAdmin = currentIsAppAdmin ?? isAppAdmin;
+  const viewerUserId = currentUserId;
+  const viewerIsAppAdmin = currentIsAppAdmin ?? false;
   const timeAgo = getTimeAgo(newsItem.createdAt);
   const newsCreatedBy = newsItem.createdBy ?? (newsItem as any).created_by ?? null;
   const newsActorType = newsItem.actorType ?? (newsItem as any).actor_type ?? 'user';
   const newsActorId = newsItem.actorId ?? (newsItem as any).actor_id ?? newsCreatedBy;
   const newsCommunityId = newsItem.communityId ?? (newsItem as any).community_id ?? null;
-  const cleanedSiteName = cleanText(newsItem.siteName);
-  const cleanedTitle = cleanText(newsItem.title);
-  const cleanedDescription = cleanText(newsItem.description);
   const cleanedNote = cleanText(newsItem.note);
-  const linkDomain = useMemo(() => getDomainLabel(newsItem.url), [newsItem.url]);
-  const isInstagramLink = useMemo(() => isInstagramUrl(newsItem.url), [newsItem.url]);
-  const fullLinkDomain = useMemo(
-    () => getDomainLabel(newsItem.url, { stripWww: false }),
-    [newsItem.url],
-  );
-  const heroImageUrl = useMemo(
-    () => (isInstagramLink ? null : sanitizeNewsHeroImageUrl(newsItem.imageUrl, newsItem.url)),
-    [isInstagramLink, newsItem.imageUrl, newsItem.url],
-  );
   const authoredCommunityId =
     newsActorType === 'community' ? newsActorId || newsCommunityId || null : null;
   const { role: authoredCommunityRole } = useCommunityRole(authoredCommunityId);
-  const [imageFailed, setImageFailed] = useState(false);
-
   const resolvedActor = resolveActorLine({
     actorType: newsActorType,
     authorId: newsActorType === 'user' ? newsActorId || newsCreatedBy || undefined : undefined,
@@ -199,8 +143,6 @@ export function NewsCard({
     });
   }
 
-  const theme = defaultTheme;
-
   const cardModel = buildCardBehaviorModel({
     kind: 'news',
     actorType: newsActorType === 'community' ? 'community' : 'fan',
@@ -209,85 +151,6 @@ export function NewsCard({
   });
 
   const hasRightSlot = newsMenuOptions.length > 0;
-  const showHeroImage = !isInstagramLink && Boolean(heroImageUrl) && !imageFailed;
-  const mediaLabel = cleanedSiteName || linkDomain || 'Nyhed';
-  const compactPrimaryLabel = cleanedSiteName || cleanedTitle || linkDomain || 'Link';
-  const compactSecondaryLabel =
-    fullLinkDomain && fullLinkDomain.toLowerCase() !== compactPrimaryLabel.toLowerCase()
-      ? fullLinkDomain
-      : cleanedSiteName
-        ? cleanedTitle || cleanedDescription || null
-        : cleanedDescription || null;
-  const compactIconName = getLinkIconName(newsItem.url);
-  const ctaLabel = '\u00c5bn';
-
-  useEffect(() => {
-    setImageFailed(false);
-  }, [heroImageUrl]);
-
-  const defaultLinkPreview = showHeroImage ? (
-    <>
-      <CardMedia aspectRatio={16 / 9} fullBleed style={{ marginTop: theme.spacing[3] }}>
-        <Image
-          source={{ uri: heroImageUrl! }}
-          style={styles.mediaImage}
-          resizeMode="cover"
-          onError={() => setImageFailed(true)}
-        />
-      </CardMedia>
-
-      <View style={styles.linkContent}>
-        <Text variant="small" color="secondary" style={styles.siteName}>
-          {mediaLabel}
-        </Text>
-        {cleanedTitle ? (
-          <Text variant="bodyBold" color="primary" style={styles.title} numberOfLines={2}>
-            {cleanedTitle}
-          </Text>
-        ) : null}
-        {cleanedDescription ? (
-          <Text variant="body" color="secondary" style={styles.description} numberOfLines={3}>
-            {cleanedDescription}
-          </Text>
-        ) : null}
-        {newsItem.url ? (
-          <Pressable style={styles.ctaButton} onPress={handleOpenLink}>
-            <Text variant="body" color="primary" style={styles.ctaText}>
-              {ctaLabel}
-            </Text>
-          </Pressable>
-        ) : null}
-      </View>
-    </>
-  ) : (
-    <View style={styles.linkContentCompact}>
-      <View style={styles.linkIconWrap}>
-        <Ionicons
-          name={compactIconName}
-          size={theme.components.icon.size.md}
-          color={theme.colors.text.secondary}
-        />
-      </View>
-      <View style={styles.linkTextWrap}>
-        <Text variant="bodyBold" color="primary" numberOfLines={1} style={styles.compactTitle}>
-          {compactPrimaryLabel}
-        </Text>
-        {compactSecondaryLabel ? (
-          <Text variant="small" color="secondary" numberOfLines={1} style={styles.compactMeta}>
-            {compactSecondaryLabel}
-          </Text>
-        ) : null}
-      </View>
-      {newsItem.url ? (
-        <Pressable style={styles.ctaButtonCompact} onPress={handleOpenLink}>
-          <Text variant="small" color="primary" style={styles.ctaTextCompact}>
-            {ctaLabel}
-          </Text>
-        </Pressable>
-      ) : null}
-    </View>
-  );
-
   return (
     <CardRoot
       targetType="news"
@@ -333,7 +196,17 @@ export function NewsCard({
           </Text>
         </View>
       ) : null}
-      {defaultLinkPreview}
+      <ArticlePreview
+        preview={{
+          url: newsItem.url,
+          title: newsItem.title,
+          description: newsItem.description,
+          imageUrl: newsItem.imageUrl,
+          siteName: newsItem.siteName,
+        }}
+        fallbackLabel="Nyhed"
+        onOpen={handleOpenLink}
+      />
     </CardRoot>
   );
 }
@@ -341,88 +214,9 @@ export function NewsCard({
 const theme = defaultTheme;
 
 const styles = StyleSheet.create({
-  mediaImage: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: theme.colors.border.default,
-  },
   noteBlock: {
     marginTop: theme.spacing[3],
     marginBottom: theme.spacing[3],
     paddingHorizontal: theme.spacing[3],
-  },
-  linkContent: {
-    gap: theme.spacing[1],
-    marginTop: theme.spacing[3],
-  },
-  linkContentCompact: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing[2],
-    marginTop: theme.spacing[2],
-    paddingVertical: theme.spacing[2],
-    paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.radius.sm,
-    borderWidth: theme.layout.borderHairline,
-    borderColor: theme.colors.border.subtle,
-    backgroundColor: theme.colors.bg.surface,
-  },
-  linkIconWrap: {
-    width: theme.spacing[10],
-    height: theme.spacing[10],
-    borderRadius: theme.radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.colors.bg.subtle,
-    borderWidth: theme.layout.borderHairline,
-    borderColor: theme.colors.border.subtle,
-    flexShrink: 0,
-  },
-  linkTextWrap: {
-    flex: 1,
-    minWidth: 0,
-    gap: theme.spacing[0],
-  },
-  siteName: {
-    textTransform: 'uppercase',
-  },
-  title: {},
-  description: {},
-  compactTitle: {
-    fontWeight: '600',
-  },
-  compactMeta: {
-    color: theme.colors.text.muted,
-  },
-  ctaButton: {
-    marginTop: theme.spacing[2],
-    marginBottom: theme.spacing[3],
-    borderWidth: theme.layout.borderWidth,
-    borderColor: theme.colors.state.success,
-    backgroundColor: theme.colors.bg.card,
-    paddingVertical: theme.spacing[2] + theme.spacing[1] / 2,
-    paddingHorizontal: theme.spacing[4],
-    borderRadius: theme.radius.pill,
-    alignItems: 'center',
-  },
-  ctaButtonCompact: {
-    alignSelf: 'center',
-    paddingVertical: theme.spacing[1],
-    paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.radius.sm,
-    borderWidth: theme.layout.borderHairline,
-    borderColor: theme.colors.border.subtle,
-    backgroundColor: theme.colors.bg.subtle,
-    flexShrink: 0,
-  },
-  ctaText: {
-    color: theme.colors.state.success,
-    textAlign: 'center',
-    fontWeight: '600',
-  },
-  ctaTextCompact: {
-    color: theme.colors.primary,
-    textAlign: 'center',
-    fontWeight: '600',
   },
 });

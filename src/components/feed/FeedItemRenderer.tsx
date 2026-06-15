@@ -5,6 +5,8 @@ import type { CategoryKey } from '../../theme/categories';
 import type { FeedFanActivityData, FeedItem } from '../../types/feed';
 import type { FanLevelKey } from '../../types/fan';
 import { toEventCardVM } from '../../utils/eventCardVM';
+import { recordRenderCount } from '../../utils/performanceTiming';
+import { POST_ENGAGEMENT_TARGET_TYPE } from '../../utils/postEngagement';
 import { PollCard } from '../PollCard';
 import { FanActivityFeedCard } from '../fan/FanActivityFeedCard';
 import { CommunityCard, FanPostCard, NewsCard, WeeklyTopFanCard } from '../cards';
@@ -29,9 +31,6 @@ export type FeedItemRendererProps = {
   removeNews: (newsId: string) => void;
   incrementCommentCount: (kind: any, id: string) => void;
   addCommentPreview: (kind: any, id: string, comment: CommentPreview) => void;
-  isActiveVideo?: boolean;
-  isAppActive?: boolean;
-  onActivateVideo?: () => void;
   onPressEvent?: (eventId: string) => void;
   onPressBusTrip?: (busTripId: string) => void;
   onPressMatch?: (matchId: string) => void;
@@ -39,9 +38,11 @@ export type FeedItemRendererProps = {
   onPressCommunity?: (communityId: string, title: string) => void;
   onPressProfile?: (userId: string) => void;
   onPressPost?: (postId: string) => void;
+  /** Whether this specific item is the currently active inline video. */
+  isActiveVideo?: boolean;
 };
 
-export function FeedItemRenderer(props: FeedItemRendererProps): React.ReactElement | null {
+function FeedItemRendererComponent(props: FeedItemRendererProps): React.ReactElement | null {
   const {
     item,
     itemKey,
@@ -58,9 +59,6 @@ export function FeedItemRenderer(props: FeedItemRendererProps): React.ReactEleme
     removeNews,
     incrementCommentCount,
     addCommentPreview,
-    isActiveVideo,
-    isAppActive,
-    onActivateVideo,
     onPressEvent,
     onPressBusTrip,
     onPressMatch,
@@ -68,7 +66,9 @@ export function FeedItemRenderer(props: FeedItemRendererProps): React.ReactEleme
     onPressCommunity,
     onPressProfile,
     onPressPost,
+    isActiveVideo,
   } = props;
+  recordRenderCount('FeedItemRenderer', itemKey);
 
   switch (item.kind) {
     case 'post': {
@@ -96,19 +96,17 @@ export function FeedItemRenderer(props: FeedItemRendererProps): React.ReactEleme
           likes={likeState.likes}
           commentsCount={commentCount}
           commentPreviews={commentPreviews}
-          isActiveVideo={isActiveVideo}
-          isAppActive={isAppActive}
-          onActivateVideo={onActivateVideo}
           onToggleLike={() => {
             if (user?.id) {
-              toggleLike('post', item.id, user.id);
+              toggleLike(POST_ENGAGEMENT_TARGET_TYPE, item.id, user.id);
             }
           }}
           onDeleted={(postId) => removePost(postId)}
           onNewComment={(comment) => {
-            incrementCommentCount('post', item.id);
-            addCommentPreview('post', item.id, comment);
+            incrementCommentCount(POST_ENGAGEMENT_TARGET_TYPE, item.id);
+            addCommentPreview(POST_ENGAGEMENT_TARGET_TYPE, item.id, comment);
           }}
+          isActiveVideo={isActiveVideo}
           bodyContent={
             pollData ? (
               <PollCard pollData={pollData} postId={item.id} profileMap={safeProfileMap} />
@@ -238,3 +236,6 @@ export function FeedItemRenderer(props: FeedItemRendererProps): React.ReactEleme
       return null;
   }
 }
+
+export const FeedItemRenderer = React.memo(FeedItemRendererComponent);
+FeedItemRenderer.displayName = 'FeedItemRenderer';
