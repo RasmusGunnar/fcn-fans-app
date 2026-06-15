@@ -5,14 +5,19 @@
     "moduleResolution": "Node16",
     "target": "ES2020",
     "noEmit": false,
+    "rewriteRelativeImportExtensions": true,
     "outDir": "./build/media-article-candidate-tests",
     "rootDir": ".",
     "types": ["node"],
     "skipLibCheck": true
   },
   "include": [
+    "supabase/functions/_shared/decodeHtml.ts",
     "supabase/functions/_shared/mediaArticleCandidateCore.ts",
-    "supabase/functions/_shared/__tests__/mediaArticleCandidateCore.test.ts"
+    "supabase/functions/_shared/newsMedia.ts",
+    "supabase/functions/_shared/textEncoding.ts",
+    "supabase/functions/_shared/__tests__/mediaArticleCandidateCore.test.ts",
+    "supabase/functions/_shared/__tests__/newsMedia.test.ts"
   ],
   "exclude": []
 }

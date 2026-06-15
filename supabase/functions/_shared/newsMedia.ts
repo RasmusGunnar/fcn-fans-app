@@ -424,12 +424,57 @@ function extractJsonLdSiteName(html: string): string {
   return resolved;
 }
 
-function extractJsonLdImage(html: string): string {
-  let resolved = "";
+function isJsonLdImageObject(record: Record<string, unknown>): boolean {
+  const types = Array.isArray(record["@type"]) ? record["@type"] : [record["@type"]];
+  return types.some((type) => /(?:^|[/#:])imageobject$/i.test(asString(type)));
+}
+
+function normalizeJsonLdId(value: string, baseUrl: string): string {
+  const cleaned = cleanMetaText(value);
+  if (!cleaned) return "";
+
+  try {
+    return new URL(cleaned, baseUrl).href;
+  } catch {
+    return cleaned;
+  }
+}
+
+function extractJsonLdImage(html: string, baseUrl: string): string {
+  const nodes = extractJsonLdNodes(html);
+  const recordsById = new Map<string, Record<string, unknown>>();
+
+  for (const node of nodes) {
+    walkJsonLd(node, (record) => {
+      const rawId = asString(record["@id"]);
+      if (!rawId) return false;
+
+      recordsById.set(rawId, record);
+      recordsById.set(normalizeJsonLdId(rawId, baseUrl), record);
+      return false;
+    });
+  }
+
+  const readDirectImageUrl = (record: Record<string, unknown>): string =>
+    asString(record.contentUrl) || asString(record.url) || asString(record.thumbnailUrl);
+
+  const resolveImageReference = (reference: string): string => {
+    const cleanedReference = cleanMetaText(reference);
+    if (!cleanedReference) return "";
+
+    const referencedRecord =
+      recordsById.get(cleanedReference) ??
+      recordsById.get(normalizeJsonLdId(cleanedReference, baseUrl));
+    if (referencedRecord && isJsonLdImageObject(referencedRecord)) {
+      return readDirectImageUrl(referencedRecord);
+    }
+
+    return isSameDocumentFragmentUrl(cleanedReference, baseUrl) ? "" : cleanedReference;
+  };
 
   const readImageCandidate = (value: unknown): string => {
     if (!value) return "";
-    if (typeof value === "string") return cleanMetaText(value);
+    if (typeof value === "string") return resolveImageReference(value);
     if (Array.isArray(value)) {
       for (const item of value) {
         const nested = readImageCandidate(item);
@@ -439,20 +484,17 @@ function extractJsonLdImage(html: string): string {
     }
     if (typeof value === "object") {
       const record = value as Record<string, unknown>;
-      return (
-        asString(record.url) ||
-        asString(record.contentUrl) ||
-        asString(record.thumbnailUrl) ||
-        asString(record["@id"])
-      );
+      return readDirectImageUrl(record) || resolveImageReference(asString(record["@id"]));
     }
     return "";
   };
 
-  for (const node of extractJsonLdNodes(html)) {
+  let resolved = "";
+  for (const node of nodes) {
     if (
       walkJsonLd(node, (record) => {
-        const imageCandidate = readImageCandidate(record.image) || readImageCandidate(record.thumbnailUrl);
+        const imageCandidate =
+          readImageCandidate(record.image) || readImageCandidate(record.thumbnailUrl);
         if (imageCandidate) {
           resolved = imageCandidate;
           return true;
@@ -480,6 +522,26 @@ function resolveAbsoluteUrl(candidate: string | null | undefined, baseUrl: strin
   }
 }
 
+function isSameDocumentFragmentUrl(candidate: string, baseUrl: string): boolean {
+  try {
+    const candidateUrl = new URL(candidate, baseUrl);
+    const articleUrl = new URL(baseUrl);
+    if (!candidateUrl.hash || IMAGE_HINT_REGEX.test(candidateUrl.pathname)) {
+      return false;
+    }
+
+    const normalizePathname = (pathname: string) =>
+      pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
+
+    return (
+      candidateUrl.origin === articleUrl.origin &&
+      normalizePathname(candidateUrl.pathname) === normalizePathname(articleUrl.pathname)
+    );
+  } catch {
+    return false;
+  }
+}
+
 function isLikelyVideoUrl(url: string): boolean {
   return VIDEO_HINT_REGEX.test(url);
 }
@@ -497,9 +559,21 @@ export function sanitizeNewsHeroImageUrl(
 ): string | null {
   const absolute = resolveAbsoluteUrl(candidate, baseUrl);
   if (!absolute) return null;
+  if (isSameDocumentFragmentUrl(absolute, baseUrl)) return null;
   if (isLikelyVideoUrl(absolute)) return null;
   if (isLikelyBadAsset(absolute) && !IMAGE_HINT_REGEX.test(absolute)) return null;
   return absolute;
+}
+
+export function selectNewsHeroImageUrl(
+  primaryCandidate: string | null | undefined,
+  fallbackCandidate: string | null | undefined,
+  baseUrl: string,
+): string | null {
+  return (
+    sanitizeNewsHeroImageUrl(primaryCandidate, baseUrl) ??
+    sanitizeNewsHeroImageUrl(fallbackCandidate, baseUrl)
+  );
 }
 
 function hasVideoSignals(html: string): boolean {
@@ -636,7 +710,7 @@ export function extractArticleMedia(html: string, baseUrl: string): ResolvedArti
     { rawUrl: extractMetaContent(html, "twitter:image:src"), source: "twitter_image" },
     { rawUrl: extractMetaContent(html, "image"), source: "meta_image" },
     { rawUrl: extractLinkHref(html, "image_src"), source: "image_src" },
-    { rawUrl: extractJsonLdImage(html), source: "jsonld_image" },
+    { rawUrl: extractJsonLdImage(html, baseUrl), source: "jsonld_image" },
     ...extractImageTagCandidates(html),
   ];
 

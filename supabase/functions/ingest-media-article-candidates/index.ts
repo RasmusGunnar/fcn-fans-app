@@ -18,6 +18,7 @@ import {
   extractArticleMetadata,
   fetchArticleMedia,
   sanitizeNewsHeroImageUrl,
+  selectNewsHeroImageUrl,
 } from '../_shared/newsMedia.ts';
 import { decodeHtml } from '../_shared/decodeHtml.ts';
 import { decodeResponseText, fixEncoding } from '../_shared/textEncoding.ts';
@@ -422,7 +423,7 @@ async function enrichCandidate(
       sourceUrl;
     title = metadata.title || title;
     description = metadata.description || description;
-    imageUrl = metadata.media.imageUrl || imageUrl;
+    imageUrl = selectNewsHeroImageUrl(metadata.media.imageUrl, imageUrl, article.resolvedUrl);
     publishedAt = extractPublishedAt(article.html) || publishedAt;
   } catch (error) {
     // Listing/feed metadata remains useful when an outlet blocks detail fetches.
