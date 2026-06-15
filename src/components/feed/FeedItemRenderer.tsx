@@ -7,6 +7,7 @@ import type { FanLevelKey } from '../../types/fan';
 import { toEventCardVM } from '../../utils/eventCardVM';
 import { recordRenderCount } from '../../utils/performanceTiming';
 import { POST_ENGAGEMENT_TARGET_TYPE } from '../../utils/postEngagement';
+import { resolveFeedItemAuthorProfile } from '../../utils/fanPostBadge';
 import { PollCard } from '../PollCard';
 import { FanActivityFeedCard } from '../fan/FanActivityFeedCard';
 import { CommunityCard, FanPostCard, NewsCard, WeeklyTopFanCard } from '../cards';
@@ -72,13 +73,7 @@ function FeedItemRendererComponent(props: FeedItemRendererProps): React.ReactEle
 
   switch (item.kind) {
     case 'post': {
-      const authorProfile = item.data.authorId
-        ? safeProfileMap[item.data.authorId] || {
-            display_name: item.data.authorDisplayName ?? item.data.authorName ?? null,
-            avatar_url: item.data.authorAvatarUrl ?? null,
-            fan_level_key: null,
-          }
-        : undefined;
+      const authorProfile = resolveFeedItemAuthorProfile(item.data.authorId, safeProfileMap);
       const categoryKey: CategoryKey = 'fan';
       const pollData = item.data.poll_data;
 

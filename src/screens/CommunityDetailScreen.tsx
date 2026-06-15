@@ -22,10 +22,14 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../auth/AuthProvider';
+import { isFanLevelKey } from '../lib/fanLevel';
 import { logger } from '../lib/logger';
 import { pickCameraPhoto, pickImageFromLibrary } from '../lib/mediaPicker';
 import { geocodeAddress } from '../services/geocoding';
-import { FeedItemRenderer } from '../components/feed/FeedItemRenderer';
+import {
+  FeedItemRenderer,
+  type FeedItemRendererProps,
+} from '../components/feed/FeedItemRenderer';
 import { MembersStatRow } from '../components/social/MembersStatRow';
 import { IconButton } from '../components/ui';
 import { getPublicUrl } from '../lib/storageUrl';
@@ -64,6 +68,7 @@ import { normalizeLinkPreview } from '../utils/linkPreview';
 import { resolveAvatarUrl } from '../utils/avatar';
 import { resolveProfileDisplayName } from '../utils/actor';
 import { buildCommunityFeedTargetFilter } from '../utils/communityFeedTargets';
+import { mergeCommunityFeedProfiles } from '../utils/communityFeedProfiles';
 import { getFeedItemVisibleMediaKind } from '../utils/homeStartupPerformance';
 import { selectActiveInlineVideoKey } from '../utils/videoPlaybackBehavior';
 
@@ -71,6 +76,7 @@ type CommunityDetailRouteProp = RouteProp<
   { CommunityDetail: { id: string; title: string } },
   'CommunityDetail'
 >;
+type CommunityFeedProfileMap = FeedItemRendererProps['safeProfileMap'];
 
 export default function CommunityDetailScreen() {
   const navigation = useNavigation();
@@ -132,6 +138,7 @@ export default function CommunityDetailScreen() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [postLikes, setPostLikes] = useState<Record<string, boolean>>({});
   const [communityPostFeedItems, setCommunityPostFeedItems] = useState<FeedItem[]>([]);
+  const [communityProfileMap, setCommunityProfileMap] = useState<CommunityFeedProfileMap>({});
   const [loadingCommunityFeed, setLoadingCommunityFeed] = useState(false);
 
   // Scroll-driven single-video autoplay — same principle as Home feed.
@@ -147,11 +154,14 @@ export default function CommunityDetailScreen() {
   // exactly once when the sheet closes (e.g. after a new post is submitted).
   const prevCreateSheetVisibleRef = useRef(false);
 
-  const safeProfileMap = profileMap || {};
   const safeCommunityMap = communityMap || {};
   const safeLikeMap = likeMap || {};
   const safeCommentCountMap = commentCountMap || {};
   const safeCommentPreviewMap = commentPreviewMap || {};
+  const communityFeedProfileMap = React.useMemo(
+    () => mergeCommunityFeedProfiles(profileMap || {}, communityProfileMap),
+    [communityProfileMap, profileMap],
+  );
 
   // communityFeedItems is now the dedicated query result; the global feedItems
   // array is no longer used for community post rendering.
@@ -299,10 +309,7 @@ export default function CommunityDetailScreen() {
       // Self-contained profile fetch — do not rely on the global Home profileMap
       // which only covers the 25 rows fetched for the home feed.
       const authorIds = [...new Set(rows.map((r) => r.author_id).filter(Boolean))];
-      let resolvedProfiles: Record<
-        string,
-        { display_name: string | null; avatar_url: string | null; fan_level_key: string | null }
-      > = {};
+      const resolvedProfiles: CommunityFeedProfileMap = {};
       if (authorIds.length > 0) {
         const profileSelectAttempts = [
           'id, display_name, avatar_url, fan_level_key',
@@ -318,7 +325,7 @@ export default function CommunityDetailScreen() {
               resolvedProfiles[p.id] = {
                 display_name: p.display_name ?? null,
                 avatar_url: p.avatar_url ?? null,
-                fan_level_key: p.fan_level_key ?? null,
+                fan_level_key: isFanLevelKey(p.fan_level_key) ? p.fan_level_key : null,
               };
             });
             break;
@@ -380,6 +387,7 @@ export default function CommunityDetailScreen() {
         rowIds: rows.map((row) => row.id),
         rendererItemKeys: feedItems.map((item) => getFeedItemKey(item)),
       });
+      setCommunityProfileMap(resolvedProfiles);
       setCommunityPostFeedItems(feedItems);
     } catch (err) {
       logger.warn('[CommunityDetail] Community feed load error:', err);
@@ -1205,7 +1213,7 @@ export default function CommunityDetailScreen() {
                     likeState={likeState}
                     commentCount={commentCount}
                     commentPreviews={commentPreviews}
-                    safeProfileMap={safeProfileMap}
+                    safeProfileMap={communityFeedProfileMap}
                     communityMap={safeCommunityMap}
                     // @ts-ignore
                     attendanceMap={attendanceMap}

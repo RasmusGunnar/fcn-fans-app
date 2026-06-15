@@ -16,6 +16,9 @@
     "src/types/news.ts",
     "src/types/post.ts",
     "src/utils/targetKey.ts",
+    "src/utils/actor.ts",
+    "src/utils/communityFeedProfiles.ts",
+    "src/utils/fanPostBadge.ts",
     "src/utils/feedPublication.ts",
     "src/utils/homeFeedFilter.ts",
     "src/utils/homeStartupPerformance.ts",
@@ -39,6 +42,7 @@
     "src/utils/__tests__/mediaArticleCandidates.test.ts",
     "src/utils/__tests__/postMediaMapping.test.ts",
     "src/utils/__tests__/videoPlaybackBehavior.test.ts",
-    "src/utils/__tests__/communityFeed.test.ts"
+    "src/utils/__tests__/communityFeed.test.ts",
+    "src/utils/__tests__/fanPostBadge.test.ts"
   ]
 }

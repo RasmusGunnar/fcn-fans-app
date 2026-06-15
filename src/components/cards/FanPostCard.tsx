@@ -21,8 +21,10 @@ import { CardMedia } from './CardMedia';
 import { CardRoot } from './CardRoot';
 import { CardHeader } from './CardHeader';
 import { Avatar } from '../Avatar';
+import { FanLevelBadge } from '../fan/FanLevelBadge';
 import { defaultTheme } from '../../theme';
 import { Post } from '../../types/post';
+import { getSafeFanLevelKey } from '../../lib/fanLevel';
 import { supabase } from '../../lib/supabase';
 import { navigationRef } from '../../navigation/navigationRef';
 import * as Linking from 'expo-linking';
@@ -48,6 +50,10 @@ import { ArticlePreview } from './ArticlePreview';
 import { getMediaArticleHeaderPresentation } from '../../utils/mediaArticlePresentation';
 import { MediaArticleSourceAvatar } from './MediaArticleSourceAvatar';
 import { FeedVideo } from '../feed/FeedVideo';
+import {
+  resolveFanPostBadgeCandidate,
+  type FanPostBadgeAuthorProfile,
+} from '../../utils/fanPostBadge';
 
 function getTimeAgo(isoDate: string): string {
   const now = new Date();
@@ -66,7 +72,7 @@ function getTimeAgo(isoDate: string): string {
 
 interface FanPostCardProps {
   post: Post;
-  authorProfile?: { display_name: string | null; avatar_url: string | null };
+  authorProfile?: FanPostBadgeAuthorProfile;
   communityMap?: Record<string, string>;
   profileMap?: ProfileMap;
   categoryKey?: CategoryKey;
@@ -284,6 +290,13 @@ export function FanPostCard({
     : groupDisplay
       ? `${groupDisplay} · ${timeAgo}`
       : timeAgo;
+  const fanLevelCandidate = resolveFanPostBadgeCandidate({
+    postType: post.postType,
+    actorType: isCommunityPost ? 'community' : post.actorType,
+    authorProfile,
+    postAuthorFanLevelKey: post.authorFanLevelKey,
+  });
+  const authorFanLevel = fanLevelCandidate ? getSafeFanLevelKey(fanLevelCandidate) : null;
 
   return (
     <CardRoot
@@ -329,7 +342,7 @@ export function FanPostCard({
             avatarSlot={
               <Avatar
                 userId={post.authorId}
-                avatarUrl={authorProfile?.avatar_url}
+                avatarUrl={authorProfile?.avatar_url ?? post.authorAvatarUrl}
                 size={40}
                 label={authorProfile?.display_name || post.authorName || 'Fan'}
               />
@@ -337,6 +350,9 @@ export function FanPostCard({
             nameLine={cardModel.nameLine}
             fallbackTitle={headerTitle}
             subtitle={headerSubtitle}
+            inlineBadge={
+              authorFanLevel ? <FanLevelBadge level={authorFanLevel} size="sm" /> : undefined
+            }
           />
           {(showEditOption || showDeleteOption) && postMenuOptions.length > 0 ? (
             <OptionsMenu options={postMenuOptions} />
