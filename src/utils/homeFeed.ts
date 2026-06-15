@@ -8,7 +8,7 @@ import type { NewsItem } from '../types/news';
 import type { Post } from '../types/post';
 import { reconcileFeedItemIdentities } from './feedPublication';
 import {
-  getHomePostEngagementScore,
+  getHomeContentEngagementScore,
   getHomePostRecencyScore,
   HOME_POST_ENGAGEMENT_RANKING,
   HOME_POST_RECENCY_RANKING,
@@ -432,8 +432,8 @@ function getEngagementScore(item: FeedItem, now: Date): number {
   if (item.kind === 'weekly_top_fan') {
     return 0;
   }
-  if (item.kind === 'post') {
-    return getHomePostEngagementScore(item.data, now);
+  if (item.kind === 'post' || item.kind === 'news') {
+    return getHomeContentEngagementScore(item.data, now);
   }
 
   const likeCount = Math.max(0, item.data.likeCount ?? 0);

@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import test from 'node:test';
-import type { FeedPostData } from '../../types/feed';
+import type { FeedNewsData, FeedPostData } from '../../types/feed';
 import {
-  getHomePostEngagementScore,
+  getHomeContentEngagementScore,
+  getHomeContentRecencyScore,
   getHomePostRankingScore,
 } from '../homePostRanking';
 
@@ -26,6 +29,37 @@ function createPostItem(
     commentCount,
     engagementCount: likeCount + commentCount,
   };
+}
+
+function createNewsItem(
+  id: string,
+  createdAt: string,
+  likeCount: number,
+  commentCount = 0,
+): FeedNewsData {
+  return {
+    id,
+    url: `https://example.com/${id}`,
+    title: id,
+    createdBy: 'author-1',
+    actorType: 'user',
+    actorId: 'author-1',
+    actorName: 'Author',
+    createdAt,
+    likesCount: likeCount,
+    commentsCount: commentCount,
+    likedByMe: false,
+    likeCount,
+    commentCount,
+    engagementCount: likeCount + commentCount,
+  };
+}
+
+function getNewsRankingScore(news: FeedNewsData, now: Date): number {
+  return (
+    getHomeContentRecencyScore(news, now) +
+    getHomeContentEngagementScore(news, now)
+  );
 }
 
 test('an old liked post does not outrank a much newer zero-engagement post', () => {
@@ -59,8 +93,8 @@ test('ordinary post engagement decays after 96 hours and reaches zero at 14 days
     20,
   );
 
-  assert.equal(getHomePostEngagementScore(fiveDayPost, now), 10);
-  assert.equal(getHomePostEngagementScore(fourteenDayPost, now), 0);
+  assert.equal(getHomeContentEngagementScore(fiveDayPost, now), 10);
+  assert.equal(getHomeContentEngagementScore(fourteenDayPost, now), 0);
 });
 
 test('five-day-old media article engagement decays', () => {
@@ -73,7 +107,7 @@ test('five-day-old media article engagement decays', () => {
     'media_article',
   );
 
-  assert.equal(getHomePostEngagementScore(mediaArticle, now), 10);
+  assert.equal(getHomeContentEngagementScore(mediaArticle, now), 10);
 });
 
 test('fourteen-day-old media article engagement becomes zero', () => {
@@ -86,7 +120,7 @@ test('fourteen-day-old media article engagement becomes zero', () => {
     'media_article',
   );
 
-  assert.equal(getHomePostEngagementScore(mediaArticle, now), 0);
+  assert.equal(getHomeContentEngagementScore(mediaArticle, now), 0);
 });
 
 test('old engaged media article does not outrank a newer zero-engagement item', () => {
@@ -140,5 +174,57 @@ test('system cards remain exempt from post engagement decay', () => {
     isSystemCard: true,
   };
 
-  assert.equal(getHomePostEngagementScore(systemCard, now), 20);
+  assert.equal(getHomeContentEngagementScore(systemCard, now), 20);
+});
+
+test('five-day-old news engagement decays', () => {
+  const now = new Date('2026-06-15T12:00:00.000Z');
+  const news = createNewsItem('news-five-days', '2026-06-10T12:00:00.000Z', 20);
+
+  assert.equal(getHomeContentEngagementScore(news, now), 10);
+});
+
+test('fourteen-day-old news engagement becomes zero', () => {
+  const now = new Date('2026-06-15T12:00:00.000Z');
+  const news = createNewsItem('news-fourteen-days', '2026-06-01T12:00:00.000Z', 20);
+
+  assert.equal(getHomeContentEngagementScore(news, now), 0);
+});
+
+test('old engaged news does not outrank a newer zero-engagement item', () => {
+  const now = new Date('2026-06-15T12:00:00.000Z');
+  const oldNews = createNewsItem('news-old', '2026-03-22T12:00:00.000Z', 4, 2);
+  const newerNews = createNewsItem('news-newer', '2026-06-13T12:00:00.000Z', 0);
+
+  assert.ok(getNewsRankingScore(newerNews, now) > getNewsRankingScore(oldNews, now));
+});
+
+test('recent engaged news can outrank same-age unengaged content', () => {
+  const now = new Date('2026-06-15T12:00:00.000Z');
+  const engagedNews = createNewsItem('news-engaged', '2026-06-15T04:00:00.000Z', 5);
+  const unengagedNews = createNewsItem('news-unengaged', '2026-06-15T04:00:00.000Z', 0);
+
+  assert.ok(
+    getNewsRankingScore(engagedNews, now) >
+      getNewsRankingScore(unengagedNews, now),
+  );
+});
+
+test('system news cards remain exempt from engagement decay', () => {
+  const now = new Date('2026-06-15T12:00:00.000Z');
+  const systemNews = {
+    ...createNewsItem('news-system', '2026-06-01T12:00:00.000Z', 20),
+    isSystemCard: true,
+  };
+
+  assert.equal(getHomeContentEngagementScore(systemNews, now), 20);
+});
+
+test('FeedItemRenderer keeps kind news on the NewsCard path', () => {
+  const rendererSource = fs.readFileSync(
+    path.resolve(process.cwd(), 'src/components/feed/FeedItemRenderer.tsx'),
+    'utf8',
+  );
+
+  assert.match(rendererSource, /case 'news':[\s\S]*?<NewsCard/);
 });

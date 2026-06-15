@@ -1,6 +1,10 @@
-import type { FeedPostData } from '../types/feed';
+import type { FeedPostData, FeedRankingSignals } from '../types/feed';
 
 const MS_PER_HOUR = 1000 * 60 * 60;
+
+type HomeDatedRankingData = FeedRankingSignals & {
+  createdAt?: string | null;
+};
 
 export const HOME_POST_RECENCY_RANKING = {
   maxPoints: 72,
@@ -28,17 +32,13 @@ export function getHomePostRecencyScore(
   post: FeedPostData,
   now: Date,
 ): number {
+  const recencyScore = getHomeContentRecencyScore(post, now);
   const createdAt = toTimestamp(post.createdAt ?? post.sortDate ?? null);
   if (!createdAt) {
     return 0;
   }
 
   const ageHours = Math.max(0, (now.getTime() - createdAt) / MS_PER_HOUR);
-  const cappedAgeHours = Math.min(ageHours, HOME_POST_RECENCY_RANKING.windowHours);
-  const remainingRatio = 1 - cappedAgeHours / HOME_POST_RECENCY_RANKING.windowHours;
-  const recencyScore =
-    HOME_POST_RECENCY_RANKING.maxPoints * Math.max(0, remainingRatio);
-
   if (ageHours <= HOME_POST_RECENCY_RANKING.freshnessFloorHours) {
     return Math.max(recencyScore, HOME_POST_RECENCY_RANKING.freshnessFloorPoints);
   }
@@ -46,23 +46,38 @@ export function getHomePostRecencyScore(
   return recencyScore;
 }
 
-export function getHomePostEngagementScore(
-  post: FeedPostData,
+export function getHomeContentRecencyScore(
+  content: HomeDatedRankingData,
   now: Date,
 ): number {
-  const likeCount = Math.max(0, post.likeCount ?? 0);
-  const commentCount = Math.max(0, post.commentCount ?? 0);
+  const createdAt = toTimestamp(content.createdAt ?? content.sortDate ?? null);
+  if (!createdAt) {
+    return 0;
+  }
+
+  const ageHours = Math.max(0, (now.getTime() - createdAt) / MS_PER_HOUR);
+  const cappedAgeHours = Math.min(ageHours, HOME_POST_RECENCY_RANKING.windowHours);
+  const remainingRatio = 1 - cappedAgeHours / HOME_POST_RECENCY_RANKING.windowHours;
+  return HOME_POST_RECENCY_RANKING.maxPoints * Math.max(0, remainingRatio);
+}
+
+export function getHomeContentEngagementScore(
+  content: HomeDatedRankingData,
+  now: Date,
+): number {
+  const likeCount = Math.max(0, content.likeCount ?? 0);
+  const commentCount = Math.max(0, content.commentCount ?? 0);
   const cappedEngagement = Math.min(
     likeCount * HOME_POST_ENGAGEMENT_RANKING.likeWeight +
       commentCount * HOME_POST_ENGAGEMENT_RANKING.commentWeight,
     HOME_POST_ENGAGEMENT_RANKING.maxPoints,
   );
 
-  if (post.isSystemCard || cappedEngagement === 0) {
+  if (content.isSystemCard || cappedEngagement === 0) {
     return cappedEngagement;
   }
 
-  const createdAt = toTimestamp(post.createdAt ?? post.sortDate ?? null);
+  const createdAt = toTimestamp(content.createdAt ?? content.sortDate ?? null);
   if (!createdAt) {
     return 0;
   }
@@ -91,6 +106,6 @@ export function getHomePostRankingScore(
 ): number {
   return (
     getHomePostRecencyScore(post, now) +
-    getHomePostEngagementScore(post, now)
+    getHomeContentEngagementScore(post, now)
   );
 }
