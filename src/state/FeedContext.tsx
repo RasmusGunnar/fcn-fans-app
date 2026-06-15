@@ -44,6 +44,11 @@ import {
   withFeedEngagementSummary,
   withFeedEngagementSummaryPreservingList,
 } from '../utils/homeFeed';
+import {
+  buildHomePostFeedTargetFilter,
+  HOME_POST_FETCH_LIMIT,
+  selectHomePostRows,
+} from '../utils/homeFeedQuery';
 import { resolveAvatarUrl } from '../utils/avatar';
 import { normalizeLinkPreview } from '../utils/linkPreview';
 import { normalizeMedia } from '../utils/media';
@@ -62,6 +67,9 @@ type EngagementCounts = {
   likeMap: Record<string, { liked: boolean; likes: number }>;
   commentCountMap: Record<string, number>;
 };
+
+const FEED_POST_SELECT =
+  'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets, poll_data, link_preview, post_type';
 
 const FEED_PROFILE_SELECT_ATTEMPTS = [
   'id, display_name, username, avatar_url, fan_level_key',
@@ -575,6 +583,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
     setError(null);
 
     let transformedPosts: Post[] = [];
+    let transformedHomePosts: Post[] = [];
     let newsItems: NewsItem[] = [];
     let upcomingEvents: Event[] = [];
     let upcomingBusTrips: BusTrip[] = [];
@@ -659,52 +668,70 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
     // Fetch posts in separate try/catch so news_items errors don't block posts
     try {
       const postsFetchStartedAt = performanceNow();
-      const { data: postsData, error: fetchError } = await supabase
-        .from('posts')
-        .select(
-          'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets, poll_data, link_preview, post_type',
-        )
-        .order('created_at', { ascending: false })
-        .limit(25);
+      const [
+        { data: postsData, error: fetchError },
+        { data: homePostsData, error: homeFetchError },
+      ] = await Promise.all([
+        supabase
+          .from('posts')
+          .select(FEED_POST_SELECT)
+          .order('created_at', { ascending: false })
+          .limit(HOME_POST_FETCH_LIMIT),
+        supabase
+          .from('posts')
+          .select(FEED_POST_SELECT)
+          .or(buildHomePostFeedTargetFilter())
+          .order('created_at', { ascending: false })
+          .limit(HOME_POST_FETCH_LIMIT),
+      ]);
 
       if (fetchError) {
         throw fetchError;
       }
+      if (homeFetchError) {
+        throw homeFetchError;
+      }
+      const scopedHomePostsData = selectHomePostRows(homePostsData || []);
       logPerformanceTiming('FeedFetch', 'posts', postsFetchStartedAt, {
         postCount: postsData?.length ?? 0,
+        homePostCount: scopedHomePostsData.length,
       });
 
       // Publish post rows before profile hydration so Home can render and calculate
       // viewability while author metadata loads in the background.
       const mappingStartedAt = performanceNow();
-      transformedPosts = (postsData || []).map((dbPost) => ({
-        id: dbPost.id,
-        postType: normalizePostType(dbPost.post_type),
-        authorName: 'Fan',
-        authorId: dbPost.author_id,
-        actorType: dbPost.actor_type ?? 'user',
-        actorId: dbPost.actor_id ?? dbPost.author_id,
-        actorDisplayName: dbPost.actor_type === 'community' ? null : 'Fan',
-        actorAvatarUrl: null,
-        communityId: dbPost.community_id ?? null,
-        feedTargets: Array.isArray(dbPost.feed_targets) ? dbPost.feed_targets : ['home'],
-        createdAt: dbPost.created_at,
-        text: dbPost.text,
-        poll_data: dbPost.poll_data ?? null,
-        linkPreview: normalizeLinkPreview(dbPost.link_preview),
-        likesCount: 0,
-        commentsCount: 0,
-        likedByMe: false,
-        media: normalizeMedia(dbPost.media),
-      }));
+      const mapPostRows = (rows: NonNullable<typeof postsData>): Post[] =>
+        rows.map((dbPost) => ({
+          id: dbPost.id,
+          postType: normalizePostType(dbPost.post_type),
+          authorName: 'Fan',
+          authorId: dbPost.author_id,
+          actorType: dbPost.actor_type ?? 'user',
+          actorId: dbPost.actor_id ?? dbPost.author_id,
+          actorDisplayName: dbPost.actor_type === 'community' ? null : 'Fan',
+          actorAvatarUrl: null,
+          communityId: dbPost.community_id ?? null,
+          feedTargets: Array.isArray(dbPost.feed_targets) ? dbPost.feed_targets : ['home'],
+          createdAt: dbPost.created_at,
+          text: dbPost.text,
+          poll_data: dbPost.poll_data ?? null,
+          linkPreview: normalizeLinkPreview(dbPost.link_preview),
+          likesCount: 0,
+          commentsCount: 0,
+          likedByMe: false,
+          media: normalizeMedia(dbPost.media),
+        }));
+      transformedPosts = mapPostRows(postsData || []);
+      transformedHomePosts = mapPostRows(scopedHomePostsData);
       logPerformanceTiming('FeedMap', 'posts', mappingStartedAt, {
         postCount: transformedPosts.length,
-        mediaArticleCount: transformedPosts.filter(
+        homePostCount: transformedHomePosts.length,
+        mediaArticleCount: transformedHomePosts.filter(
           (post) => post.postType === 'media_article',
         ).length,
       });
       logPerformanceTiming('FeedMap', 'media-preparation', mappingStartedAt, {
-        attachmentCount: transformedPosts.reduce(
+        attachmentCount: transformedHomePosts.reduce(
           (count, post) => count + (post.media?.length ?? 0),
           0,
         ),
@@ -728,7 +755,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       });
       const postsOnlyHomeItems = sortHomeFeedItems(
         buildHomeFeedItemsFromSources({
-          posts: transformedPosts,
+          posts: transformedHomePosts,
           newsItems: [],
           events: [],
           busTrips: [],
@@ -744,6 +771,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
       logPerformanceTiming('FeedPublication', 'posts-only-enqueued', publicationStartedAt, {
         postCount: transformedPosts.length,
+        homePostCount: transformedHomePosts.length,
         feedItemCount: postsOnlyFeedItems.length,
         homeItemCount: postsOnlyHomeItems.length,
       });
@@ -753,7 +781,11 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         secondaryFeedPending: true,
       });
 
-      const postIds = transformedPosts.map((post) => post.id);
+      const postIds = [
+        ...new Set(
+          [...transformedPosts, ...transformedHomePosts].map((post) => post.id),
+        ),
+      ];
       const postEngagementStartedAt = performanceNow();
       postEngagementCountsTask = fetchEngagementCounts(
         POST_ENGAGEMENT_TARGET_TYPE,
@@ -768,7 +800,13 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       // Fetch author profiles for all posts and keep the current viewer profile available
       // so optimistic post inserts retain display name, avatar, and fan level in Home.
       const authorIds = [
-        ...new Set([...(postsData || []).map((p) => p.author_id), currentUserId].filter(Boolean)),
+        ...new Set(
+          [
+            ...transformedPosts.map((post) => post.authorId),
+            ...transformedHomePosts.map((post) => post.authorId),
+            currentUserId,
+          ].filter((id): id is string => typeof id === 'string' && id.length > 0),
+        ),
       ];
       profileHydrationTask = (async () => {
         const newProfileMap: Record<string, FeedProfileEntry> = {};
@@ -868,7 +906,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
     const coreHomeFeedItems = sortHomeFeedItems(
       withFeedEngagementSummary(
         buildHomeFeedItemsFromSources({
-          posts: transformedPosts,
+          posts: transformedHomePosts,
           newsItems,
           events: upcomingEvents,
           busTrips: upcomingBusTrips,
@@ -909,7 +947,11 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
     });
     logHomeFeedSnapshot('core', coreHomeFeedItems, baseDate);
 
-    const corePostIds = transformedPosts.map((post) => post.id);
+    const corePostIds = [
+      ...new Set(
+        [...transformedPosts, ...transformedHomePosts].map((post) => post.id),
+      ),
+    ];
     const coreNewsIds = newsItems.map((newsItem) => newsItem.id);
     const coreEventIds = upcomingEvents.map((event) => event.id);
     const coreBusTripIds = upcomingBusTrips.map((busTrip) => busTrip.id);
@@ -973,7 +1015,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         .filter((item) => item.actorType === 'community' && item.actorId)
         .map((item) => item.actorId);
 
-      const postCommunityIds = transformedPosts
+      const postCommunityIds = [...transformedPosts, ...transformedHomePosts]
         .map((post) =>
           post.actorType === 'community' ? (post.actorId ?? post.communityId) : post.communityId,
         )
@@ -1007,7 +1049,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
 
             resolvedCommunityNames = newCommunityMap;
 
-            transformedPosts = transformedPosts.map((post) => {
+            const applyCommunityIdentity = (post: Post): Post => {
               if (post.actorType !== 'community') {
                 return post;
               }
@@ -1025,7 +1067,9 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
                 actorAvatarUrl: communityIdentity.avatarUrl,
                 communityName: communityIdentity.name,
               };
-            });
+            };
+            transformedPosts = transformedPosts.map(applyCommunityIdentity);
+            transformedHomePosts = transformedHomePosts.map(applyCommunityIdentity);
 
             setPosts(transformedPosts);
           }
@@ -1124,6 +1168,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
     // Merge posts, news, events, and bus trips into combined feed
     try {
       const safePostsArray = transformedPosts ?? [];
+      const safeHomePostsArray = transformedHomePosts ?? [];
       const safeNewsArray = newsItems ?? [];
       const safeEventsArray = upcomingEvents ?? [];
       const safeBusTripsArray = upcomingBusTrips ?? [];
@@ -1160,7 +1205,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         baseDate,
       });
       const nextHomeFeedItems = buildHomeFeedItemsFromSources({
-        posts: safePostsArray,
+        posts: safeHomePostsArray,
         newsItems: safeNewsArray,
         events: safeEventsArray,
         busTrips: safeBusTripsArray,

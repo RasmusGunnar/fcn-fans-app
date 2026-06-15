@@ -13,6 +13,8 @@
     "format": "prettier . --write",
     "format:check": "prettier . --check",
     "test:home-feed-filter": "tsc -p tsconfig.media-article-tests.json && node build/media-article-tests/utils/__tests__/homeFeedFilter.test.js",
+    "test:home-feed-query": "tsc -p tsconfig.media-article-tests.json && node build/media-article-tests/utils/__tests__/homeFeedQuery.test.js",
+    "test:home-feed-ranking": "tsc -p tsconfig.media-article-tests.json && node build/media-article-tests/utils/__tests__/homeFeedRanking.test.js",
     "test:community-feed": "tsc -p tsconfig.media-article-tests.json && node --test build/media-article-tests/utils/__tests__/communityFeed.test.js",
     "test:fan-post-badge": "tsc -p tsconfig.media-article-tests.json && node build/media-article-tests/utils/__tests__/fanPostBadge.test.js",
     "test:media-article": "tsc -p tsconfig.media-article-tests.json && node build/media-article-tests/utils/__tests__/mediaArticle.test.js",

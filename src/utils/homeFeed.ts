@@ -7,6 +7,12 @@ import type { FeedFanActivityData, FeedItem, FeedWeeklyTopFanData } from '../typ
 import type { NewsItem } from '../types/news';
 import type { Post } from '../types/post';
 import { reconcileFeedItemIdentities } from './feedPublication';
+import {
+  getHomePostEngagementScore,
+  getHomePostRecencyScore,
+  HOME_POST_ENGAGEMENT_RANKING,
+  HOME_POST_RECENCY_RANKING,
+} from './homePostRanking';
 import { toPostFeedItem } from './postFeedItem';
 
 export { toPostFeedItem } from './postFeedItem';
@@ -23,16 +29,16 @@ export const HOME_FEED_AUDIT_DEBUG_ENABLED =
 
 export const HOME_RANKING_V1 = {
   recency: {
-    maxPoints: 72,
-    windowHours: 96,
-    freshnessFloorHours: 2,
-    freshnessFloorPoints: 38,
+    ...HOME_POST_RECENCY_RANKING,
   },
   engagement: {
-    likeWeight: 1,
-    commentWeight: 2,
+    likeWeight: HOME_POST_ENGAGEMENT_RANKING.likeWeight,
+    commentWeight: HOME_POST_ENGAGEMENT_RANKING.commentWeight,
     systemVoteWeight: 1,
-    maxPoints: 20,
+    maxPoints: HOME_POST_ENGAGEMENT_RANKING.maxPoints,
+    decayStartsAfterHours: HOME_POST_ENGAGEMENT_RANKING.decayStartsAfterHours,
+    decayHalfLifeHours: HOME_POST_ENGAGEMENT_RANKING.decayHalfLifeHours,
+    noBoostAfterHours: HOME_POST_ENGAGEMENT_RANKING.noBoostAfterHours,
   },
   polls: {
     activeBoost: 22,
@@ -380,6 +386,10 @@ function getHomeRecencyDate(item: FeedItem): string | null {
 }
 
 function getRecencyScore(item: FeedItem, now: Date): number {
+  if (item.kind === 'post') {
+    return getHomePostRecencyScore(item.data, now);
+  }
+
   const recencyDate = getHomeRecencyDate(item);
   if (!recencyDate) return 0;
 
@@ -387,10 +397,6 @@ function getRecencyScore(item: FeedItem, now: Date): number {
   const cappedAgeHours = Math.min(ageHours, HOME_RANKING_V1.recency.windowHours);
   const remainingRatio = 1 - cappedAgeHours / HOME_RANKING_V1.recency.windowHours;
   const recencyScore = HOME_RANKING_V1.recency.maxPoints * Math.max(0, remainingRatio);
-
-  if (item.kind === 'post' && ageHours <= HOME_RANKING_V1.recency.freshnessFloorHours) {
-    return Math.max(recencyScore, HOME_RANKING_V1.recency.freshnessFloorPoints);
-  }
 
   if (item.kind === 'community') {
     return recencyScore * HOME_RANKING_V1.community.recencyMultiplier;
@@ -422,9 +428,12 @@ function getRecencyScore(item: FeedItem, now: Date): number {
   return recencyScore;
 }
 
-function getEngagementScore(item: FeedItem): number {
+function getEngagementScore(item: FeedItem, now: Date): number {
   if (item.kind === 'weekly_top_fan') {
     return 0;
+  }
+  if (item.kind === 'post') {
+    return getHomePostEngagementScore(item.data, now);
   }
 
   const likeCount = Math.max(0, item.data.likeCount ?? 0);
@@ -606,7 +615,7 @@ export function getHomeRankingBreakdown(
   now = new Date(),
 ): HomeRankingScoreBreakdown {
   const recency = getRecencyScore(item, now);
-  const engagement = getEngagementScore(item);
+  const engagement = getEngagementScore(item, now);
   const pollBoost = getPollBoost(item, now);
   const timeWindowBoost = getEventTimeWindowBoost(item, now);
   const weeklyTopFanBoost = getWeeklyTopFanBoost(item, now);
