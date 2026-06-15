@@ -3,10 +3,18 @@
 // NO hardcoded numbers or color strings allowed.
 
 import { Ionicons } from '@expo/vector-icons';
-import { AVPlaybackStatus, ResizeMode, Video } from 'expo-av';
+import {
+  Audio,
+  AVPlaybackStatus,
+  InterruptionModeAndroid,
+  InterruptionModeIOS,
+  ResizeMode,
+  Video,
+} from 'expo-av';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, GestureResponderEvent, Pressable, StyleSheet, View } from 'react-native';
 import { defaultTheme } from '../../theme';
+import { buildInlineVideoPlaybackStatus } from '../../utils/videoPlaybackBehavior';
 
 const theme = defaultTheme;
 
@@ -78,6 +86,7 @@ export function FeedVideo({
   onError,
 }: FeedVideoProps) {
   const videoRef = useRef<Video>(null);
+  const isLoadedRef = useRef(false);
   const didNotifyReadyRef = useRef(false);
   const mountedAtRef = useRef(Date.now());
   const [detectedRatio, setDetectedRatio] = useState<VideoRatio | null>(null);
@@ -123,10 +132,12 @@ export function FeedVideo({
 
   useEffect(() => {
     didNotifyReadyRef.current = false;
+    isLoadedRef.current = false;
   }, [uri]);
 
   useEffect(
     () => () => {
+      isLoadedRef.current = false;
       void videoRef.current?.unloadAsync().catch(() => {});
     },
     [uri],
@@ -136,25 +147,56 @@ export function FeedVideo({
   // video takes focus) so we never hold more than one loaded player at a time.
   useEffect(() => {
     if (!isActive) {
+      isLoadedRef.current = false;
       void videoRef.current?.unloadAsync().catch(() => {});
     }
   }, [isActive]);
+
+  const applyInlinePlaybackStatus = useCallback(async () => {
+    if (!isLoadedRef.current || !videoRef.current) {
+      return;
+    }
+
+    const status = buildInlineVideoPlaybackStatus(shouldPlay, muted);
+
+    try {
+      if (!status.isMuted) {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          interruptionModeIOS: InterruptionModeIOS.DuckOthers,
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+          interruptionModeAndroid: InterruptionModeAndroid.DuckOthers,
+          shouldDuckAndroid: true,
+          playThroughEarpieceAndroid: false,
+        });
+      }
+
+      await videoRef.current.setStatusAsync(status);
+    } catch (error) {
+      if (__DEV__) {
+        console.warn('[FeedVideo] Failed to apply inline audio status', { uri, error });
+      }
+      onError?.(error);
+    }
+  }, [muted, onError, shouldPlay, uri]);
+
+  useEffect(() => {
+    void applyInlinePlaybackStatus();
+  }, [applyInlinePlaybackStatus]);
 
   // Detect natural size from loaded video if metadata wasn't provided
   const handleLoad = useCallback(
     (status: AVPlaybackStatus) => {
       if (!status.isLoaded) return;
-      if (shouldPlay) {
-        void videoRef.current?.playAsync().catch((error) => {
-          onError?.(error);
-        });
-      }
+      isLoadedRef.current = true;
+      void applyInlinePlaybackStatus();
       if (!metaRatio && (status as any).naturalSize) {
         const ns = (status as any).naturalSize as { width: number; height: number };
         setDetectedRatio(pickRatio(ns.width, ns.height));
       }
     },
-    [metaRatio, onError, shouldPlay],
+    [applyInlinePlaybackStatus, metaRatio],
   );
   const handlePlaybackStatusUpdate = useCallback(
     (status: AVPlaybackStatus) => {

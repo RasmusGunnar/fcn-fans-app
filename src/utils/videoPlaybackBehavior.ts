@@ -4,6 +4,14 @@ export function toggleVideoMuted(isMuted: boolean): boolean {
   return !isMuted;
 }
 
+export function buildInlineVideoPlaybackStatus(shouldPlay: boolean, muted: boolean) {
+  return {
+    shouldPlay,
+    isMuted: muted || !shouldPlay,
+    volume: 1,
+  };
+}
+
 export type InlineVideoCardLayout = {
   y: number;
   height: number;

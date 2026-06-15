@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   buildFeedVideoPresentation,
+  buildInlineVideoPlaybackStatus,
   buildMediaViewerParams,
   selectActiveInlineVideoKey,
   toggleVideoMuted,
@@ -41,6 +42,24 @@ test('video playback is muted by default', () => {
   assert.equal(VIDEO_MUTED_BY_DEFAULT, true);
   assert.equal(toggleVideoMuted(VIDEO_MUTED_BY_DEFAULT), false);
   assert.equal(toggleVideoMuted(false), true);
+});
+
+test('inline video status explicitly propagates mute, volume, and playback intent', () => {
+  assert.deepEqual(buildInlineVideoPlaybackStatus(true, false), {
+    shouldPlay: true,
+    isMuted: false,
+    volume: 1,
+  });
+  assert.deepEqual(buildInlineVideoPlaybackStatus(true, true), {
+    shouldPlay: true,
+    isMuted: true,
+    volume: 1,
+  });
+  assert.deepEqual(buildInlineVideoPlaybackStatus(false, false), {
+    shouldPlay: false,
+    isMuted: true,
+    volume: 1,
+  });
 });
 
 test('inline autoplay accounts for a feed section offset inside a ScrollView', () => {
