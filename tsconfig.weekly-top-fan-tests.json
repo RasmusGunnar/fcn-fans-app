@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "target": "ES2020",
+    "noEmit": false,
+    "rewriteRelativeImportExtensions": true,
+    "outDir": "./build/weekly-top-fan-tests",
+    "rootDir": ".",
+    "types": ["node"],
+    "skipLibCheck": true
+  },
+  "include": [
+    "supabase/functions/_shared/weeklyTopFanSelection.ts",
+    "supabase/functions/_shared/__tests__/weeklyTopFanSelection.test.ts"
+  ],
+  "exclude": []
+}

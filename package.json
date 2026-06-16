@@ -18,6 +18,7 @@
     "test:community-feed": "tsc -p tsconfig.media-article-tests.json && node --test build/media-article-tests/utils/__tests__/communityFeed.test.js",
     "test:fan-post-badge": "tsc -p tsconfig.media-article-tests.json && node build/media-article-tests/utils/__tests__/fanPostBadge.test.js",
     "test:sync-fan-levels": "tsc -p tsconfig.sync-fan-level-tests.json && node build/sync-fan-level-tests/supabase/functions/_shared/__tests__/fanLevelScoring.test.js",
+    "test:weekly-top-fan": "tsc -p tsconfig.weekly-top-fan-tests.json && node build/weekly-top-fan-tests/supabase/functions/_shared/__tests__/weeklyTopFanSelection.test.js",
     "test:media-article": "tsc -p tsconfig.media-article-tests.json && node build/media-article-tests/utils/__tests__/mediaArticle.test.js",
     "test:media-article-admin": "tsc -p tsconfig.media-article-tests.json && node build/media-article-tests/utils/__tests__/mediaArticleAdmin.test.js",
     "test:media-article-candidates": "tsc -p tsconfig.media-article-tests.json && node build/media-article-tests/utils/__tests__/mediaArticleCandidates.test.js && node build/media-article-tests/utils/__tests__/mediaArticleCandidateList.test.js && node build/media-article-tests/utils/__tests__/mediaArticleApprovalError.test.js && tsc -p tsconfig.media-article-candidate-core-tests.json && node build/media-article-candidate-tests/supabase/functions/_shared/__tests__/mediaArticleCandidateCore.test.js && node build/media-article-candidate-tests/supabase/functions/_shared/__tests__/newsMedia.test.js",

@@ -1,5 +1,15 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+import {
+  compareWeeklyTopFanCandidates,
+  getWeeklyTopFanActivitySignalCount,
+  getWeeklyTopFanReasonType,
+  selectWeeklyTopFanWinner,
+  type WeeklyTopFanCandidate as Candidate,
+  type WeeklyTopFanReasonType as ReasonType,
+  type WeeklyTopFanSelectionMode as WinnerSelectionMode,
+  type WeeklyTopFanTopContent as TopContent,
+} from '../_shared/weeklyTopFanSelection.ts';
 
 type FanLevelKey =
   | 'new_fan'
@@ -8,8 +18,6 @@ type FanLevelKey =
   | 'community_core'
   | 'dedicated'
   | 'top_fan';
-
-type ReasonType = 'post' | 'comment' | 'activity' | 'checkin';
 
 type WeeklyTopFanRequest = {
   job_name?: 'weekly_top_fan';
@@ -57,31 +65,10 @@ type FixtureRow = {
   away_team: string | null;
 };
 
-type Candidate = {
-  userId: string;
-  postCount: number;
-  commentCount: number;
-  checkinCount: number;
-  postLikesReceived: number;
-  commentLikesReceived: number;
-  activityVariety: number;
-  weeklyScore: number;
-  latestActivityAt: string | null;
-};
-
-type TopContent = {
-  id: string;
-  text: string | null;
-  likes: number;
-  createdAt: string;
-};
-
 type WinnerProfile = {
   displayName: string;
   fanLevelKey: FanLevelKey | null;
 };
-
-type WinnerSelectionMode = 'strict' | 'fallback';
 
 const COPENHAGEN_TIMEZONE = 'Europe/Copenhagen';
 const FALLBACK_BODY = 'Har været en af ugens mest aktive fans i fællesskabet.';
@@ -96,8 +83,6 @@ const COMMENT_TARGET_24H_CAP = 3;
 const DAILY_RECEIVED_LIKES_CAP = 20;
 const POST_RECEIVED_LIKES_CAP = 5;
 const COMMENT_RECEIVED_LIKES_CAP = 3;
-const QUALIFYING_SCORE_THRESHOLD = 25;
-const MIN_ACTIVE_SOURCES = 2;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const FCN_TEAM_NAME_MATCHERS = ['nordsjalland', 'nordsjaelland'];
 const WEEKLY_TOP_FAN_PUBLISH_WEEKDAY = 'Wed';
@@ -153,10 +138,7 @@ function getCooldownStartDate(weekStartDate: string): string {
   return addDays(weekStartDate, -21);
 }
 
-function readFormatterParts(
-  date: Date,
-  timeZone: string,
-): Record<string, string> {
+function readFormatterParts(date: Date, timeZone: string): Record<string, string> {
   const parts = new Intl.DateTimeFormat('en-GB', {
     timeZone,
     year: 'numeric',
@@ -170,9 +152,7 @@ function readFormatterParts(
   }).formatToParts(date);
 
   return Object.fromEntries(
-    parts
-      .filter((part) => part.type !== 'literal')
-      .map((part) => [part.type, part.value]),
+    parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]),
   );
 }
 
@@ -222,29 +202,11 @@ function isFanLevelKey(value: unknown): value is FanLevelKey {
   );
 }
 
-function compareBySpotlightValue<T extends { likes: number; createdAt: string }>(a: T, b: T): number {
+function compareBySpotlightValue<T extends { likes: number; createdAt: string }>(
+  a: T,
+  b: T,
+): number {
   return b.likes - a.likes || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-}
-
-function getCandidateActivitySignalCount(candidate: Candidate): number {
-  return (
-    candidate.postCount +
-    candidate.commentCount +
-    candidate.checkinCount +
-    candidate.postLikesReceived +
-    candidate.commentLikesReceived
-  );
-}
-
-function compareCandidates<T extends Candidate & { activityVariety: number }>(a: T, b: T): number {
-  return (
-    b.weeklyScore - a.weeklyScore ||
-    b.activityVariety - a.activityVariety ||
-    getCandidateActivitySignalCount(b) - getCandidateActivitySignalCount(a) ||
-    b.checkinCount - a.checkinCount ||
-    new Date(b.latestActivityAt || 0).getTime() -
-      new Date(a.latestActivityAt || 0).getTime()
-  );
 }
 
 function getCopenhagenParts(baseDate: Date) {
@@ -266,8 +228,7 @@ function getCopenhagenParts(baseDate: Date) {
 
 function isWeeklyTopFanPublishWindow(parts: ReturnType<typeof getCopenhagenParts>): boolean {
   return (
-    parts.weekday === WEEKLY_TOP_FAN_PUBLISH_WEEKDAY &&
-    parts.hour === WEEKLY_TOP_FAN_PUBLISH_HOUR
+    parts.weekday === WEEKLY_TOP_FAN_PUBLISH_WEEKDAY && parts.hour === WEEKLY_TOP_FAN_PUBLISH_HOUR
   );
 }
 
@@ -305,8 +266,9 @@ function buildReasonCopy({
   body: string;
 } {
   const seed = `${weekStartDate}:${displayName}`;
+  const reasonType = getWeeklyTopFanReasonType({ candidate, topPost, topComment });
 
-  if (topPost && topPost.likes > 0) {
+  if (reasonType === 'post' && topPost) {
     const preview = truncatePreview(topPost.text);
     return {
       reasonType: 'post',
@@ -328,7 +290,7 @@ function buildReasonCopy({
     };
   }
 
-  if (topComment && topComment.likes > 0) {
+  if (reasonType === 'comment' && topComment) {
     const preview = truncatePreview(topComment.text);
     return {
       reasonType: 'comment',
@@ -350,7 +312,7 @@ function buildReasonCopy({
     };
   }
 
-  if (candidate.postCount > 0 || candidate.commentCount > 0) {
+  if (reasonType === 'activity') {
     return {
       reasonType: 'activity',
       referencePostId: null,
@@ -381,7 +343,9 @@ function buildReasonCopy({
 
 async function readRequest(
   req: Request,
-): Promise<Required<Pick<WeeklyTopFanRequest, 'force'>> & Pick<WeeklyTopFanRequest, 'week_start_date'>> {
+): Promise<
+  Required<Pick<WeeklyTopFanRequest, 'force'>> & Pick<WeeklyTopFanRequest, 'week_start_date'>
+> {
   try {
     const body = (await req.json()) as WeeklyTopFanRequest;
     return {
@@ -440,13 +404,15 @@ async function loadCommentRows(
   }
 
   return {
-    data: ((commentsResponse.data || []) as Array<{
-      id: string;
-      author_id: string;
-      text: string;
-      post_id: string;
-      created_at: string;
-    }>).map((comment) => ({
+    data: (
+      (commentsResponse.data || []) as Array<{
+        id: string;
+        author_id: string;
+        text: string;
+        post_id: string;
+        created_at: string;
+      }>
+    ).map((comment) => ({
       id: comment.id,
       author_id: comment.author_id,
       text: comment.text,
@@ -616,34 +582,31 @@ serve(async (req) => {
       recentWinnersResponse,
       likesResponse,
       appAdminsResponse,
-    ] =
-      await Promise.all([
-        supabase
-          .from('posts')
-          .select('id, author_id, text, created_at')
-          .gte('created_at', windowStartIso)
-          .lt('created_at', windowEndIso),
-        loadCommentRows(supabase, windowStartIso, windowEndIso),
-        supabase
-          .from('match_checkins')
-          .select('match_id, user_id, created_at')
-          .gte('created_at', windowStartIso)
-          .lt('created_at', windowEndIso),
-        supabase
-          .from('weekly_top_fan')
-          .select('user_id')
-          .gte('week_start_date', cooldownStartDate)
-          .lt('week_start_date', weekStartDate),
-        supabase
-          .from('likes_v2')
-          .select('user_id, target_type, target_id, created_at')
-          .gte('created_at', windowStartIso)
-          .lt('created_at', windowEndIso)
-          .in('target_type', ['post', 'comment']),
-        supabase
-          .from('app_admins')
-          .select('user_id'),
-      ]);
+    ] = await Promise.all([
+      supabase
+        .from('posts')
+        .select('id, author_id, text, created_at')
+        .gte('created_at', windowStartIso)
+        .lt('created_at', windowEndIso),
+      loadCommentRows(supabase, windowStartIso, windowEndIso),
+      supabase
+        .from('match_checkins')
+        .select('match_id, user_id, created_at')
+        .gte('created_at', windowStartIso)
+        .lt('created_at', windowEndIso),
+      supabase
+        .from('weekly_top_fan')
+        .select('user_id')
+        .gte('week_start_date', cooldownStartDate)
+        .lt('week_start_date', weekStartDate),
+      supabase
+        .from('likes_v2')
+        .select('user_id, target_type, target_id, created_at')
+        .gte('created_at', windowStartIso)
+        .lt('created_at', windowEndIso)
+        .in('target_type', ['post', 'comment']),
+      supabase.from('app_admins').select('user_id'),
+    ]);
 
     if (postsResponse.error) {
       return json(500, { error: 'Failed to fetch posts', details: postsResponse.error });
@@ -684,9 +647,7 @@ serve(async (req) => {
       new Set(likes.filter((like) => like.target_type === 'post').map((like) => like.target_id)),
     );
     const likedCommentIds = Array.from(
-      new Set(
-        likes.filter((like) => like.target_type === 'comment').map((like) => like.target_id),
-      ),
+      new Set(likes.filter((like) => like.target_type === 'comment').map((like) => like.target_id)),
     );
     const checkinMatchIds = Array.from(
       new Set(checkins.map((checkin) => checkin.match_id).filter(Boolean)),
@@ -694,17 +655,11 @@ serve(async (req) => {
 
     const [likedPostsResponse, likedCommentsResponse, fixturesResponse] = await Promise.all([
       likedPostIds.length > 0
-        ? supabase
-            .from('posts')
-            .select('id, author_id')
-            .in('id', likedPostIds)
+        ? supabase.from('posts').select('id, author_id').in('id', likedPostIds)
         : Promise.resolve({ data: [], error: null }),
       loadCommentAuthorRows(supabase, likedCommentIds),
       checkinMatchIds.length > 0
-        ? supabase
-            .from('fixtures')
-            .select('id, home_team, away_team')
-            .in('id', checkinMatchIds)
+        ? supabase.from('fixtures').select('id, home_team, away_team').in('id', checkinMatchIds)
         : Promise.resolve({ data: [], error: null }),
     ]);
 
@@ -812,9 +767,9 @@ serve(async (req) => {
         return;
       }
 
-      const recentAccepted = (acceptedCommentTimestampsByUserTarget.get(userTargetKey) || []).filter(
-        (timestamp) => createdAtMs - timestamp < ONE_DAY_MS,
-      );
+      const recentAccepted = (
+        acceptedCommentTimestampsByUserTarget.get(userTargetKey) || []
+      ).filter((timestamp) => createdAtMs - timestamp < ONE_DAY_MS);
 
       if (recentAccepted.length >= COMMENT_TARGET_24H_CAP) {
         acceptedCommentTimestampsByUserTarget.set(userTargetKey, recentAccepted);
@@ -914,16 +869,20 @@ serve(async (req) => {
         };
       })
       .filter((candidate) => !adminUserIds.has(candidate.userId))
-      .filter((candidate) => getCandidateActivitySignalCount(candidate) > 0)
-      .sort(compareCandidates);
+      .filter((candidate) => getWeeklyTopFanActivitySignalCount(candidate) > 0)
+      .sort(compareWeeklyTopFanCandidates);
 
-    const strictCandidates = allEligibleCandidates
-      .filter((candidate) => candidate.weeklyScore >= QUALIFYING_SCORE_THRESHOLD)
-      .filter((candidate) => candidate.activityVariety >= MIN_ACTIVE_SOURCES)
-      .filter((candidate) => !recentWinnerIds.has(candidate.userId));
-
-    const winner = strictCandidates[0] || allEligibleCandidates[0];
-    const selectionMode: WinnerSelectionMode = strictCandidates[0] ? 'strict' : 'fallback';
+    const {
+      winner,
+      selectionMode,
+      strictCandidates,
+      fallbackCandidates,
+    }: {
+      winner: Candidate | null;
+      selectionMode: WinnerSelectionMode | null;
+      strictCandidates: Candidate[];
+      fallbackCandidates: Candidate[];
+    } = selectWeeklyTopFanWinner(allEligibleCandidates, recentWinnerIds);
 
     if (!winner) {
       return json(200, {
@@ -932,7 +891,10 @@ serve(async (req) => {
         mode: 'skipped',
         publish_rule: WEEKLY_TOP_FAN_PUBLISH_RULE,
         week_start_date: weekStartDate,
-        reason: 'no_non_admin_candidate_with_activity',
+        reason:
+          allEligibleCandidates.length > 0
+            ? 'all_eligible_candidates_in_cooldown'
+            : 'no_non_admin_candidate_with_activity',
       });
     }
 
@@ -942,8 +904,10 @@ serve(async (req) => {
       candidate_count: candidates.size,
       eligible_candidate_count: allEligibleCandidates.length,
       strict_candidate_count: strictCandidates.length,
-      admin_excluded_count: Array.from(candidates.keys()).filter((userId) => adminUserIds.has(userId))
-        .length,
+      fallback_candidate_count: fallbackCandidates.length,
+      admin_excluded_count: Array.from(candidates.keys()).filter((userId) =>
+        adminUserIds.has(userId),
+      ).length,
       winner_user_id: winner.userId,
       weekly_score: winner.weeklyScore,
       activity_variety: winner.activityVariety,
