@@ -131,6 +131,8 @@ export type FeedWeeklyTopFanData = {
   likesCount?: number | null;
   commentsCount?: number | null;
   votesCount?: number | null;
+  isFallbackLatest?: boolean;
+  expectedWeekStart?: string | null;
 } & FeedRankingSignals;
 
 /**

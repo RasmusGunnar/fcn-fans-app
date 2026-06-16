@@ -22,8 +22,37 @@ function createPostItem(id: string, postType: PostType, createdAt: string): Feed
   };
 }
 
+function createWeeklyTopFanItem(id: string, weekStartDate: string): FeedItem {
+  return {
+    kind: 'weekly_top_fan',
+    id,
+    data: {
+      id,
+      weekStartDate,
+      generatedAt: '2026-05-27T10:00:00.000Z',
+      userId: 'fan-1',
+      displayName: 'Fan',
+      fanLevelKey: 'new_fan',
+      weeklyScore: 2,
+      reasonType: 'activity',
+      referencePostId: null,
+      referenceCommentId: null,
+      title: 'Ugens topfan',
+      subtitle: 'Fan har v\u00e6ret aktiv',
+      body: 'Aktiv i f\u00e6llesskabet',
+      ctaLabel: 'Se profil',
+      isPublished: true,
+      createdAt: '2026-05-27T10:00:00.000Z',
+      isSystemCard: true,
+      isFallbackLatest: true,
+      expectedWeekStart: '2026-06-01',
+    },
+  };
+}
+
 const mixedFeed: FeedItem[] = [
   createPostItem('fan-old', 'post', '2026-06-08T10:00:00.000Z'),
+  createWeeklyTopFanItem('weekly-top-fan-fallback', '2026-05-18'),
   {
     kind: 'news',
     id: 'news-1',
@@ -74,6 +103,20 @@ test('FCN i medierne includes only media articles sorted newest first', () => {
     ['article-new', 'article-old'],
   );
   assert.ok(result.every((item) => item.kind === 'post' && item.data.postType === 'media_article'));
+});
+
+test('Weekly Top Fan fallback stays in Alle and out of specialized post tabs', () => {
+  const allItems = filterHomeFeedItems(mixedFeed, 'all');
+  const fanPosts = filterHomeFeedItems(mixedFeed, 'fan_posts');
+  const mediaArticles = filterHomeFeedItems(mixedFeed, 'media_articles');
+
+  assert.ok(
+    allItems.some(
+      (item) => item.kind === 'weekly_top_fan' && item.data.isFallbackLatest === true,
+    ),
+  );
+  assert.ok(fanPosts.every((item) => item.kind !== 'weekly_top_fan'));
+  assert.ok(mediaArticles.every((item) => item.kind !== 'weekly_top_fan'));
 });
 
 test('secondary publication preserves unchanged card identities', () => {

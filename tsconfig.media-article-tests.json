@@ -35,6 +35,7 @@
     "src/utils/postEngagement.ts",
     "src/utils/postFeedItem.ts",
     "src/utils/videoPlaybackBehavior.ts",
+    "src/services/weeklyTopFanApiFallback.ts",
     "src/utils/__tests__/homeFeedFilter.test.ts",
     "src/utils/__tests__/homeFeedQuery.test.ts",
     "src/utils/__tests__/homeFeedRanking.test.ts",
@@ -47,6 +48,7 @@
     "src/utils/__tests__/postMediaMapping.test.ts",
     "src/utils/__tests__/videoPlaybackBehavior.test.ts",
     "src/utils/__tests__/communityFeed.test.ts",
-    "src/utils/__tests__/fanPostBadge.test.ts"
+    "src/utils/__tests__/fanPostBadge.test.ts",
+    "src/services/__tests__/weeklyTopFanApiFallback.test.ts"
   ]
 }

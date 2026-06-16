@@ -17,6 +17,7 @@
     "test:home-feed-ranking": "tsc -p tsconfig.media-article-tests.json && node build/media-article-tests/utils/__tests__/homeFeedRanking.test.js",
     "test:community-feed": "tsc -p tsconfig.media-article-tests.json && node --test build/media-article-tests/utils/__tests__/communityFeed.test.js",
     "test:fan-post-badge": "tsc -p tsconfig.media-article-tests.json && node build/media-article-tests/utils/__tests__/fanPostBadge.test.js",
+    "test:weekly-top-fan-api": "tsc -p tsconfig.media-article-tests.json && node build/media-article-tests/services/__tests__/weeklyTopFanApiFallback.test.js",
     "test:sync-fan-levels": "tsc -p tsconfig.sync-fan-level-tests.json && node build/sync-fan-level-tests/supabase/functions/_shared/__tests__/fanLevelScoring.test.js",
     "test:weekly-top-fan": "tsc -p tsconfig.weekly-top-fan-tests.json && node build/weekly-top-fan-tests/supabase/functions/_shared/__tests__/weeklyTopFanSelection.test.js",
     "test:media-article": "tsc -p tsconfig.media-article-tests.json && node build/media-article-tests/utils/__tests__/mediaArticle.test.js",
