@@ -118,6 +118,7 @@ export function FanPostCard({
   const navigation = useNavigation<any>();
   const timeAgo = getTimeAgo(post.createdAt);
   const isMediaArticle = post.postType === 'media_article';
+  const bodyText = post.text?.trim() ?? '';
   const mediaArticleHeader = useMemo(
     () => getMediaArticleHeaderPresentation(post.postType, post.linkPreview),
     [post.linkPreview, post.postType],
@@ -385,11 +386,11 @@ export function FanPostCard({
         </View>
       ) : bodyContent ? (
         bodyContent
-      ) : (
+      ) : bodyText.length > 0 ? (
         <Text variant="body" color="primary" style={styles.text}>
-          {post.text}
+          {bodyText}
         </Text>
-      )}
+      ) : null}
       {isMediaArticle && post.linkPreview ? (
         <ArticlePreview preview={post.linkPreview} fallbackLabel="Artikel" />
       ) : !firstMedia ? null : isVideo ? (

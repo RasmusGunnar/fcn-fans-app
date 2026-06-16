@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import test from 'node:test';
 import { getFeedItemKey } from '../../types/feed';
 import { assertValidPostSubtypePayload, normalizePostType, type Post } from '../../types/post';
@@ -203,4 +205,19 @@ test('normal fan posts do not receive a media_article badge', () => {
     }),
     null,
   );
+});
+
+test('FanPostCard renders post body only when trimmed text exists', () => {
+  const source = fs.readFileSync(
+    path.resolve(process.cwd(), 'src/components/cards/FanPostCard.tsx'),
+    'utf8',
+  );
+
+  assert.match(source, /const bodyText = post\.text\?\.trim\(\) \?\? '';/);
+  assert.match(source, /\) : bodyText\.length > 0 \? \(/);
+  assert.match(
+    source,
+    /<Text variant="body" color="primary" style=\{styles\.text\}>[\s\S]*?\{bodyText\}[\s\S]*?<\/Text>/,
+  );
+  assert.match(source, /text:\s*\{[\s\S]*?marginBottom: theme\.spacing\[3\]/);
 });
