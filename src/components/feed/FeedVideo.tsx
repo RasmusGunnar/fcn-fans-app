@@ -12,7 +12,7 @@ import {
   Video,
 } from 'expo-av';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, GestureResponderEvent, Pressable, StyleSheet, View } from 'react-native';
+import { AppState, GestureResponderEvent, Image, Pressable, StyleSheet, View } from 'react-native';
 import { defaultTheme } from '../../theme';
 import { buildInlineVideoPlaybackStatus } from '../../utils/videoPlaybackBehavior';
 
@@ -91,6 +91,7 @@ export function FeedVideo({
   const mountedAtRef = useRef(Date.now());
   const [detectedRatio, setDetectedRatio] = useState<VideoRatio | null>(null);
   const [appActive, setAppActive] = useState(AppState.currentState === 'active');
+  const [isFirstFrameReady, setIsFirstFrameReady] = useState(false);
 
   // Track whether the host app is in the foreground so we pause on background
   useEffect(() => {
@@ -122,6 +123,7 @@ export function FeedVideo({
   // Play or pause based on active state
   const shouldPlay = isActive && appActive;
   const effectiveMuted = muted || !shouldPlay;
+  const showPosterOverlay = !isFirstFrameReady;
 
   // Debug: log whenever playback intent changes
   useEffect(() => {
@@ -133,7 +135,8 @@ export function FeedVideo({
   useEffect(() => {
     didNotifyReadyRef.current = false;
     isLoadedRef.current = false;
-  }, [uri]);
+    setIsFirstFrameReady(false);
+  }, [posterUri, uri]);
 
   useEffect(
     () => () => {
@@ -185,6 +188,27 @@ export function FeedVideo({
     void applyInlinePlaybackStatus();
   }, [applyInlinePlaybackStatus]);
 
+  const markFirstFrameReady = useCallback(
+    (source: 'readyForDisplay' | 'playing') => {
+      setIsFirstFrameReady(true);
+
+      if (didNotifyReadyRef.current) {
+        return;
+      }
+
+      didNotifyReadyRef.current = true;
+      if (__DEV__) {
+        console.log('[FeedVideo] ready/playing', {
+          uri,
+          source,
+          msSinceMount: Date.now() - mountedAtRef.current,
+        });
+      }
+      onReady?.();
+    },
+    [onReady, uri],
+  );
+
   // Detect natural size from loaded video if metadata wasn't provided
   const handleLoad = useCallback(
     (status: AVPlaybackStatus) => {
@@ -200,20 +224,13 @@ export function FeedVideo({
   );
   const handlePlaybackStatusUpdate = useCallback(
     (status: AVPlaybackStatus) => {
-      if (!status.isLoaded || !status.isPlaying || didNotifyReadyRef.current) {
+      if (!status.isLoaded || !status.isPlaying) {
         return;
       }
 
-      didNotifyReadyRef.current = true;
-      if (__DEV__) {
-        console.log('[FeedVideo] ready/playing', {
-          uri,
-          msSinceMount: Date.now() - mountedAtRef.current,
-        });
-      }
-      onReady?.();
+      markFirstFrameReady('playing');
     },
-    [onReady, uri],
+    [markFirstFrameReady],
   );
 
   const toggleMute = useCallback(
@@ -238,6 +255,7 @@ export function FeedVideo({
         posterSource={posterSource}
         posterStyle={styles.video}
         onLoad={handleLoad}
+        onReadyForDisplay={() => markFirstFrameReady('readyForDisplay')}
         onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
         onError={(error) => {
           if (__DEV__) {
@@ -246,6 +264,15 @@ export function FeedVideo({
           onError?.(error);
         }}
       />
+      {showPosterOverlay ? (
+        <View style={styles.posterOverlay} pointerEvents="none">
+          {posterSource ? (
+            <Image source={posterSource} style={styles.posterImage} resizeMode="cover" />
+          ) : (
+            <View style={styles.posterFallback} />
+          )}
+        </View>
+      ) : null}
       <Pressable
         style={styles.mediaPressTarget}
         onPress={onPress}
@@ -285,12 +312,25 @@ export function FeedVideo({
 const styles = StyleSheet.create({
   container: {
     width: '100%',
-    backgroundColor: theme.colors.border.default,
+    backgroundColor: theme.colors.overlay.fullscreen,
     overflow: 'hidden',
   },
   video: {
     width: '100%',
     height: '100%',
+    backgroundColor: theme.colors.overlay.fullscreen,
+  },
+  posterOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: theme.colors.overlay.fullscreen,
+  },
+  posterImage: {
+    width: '100%',
+    height: '100%',
+  },
+  posterFallback: {
+    flex: 1,
+    backgroundColor: theme.colors.overlay.fullscreen,
   },
   mediaPressTarget: {
     ...StyleSheet.absoluteFillObject,

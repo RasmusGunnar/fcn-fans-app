@@ -14,7 +14,6 @@ import { AppHeader } from '../components/AppHeader';
 import NextMatchBadge from '../components/home/NextMatchBadge';
 import { Card } from '../components/ui/Card';
 import { FeedItemRenderer } from '../components/feed/FeedItemRenderer';
-import { FanFactionCard } from '../components/cards/FanFactionCard';
 import { useAttendance } from '../hooks/useAttendance';
 import { useMatchCheckIn } from '../hooks/useMatchCheckIn';
 import { useFeed } from '../state/FeedContext';
@@ -299,8 +298,6 @@ export default function HomeScreen() {
     });
   }, [selectedFeedFilter, visibleFeedItems]);
 
-  const [factionLiked, setFactionLiked] = useState(false);
-  const [factionLikes, setFactionLikes] = useState(7);
   const [activeVideoKey, setActiveVideoKey] = useState<string | null>(null);
 
   // Reset active video when the feed filter changes so no stale player stays mounted
@@ -329,11 +326,6 @@ export default function HomeScreen() {
       return nextKey;
     });
   });
-
-  const toggleFactionLike = useCallback(() => {
-    setFactionLiked((currentLiked) => !currentLiked);
-    setFactionLikes((currentLikes) => currentLikes + (factionLiked ? -1 : 1));
-  }, [factionLiked]);
 
   const handleFlatListContentSizeChange = useCallback(
     (width: number, height: number) => {
@@ -649,25 +641,6 @@ export default function HomeScreen() {
             ) : null}
           </View>
         </>
-      }
-      ListFooterComponent={
-        selectedFeedFilter === 'all' ? (
-          <View style={styles.content}>
-            <FanFactionCard
-              name="Ultras FCN"
-              members={89}
-              timeAgo="1 time siden"
-              description="FCN's mest passionerede fans. Vi støtter holdet gennem tykt og tyndt med sang, flag og uforbeholden støtte."
-              liked={factionLiked}
-              likes={factionLikes}
-              comments={1}
-              onToggleLike={toggleFactionLike}
-              onPressComment={() => console.log('Faction comment')}
-              onPressShare={() => console.log('Faction share')}
-              onPressJoin={() => console.log('Navigate to Faction')}
-            />
-          </View>
-        ) : null
       }
     />
   );
