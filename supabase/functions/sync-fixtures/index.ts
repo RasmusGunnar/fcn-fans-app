@@ -11,6 +11,7 @@
  */
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+import { geocodeUpcomingFcnFixtures } from '../_shared/fixtureGeocoding.ts';
 
 // ── Env ──────────────────────────────────────────────────────────────────────
 
@@ -140,12 +141,14 @@ serve(async (req) => {
   console.log(`[MatchSync] ${upcoming.length} upcoming (after cutoff ${cutoff})`);
 
   if (upcoming.length === 0) {
+    const geocoding = await geocodeUpcomingFcnFixtures(supabase, { limit: 25 });
     return json({
       season,
       fetched: events.length,
       filtered: fcnEvents.length,
       upserted: 0,
       skipped_reason: 'No upcoming FCN matches found in season schedule',
+      geocoding,
     });
   }
 
@@ -185,12 +188,14 @@ serve(async (req) => {
   }
 
   console.log(`[MatchSync] Done — upserted ${upserted}/${rows.length}`);
+  const geocoding = await geocodeUpcomingFcnFixtures(supabase, { limit: 25 });
 
   const result = {
     season,
     fetched: events.length,
     filtered: fcnEvents.length,
     upserted,
+    geocoding,
     ...(errors.length > 0 ? { errors } : {}),
   };
 

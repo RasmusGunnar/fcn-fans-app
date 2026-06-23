@@ -1,6 +1,7 @@
 ﻿// deno-lint-ignore-file no-explicit-any
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+import { geocodeUpcomingFcnFixtures } from '../_shared/fixtureGeocoding.ts';
 
 type NormalizedFixture = {
   provider: string;
@@ -18,18 +19,6 @@ type NormalizedFixture = {
   away_team_provider_id: string | null;
   updated_at: string;
 };
-
-interface GeocodingResult {
-  lat: number;
-  lng: number;
-  place_name: string;
-}
-interface GeocodingSummary {
-  scanned: number;
-  geocoded: number;
-  skipped: number;
-  failed: number;
-}
 
 const SPORTSDB_BASE_DEFAULT = 'https://www.thesportsdb.com/api/v1/json';
 const DEFAULT_FCN_TEAM_ID = '133890';
@@ -147,100 +136,6 @@ async function fetchSportsDbTeamLast(apiKey: string, teamId: string, baseUrl: st
   return { fixtures };
 }
 
-// ===== GEOCODING =====
-async function geocodeAddress(addressText: string): Promise<GeocodingResult | null> {
-  if (!addressText || !addressText.trim()) return null;
-  try {
-    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addressText)}&limit=1`;
-    const response = await fetch(url, { headers: { 'User-Agent': 'FCN-Fans-Sync/1.0' } });
-    if (!response.ok) return null;
-
-    const data = await response.json();
-    if (!Array.isArray(data) || data.length === 0) return null;
-
-    const first = data[0];
-    return {
-      lat: parseFloat(first.lat),
-      lng: parseFloat(first.lon),
-      place_name: first.display_name || addressText,
-    };
-  } catch {
-    return null;
-  }
-}
-
-const VENUE_ALIASES: Record<string, string[]> = {
-  'Energi Viborg Arena': ['Viborg Stadion, Viborg, Denmark', 'Viborg Stadion, Denmark'],
-  'Monjasa Park': [
-    'Monjasa Park, Fredericia, Denmark',
-    'Fredericia Stadion, Fredericia, Denmark',
-    'Fredericia Stadion, Denmark',
-  ],
-  'Vejlby Stadion': [
-    'Vejlby Stadion, Risskov, Denmark',
-    'Vejlby Stadion, Aarhus, Denmark',
-    'Vejlby, Aarhus, Denmark',
-  ],
-};
-
-async function geocodeFixtures(supabase: any): Promise<GeocodingSummary> {
-  const { data, error } = await supabase
-    .from('fixtures')
-    .select('id, venue, venue_city, lat, lng')
-    .or('lat.is.null,lng.is.null')
-    .limit(1);
-
-  if (error || !data || data.length === 0)
-    return { scanned: 0, geocoded: 0, skipped: 0, failed: 0 };
-
-  let geocoded = 0;
-  let skipped = 0;
-  let failed = 0;
-
-  for (const f of data) {
-    if (!f.venue) {
-      skipped++;
-      continue;
-    }
-
-    // Rate-limit: delay per fixture (~800ms)
-    await new Promise((resolve) => setTimeout(resolve, 800));
-
-    // Build candidate list
-    const candidates: string[] = [];
-    const aliases = VENUE_ALIASES[String(f.venue)];
-    if (aliases) candidates.push(...aliases);
-    if (f.venue_city) candidates.push(`${f.venue}, ${f.venue_city}, Denmark`);
-    candidates.push(`${f.venue}, Denmark`);
-
-    let geo: GeocodingResult | null = null;
-    for (const candidate of candidates) {
-      geo = await geocodeAddress(candidate);
-      if (geo) break;
-    }
-
-    if (!geo) {
-      failed++;
-      continue;
-    }
-
-    const { error: uerr } = await supabase
-      .from('fixtures')
-      .update({
-        lat: geo.lat,
-        lng: geo.lng,
-        place_name: geo.place_name,
-        geocoded_at: new Date().toISOString(),
-      })
-      .eq('id', f.id);
-
-    if (uerr) failed++;
-    else geocoded++;
-  }
-
-  return { scanned: data.length, geocoded, skipped, failed };
-}
-
 // ===== MAIN =====
 type JobName =
   | 'fixtures_season'
@@ -320,7 +215,7 @@ serve(async (req) => {
     }
 
     if (job === 'geocode_only') {
-      const geocoding = await geocodeFixtures(supabase);
+      const geocoding = await geocodeUpcomingFcnFixtures(supabase, { limit: 25 });
       return new Response(JSON.stringify({ success: true, mode: 'geocode-only', geocoding }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -385,7 +280,7 @@ serve(async (req) => {
       );
     }
 
-    const geocoding = { scanned: 0, geocoded: 0, skipped: 0, failed: 0 };
+    const geocoding = await geocodeUpcomingFcnFixtures(supabase, { limit: 25, nowIso });
 
     return new Response(
       JSON.stringify({
