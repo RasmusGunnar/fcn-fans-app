@@ -14,7 +14,7 @@ interface CardActionsProps {
   comments: number;
   onToggleLike: () => void;
   onPressComment: () => void;
-  onPressShare: () => void;
+  onPressShare?: () => void;
 }
 
 export function CardActions({
@@ -74,17 +74,19 @@ export function CardActions({
           </Text>
         </Pressable>
       </View>
-      <Pressable
-        style={({ pressed }) => [
-          styles.action,
-          styles.shareAction,
-          pressed && styles.actionPressed,
-        ]}
-        onPress={onPressShare}
-        pointerEvents="auto"
-      >
-        <Ionicons name="share-social-outline" size={iconSize} color={theme.colors.text.muted} />
-      </Pressable>
+      {onPressShare ? (
+        <Pressable
+          style={({ pressed }) => [
+            styles.action,
+            styles.shareAction,
+            pressed && styles.actionPressed,
+          ]}
+          onPress={onPressShare}
+          pointerEvents="auto"
+        >
+          <Ionicons name="share-social-outline" size={iconSize} color={theme.colors.text.muted} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }

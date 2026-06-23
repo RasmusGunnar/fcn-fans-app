@@ -403,8 +403,6 @@ export default function EventsScreen() {
         creatorUserId: item.creator_user_id ?? null,
         createdBy: item.created_by ?? null,
 
-        eventType: 'event',
-
         coverBucket: item.cover_bucket ?? null,
         coverPath: item.cover_path ?? null,
       },

@@ -16,7 +16,6 @@ export type CardBehaviorInput = {
   postLinkUrl?: string | null; // hvis post har indlejret link
   newsUrl?: string | null; // nyhedens url
   eventId?: string | null; // event detail target (intern)
-  eventType?: string | null;
 
   // event: hvis tilknyttet community, skal navnelinje vise community-navn
   eventCommunityName?: string | null;
@@ -46,7 +45,7 @@ export function buildCardBehaviorModel(input: CardBehaviorInput): CardBehaviorMo
   // - Post som fan: category="Fra Fans", nameLine=fanName
   // - Post som community: category=communityName, nameLine=null
   // - News: category="Nyhed", nameLine=actorName (fan eller community)
-  // - Event: category="Event" | "Bustur", nameLine=null eller eventCommunityName hvis sat
+  // - Event: category="Event", nameLine=null eller eventCommunityName hvis sat
 
   if (input.kind === 'post') {
     const categoryLabel = input.actorType === 'community' ? actorName : 'Fra Fans';
@@ -75,8 +74,7 @@ export function buildCardBehaviorModel(input: CardBehaviorInput): CardBehaviorMo
 
   // event
   {
-    const eventType = (input.eventType ?? '').trim().toLowerCase();
-    const categoryLabel = eventType === 'bustur' ? 'Bustur' : 'Event';
+    const categoryLabel = 'Event';
     const host = (input.eventCommunityName ?? '').trim();
     const nameLine = host ? host : null;
 

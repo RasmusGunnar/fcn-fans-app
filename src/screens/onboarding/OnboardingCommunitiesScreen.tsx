@@ -49,9 +49,6 @@ function isProfileCompleteForApp(
 ): boolean {
   const hasDisplayName =
     typeof profile?.display_name === 'string' && profile.display_name.trim().length > 0;
-  const hasAvatar =
-    typeof profile?.avatar_url === 'string' && profile.avatar_url.trim().length > 0;
-
   if (!hasDisplayName) {
     return false;
   }
@@ -64,7 +61,7 @@ function isProfileCompleteForApp(
     return false;
   }
 
-  return hasAvatar;
+  return true;
 }
 
 function isMissingOnboardingColumnError(error: unknown): boolean {

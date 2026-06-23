@@ -30,11 +30,7 @@ import { Text } from '../ui';
 import { resolveActorLine, type ProfileMap } from '../../utils/actor';
 import { navigateToMentionTarget } from '../../utils/mentionNavigation';
 import { renderTextWithEntities } from '../../utils/renderTextWithEntities';
-import {
-  toggleCommentLike,
-  triggerCommentReplyPush,
-  type CommentReplyRecord,
-} from '../../services/commentsApi';
+import { triggerCommentReplyPush, type CommentReplyRecord } from '../../services/commentsApi';
 import type { CommentPreview } from '../../services/likesApi';
 
 export type CommentTargetType = 'post' | 'news' | 'event' | 'match' | 'bus_trip';
@@ -505,35 +501,6 @@ export function InlineComments({
     });
   };
 
-  const handleToggleCommentLike = async (commentId: string) => {
-    if (!currentUserId) {
-      Alert.alert('Fejl', 'Du skal være logget ind for at like en kommentar');
-      return;
-    }
-
-    const previous = comments;
-    const updated = comments.map((comment) => {
-      if (comment.id !== commentId) return comment;
-      const nextLiked = !comment.likedByMe;
-      const nextCount = Math.max(0, comment.likeCount + (nextLiked ? 1 : -1));
-      return { ...comment, likedByMe: nextLiked, likeCount: nextCount };
-    });
-    setComments(updated);
-
-    const target = updated.find((comment) => comment.id === commentId);
-    if (!target) return;
-
-    const ok = await toggleCommentLike({
-      commentId,
-      userId: currentUserId,
-      willLike: target.likedByMe,
-    });
-
-    if (!ok) {
-      setComments(previous);
-    }
-  };
-
   const handleStartReply = (parentCommentId: string, displayName: string, scrollToId?: string) => {
     setActiveReplyToCommentId(parentCommentId);
     setActiveReplyToDisplayName(displayName);
@@ -862,22 +829,6 @@ export function InlineComments({
                   {getTimeAgo(comment.created_at)}
                 </Text>
               </View>
-              <Pressable
-                onPress={() => handleToggleCommentLike(comment.id)}
-                hitSlop={theme.spacing[2]}
-                style={styles.commentLikeButton}
-              >
-                <Ionicons
-                  name={comment.likedByMe ? 'heart' : 'heart-outline'}
-                  size={theme.spacing[5]}
-                  color={comment.likedByMe ? theme.colors.primary : theme.colors.text.muted}
-                />
-                {comment.likeCount > 0 ? (
-                  <Text variant="caption" color={comment.likedByMe ? 'primary' : 'muted'}>
-                    {comment.likeCount}
-                  </Text>
-                ) : null}
-              </Pressable>
             </View>
 
             <Text variant="body" color="primary" style={styles.commentText}>
@@ -1328,12 +1279,6 @@ const styles = StyleSheet.create({
     fontWeight: theme.typography.caption.fontWeight as any,
   },
   commentTime: {},
-  commentLikeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing[1],
-    paddingLeft: theme.spacing[1],
-  },
   commentText: {
     marginTop: theme.spacing[1],
   },

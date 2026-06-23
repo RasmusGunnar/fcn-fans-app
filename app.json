@@ -22,7 +22,8 @@
         "ITSAppUsesNonExemptEncryption": false,
         "NSPhotoLibraryUsageDescription": "FCN Fan Fællesskab uses your photo library so you can choose a profile picture and upload photos when creating posts, communities and fan activities.",
         "NSPhotoLibraryAddUsageDescription": "FCN Fan Fællesskab saves images to your photo library only when you choose to save or export content from the app.",
-        "NSMicrophoneUsageDescription": "FCN Fan Fællesskab uses microphone access when you choose to record a video in the app, so the video can include sound before you share it as user-generated content."
+        "NSMicrophoneUsageDescription": "FCN Fan Fællesskab uses microphone access when you choose to record a video in the app, so the video can include sound before you share it as user-generated content.",
+        "NSCameraUsageDescription": "FCN Fans bruger kameraet, så du kan tage billeder og videoer til opslag, events og fællesskaber. FCN Fans uses the camera so you can take photos and videos for posts, events and communities."
       }
     },
     "android": {

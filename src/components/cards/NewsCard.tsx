@@ -72,7 +72,7 @@ export function NewsCard({
   commentsCount = newsItem.commentsCount,
   onToggleLike = () => {},
   onPressComment = () => {},
-  onPressShare = () => {},
+  onPressShare,
   commentPreviews = [],
   onNewComment,
   onDeleted = () => {},

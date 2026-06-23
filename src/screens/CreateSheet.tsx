@@ -27,16 +27,18 @@ import { resolveProfileDisplayName } from '../utils/actor';
 interface CreateSheetProps {
   visible: boolean;
   onClose: () => void;
+  onCreateEvent: () => void;
   initialContentType?: ContentType;
   initialFeedTargets?: string[];
   initialActor?: Actor;
 }
 
-type ContentType = null | 'post' | 'media_article' | 'news' | 'poll' | 'event';
+type ContentType = null | 'post' | 'media_article' | 'news' | 'poll';
 
 export default function CreateSheet({
   visible,
   onClose,
+  onCreateEvent,
   initialContentType,
   initialFeedTargets,
   initialActor,
@@ -155,6 +157,10 @@ export default function CreateSheet({
     onClose();
   };
 
+  const handleCreateEvent = () => {
+    onCreateEvent();
+  };
+
   const includesHome = feedTargets.includes('home');
   const communityTargetCount = feedTargets.filter((target) =>
     target.startsWith('community:'),
@@ -237,7 +243,7 @@ export default function CreateSheet({
 
               <Pressable
                 style={({ pressed }) => [styles.choiceCard, pressed && styles.choiceCardPressed]}
-                onPress={() => setContentType('event')}
+                onPress={handleCreateEvent}
               >
                 <View
                   style={[styles.choiceIcon, { backgroundColor: theme.colors.badges.eventSoftBg }]}
@@ -413,19 +419,7 @@ export default function CreateSheet({
       );
     }
 
-    return (
-      <View style={styles.placeholderSection}>
-        <View
-          style={[styles.placeholderIcon, { backgroundColor: theme.colors.badges.eventSoftBg }]}
-        >
-          <Ionicons name="calendar" size={28} color={theme.colors.badges.event} />
-        </View>
-        <Text style={styles.placeholderTitle}>Event-oprettelse kommer snart</Text>
-        <Text style={styles.placeholderDescription}>
-          Event-oprettelse bliver tilføjet i en kommende version.
-        </Text>
-      </View>
-    );
+    return null;
   };
 
   if (!visible) return null;
@@ -449,11 +443,11 @@ export default function CreateSheet({
                 ? 'Opret opslag'
                 : contentType === 'media_article'
                   ? 'FCN i medierne'
-                : contentType === 'news'
-                  ? 'Del nyhed'
-                  : contentType === 'poll'
-                    ? 'Opret afstemning'
-                    : 'Opret event'}
+                  : contentType === 'news'
+                    ? 'Del nyhed'
+                    : contentType === 'poll'
+                      ? 'Opret afstemning'
+                      : ''}
           </Text>
           <View style={{ width: 28 }} />
         </View>

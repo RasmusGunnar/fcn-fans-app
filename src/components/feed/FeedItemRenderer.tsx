@@ -1,5 +1,4 @@
 import React from 'react';
-import { Alert } from 'react-native';
 import type { CommentPreview } from '../../services/likesApi';
 import type { CategoryKey } from '../../theme/categories';
 import type { FeedFanActivityData, FeedItem } from '../../types/feed';
@@ -131,7 +130,6 @@ function FeedItemRendererComponent(props: FeedItemRendererProps): React.ReactEle
               toggleLike('news', item.id, user.id);
             }
           }}
-          onPressShare={() => Alert.alert('Info', 'Del-funktionen kommer snart')}
           commentPreviews={newsCommentPreviews}
           onDeleted={(newsId) => removeNews(newsId)}
           onNewComment={(comment) => {
@@ -216,7 +214,6 @@ function FeedItemRendererComponent(props: FeedItemRendererProps): React.ReactEle
               toggleLike(item.kind, item.id, user.id);
             }
           }}
-          onPressShare={() => Alert.alert('Info', 'Del-funktionen kommer snart')}
           onPressDetail={handleDetail}
           commentPreviews={commentPreviews}
           onNewComment={(comment) => {

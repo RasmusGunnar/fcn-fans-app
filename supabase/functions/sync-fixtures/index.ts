@@ -7,7 +7,7 @@
  *   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
  *   THESPORTSDB_API_KEY  (free tier default "3")
  *
- * Can be invoked from the app (admin-only) or via cron/curl.
+ * Can be invoked from the app by authenticated app admins.
  */
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
@@ -47,17 +47,58 @@ function toKickoff(dateEvent: string | null, strTime: string | null): string | n
     : parsed.toISOString();
 }
 
+function getBearerToken(req: Request): string | null {
+  const authHeader = req.headers.get('authorization') ?? '';
+  const match = authHeader.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() || null;
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 serve(async (req) => {
-  // Allow POST (app invoke) and GET (quick test)
-  if (req.method !== 'POST' && req.method !== 'GET') {
+  if (req.method !== 'POST') {
     return json({ error: 'Method not allowed' }, 405);
   }
 
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     console.error('[MatchSync] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
     return json({ error: 'Server misconfigured' }, 500);
+  }
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const bearerToken = getBearerToken(req);
+
+  if (!bearerToken) {
+    console.warn('[MatchSync] Missing authorization bearer token');
+    return json({ error: 'Unauthorized' }, 401);
+  }
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser(bearerToken);
+
+  if (userError || !user?.id) {
+    console.warn('[MatchSync] Invalid authorization bearer token', userError?.message ?? null);
+    return json({ error: 'Unauthorized' }, 401);
+  }
+
+  const { data: adminRow, error: adminError } = await supabase
+    .from('app_admins')
+    .select('user_id')
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  if (adminError) {
+    console.error('[MatchSync] Admin check failed:', adminError.message);
+    return json({ error: 'Admin check failed' }, 500);
+  }
+
+  if (!adminRow) {
+    console.warn('[MatchSync] Non-admin sync attempt blocked:', user.id);
+    return json({ error: 'Forbidden' }, 403);
   }
 
   const season = currentSeason();
@@ -125,10 +166,6 @@ serve(async (req) => {
   }));
 
   // 5. Upsert — ON CONFLICT (provider_fixture_id) to avoid duplicates
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-
   let upserted = 0;
   const chunkSize = 100;
   const errors: string[] = [];

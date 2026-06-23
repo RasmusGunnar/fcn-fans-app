@@ -35,7 +35,6 @@ export type FeedEventData = {
   creatorUserId?: string | null;
   createdBy?: string | null;
   createdAt?: string | null;
-  eventType?: 'event' | 'bus_trip' | string | null;
   coverBucket?: string | null;
   coverPath?: string | null;
 } & FeedRankingSignals;

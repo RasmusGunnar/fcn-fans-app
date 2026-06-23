@@ -25,7 +25,7 @@ interface EventCardProps {
   likes: number;
   comments: number;
   onToggleLike: () => void;
-  onPressShare: () => void;
+  onPressShare?: () => void;
   onPressDetail: () => void;
   commentPreviews?: CommentPreview[];
   onNewComment?: (comment: CommentPreview) => void;

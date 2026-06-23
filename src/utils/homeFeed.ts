@@ -1018,7 +1018,6 @@ function toEventFeedItem(event: Event): FeedItem {
       creatorUserId: event.creator_user_id ?? null,
       createdBy: event.created_by ?? null,
       createdAt: event.created_at ?? null,
-      eventType: 'event',
       coverBucket: event.cover_bucket ?? null,
       coverPath: event.cover_path ?? null,
       sortDate: startAt ?? event.created_at ?? null,

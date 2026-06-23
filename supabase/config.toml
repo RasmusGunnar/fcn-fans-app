@@ -15,9 +15,9 @@ verify_jwt = false
 [functions.sync_wild_tigers_songs]
 verify_jwt = false
 
-# sync-fixtures: also uses secret-header auth, no JWT needed.
+# sync-fixtures: app admin on-demand sync. Requires user JWT and in-function admin check.
 [functions.sync-fixtures]
-verify_jwt = false
+verify_jwt = true
 
 # sportsdb_team_hero: public, no JWT needed (returns hero image URL for a team).
 [functions.sportsdb_team_hero]

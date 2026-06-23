@@ -57,6 +57,12 @@ function CustomTabBar({ state, navigation, tabs, showCreate }: any) {
     openCreateSheet();
   };
 
+  const onCreateEvent = () => {
+    closeCreateSheet();
+    const parentNavigation = navigation.getParent?.();
+    (parentNavigation ?? navigation).navigate('CreateNewEvent');
+  };
+
   const leftTabs = tabs.slice(0, Math.ceil(tabs.length / 2));
   const rightTabs = tabs.slice(Math.ceil(tabs.length / 2));
 
@@ -115,6 +121,7 @@ function CustomTabBar({ state, navigation, tabs, showCreate }: any) {
           <CreateSheet
             visible
             onClose={closeCreateSheet}
+            onCreateEvent={onCreateEvent}
             initialContentType={initialContentType}
             initialFeedTargets={initialFeedTargets}
             initialActor={initialActor}

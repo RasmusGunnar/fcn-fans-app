@@ -102,8 +102,8 @@ export default function OnboardingProfileSetupScreen({ navigation, route }: Prop
   }, [user?.id]);
 
   const canContinue = useMemo(() => {
-    return displayNameInput.trim().length > 0 && !!avatarUrlInput && !saving;
-  }, [displayNameInput, avatarUrlInput, saving]);
+    return displayNameInput.trim().length > 0 && !saving;
+  }, [displayNameInput, saving]);
 
   const handleUploadAvatar = async () => {
     if (!user?.id) return;
@@ -112,7 +112,10 @@ export default function OnboardingProfileSetupScreen({ navigation, route }: Prop
     setUploadingAvatar(false);
 
     if (!avatarPath) {
-      Alert.alert('Fejl', 'Kunne ikke uploade billede. Prøv igen.');
+      Alert.alert(
+        'Billedet blev ikke uploadet',
+        'Du kan fortsætte uden profilbillede og tilføje det senere fra din profil.',
+      );
       return;
     }
 
@@ -126,11 +129,6 @@ export default function OnboardingProfileSetupScreen({ navigation, route }: Prop
 
     if (!trimmedName) {
       Alert.alert('Mangler kaldenavn', 'Indtast et kaldenavn for at fortsætte.');
-      return;
-    }
-
-    if (!avatarUrlInput) {
-      Alert.alert('Mangler profilbillede', 'Upload et profilbillede for at fortsætte.');
       return;
     }
 
@@ -236,7 +234,7 @@ export default function OnboardingProfileSetupScreen({ navigation, route }: Prop
             Gør profilen til din
           </Text>
           <Text variant="body" color="secondary" style={styles.subtitle}>
-            Vælg et kaldenavn og et profilbillede, så andre fans kan kende dig.
+            Vælg et kaldenavn. Du kan også tilføje et profilbillede, så andre fans kan kende dig.
           </Text>
         </View>
 
@@ -257,7 +255,7 @@ export default function OnboardingProfileSetupScreen({ navigation, route }: Prop
                 ? 'Henter billede...'
                 : hasAvatar
                   ? 'Skift profilbillede'
-                  : 'Vælg profilbillede'}
+                  : 'Vælg profilbillede (valgfrit)'}
             </Text>
           </View>
 

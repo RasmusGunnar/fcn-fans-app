@@ -134,7 +134,7 @@ export function FeedCardShell({
         comments={commentsCount}
         onToggleLike={actions.onToggleLike || (() => {})}
         onPressComment={handlePressComment}
-        onPressShare={actions.onPressShare || (() => {})}
+        onPressShare={actions.onPressShare}
       />
 
       {showPreview && (
