@@ -8,6 +8,10 @@ import { Text } from '../components/ui';
 import { getNotifications, markAsRead, type NotificationItem } from '../services/notificationsApi';
 import { useTheme, type Theme } from '../theme';
 import { navigateFromNotificationData } from '../navigation/navigationRef';
+import {
+  getNotificationInteractionKind,
+  getNotificationLabel,
+} from '../utils/notificationPresentation';
 
 function formatRelativeTime(value: string): string {
   const createdAt = new Date(value).getTime();
@@ -35,16 +39,6 @@ function formatRelativeTime(value: string): string {
   }
 }
 
-function getNotificationLabel(item: NotificationItem): string {
-  if (item.type === 'mention') {
-    return item.entity_type === 'comment'
-      ? 'Du blev nævnt i en kommentar'
-      : 'Du blev nævnt i et opslag';
-  }
-
-  return 'Nogen svarede på din kommentar';
-}
-
 function buildNotificationTarget(item: NotificationItem): Record<string, unknown> {
   if (item.type === 'mention' && item.entity_type === 'comment') {
     return {
@@ -67,9 +61,11 @@ function buildNotificationTarget(item: NotificationItem): Record<string, unknown
     };
   }
 
+  const isCommentOnPost = getNotificationInteractionKind(item) === 'comment_on_post';
+
   return {
-    notificationType: 'reply_to_comment',
-    targetType: 'comment_reply',
+    notificationType: isCommentOnPost ? 'comment_on_post' : 'reply_to_comment',
+    targetType: isCommentOnPost ? 'post_comment' : 'comment_reply',
     postId: item.post_id,
     commentId: item.entity_id,
     entityId: item.entity_id,

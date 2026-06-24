@@ -2,7 +2,6 @@
 import {
   createAdminClient,
   dispatchNotifications,
-  fetchAllPushTokens,
   fetchPushTokensForUsers,
   json,
   requireSyncSecret,
@@ -40,7 +39,6 @@ Deno.serve(async (req) => {
       throw eventError;
     }
 
-    const allTokens = await fetchAllPushTokens(supabase);
     const requests: any[] = [];
 
     for (const event of events ?? []) {
@@ -63,8 +61,11 @@ Deno.serve(async (req) => {
         ),
       );
 
-      const tokens =
-        rsvpUserIds.length > 0 ? await fetchPushTokensForUsers(supabase, rsvpUserIds) : allTokens;
+      if (rsvpUserIds.length === 0) {
+        continue;
+      }
+
+      const tokens = await fetchPushTokensForUsers(supabase, rsvpUserIds);
 
       tokens.forEach((tokenRow: any) => {
         requests.push({

@@ -24,15 +24,7 @@ logPerformanceEvent('ScreenLifecycle', 'module-evaluated', { screen: 'LibraryScr
 
 const theme = defaultTheme;
 
-declare const process: {
-  env: {
-    EXPO_PUBLIC_SPORTSDB_LEAGUE_ID?: string;
-    EXPO_PUBLIC_SPORTSDB_SEASON?: string;
-  };
-};
-
-const STANDINGS_LEAGUE_ID: string = String(process.env.EXPO_PUBLIC_SPORTSDB_LEAGUE_ID ?? '4340');
-const STANDINGS_SEASON = process.env.EXPO_PUBLIC_SPORTSDB_SEASON ?? '2025-2026';
+const STANDINGS_LEAGUE_ID = '4340';
 
 type LibrarySegmentKey = 'songs' | 'standings' | 'links' | 'videos';
 
@@ -205,9 +197,9 @@ function StandingsView() {
     const loadStandings = async () => {
       const { data, error } = await supabase
         .from('standings_cache')
-        .select('rows, updated_at, league_id, season')
+        .select('rows, updated_at, league_id, season, is_active')
         .eq('league_id', STANDINGS_LEAGUE_ID)
-        .eq('season', STANDINGS_SEASON)
+        .eq('is_active', true)
         .order('updated_at', { ascending: false })
         .limit(1)
         .maybeSingle();

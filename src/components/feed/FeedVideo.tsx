@@ -123,7 +123,7 @@ export function FeedVideo({
   // Play or pause based on active state
   const shouldPlay = isActive && appActive;
   const effectiveMuted = muted || !shouldPlay;
-  const showPosterOverlay = !isFirstFrameReady;
+  const showPosterOverlay = !shouldPlay || !isFirstFrameReady;
 
   // Debug: log whenever playback intent changes
   useEffect(() => {
@@ -137,6 +137,12 @@ export function FeedVideo({
     isLoadedRef.current = false;
     setIsFirstFrameReady(false);
   }, [posterUri, uri]);
+
+  useEffect(() => {
+    if (!shouldPlay) {
+      setIsFirstFrameReady(false);
+    }
+  }, [shouldPlay]);
 
   useEffect(
     () => () => {
@@ -189,7 +195,7 @@ export function FeedVideo({
   }, [applyInlinePlaybackStatus]);
 
   const markFirstFrameReady = useCallback(
-    (source: 'readyForDisplay' | 'playing') => {
+    () => {
       setIsFirstFrameReady(true);
 
       if (didNotifyReadyRef.current) {
@@ -200,7 +206,7 @@ export function FeedVideo({
       if (__DEV__) {
         console.log('[FeedVideo] ready/playing', {
           uri,
-          source,
+          source: 'readyForDisplay',
           msSinceMount: Date.now() - mountedAtRef.current,
         });
       }
@@ -222,17 +228,6 @@ export function FeedVideo({
     },
     [applyInlinePlaybackStatus, metaRatio],
   );
-  const handlePlaybackStatusUpdate = useCallback(
-    (status: AVPlaybackStatus) => {
-      if (!status.isLoaded || !status.isPlaying) {
-        return;
-      }
-
-      markFirstFrameReady('playing');
-    },
-    [markFirstFrameReady],
-  );
-
   const toggleMute = useCallback(
     (event?: GestureResponderEvent) => {
       event?.stopPropagation();
@@ -255,8 +250,7 @@ export function FeedVideo({
         posterSource={posterSource}
         posterStyle={styles.video}
         onLoad={handleLoad}
-        onReadyForDisplay={() => markFirstFrameReady('readyForDisplay')}
-        onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
+        onReadyForDisplay={markFirstFrameReady}
         onError={(error) => {
           if (__DEV__) {
             console.warn('[FeedVideo] playback error', { uri, error });
@@ -269,7 +263,7 @@ export function FeedVideo({
           {posterSource ? (
             <Image source={posterSource} style={styles.posterImage} resizeMode="cover" />
           ) : (
-            <View style={styles.posterFallback} />
+            <VideoPosterPlaceholder />
           )}
         </View>
       ) : null}
@@ -309,20 +303,34 @@ export function FeedVideo({
   );
 }
 
+function VideoPosterPlaceholder() {
+  return (
+    <View style={styles.posterFallback}>
+      <View style={styles.posterFallbackIcon}>
+        <Ionicons
+          name="play"
+          size={theme.components.icon.size.lg}
+          color={theme.colors.text.secondary}
+        />
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     width: '100%',
-    backgroundColor: theme.colors.overlay.fullscreen,
+    backgroundColor: theme.colors.bg.subtle,
     overflow: 'hidden',
   },
   video: {
     width: '100%',
     height: '100%',
-    backgroundColor: theme.colors.overlay.fullscreen,
+    backgroundColor: theme.colors.bg.subtle,
   },
   posterOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: theme.colors.overlay.fullscreen,
+    backgroundColor: theme.colors.bg.subtle,
   },
   posterImage: {
     width: '100%',
@@ -330,7 +338,19 @@ const styles = StyleSheet.create({
   },
   posterFallback: {
     flex: 1,
-    backgroundColor: theme.colors.overlay.fullscreen,
+    backgroundColor: theme.colors.bg.subtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  posterFallbackIcon: {
+    width: theme.spacing[12],
+    height: theme.spacing[12],
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.bg.card,
+    borderWidth: theme.layout.borderHairline,
+    borderColor: theme.colors.border.default,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   mediaPressTarget: {
     ...StyleSheet.absoluteFillObject,

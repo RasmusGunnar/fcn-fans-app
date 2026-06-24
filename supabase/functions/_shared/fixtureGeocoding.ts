@@ -8,6 +8,19 @@ type FixtureRow = Record<string, unknown>;
 
 type CandidateSource = 'mapped_venue' | 'venue_city' | 'country_hint';
 
+type MappedFallbackCoords = {
+  lat: number;
+  lng: number;
+  place_name: string;
+  source: string;
+};
+
+type VenueMapping = {
+  venues: string[];
+  queries: string[];
+  fallback?: MappedFallbackCoords;
+};
+
 type GeocodeCandidate = {
   query: string;
   source: CandidateSource;
@@ -28,6 +41,8 @@ type GeocodeResult =
 
 export type FixtureGeocodingStatus =
   | 'geocoded'
+  | 'reused_existing_venue_coords'
+  | 'used_mapped_fallback_coords'
   | 'skipped_existing_coords'
   | 'skipped_no_venue'
   | 'failed_no_match'
@@ -41,6 +56,8 @@ export type FixtureGeocodingResult = {
   query?: string;
   place_name?: string;
   mapped_venue?: boolean;
+  reused_from_fixture_id?: string;
+  fallback_source?: string;
   error?: string;
 };
 
@@ -48,6 +65,8 @@ export type FixtureGeocodingSummary = {
   scanned: number;
   attempted: number;
   geocoded: number;
+  reused_existing_venue_coords: number;
+  used_mapped_fallback_coords: number;
   mapped_venue: number;
   skipped_existing_coords: number;
   skipped_no_venue: number;
@@ -72,18 +91,36 @@ const FCN_TEAM_PROVIDER_ID = '133890';
 const FCN_TEAM_NAME_MATCHERS = ['nordsjalland', 'nordsjaelland'];
 const USER_AGENT = 'FCN-Fans-Fixture-Geocoding/1.0';
 
-const VENUE_QUERY_MAPPINGS: { venues: string[]; queries: string[] }[] = [
+const VENUE_QUERY_MAPPINGS: VenueMapping[] = [
   {
     venues: ['Br\u00f8ndby Stadion'],
     queries: ['Br\u00f8ndby Stadion, Br\u00f8ndby Stadion 30, 2605 Br\u00f8ndby, Denmark'],
+    fallback: {
+      lat: 55.648839,
+      lng: 12.418517,
+      place_name: 'Br\u00f8ndby Stadion, Br\u00f8ndby Stadion 30, 2605 Br\u00f8ndby, Denmark',
+      source: 'https://fr.wikipedia.org/wiki/Br%C3%B8ndby_Stadion',
+    },
   },
   {
     venues: ['Stadion im Ernesta Pohla', 'Stadion im. Ernesta Pohla', 'Arena Zabrze'],
     queries: ['Arena Zabrze, ul. F. Roosevelta 81, 41-800 Zabrze, Poland'],
+    fallback: {
+      lat: 50.296317,
+      lng: 18.768564,
+      place_name: 'Arena Zabrze, ul. F. Roosevelta 81, 41-800 Zabrze, Poland',
+      source: 'https://fr.wikipedia.org/wiki/Stade_Ernest-Pohl',
+    },
   },
   {
     venues: ['Chorten Arena'],
     queries: ['Chorten Arena, ul. S\u0142oneczna 1, 15-323 Bia\u0142ystok, Poland'],
+    fallback: {
+      lat: 53.105556,
+      lng: 23.148889,
+      place_name: 'Chorten Arena, ul. S\u0142oneczna 1, 15-323 Bia\u0142ystok, Poland',
+      source: 'https://de.wikipedia.org/wiki/Chorten_Arena',
+    },
   },
   {
     venues: ['Gamla Ullevi'],
@@ -92,6 +129,12 @@ const VENUE_QUERY_MAPPINGS: { venues: string[]; queries: string[] }[] = [
   {
     venues: ['Right to Dream Park', 'Farum Park'],
     queries: ['Right to Dream Park, Idr\u00e6tsv\u00e6nget 2, 3520 Farum, Denmark'],
+    fallback: {
+      lat: 55.816071,
+      lng: 12.35306,
+      place_name: 'Right to Dream Park, Idr\u00e6tsv\u00e6nget 2, 3520 Farum, Denmark',
+      source: 'https://de.wikipedia.org/wiki/Farum_Park',
+    },
   },
   {
     venues: ['Energi Viborg Arena'],
@@ -121,11 +164,23 @@ const VENUE_QUERIES_BY_KEY = new Map<string, string[]>(
   ),
 );
 
+const VENUE_FALLBACKS_BY_KEY = new Map<string, MappedFallbackCoords>(
+  VENUE_QUERY_MAPPINGS.flatMap((entry) =>
+    entry.fallback
+      ? entry.venues.map(
+          (venue) => [normalizeText(venue), entry.fallback] as [string, MappedFallbackCoords],
+        )
+      : [],
+  ),
+);
+
 function createEmptySummary(): FixtureGeocodingSummary {
   return {
     scanned: 0,
     attempted: 0,
     geocoded: 0,
+    reused_existing_venue_coords: 0,
+    used_mapped_fallback_coords: 0,
     mapped_venue: 0,
     skipped_existing_coords: 0,
     skipped_no_venue: 0,
@@ -220,16 +275,19 @@ function buildCandidates(row: FixtureRow): {
   venue: string | null;
   candidates: GeocodeCandidate[];
   mappedVenue: boolean;
+  fallback?: MappedFallbackCoords;
 } {
   const venue = getVenue(row);
   if (!venue) return { venue: null, candidates: [], mappedVenue: false };
 
-  const mappedQueries = VENUE_QUERIES_BY_KEY.get(normalizeText(venue)) ?? [];
+  const venueKey = normalizeText(venue);
+  const mappedQueries = VENUE_QUERIES_BY_KEY.get(venueKey) ?? [];
   if (mappedQueries.length > 0) {
     return {
       venue,
       candidates: mappedQueries.map((query) => ({ query, source: 'mapped_venue' })),
       mappedVenue: true,
+      fallback: VENUE_FALLBACKS_BY_KEY.get(venueKey),
     };
   }
 
@@ -304,10 +362,42 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function readErrorMessage(error: unknown): string {
+  if (error && typeof error === 'object' && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string' && message.trim().length > 0) return message;
+  }
+  return String(error);
+}
+
+async function updateFixtureCoordinates(
+  supabase: SupabaseLike,
+  fixtureId: string,
+  coords: { lat: number; lng: number; place_name: string },
+): Promise<string | null> {
+  const { error } = await supabase
+    .from('fixtures')
+    .update({
+      lat: coords.lat,
+      lng: coords.lng,
+      place_name: coords.place_name,
+      geocoded_at: new Date().toISOString(),
+    })
+    .eq('id', fixtureId);
+
+  return error ? readErrorMessage(error) : null;
+}
+
 function addResult(summary: FixtureGeocodingSummary, result: FixtureGeocodingResult) {
   switch (result.status) {
     case 'geocoded':
       summary.geocoded++;
+      break;
+    case 'reused_existing_venue_coords':
+      summary.reused_existing_venue_coords++;
+      break;
+    case 'used_mapped_fallback_coords':
+      summary.used_mapped_fallback_coords++;
       break;
     case 'skipped_existing_coords':
       summary.skipped_existing_coords++;
@@ -347,6 +437,72 @@ async function fetchUpcomingFcnFixtures(
   return { rows: rows.filter(isFcnFixture).slice(0, limit) };
 }
 
+type ReusableVenueCoords = {
+  fixtureId: string;
+  venue: string;
+  lat: number;
+  lng: number;
+  place_name: string;
+};
+
+async function fetchReusableVenueCoords(
+  supabase: SupabaseLike,
+  rows: FixtureRow[],
+): Promise<Map<string, ReusableVenueCoords>> {
+  const neededVenueKeys = new Set(
+    rows
+      .filter((row) => !isValidCoordinatePair(row))
+      .map((row) => getVenue(row))
+      .filter((venue): venue is string => !!venue)
+      .map(normalizeText),
+  );
+
+  if (neededVenueKeys.size === 0) return new Map();
+
+  const { data, error } = await supabase
+    .from('fixtures')
+    .select('id,venue,venue_name,lat,lng,place_name,geocoded_at')
+    .not('lat', 'is', null)
+    .not('lng', 'is', null)
+    .order('geocoded_at', { ascending: false, nullsFirst: false })
+    .limit(1000);
+
+  if (error) {
+    console.warn(
+      '[fixture-geocoding] reusable venue coords lookup failed:',
+      readErrorMessage(error),
+    );
+    return new Map();
+  }
+
+  const reusableByVenueKey = new Map<string, ReusableVenueCoords>();
+  const candidates = Array.isArray(data) ? (data as FixtureRow[]) : [];
+
+  for (const candidate of candidates) {
+    if (!isValidCoordinatePair(candidate)) continue;
+
+    const venue = getVenue(candidate);
+    if (!venue) continue;
+
+    const venueKey = normalizeText(venue);
+    if (!neededVenueKeys.has(venueKey) || reusableByVenueKey.has(venueKey)) continue;
+
+    const lat = readNumber(candidate.lat);
+    const lng = readNumber(candidate.lng);
+    if (lat == null || lng == null) continue;
+
+    reusableByVenueKey.set(venueKey, {
+      fixtureId: getFixtureId(candidate),
+      venue,
+      lat,
+      lng,
+      place_name: readString(candidate.place_name) ?? venue,
+    });
+  }
+
+  return reusableByVenueKey;
+}
+
 export async function geocodeUpcomingFcnFixtures(
   supabase: SupabaseLike,
   options: FixtureGeocodingOptions = {},
@@ -377,6 +533,7 @@ export async function geocodeUpcomingFcnFixtures(
   }
 
   summary.scanned = rows.length;
+  const reusableVenueCoordsByKey = await fetchReusableVenueCoords(supabase, rows);
 
   for (const row of rows) {
     const fixtureId = getFixtureId(row);
@@ -392,7 +549,7 @@ export async function geocodeUpcomingFcnFixtures(
         continue;
       }
 
-      const { candidates, mappedVenue } = buildCandidates(row);
+      const { candidates, mappedVenue, fallback } = buildCandidates(row);
       if (mappedVenue) summary.mapped_venue++;
 
       if (!venue) {
@@ -400,6 +557,62 @@ export async function geocodeUpcomingFcnFixtures(
           fixtureId,
           venue: null,
           status: 'skipped_no_venue',
+        });
+        continue;
+      }
+
+      if (mappedVenue && fallback) {
+        const updateError = await updateFixtureCoordinates(supabase, fixtureId, fallback);
+
+        if (updateError) {
+          addResult(summary, {
+            fixtureId,
+            venue,
+            status: 'failed_update',
+            query: candidates[0]?.query,
+            mapped_venue: true,
+            fallback_source: fallback.source,
+            error: updateError,
+          });
+          continue;
+        }
+
+        addResult(summary, {
+          fixtureId,
+          venue,
+          status: 'used_mapped_fallback_coords',
+          query: candidates[0]?.query,
+          place_name: fallback.place_name,
+          mapped_venue: true,
+          fallback_source: fallback.source,
+        });
+        continue;
+      }
+
+      const reusableCoords = reusableVenueCoordsByKey.get(normalizeText(venue));
+      if (reusableCoords) {
+        const updateError = await updateFixtureCoordinates(supabase, fixtureId, {
+          lat: reusableCoords.lat,
+          lng: reusableCoords.lng,
+          place_name: reusableCoords.place_name,
+        });
+
+        if (updateError) {
+          addResult(summary, {
+            fixtureId,
+            venue,
+            status: 'failed_update',
+            error: updateError,
+          });
+          continue;
+        }
+
+        addResult(summary, {
+          fixtureId,
+          venue,
+          status: 'reused_existing_venue_coords',
+          place_name: reusableCoords.place_name,
+          reused_from_fixture_id: reusableCoords.fixtureId,
         });
         continue;
       }
@@ -430,15 +643,11 @@ export async function geocodeUpcomingFcnFixtures(
           continue;
         }
 
-        const { error: updateError } = await supabase
-          .from('fixtures')
-          .update({
-            lat: geocode.lat,
-            lng: geocode.lng,
-            place_name: geocode.place_name,
-            geocoded_at: new Date().toISOString(),
-          })
-          .eq('id', fixtureId);
+        const updateError = await updateFixtureCoordinates(supabase, fixtureId, {
+          lat: geocode.lat,
+          lng: geocode.lng,
+          place_name: geocode.place_name,
+        });
 
         if (updateError) {
           addResult(summary, {
@@ -447,7 +656,7 @@ export async function geocodeUpcomingFcnFixtures(
             status: 'failed_update',
             query: candidate.query,
             mapped_venue: candidate.source === 'mapped_venue',
-            error: updateError.message ?? String(updateError),
+            error: updateError,
           });
           break;
         }

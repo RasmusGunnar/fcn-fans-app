@@ -26,6 +26,12 @@ type CommentRow = {
   created_at: string;
 };
 
+type PostRow = {
+  id: string;
+  author_id: string | null;
+  post_type: string | null;
+};
+
 type PushTokenRow = {
   user_id: string;
   push_token: string;
@@ -124,8 +130,40 @@ Deno.serve(async (req) => {
       });
     }
 
+    const notificationType: 'comment_on_post' | 'reply_to_comment' = comment.parent_id
+      ? 'reply_to_comment'
+      : 'comment_on_post';
+
+    const { data: postData, error: postError } = await supabase
+      .from('posts')
+      .select('id, author_id, post_type')
+      .eq('id', comment.target_id)
+      .maybeSingle();
+
+    if (postError) {
+      throw postError;
+    }
+
+    const post = (postData as PostRow | null) ?? null;
+    if (!post?.id) {
+      console.log('[push_comment_replies] skipped missing post', {
+        commentId,
+        notificationType,
+        postId: comment.target_id,
+      });
+      return json(200, { ok: true, skipped: 'missing_post' });
+    }
+
+    if (readString(post?.post_type ?? null) === 'media_article') {
+      console.log('[push_comment_replies] skipped media article post', {
+        commentId,
+        notificationType,
+        postId: comment.target_id,
+      });
+      return json(200, { ok: true, skipped: 'media_article_post' });
+    }
+
     let recipientUserId: string | null = null;
-    let notificationType: 'comment_on_post' | 'reply_to_comment' = 'comment_on_post';
 
     if (comment.parent_id) {
       const { data: parentData, error: parentError } = await supabase
@@ -139,20 +177,8 @@ Deno.serve(async (req) => {
       }
 
       recipientUserId = readString(parentData?.author_id ?? null);
-      notificationType = 'reply_to_comment';
     } else {
-      const { data: postData, error: postError } = await supabase
-        .from('posts')
-        .select('id, author_id')
-        .eq('id', comment.target_id)
-        .maybeSingle();
-
-      if (postError) {
-        throw postError;
-      }
-
-      recipientUserId = readString(postData?.author_id ?? null);
-      notificationType = 'comment_on_post';
+      recipientUserId = readString(post?.author_id ?? null);
     }
 
     if (!recipientUserId) {
@@ -269,8 +295,7 @@ Deno.serve(async (req) => {
           body: bodyPreview,
           data: {
             notificationType,
-            targetType:
-              notificationType === 'reply_to_comment' ? 'comment_reply' : 'post_comment',
+            targetType: notificationType === 'reply_to_comment' ? 'comment_reply' : 'post_comment',
             type: 'post',
             postId: comment.target_id,
             commentId: comment.id,

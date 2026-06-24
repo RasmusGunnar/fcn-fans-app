@@ -24,6 +24,15 @@ export type InAppNotificationRequest = {
   dedupeKey?: string | null;
 };
 
+type CanonicalInAppNotification = {
+  userId: string;
+  actorId: string;
+  type: InAppNotificationType;
+  entityType: 'post' | 'comment';
+  entityId: string;
+  postId: string;
+};
+
 type ReservedNotification = DispatchNotificationRequest & {
   logId: string;
 };
@@ -215,11 +224,7 @@ function getErrorMessage(error: unknown) {
   return normalized || 'Unknown Expo transport error';
 }
 
-async function markBatchFailed(
-  supabase: any,
-  batch: ReservedNotification[],
-  errorMessage: string,
-) {
+async function markBatchFailed(supabase: any, batch: ReservedNotification[], errorMessage: string) {
   for (const notification of batch) {
     await updateNotificationLog(supabase, notification.logId, {
       status: 'failed',
@@ -373,84 +378,104 @@ export async function fetchExistingNotificationDedupeKeys(
   );
 }
 
-export async function fetchExistingInAppNotificationDedupeKeys(
-  supabase: any,
-  dedupeKeys: string[],
-) {
-  const uniqueKeys = Array.from(
-    new Set(dedupeKeys.map((key) => key.trim()).filter((key) => key.length > 0)),
-  );
+function normalizeInAppNotificationRequest(
+  request: InAppNotificationRequest,
+): CanonicalInAppNotification | null {
+  const userId = request.userId.trim();
+  const actorId = request.actorUserId?.trim() ?? '';
+  const postId = request.postId?.trim() ?? '';
+  const commentId = request.commentId?.trim() ?? '';
 
-  if (uniqueKeys.length === 0) {
-    return new Set<string>();
+  if (
+    !userId ||
+    !actorId ||
+    !postId ||
+    request.title.trim().length === 0 ||
+    (request.type !== 'mention' && request.type !== 'reply')
+  ) {
+    return null;
   }
 
+  return {
+    userId,
+    actorId,
+    type: request.type,
+    entityType: commentId ? 'comment' : 'post',
+    entityId: commentId || postId,
+    postId,
+  };
+}
+
+function getCanonicalInAppNotificationKey(notification: CanonicalInAppNotification): string {
+  return [
+    notification.userId,
+    notification.actorId,
+    notification.type,
+    notification.entityType,
+    notification.entityId,
+    notification.postId,
+  ].join(':');
+}
+
+async function hasExistingCanonicalInAppNotification(
+  supabase: any,
+  notification: CanonicalInAppNotification,
+): Promise<boolean> {
   const { data, error } = await supabase
-    .from('in_app_notifications')
-    .select('dedupe_key')
-    .in('dedupe_key', uniqueKeys);
+    .from('notifications')
+    .select('id')
+    .eq('user_id', notification.userId)
+    .eq('actor_id', notification.actorId)
+    .eq('type', notification.type)
+    .eq('entity_type', notification.entityType)
+    .eq('entity_id', notification.entityId)
+    .eq('post_id', notification.postId)
+    .limit(1);
 
   if (error) throw error;
 
-  return new Set(
-    ((data as { dedupe_key?: string | null }[] | null) ?? [])
-      .map((row) => row.dedupe_key?.trim() ?? '')
-      .filter((key) => key.length > 0),
-  );
+  return ((data as { id?: string | null }[] | null) ?? []).length > 0;
 }
 
 export async function createInAppNotifications(
   supabase: any,
   requests: InAppNotificationRequest[],
 ) {
-  const normalizedRequests = requests.filter(
-    (request) =>
-      request.userId.trim().length > 0 &&
-      request.title.trim().length > 0 &&
-      request.type.trim().length > 0,
-  );
-
-  const existingDedupeKeys = await fetchExistingInAppNotificationDedupeKeys(
-    supabase,
-    normalizedRequests
-      .map((request) => request.dedupeKey?.trim() ?? '')
-      .filter((key) => key.length > 0),
-  );
+  const normalizedRequests = requests
+    .map(normalizeInAppNotificationRequest)
+    .filter((request): request is CanonicalInAppNotification => Boolean(request));
 
   let created = 0;
   let skipped = 0;
+  const seenKeys = new Set<string>();
 
   for (const request of normalizedRequests) {
-    const dedupeKey = request.dedupeKey?.trim() || null;
-    if (dedupeKey && existingDedupeKeys.has(dedupeKey)) {
+    const key = getCanonicalInAppNotificationKey(request);
+    if (seenKeys.has(key) || (await hasExistingCanonicalInAppNotification(supabase, request))) {
       skipped += 1;
       continue;
     }
 
-    const { error } = await supabase.from('in_app_notifications').insert({
+    const { error } = await supabase.from('notifications').insert({
       user_id: request.userId,
-      actor_user_id: request.actorUserId?.trim() || null,
+      actor_id: request.actorId,
       type: request.type,
-      post_id: request.postId?.trim() || null,
-      comment_id: request.commentId?.trim() || null,
-      title: request.title.trim(),
-      body: request.body?.trim() || null,
-      dedupe_key: dedupeKey,
+      entity_type: request.entityType,
+      entity_id: request.entityId,
+      post_id: request.postId,
     });
 
     if (error) {
       const isDuplicate = error.code === '23505';
-      if (isDuplicate && dedupeKey) {
-        existingDedupeKeys.add(dedupeKey);
+      if (isDuplicate) {
+        seenKeys.add(key);
         skipped += 1;
         continue;
       }
       throw error;
     }
 
-    if (dedupeKey) {
-      existingDedupeKeys.add(dedupeKey);
-    }
+    seenKeys.add(key);
     created += 1;
   }
 

@@ -26,6 +26,8 @@ type RegistrationRow = {
   fan_activities?: {
     id: string;
     title: string | null;
+    parent_type: string | null;
+    parent_id: string | null;
   } | null;
 };
 
@@ -63,6 +65,51 @@ function getNotificationCopy(status: RegistrationStatus, activityTitle: string) 
   };
 }
 
+function buildFanActivityNotificationData(
+  row: RegistrationRow,
+  registrationId: string,
+  notificationType: string,
+) {
+  const fanActivityId = readString(row.fan_activity_id);
+  const parentType = readString(row.fan_activities?.parent_type ?? null);
+  const parentId = readString(row.fan_activities?.parent_id ?? null);
+  const baseData = {
+    notificationType,
+    registrationId,
+    fanActivityId: fanActivityId ?? row.fan_activity_id,
+  };
+
+  if (fanActivityId && parentId && parentType === 'match') {
+    return {
+      ...baseData,
+      targetType: 'match',
+      type: 'match',
+      fixtureId: parentId,
+      url: `fcnfans://match/${encodeURIComponent(parentId)}/fan-activity/${encodeURIComponent(
+        fanActivityId,
+      )}`,
+    };
+  }
+
+  if (fanActivityId && parentId && parentType === 'event') {
+    return {
+      ...baseData,
+      targetType: 'event',
+      type: 'event',
+      eventId: parentId,
+      url: `fcnfans://event/${encodeURIComponent(parentId)}/fan-activity/${encodeURIComponent(
+        fanActivityId,
+      )}`,
+    };
+  }
+
+  return {
+    ...baseData,
+    targetType: 'home_feed',
+    type: 'home_feed',
+  };
+}
+
 Deno.serve(async (req) => {
   try {
     const auth = await requireAuthenticatedUser(req);
@@ -86,7 +133,9 @@ Deno.serve(async (req) => {
     const supabase = createAdminClient();
     const { data: registration, error: registrationError } = await supabase
       .from('fan_activity_registrations')
-      .select('id, status, user_id, fan_activity_id, fan_activities(id, title)')
+      .select(
+        'id, status, user_id, fan_activity_id, fan_activities(id, title, parent_type, parent_id)',
+      )
       .eq('id', registrationId)
       .maybeSingle();
 
@@ -157,13 +206,7 @@ Deno.serve(async (req) => {
           dedupeKey,
           title: copy.title,
           body: copy.body,
-          data: {
-            notificationType: copy.notificationType,
-            targetType: 'home_feed',
-            type: 'home_feed',
-            registrationId,
-            fanActivityId: row.fan_activity_id,
-          },
+          data: buildFanActivityNotificationData(row, registrationId, copy.notificationType),
         },
       ];
     });

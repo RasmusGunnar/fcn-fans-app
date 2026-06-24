@@ -424,11 +424,21 @@ export function FanPostCard({
                   ) : (
                     <View style={styles.videoPosterFallback} />
                   )}
-                  <View style={styles.videoOverlay} pointerEvents="none">
+                  <View
+                    style={[
+                      styles.videoOverlay,
+                      !videoPresentation.posterUri && styles.videoOverlayWithoutPoster,
+                    ]}
+                    pointerEvents="none"
+                  >
                     <Ionicons
                       name="play"
                       size={theme.components.icon.size.lg}
-                      color={theme.colors.text.inverse}
+                      color={
+                        videoPresentation.posterUri
+                          ? theme.colors.text.inverse
+                          : theme.colors.text.secondary
+                      }
                     />
                   </View>
                 </CardMedia>
@@ -513,7 +523,7 @@ const styles = StyleSheet.create({
   videoPosterFallback: {
     width: '100%',
     height: '100%',
-    backgroundColor: theme.colors.overlay.fullscreen,
+    backgroundColor: theme.colors.bg.subtle,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -522,6 +532,9 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.overlay.medium,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  videoOverlayWithoutPoster: {
+    backgroundColor: theme.colors.bg.subtle,
   },
   imageErrorContainer: {
     padding: theme.spacing[2],

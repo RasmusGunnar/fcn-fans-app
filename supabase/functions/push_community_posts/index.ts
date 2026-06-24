@@ -32,6 +32,7 @@ type CommunityPostRow = {
   community_id: string | null;
   text: string | null;
   poll_data: Record<string, unknown> | null;
+  post_type: string | null;
 };
 
 const DISCOVERY_NOTIFICATION_TYPES = ['community_post', 'community_poll'];
@@ -58,7 +59,9 @@ function normalizePushTokens(rows: PushTokenRow[]): PushTokenRow[] {
 }
 
 function truncatePreview(value: string | null | undefined, limit = 120) {
-  const normalized = String(value ?? '').replace(/\s+/g, ' ').trim();
+  const normalized = String(value ?? '')
+    .replace(/\s+/g, ' ')
+    .trim();
   if (!normalized) return 'Der er et nyt opslag i dit f\u00E6llesskab.';
   if (normalized.length <= limit) return normalized;
   return `${normalized.slice(0, limit - 1).trimEnd()}\u2026`;
@@ -102,7 +105,7 @@ Deno.serve(async (req) => {
     const supabase = createAdminClient();
     const { data: postData, error: postError } = await supabase
       .from('posts')
-      .select('id, author_id, actor_type, actor_id, community_id, text, poll_data')
+      .select('id, author_id, actor_type, actor_id, community_id, text, poll_data, post_type')
       .eq('id', postId)
       .maybeSingle();
 
@@ -117,6 +120,11 @@ Deno.serve(async (req) => {
 
     if (post.author_id !== callerUserId) {
       return json(403, { error: 'Only the post author can trigger community push' });
+    }
+
+    if (readString(post.post_type) === 'media_article') {
+      console.log('[push_community_posts] skipped media article post', { postId });
+      return json(200, { ok: true, skipped: 'media_article_post' });
     }
 
     const communityId = readString(post.community_id);

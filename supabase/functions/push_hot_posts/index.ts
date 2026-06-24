@@ -1,5 +1,11 @@
 // deno-lint-ignore-file no-explicit-any
-import { createAdminClient, dispatchNotifications, fetchAllPushTokens, json, requireSyncSecret } from '../_shared/push.ts';
+import {
+  createAdminClient,
+  dispatchNotifications,
+  fetchAllPushTokens,
+  json,
+  requireSyncSecret,
+} from '../_shared/push.ts';
 
 const LOOKBACK_HOURS = 24;
 const MIN_LIKES = 8;
@@ -21,7 +27,8 @@ Deno.serve(async (req) => {
 
     const { data: posts, error: postError } = await supabase
       .from('posts')
-      .select('id, created_at, feed_targets')
+      .select('id, created_at, feed_targets, post_type')
+      .eq('post_type', 'post')
       .gte('created_at', sinceIso)
       .order('created_at', { ascending: false })
       .limit(25);
@@ -33,7 +40,15 @@ Deno.serve(async (req) => {
     const homePosts = (posts ?? []).filter((post: any) => isHomePost(post.feed_targets));
     const postIds = homePosts.map((post: any) => String(post.id));
     if (postIds.length === 0) {
-      return json(200, { ok: true, postsMatched: 0, total: 0, queued: 0, skipped: 0, sent: 0, failed: 0 });
+      return json(200, {
+        ok: true,
+        postsMatched: 0,
+        total: 0,
+        queued: 0,
+        skipped: 0,
+        sent: 0,
+        failed: 0,
+      });
     }
 
     const [{ data: likes, error: likesError }, { data: comments, error: commentsError }] =
@@ -90,10 +105,11 @@ Deno.serve(async (req) => {
         title: 'Der er gang i snakken 🔥',
         body: 'Se hvad fans snakker om lige nu',
         data: {
-          targetType: 'home_feed',
+          targetType: 'post',
+          type: 'post',
           notificationType: 'hot_post',
           postId: post.id,
-          url: 'fcnfans://home',
+          url: `fcnfans://post/${post.id}`,
         },
       })),
     );

@@ -46,12 +46,14 @@ type ResolvedNotificationRoute =
       targetType: 'event';
       routeLabel: 'Main > Events > EventDetails';
       eventId: string;
+      fanActivityId?: string;
       fallback: boolean;
     }
   | {
       targetType: 'match';
       routeLabel: 'Main > Home > MatchDetails';
       fixtureId: string;
+      fanActivityId?: string;
       fallback: boolean;
     };
 
@@ -81,7 +83,9 @@ function normalizeNotificationTargetType(value: string | null): NotificationTarg
   return null;
 }
 
-function isPostDetailTargetType(value: NotificationTargetType | null): value is PostDetailTargetType {
+function isPostDetailTargetType(
+  value: NotificationTargetType | null,
+): value is PostDetailTargetType {
   return (
     value === 'post' ||
     value === 'post_comment' ||
@@ -132,6 +136,7 @@ function resolveNotificationRoute(payload: Record<string, unknown>): ResolvedNot
   const postId = readString(payload.postId ?? payload.targetId);
   const fixtureId = readString(payload.fixtureId ?? payload.matchId ?? payload.targetId);
   const eventId = readString(payload.eventId ?? payload.targetId);
+  const fanActivityId = readString(payload.fanActivityId);
 
   if (resolvedType === 'home_feed') {
     return {
@@ -155,6 +160,7 @@ function resolveNotificationRoute(payload: Record<string, unknown>): ResolvedNot
       targetType: 'match',
       routeLabel: 'Main > Home > MatchDetails',
       fixtureId,
+      ...(fanActivityId ? { fanActivityId } : {}),
       fallback: false,
     };
   }
@@ -164,6 +170,7 @@ function resolveNotificationRoute(payload: Record<string, unknown>): ResolvedNot
       targetType: 'event',
       routeLabel: 'Main > Events > EventDetails',
       eventId,
+      ...(fanActivityId ? { fanActivityId } : {}),
       fallback: false,
     };
   }
@@ -206,7 +213,13 @@ export function navigateFromNotificationData(
   if (resolvedRoute.targetType === 'match') {
     navigationRef.navigate('Main', {
       screen: 'Home',
-      params: { screen: 'MatchDetails', params: { fixtureId: resolvedRoute.fixtureId } },
+      params: {
+        screen: 'MatchDetails',
+        params: {
+          fixtureId: resolvedRoute.fixtureId,
+          ...(resolvedRoute.fanActivityId ? { fanActivityId: resolvedRoute.fanActivityId } : {}),
+        },
+      },
     });
     return true;
   }
@@ -214,7 +227,13 @@ export function navigateFromNotificationData(
   if (resolvedRoute.targetType === 'event') {
     navigationRef.navigate('Main', {
       screen: 'Events',
-      params: { screen: 'EventDetails', params: { eventId: resolvedRoute.eventId } },
+      params: {
+        screen: 'EventDetails',
+        params: {
+          eventId: resolvedRoute.eventId,
+          ...(resolvedRoute.fanActivityId ? { fanActivityId: resolvedRoute.fanActivityId } : {}),
+        },
+      },
     });
     return true;
   }

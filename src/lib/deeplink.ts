@@ -94,6 +94,7 @@ export function getNotificationDeepLinkWithOptions(
   const postId = readString(payload.postId ?? payload.targetId);
   const fixtureId = readString(payload.fixtureId ?? payload.matchId ?? payload.targetId);
   const eventId = readString(payload.eventId ?? payload.targetId);
+  const fanActivityId = readString(payload.fanActivityId);
   const targetType = normalizeNotificationTargetType(readString(payload.targetType));
   const legacyType = normalizeNotificationTargetType(readString(payload.type));
   const resolvedType = targetType ?? legacyType;
@@ -107,10 +108,26 @@ export function getNotificationDeepLinkWithOptions(
   }
 
   if (resolvedType === 'match' && fixtureId) {
+    if (fanActivityId) {
+      return createFanActivityDeepLink({
+        parentType: 'match',
+        parentId: fixtureId,
+        fanActivityId,
+      });
+    }
+
     return createMatchDeepLink(fixtureId);
   }
 
   if (resolvedType === 'event' && eventId) {
+    if (fanActivityId) {
+      return createFanActivityDeepLink({
+        parentType: 'event',
+        parentId: eventId,
+        fanActivityId,
+      });
+    }
+
     return createEventDeepLink(eventId);
   }
 
