@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "target": "ES2020",
+    "noEmit": false,
+    "rewriteRelativeImportExtensions": true,
+    "outDir": "./build/weekly-score-shadow-tests",
+    "rootDir": ".",
+    "types": ["node"],
+    "skipLibCheck": true
+  },
+  "include": [
+    "supabase/functions/_shared/weeklyScoreEngine.ts",
+    "supabase/functions/_shared/__tests__/weeklyScoreEngine.test.ts",
+    "scripts/weekly-score-shadow.ts"
+  ],
+  "exclude": []
+}
