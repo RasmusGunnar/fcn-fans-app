@@ -7,6 +7,7 @@ import { AppHeader } from '../components/AppHeader';
 import { Badge } from '../components/ui/Badge';
 import { Card } from '../components/ui/Card';
 import { SegmentedControl } from '../components/ui/SegmentedControl';
+import { DiscussionView } from '../components/views/DiscussionView';
 import { LinksView as LinksViewComponent } from '../components/views/LinksView';
 import { SongsView } from '../components/views/SongsView';
 import { VideosView as VideosViewComponent } from '../components/views/VideosView';
@@ -26,13 +27,14 @@ const theme = defaultTheme;
 
 const STANDINGS_LEAGUE_ID = '4340';
 
-type LibrarySegmentKey = 'songs' | 'standings' | 'links' | 'videos';
+type LibrarySegmentKey = 'songs' | 'standings' | 'links' | 'videos' | 'discussion';
 
 const segments = [
   { key: 'songs', label: 'Sange' },
   { key: 'standings', label: 'Stillingen' },
   { key: 'links', label: 'Links' },
   { key: 'videos', label: 'Videoer' },
+  { key: 'discussion', label: 'Debat' },
 ] as const satisfies readonly { key: LibrarySegmentKey; label: string }[];
 let hasEnteredLibraryScreen = false;
 
@@ -54,13 +56,7 @@ function isFcnTeam(name: string): boolean {
   return normalizeTeamName(name).includes('nordsjaelland');
 }
 
-function StandingsTableSection({
-  rows,
-  title,
-}: {
-  rows: StandingsRow[];
-  title?: string;
-}) {
+function StandingsTableSection({ rows, title }: { rows: StandingsRow[]; title?: string }) {
   return (
     <View style={styles.standingsSection}>
       {title ? <Text style={styles.standingsSectionTitle}>{title}</Text> : null}
@@ -322,11 +318,7 @@ export default function LibraryScreen() {
 
   return (
     <View style={styles.container}>
-      <AppHeader
-        title="Bibliotek"
-        subtitle="Ressourcer til FCN fans"
-        showProfileButton={false}
-      />
+      <AppHeader title="Bibliotek" subtitle="Ressourcer til FCN fans" showProfileButton={false} />
 
       <SegmentedControl items={segments} activeKey={activeSegment} onChange={handleSegmentPress} />
 
@@ -338,6 +330,7 @@ export default function LibraryScreen() {
         {activeSegment === 'standings' && <StandingsView />}
         {activeSegment === 'links' && <LinksViewComponent />}
         {activeSegment === 'videos' && <VideosViewComponent />}
+        {activeSegment === 'discussion' && <DiscussionView />}
       </ScrollView>
     </View>
   );

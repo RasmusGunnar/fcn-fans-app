@@ -27,6 +27,10 @@ verify_jwt = false
 [functions.parse-link]
 verify_jwt = false
 
+# discussion-link-preview: authenticated server-side preview fetcher with SSRF guards and DB cache.
+[functions.discussion-link-preview]
+verify_jwt = true
+
 # Manual app-admin ingestion into the private media article review queue.
 [functions.ingest-media-article-candidates]
 verify_jwt = true
