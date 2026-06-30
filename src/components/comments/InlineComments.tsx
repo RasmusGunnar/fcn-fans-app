@@ -28,9 +28,15 @@ import { defaultTheme } from '../../theme';
 import { Avatar } from '../Avatar';
 import { Text } from '../ui';
 import { resolveActorLine, type ProfileMap } from '../../utils/actor';
+import { applyOptimisticCommentLikeToggle } from '../../utils/commentLikeState';
 import { navigateToMentionTarget } from '../../utils/mentionNavigation';
 import { renderTextWithEntities } from '../../utils/renderTextWithEntities';
-import { triggerCommentReplyPush, type CommentReplyRecord } from '../../services/commentsApi';
+import {
+  fetchCommentLikeStates,
+  toggleCommentLike,
+  triggerCommentReplyPush,
+  type CommentReplyRecord,
+} from '../../services/commentsApi';
 import type { CommentPreview } from '../../services/likesApi';
 
 export type CommentTargetType = 'post' | 'news' | 'event' | 'match' | 'bus_trip';
@@ -251,8 +257,16 @@ export function InlineComments({
 
       // Fetch author info (display_name, avatar_url) for display
       const rows = (data || []) as CommentRecord[];
+      const likeStateByCommentId = await fetchCommentLikeStates(
+        rows.map((comment) => comment.id),
+        currentUserId,
+      );
       const commentsWithAuthors = await Promise.all(
         rows.map(async (comment) => {
+          const likeState = likeStateByCommentId.get(comment.id) ?? {
+            likeCount: 0,
+            likedByMe: false,
+          };
           const { data: profile, error: profileError } = await supabase
             .from('profiles')
             .select('id, display_name, avatar_url')
@@ -272,8 +286,8 @@ export function InlineComments({
               ...comment,
               author_display_name: null,
               author_avatar_url: null,
-              likeCount: 0,
-              likedByMe: false,
+              likeCount: likeState.likeCount,
+              likedByMe: likeState.likedByMe,
             };
           }
 
@@ -281,8 +295,8 @@ export function InlineComments({
             ...comment,
             author_display_name: profile.display_name || null,
             author_avatar_url: profile.avatar_url || null,
-            likeCount: 0,
-            likedByMe: false,
+            likeCount: likeState.likeCount,
+            likedByMe: likeState.likedByMe,
           };
         }),
       );
@@ -294,7 +308,7 @@ export function InlineComments({
     } finally {
       setLoading(false);
     }
-  }, [groupComments, targetType, targetId]);
+  }, [currentUserId, groupComments, targetType, targetId]);
 
   useEffect(() => {
     fetchComments();
@@ -499,6 +513,37 @@ export function InlineComments({
       targetId: commentId,
       subjectLabel: 'kommentar',
     });
+  };
+
+  const handleToggleCommentLike = async (commentId: string) => {
+    if (!currentUserId) {
+      Alert.alert('Fejl', 'Du skal være logget ind for at like en kommentar');
+      return;
+    }
+
+    const previousComments = comments;
+    const optimisticUpdate = applyOptimisticCommentLikeToggle(comments, commentId);
+
+    if (!optimisticUpdate.toggledComment) {
+      return;
+    }
+
+    setComments(optimisticUpdate.comments);
+
+    try {
+      await toggleCommentLike({
+        commentId,
+        userId: currentUserId,
+        willLike: optimisticUpdate.toggledComment.likedByMe,
+      });
+    } catch (err) {
+      logger.warn('[InlineComments] toggleCommentLike failed:', {
+        commentId,
+        error: err,
+      });
+      setComments(previousComments);
+      Alert.alert('Fejl', 'Kunne ikke opdatere like');
+    }
   };
 
   const handleStartReply = (parentCommentId: string, displayName: string, scrollToId?: string) => {
@@ -780,6 +825,27 @@ export function InlineComments({
     return date.toLocaleDateString('da-DK', { day: 'numeric', month: 'short' });
   };
 
+  const renderCommentLikeButton = (comment: CommentReply) => (
+    <Pressable
+      onPress={() => {
+        void handleToggleCommentLike(comment.id);
+      }}
+      hitSlop={theme.spacing[2]}
+      style={styles.commentLikeButton}
+    >
+      <Ionicons
+        name={comment.likedByMe ? 'heart' : 'heart-outline'}
+        size={theme.spacing[5]}
+        color={comment.likedByMe ? theme.colors.primary : theme.colors.text.muted}
+      />
+      {comment.likeCount > 0 ? (
+        <Text variant="caption" color={comment.likedByMe ? 'primary' : 'muted'}>
+          {comment.likeCount}
+        </Text>
+      ) : null}
+    </Pressable>
+  );
+
   const renderCommentItem = (comment: Comment) => {
     const isOwnComment = currentUserId === comment.author_id;
     const canDelete = isOwnComment || isAppAdmin;
@@ -829,6 +895,7 @@ export function InlineComments({
                   {getTimeAgo(comment.created_at)}
                 </Text>
               </View>
+              {renderCommentLikeButton(comment)}
             </View>
 
             <Text variant="body" color="primary" style={styles.commentText}>
@@ -896,18 +963,21 @@ export function InlineComments({
                       </Pressable>
                       <View style={styles.replyContent}>
                         <View style={styles.replyHeaderRow}>
-                          <Pressable
-                            onPress={() =>
-                              navigation.navigate('PublicProfile', { userId: reply.author_id })
-                            }
-                          >
-                            <Text variant="caption" color="primary" style={styles.replyAuthor}>
-                              {resolvedReply.displayName}
+                          <View style={styles.replyHeaderText}>
+                            <Pressable
+                              onPress={() =>
+                                navigation.navigate('PublicProfile', { userId: reply.author_id })
+                              }
+                            >
+                              <Text variant="caption" color="primary" style={styles.replyAuthor}>
+                                {resolvedReply.displayName}
+                              </Text>
+                            </Pressable>
+                            <Text variant="caption" color="secondary" style={styles.replyTime}>
+                              {getTimeAgo(reply.created_at)}
                             </Text>
-                          </Pressable>
-                          <Text variant="caption" color="secondary" style={styles.replyTime}>
-                            {getTimeAgo(reply.created_at)}
-                          </Text>
+                          </View>
+                          {renderCommentLikeButton(reply)}
                         </View>
                         <Text variant="body" color="primary" style={styles.replyText}>
                           {renderEntityText(reply.text)}
@@ -1279,6 +1349,12 @@ const styles = StyleSheet.create({
     fontWeight: theme.typography.caption.fontWeight as any,
   },
   commentTime: {},
+  commentLikeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[1],
+    paddingLeft: theme.spacing[1],
+  },
   commentText: {
     marginTop: theme.spacing[1],
   },
@@ -1362,9 +1438,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   replyHeaderRow: {
-    flexDirection: 'column',
+    flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: theme.spacing[0],
+    justifyContent: 'space-between',
+    gap: theme.spacing[2],
+  },
+  replyHeaderText: {
+    flex: 1,
   },
   replyAuthor: {
     fontWeight: theme.typography.caption.fontWeight as any,

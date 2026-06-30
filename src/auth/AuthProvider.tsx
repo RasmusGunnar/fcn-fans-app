@@ -9,7 +9,7 @@ import { logPerformanceTiming, performanceNow } from '../utils/performanceTiming
 
 type User = any;
 type Session = any;
-const FACEBOOK_REDIRECT_URL = 'fcnfans://auth/callback';
+const AUTH_CALLBACK_URL = 'fcnfans://auth/callback';
 
 type HandledAuthError = Error & {
   authUiHandled?: boolean;
@@ -23,63 +23,12 @@ type AuthContextValue = {
   signInWithOtp: (email: string) => Promise<void>;
   verifyOtp: (email: string, token: string) => Promise<void>;
   signInWithApple: () => Promise<void>;
-  signInWithFacebook: () => Promise<void>;
   signInWithPassword: (email: string, password: string) => Promise<any>;
   signUp: (email: string, password: string) => Promise<any>;
   signOut: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
-
-function extractAuthCallbackParams(url: string): URLSearchParams {
-  const parsedUrl = new URL(url);
-  const params = new URLSearchParams(parsedUrl.search);
-  const hash = parsedUrl.hash.startsWith('#') ? parsedUrl.hash.slice(1) : parsedUrl.hash;
-
-  if (!hash) {
-    return params;
-  }
-
-  const hashParams = new URLSearchParams(hash);
-  hashParams.forEach((value, key) => {
-    if (!params.has(key)) {
-      params.set(key, value);
-    }
-  });
-
-  return params;
-}
-
-async function completeOAuthSessionFromUrl(url: string) {
-  const params = extractAuthCallbackParams(url);
-  const errorMessage = params.get('error_description') ?? params.get('error');
-
-  if (errorMessage) {
-    throw new Error(errorMessage);
-  }
-
-  const accessToken = params.get('access_token');
-  const refreshToken = params.get('refresh_token');
-
-  if (accessToken && refreshToken) {
-    const { error } = await supabase.auth.setSession({
-      access_token: accessToken,
-      refresh_token: refreshToken,
-    });
-
-    if (error) throw error;
-    return;
-  }
-
-  const authCode = params.get('code');
-  if (authCode) {
-    const { error } = await supabase.auth.exchangeCodeForSession(authCode);
-    if (error) throw error;
-    return;
-  }
-
-  throw new Error('Kunne ikke gennemfoere Facebook login.');
-}
 
 function getFriendlyAuthErrorMessage(error: unknown): string {
   const rawMessage = String((error as any)?.message ?? '').trim();
@@ -236,7 +185,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email,
         password,
         options: {
-          emailRedirectTo: FACEBOOK_REDIRECT_URL,
+          emailRedirectTo: AUTH_CALLBACK_URL,
         },
       });
       if (error) throw error;
@@ -320,39 +269,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signInWithFacebook = async () => {
-    setLoading(true);
-    try {
-      const WebBrowser = await import('expo-web-browser');
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'facebook',
-        options: {
-          redirectTo: FACEBOOK_REDIRECT_URL,
-          scopes: 'email',
-          skipBrowserRedirect: true,
-        },
-      });
-
-      if (error) throw error;
-      if (!data?.url) {
-        throw new Error('Facebook login URL mangler.');
-      }
-
-      const result = await WebBrowser.openAuthSessionAsync(data.url, FACEBOOK_REDIRECT_URL);
-
-      if (result.type !== 'success') {
-        return;
-      }
-
-      await completeOAuthSessionFromUrl(result.url);
-    } catch (e: any) {
-      logger.warn('[AuthProvider] Facebook sign-in error:', e);
-      Alert.alert('Fejl', e.message ?? String(e));
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const signOut = async () => {
     setLoading(true);
     try {
@@ -377,7 +293,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signInWithOtp,
         verifyOtp,
         signInWithApple,
-        signInWithFacebook,
         signInWithPassword,
         signUp,
         signOut,

@@ -18,7 +18,6 @@ import {
   Dimensions,
 } from 'react-native';
 import * as AppleAuthentication from 'expo-apple-authentication';
-import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '../components/ui';
@@ -40,7 +39,7 @@ export default function LoginScreen({ route, navigation }: Props) {
   const appLogo = require('../../assets/NewLogo.png');
   const screenHeight = Dimensions.get('window').height;
   const isCompactHeight = screenHeight < 780;
-  const { signInWithPassword, signUp, signInWithApple, signInWithFacebook, loading } = useAuth();
+  const { signInWithPassword, signUp, signInWithApple, loading } = useAuth();
   const theme = useTheme();
   const styles = createStyles(theme);
   const isCondensedLayout = isCompactHeight || isKeyboardVisible;
@@ -110,22 +109,12 @@ export default function LoginScreen({ route, navigation }: Props) {
     }
   };
 
-  const onFacebook = async () => {
-    try {
-      await signInWithFacebook();
-    } catch (err: any) {
-      const msg = err?.message || String(err) || 'Ukendt fejl';
-      Alert.alert('Fejl', msg);
-    }
-  };
-
   const primaryDisabled =
     loading || !email.trim().includes('@') || !password || password.length < 6;
   const isFormValid = email.trim().includes('@') && !!password && password.length >= 6;
   const isSignup = mode === 'signup';
   const showAppleAuth = Platform.OS === 'ios';
-  const showFacebookAuth = true;
-  const showSocialDivider = showAppleAuth || showFacebookAuth;
+  const showSocialDivider = showAppleAuth;
 
   const handleOpenLegalDocument = async (kind: 'privacy' | 'terms') => {
     try {
@@ -223,44 +212,15 @@ export default function LoginScreen({ route, navigation }: Props) {
           </View>
         ) : null}
 
-        {showFacebookAuth ? (
-          <View
-          style={[
-            styles.socialAuthSection,
-            isCondensedLayout && styles.socialAuthSectionCompact,
-            Platform.OS === 'ios' && styles.secondarySocialAuthSection,
-          ]}
-        >
-          <Pressable
-            style={({ pressed }) => [
-              styles.facebookButton,
-              loading && styles.buttonDisabled,
-              pressed && !loading && styles.buttonPressed,
-            ]}
-            onPress={onFacebook}
-            disabled={loading}
-          >
-            <View style={styles.facebookButtonContent}>
-              <Ionicons
-                name="logo-facebook"
-                size={theme.spacing[5]}
-                color={theme.colors.text.inverse}
-              />
-              <Text style={styles.facebookButtonText}>{'Forts\u00E6t med Facebook'}</Text>
-            </View>
-          </Pressable>
-          </View>
-        ) : null}
-
         {showSocialDivider ? (
           <View
-          style={[styles.dividerContainer, isCondensedLayout && styles.dividerContainerCompact]}
-        >
-          <View style={styles.dividerLine} />
-          <Text variant="small" color="secondary">
-            eller fortsæt med email
-          </Text>
-          <View style={styles.dividerLine} />
+            style={[styles.dividerContainer, isCondensedLayout && styles.dividerContainerCompact]}
+          >
+            <View style={styles.dividerLine} />
+            <Text variant="small" color="secondary">
+              eller fortsæt med email
+            </Text>
+            <View style={styles.dividerLine} />
           </View>
         ) : null}
 
@@ -343,10 +303,7 @@ export default function LoginScreen({ route, navigation }: Props) {
         </View>
 
         <View
-          style={[
-            styles.legalTextContainer,
-            isCondensedLayout && styles.legalTextContainerCompact,
-          ]}
+          style={[styles.legalTextContainer, isCondensedLayout && styles.legalTextContainerCompact]}
         >
           <Text variant="caption" style={styles.legalText}>
             Ved at fortsætte accepterer du vores{' '}
@@ -540,35 +497,12 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     socialAuthSectionCompact: {
       marginTop: theme.spacing[2],
     },
-    secondarySocialAuthSection: {
-      marginTop: theme.spacing[2],
-    },
     appleButtonWrapper: {
       width: '100%',
     },
     appleNativeButton: {
       width: '100%',
       height: theme.components.button.size.lg.height,
-    },
-    facebookButton: {
-      width: '100%',
-      minHeight: theme.components.button.size.lg.height,
-      borderRadius: theme.components.button.radius,
-      paddingHorizontal: theme.components.button.size.lg.px,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: theme.colors.state.info,
-    },
-    facebookButtonContent: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: theme.spacing[2],
-    },
-    facebookButtonText: {
-      fontSize: 18,
-      fontWeight: '600',
-      color: theme.colors.text.inverse,
     },
     helperText: {
       fontSize: 14,

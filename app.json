@@ -27,7 +27,8 @@
       }
     },
     "android": {
-      "package": "dk.rasmusgunnar.fcnfans"
+      "package": "com.rasmusjakobsen.fcnfans",
+      "versionCode": 1
     },
     "web": {
       "bundler": "metro"
@@ -36,8 +37,7 @@
       "expo-notifications",
       "@react-native-community/datetimepicker",
       "expo-font",
-      "expo-apple-authentication",
-      "expo-web-browser"
+      "expo-apple-authentication"
     ],
     "extra": {
       "eas": {

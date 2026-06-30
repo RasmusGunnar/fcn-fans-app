@@ -7,6 +7,19 @@ export interface CommentLikeToggleInput {
   willLike: boolean;
 }
 
+export interface CommentLikeToggleResult {
+  liked: boolean;
+}
+
+export interface CommentLikeState {
+  likeCount: number;
+  likedByMe: boolean;
+}
+
+type SupabaseLikeClient = Pick<typeof supabase, 'from' | 'rpc'>;
+
+const COMMENT_LIKE_TARGET_TYPE = 'comment';
+
 export interface CommentReplyRecord {
   id: string;
   created_at: string;
@@ -52,12 +65,163 @@ export async function triggerCommentReplyPush(commentId: string): Promise<boolea
   }
 }
 
-// TODO: Replace stubs with real API calls once backend supports comment likes/replies.
-export async function toggleCommentLike(input: CommentLikeToggleInput): Promise<boolean> {
-  if (__DEV__) {
-    logger.warn('[commentsApi] TODO: toggleCommentLike not wired', input);
+function normalizeCommentIds(commentIds: string[]): string[] {
+  return Array.from(new Set(commentIds.map((id) => id.trim()).filter((id) => id.length > 0)));
+}
+
+function createEmptyLikeStateMap(commentIds: string[]): Map<string, CommentLikeState> {
+  return new Map(
+    commentIds.map((commentId) => [
+      commentId,
+      {
+        likeCount: 0,
+        likedByMe: false,
+      },
+    ]),
+  );
+}
+
+function getErrorMessage(error: unknown): string {
+  return String((error as any)?.message ?? error ?? 'Ukendt fejl');
+}
+
+function isDuplicateLikeError(error: unknown): boolean {
+  const code = String((error as any)?.code ?? '');
+  const message = getErrorMessage(error).toLowerCase();
+  return (
+    code === '23505' ||
+    message.includes('duplicate key') ||
+    message.includes('violates unique constraint')
+  );
+}
+
+export async function fetchCommentLikeStates(
+  commentIds: string[],
+  viewerUserId?: string,
+): Promise<Map<string, CommentLikeState>> {
+  return fetchCommentLikeStatesWithClient(supabase, commentIds, viewerUserId);
+}
+
+export async function fetchCommentLikeStatesWithClient(
+  client: SupabaseLikeClient,
+  commentIds: string[],
+  viewerUserId?: string,
+): Promise<Map<string, CommentLikeState>> {
+  const normalizedCommentIds = normalizeCommentIds(commentIds);
+  const stateByCommentId = createEmptyLikeStateMap(normalizedCommentIds);
+
+  if (normalizedCommentIds.length === 0) {
+    return stateByCommentId;
   }
-  return true;
+
+  const normalizedViewerUserId = viewerUserId?.trim();
+
+  const countsPromise = client.rpc('get_like_state_v2', {
+    p_target_type: COMMENT_LIKE_TARGET_TYPE,
+    p_target_ids: normalizedCommentIds,
+  });
+
+  const viewerLikesPromise = normalizedViewerUserId
+    ? client
+        .from('likes_v2')
+        .select('target_id')
+        .eq('user_id', normalizedViewerUserId)
+        .eq('target_type', COMMENT_LIKE_TARGET_TYPE)
+        .in('target_id', normalizedCommentIds)
+    : Promise.resolve({ data: [], error: null });
+
+  const [countsResponse, viewerLikesResponse] = await Promise.all([
+    countsPromise,
+    viewerLikesPromise,
+  ]);
+
+  if (countsResponse.error) {
+    logger.warn('[commentsApi] fetchCommentLikeStates count error:', countsResponse.error);
+  } else {
+    ((countsResponse.data as { target_id: string; likes_count: number | string }[]) || []).forEach(
+      (row) => {
+        const targetId = String(row.target_id);
+        const existing = stateByCommentId.get(targetId);
+        if (!existing) return;
+
+        stateByCommentId.set(targetId, {
+          ...existing,
+          likeCount: Number(row.likes_count) || 0,
+        });
+      },
+    );
+  }
+
+  if (viewerLikesResponse.error) {
+    logger.warn('[commentsApi] fetchCommentLikeStates viewer error:', viewerLikesResponse.error);
+  } else {
+    ((viewerLikesResponse.data as { target_id: string }[]) || []).forEach((row) => {
+      const targetId = String(row.target_id);
+      const existing = stateByCommentId.get(targetId);
+      if (!existing) return;
+
+      stateByCommentId.set(targetId, {
+        ...existing,
+        likedByMe: true,
+      });
+    });
+  }
+
+  return stateByCommentId;
+}
+
+export async function toggleCommentLike(
+  input: CommentLikeToggleInput,
+): Promise<CommentLikeToggleResult> {
+  return toggleCommentLikeWithClient(supabase, input);
+}
+
+export async function toggleCommentLikeWithClient(
+  client: SupabaseLikeClient,
+  input: CommentLikeToggleInput,
+): Promise<CommentLikeToggleResult> {
+  const commentId = input.commentId.trim();
+  const userId = input.userId.trim();
+
+  if (!commentId) {
+    throw new Error('Kommentar-id mangler');
+  }
+
+  if (!userId) {
+    throw new Error('Bruger-id mangler');
+  }
+
+  if (input.willLike) {
+    const { error } = await client.from('likes_v2').insert({
+      user_id: userId,
+      target_type: COMMENT_LIKE_TARGET_TYPE,
+      target_id: commentId,
+    });
+
+    if (error) {
+      if (isDuplicateLikeError(error)) {
+        return { liked: true };
+      }
+
+      logger.warn('[commentsApi] toggleCommentLike insert error:', error);
+      throw new Error('Kunne ikke like kommentaren');
+    }
+
+    return { liked: true };
+  }
+
+  const { error } = await client.from('likes_v2').delete().match({
+    user_id: userId,
+    target_type: COMMENT_LIKE_TARGET_TYPE,
+    target_id: commentId,
+  });
+
+  if (error) {
+    logger.warn('[commentsApi] toggleCommentLike delete error:', error);
+    throw new Error('Kunne ikke fjerne like fra kommentaren');
+  }
+
+  return { liked: false };
 }
 
 // TODO: Replace stub with real API call once backend supports replies.

@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -62,6 +62,16 @@ type ReportDraft = {
   reason: DiscussionReportReason;
   details: string;
 };
+
+type DiscussionInputFocusOptions = {
+  focus?: boolean;
+  scrollToEnd?: boolean;
+};
+
+type DiscussionInputFocusHandler = (
+  inputRef: React.RefObject<TextInput | null>,
+  options?: DiscussionInputFocusOptions,
+) => void | (() => void);
 
 function formatRelativeTime(timestamp?: string | null): string {
   if (!timestamp) return 'Ingen aktivitet endnu';
@@ -217,27 +227,38 @@ function LinkedPostBody({ body }: { body: string }) {
   );
 }
 
+function getReplyPreview(body: string): string {
+  return body.replace(/\s+/g, ' ').trim();
+}
+
 function Composer({
   thread,
   userId,
   replyTo,
+  focusRequestKey,
   rulesAccepted,
   moderation,
+  onInputFocus,
   onClearReply,
   onPostCreated,
 }: {
   thread: DiscussionThread;
   userId: string;
   replyTo: DiscussionPost | null;
+  focusRequestKey: number;
   rulesAccepted: boolean;
   moderation: DiscussionUserModeration | null;
+  onInputFocus?: DiscussionInputFocusHandler;
   onClearReply: () => void;
   onPostCreated: () => void;
 }) {
+  const inputRef = useRef<TextInput>(null);
   const [body, setBody] = useState('');
   const [media, setMedia] = useState<PickedMedia[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const replyToId = replyTo?.id ?? null;
+  const replyPreview = replyTo ? getReplyPreview(replyTo.body) : '';
 
   const disabledReason = useMemo(() => {
     if (thread.isLocked) return 'Tråden er lukket for nye indlæg.';
@@ -249,6 +270,17 @@ function Composer({
     if (!rulesAccepted) return 'Accepter debatreglerne før første indlæg.';
     return null;
   }, [moderation, rulesAccepted, thread.isLocked]);
+
+  useEffect(() => {
+    if (!replyToId || focusRequestKey === 0) return;
+
+    if (onInputFocus) {
+      return onInputFocus(inputRef, { focus: true, scrollToEnd: true });
+    }
+
+    const focusTimer = setTimeout(() => inputRef.current?.focus(), 300);
+    return () => clearTimeout(focusTimer);
+  }, [focusRequestKey, onInputFocus, replyToId]);
 
   const addImage = async () => {
     const picked = await pickImageFromLibrary();
@@ -308,9 +340,18 @@ function Composer({
     <Card style={styles.composerCard}>
       {replyTo ? (
         <View style={styles.replyBanner}>
-          <Text style={styles.replyBannerText}>Svar til {replyTo.author.displayName}</Text>
-          <Pressable onPress={onClearReply} accessibilityRole="button">
-            <Ionicons name="close" size={18} color={theme.colors.text.secondary} />
+          <View style={styles.replyBannerCopy}>
+            <Text style={styles.replyBannerText}>Svarer til {replyTo.author.displayName}</Text>
+            <Text style={styles.replyPreviewText} numberOfLines={2}>
+              {replyPreview}
+            </Text>
+          </View>
+          <Pressable
+            style={styles.cancelReplyButton}
+            onPress={onClearReply}
+            accessibilityRole="button"
+          >
+            <Text style={styles.cancelReplyText}>× Annuller svar</Text>
           </Pressable>
         </View>
       ) : null}
@@ -320,10 +361,12 @@ function Composer({
       <TextInput
         value={body}
         onChangeText={setBody}
-        placeholder="Skriv i debatten..."
         placeholderTextColor={theme.colors.text.muted}
         editable={!disabledReason && !submitting}
         multiline
+        ref={inputRef}
+        onFocus={() => onInputFocus?.(inputRef)}
+        placeholder={replyTo ? 'Skriv dit svar...' : 'Skriv i debatten...'}
         style={styles.composerInput}
       />
 
@@ -390,6 +433,7 @@ function PostItem({
   onOpenMedia,
   onReport,
   onRefresh,
+  onInputFocus,
   onOptimisticLike,
 }: {
   post: DiscussionPost;
@@ -399,8 +443,10 @@ function PostItem({
   onOpenMedia: (post: DiscussionPost, index: number) => void;
   onReport: (post: DiscussionPost) => void;
   onRefresh: () => void;
+  onInputFocus?: DiscussionInputFocusHandler;
   onOptimisticLike: (postId: string, nextLiked: boolean) => void;
 }) {
+  const editInputRef = useRef<TextInput>(null);
   const [editing, setEditing] = useState(false);
   const [editBody, setEditBody] = useState(post.body);
   const [saving, setSaving] = useState(false);
@@ -548,6 +594,8 @@ function PostItem({
             value={editBody}
             onChangeText={setEditBody}
             multiline
+            ref={editInputRef}
+            onFocus={() => onInputFocus?.(editInputRef)}
             style={styles.editInput}
           />
           <View style={styles.inlineActions}>
@@ -578,9 +626,14 @@ function PostItem({
         </Pressable>
         {!post.parentPostId ? (
           <Pressable
-            style={styles.postAction}
+            style={({ pressed }) => [
+              styles.postAction,
+              styles.replyAction,
+              pressed && styles.replyActionPressed,
+            ]}
             onPress={() => onReply(post)}
             accessibilityRole="button"
+            hitSlop={theme.spacing[1]}
           >
             <Ionicons name="chatbubble-outline" size={18} color={theme.colors.text.secondary} />
             <Text style={styles.postActionText}>Svar</Text>
@@ -647,6 +700,7 @@ function PostItem({
           onOpenMedia={onOpenMedia}
           onReport={onReport}
           onRefresh={onRefresh}
+          onInputFocus={onInputFocus}
           onOptimisticLike={onOptimisticLike}
         />
       ))}
@@ -737,7 +791,7 @@ function ReportModal({
   );
 }
 
-export function DiscussionView() {
+export function DiscussionView({ onInputFocus }: { onInputFocus?: DiscussionInputFocusHandler }) {
   const navigation = useNavigation<any>();
   const { user, isAppAdmin } = useAuth();
   const [threads, setThreads] = useState<DiscussionThread[]>([]);
@@ -748,11 +802,16 @@ export function DiscussionView() {
   const [error, setError] = useState<string | null>(null);
   const [rulesAccepted, setRulesAccepted] = useState(false);
   const [replyTo, setReplyTo] = useState<DiscussionPost | null>(null);
+  const [composerFocusRequestKey, setComposerFocusRequestKey] = useState(0);
   const [moderation, setModeration] = useState<DiscussionUserModeration | null>(null);
   const [reportDraft, setReportDraft] = useState<ReportDraft | null>(null);
   const [adminReports, setAdminReports] = useState<DiscussionReport[]>([]);
 
   const userId = user?.id ?? '';
+  const replyToId = replyTo?.id ?? null;
+  const replyToBody = replyTo?.body ?? null;
+  const replyToAuthorName = replyTo?.author.displayName ?? null;
+  const replyToAuthorAvatarUrl = replyTo?.author.avatarUrl ?? null;
 
   const rulesKey = useMemo(
     () => (userId ? `${RULES_STORAGE_KEY_PREFIX}:${userId}` : null),
@@ -821,6 +880,24 @@ export function DiscussionView() {
     }
   }, [isAppAdmin]);
 
+  useEffect(() => {
+    if (!replyToId) return;
+
+    const currentParent = flattenPosts(posts).find((post) => post.id === replyToId);
+    if (!currentParent || currentParent.hiddenAt || currentParent.deletedAt) {
+      setReplyTo(null);
+      return;
+    }
+
+    if (
+      currentParent.body !== replyToBody ||
+      currentParent.author.displayName !== replyToAuthorName ||
+      currentParent.author.avatarUrl !== replyToAuthorAvatarUrl
+    ) {
+      setReplyTo(currentParent);
+    }
+  }, [posts, replyToAuthorAvatarUrl, replyToAuthorName, replyToBody, replyToId]);
+
   const openThread = async (thread: DiscussionThread) => {
     setSelectedThread(thread);
     setPosts([]);
@@ -850,6 +927,11 @@ export function DiscussionView() {
       postId: post.id,
     });
   };
+
+  const startReply = useCallback((post: DiscussionPost) => {
+    setReplyTo(post);
+    setComposerFocusRequestKey((current) => current + 1);
+  }, []);
 
   const optimisticLike = (postId: string, nextLiked: boolean) => {
     setPosts((current) =>
@@ -941,7 +1023,13 @@ export function DiscussionView() {
 
   return (
     <View style={styles.wrap}>
-      <Pressable style={styles.backButton} onPress={() => setSelectedThread(null)}>
+      <Pressable
+        style={styles.backButton}
+        onPress={() => {
+          setReplyTo(null);
+          setSelectedThread(null);
+        }}
+      >
         <Ionicons name="chevron-back" size={20} color={theme.colors.brand.accent} />
         <Text style={styles.backText}>Tilbage til tråde</Text>
       </Pressable>
@@ -1017,12 +1105,13 @@ export function DiscussionView() {
           post={post}
           userId={userId}
           isAdmin={isAppAdmin}
-          onReply={setReplyTo}
+          onReply={startReply}
           onOpenMedia={openMedia}
           onReport={(reportedPost) =>
             setReportDraft({ post: reportedPost, reason: 'other', details: '' })
           }
           onRefresh={() => loadPosts(selectedThread)}
+          onInputFocus={onInputFocus}
           onOptimisticLike={optimisticLike}
         />
       ))}
@@ -1032,8 +1121,10 @@ export function DiscussionView() {
           thread={selectedThread}
           userId={userId}
           replyTo={replyTo}
+          focusRequestKey={composerFocusRequestKey}
           rulesAccepted={rulesAccepted}
           moderation={moderation}
+          onInputFocus={onInputFocus}
           onClearReply={() => setReplyTo(null)}
           onPostCreated={() => {
             void loadPosts(selectedThread);
@@ -1225,6 +1316,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: theme.spacing[1],
   },
+  replyAction: {
+    minHeight: theme.spacing[9],
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
+    borderRadius: theme.radius.pill,
+  },
+  replyActionPressed: {
+    backgroundColor: theme.colors.bg.subtle,
+  },
   postActionText: {
     color: theme.colors.text.secondary,
     ...theme.typography.small,
@@ -1305,17 +1405,36 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.bg.subtle,
   },
   replyBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: theme.spacing[2],
+    gap: theme.spacing[2],
+    padding: theme.spacing[3],
     borderRadius: theme.radius.md,
     backgroundColor: theme.colors.bg.subtle,
+    borderWidth: theme.layout.borderHairline,
+    borderColor: theme.colors.border.subtle,
+  },
+  replyBannerCopy: {
+    gap: theme.spacing[1],
   },
   replyBannerText: {
+    color: theme.colors.text.primary,
+    ...theme.typography.small,
+    fontWeight: '700',
+  },
+  replyPreviewText: {
     color: theme.colors.text.secondary,
     ...theme.typography.small,
-    fontWeight: '600',
+  },
+  cancelReplyButton: {
+    alignSelf: 'flex-start',
+    minHeight: theme.spacing[8],
+    justifyContent: 'center',
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.radius.sm,
+  },
+  cancelReplyText: {
+    color: theme.colors.brand.accent,
+    ...theme.typography.small,
+    fontWeight: '700',
   },
   selectedMediaRow: {
     flexDirection: 'row',

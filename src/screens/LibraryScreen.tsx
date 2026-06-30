@@ -2,7 +2,17 @@ import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  findNodeHandle,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  type TextInput,
+  View,
+} from 'react-native';
 import { AppHeader } from '../components/AppHeader';
 import { Badge } from '../components/ui/Badge';
 import { Card } from '../components/ui/Card';
@@ -37,6 +47,11 @@ const segments = [
   { key: 'discussion', label: 'Debat' },
 ] as const satisfies readonly { key: LibrarySegmentKey; label: string }[];
 let hasEnteredLibraryScreen = false;
+
+type DiscussionInputFocusOptions = {
+  focus?: boolean;
+  scrollToEnd?: boolean;
+};
 
 function normalizeTeamName(name: string): string {
   return name
@@ -271,8 +286,53 @@ export default function LibraryScreen() {
   }
 
   const tabBarHeight = useBottomTabBarHeight();
+  const contentScrollRef = useRef<ScrollView>(null);
   const [activeSegment, setActiveSegment] = useState<LibrarySegmentKey>('songs');
   const didLogFirstCommitRef = useRef(false);
+  const scrollBottomInset = tabBarHeight + theme.spacing[6];
+
+  const scrollFocusedDiscussionInputIntoView = useCallback(
+    (
+      inputRef: React.RefObject<TextInput | null>,
+      options: DiscussionInputFocusOptions = {},
+    ) => {
+      const scrollToInput = () => {
+        const inputHandle = inputRef.current ? findNodeHandle(inputRef.current) : null;
+        const responder = contentScrollRef.current?.getScrollResponder?.();
+
+        // The custom tab bar is absolutely positioned; its measured height includes bottom safe area.
+        const extraHeight = tabBarHeight + theme.spacing[4];
+
+        if (options.scrollToEnd) {
+          contentScrollRef.current?.scrollToEnd({ animated: true });
+          return;
+        }
+
+        if (inputHandle && responder?.scrollResponderScrollNativeHandleToKeyboard) {
+          responder.scrollResponderScrollNativeHandleToKeyboard(inputHandle, extraHeight, true);
+          return;
+        }
+
+        contentScrollRef.current?.scrollToEnd({ animated: true });
+      };
+
+      const animationFrame = requestAnimationFrame(scrollToInput);
+      const scrollTimer = setTimeout(scrollToInput, 250);
+      const focusTimer = options.focus
+        ? setTimeout(() => {
+            inputRef.current?.focus();
+            scrollToInput();
+          }, 360)
+        : null;
+
+      return () => {
+        cancelAnimationFrame(animationFrame);
+        clearTimeout(scrollTimer);
+        if (focusTimer) clearTimeout(focusTimer);
+      };
+    },
+    [tabBarHeight],
+  );
 
   useEffect(() => {
     return schedulePerformanceFrame(() => {
@@ -322,16 +382,28 @@ export default function LibraryScreen() {
 
       <SegmentedControl items={segments} activeKey={activeSegment} onChange={handleSegmentPress} />
 
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={{ paddingBottom: tabBarHeight + theme.spacing[6] }}
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoidingView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        enabled={activeSegment === 'discussion'}
+        keyboardVerticalOffset={0}
       >
-        {activeSegment === 'songs' && <SongsView />}
-        {activeSegment === 'standings' && <StandingsView />}
-        {activeSegment === 'links' && <LinksViewComponent />}
-        {activeSegment === 'videos' && <VideosViewComponent />}
-        {activeSegment === 'discussion' && <DiscussionView />}
-      </ScrollView>
+        <ScrollView
+          ref={contentScrollRef}
+          style={styles.content}
+          contentContainerStyle={{ paddingBottom: scrollBottomInset }}
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          keyboardShouldPersistTaps="handled"
+        >
+          {activeSegment === 'songs' && <SongsView />}
+          {activeSegment === 'standings' && <StandingsView />}
+          {activeSegment === 'links' && <LinksViewComponent />}
+          {activeSegment === 'videos' && <VideosViewComponent />}
+          {activeSegment === 'discussion' && (
+            <DiscussionView onInputFocus={scrollFocusedDiscussionInputIntoView} />
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -345,6 +417,9 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: theme.spacing[0],
     paddingTop: theme.spacing[2],
+  },
+  keyboardAvoidingView: {
+    flex: 1,
   },
   comingSoonCard: {
     borderRadius: theme.components.card.borderRadius,
