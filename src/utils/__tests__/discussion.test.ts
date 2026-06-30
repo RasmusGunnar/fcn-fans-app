@@ -3,6 +3,7 @@ import {
   DISCUSSION_MAX_IMAGES,
   extractPrimaryUrl,
   groupDiscussionReplies,
+  splitDiscussionTextByUrls,
   validateDiscussionMediaSelection,
 } from '../discussion';
 import type { PickedMedia } from '../../lib/mediaPicker';
@@ -46,6 +47,22 @@ function post(id: string, parentPostId: string | null = null): DiscussionPost {
 
 assert.equal(extractPrimaryUrl('Se https://fcn.dk/nyheder/test.'), 'https://fcn.dk/nyheder/test');
 assert.equal(extractPrimaryUrl('ingen link her'), null);
+
+const boldSegments = splitDiscussionTextByUrls('Se https://bold.dk');
+assert.deepEqual(boldSegments, [
+  { type: 'text', text: 'Se ' },
+  { type: 'url', text: 'https://bold.dk', url: 'https://bold.dk/' },
+]);
+
+const punctuationSegments = splitDiscussionTextByUrls('Læs https://fcn.dk/nyheder/test.');
+assert.deepEqual(punctuationSegments, [
+  { type: 'text', text: 'Læs ' },
+  { type: 'url', text: 'https://fcn.dk/nyheder/test', url: 'https://fcn.dk/nyheder/test' },
+  { type: 'text', text: '.' },
+]);
+
+const multipleUrlSegments = splitDiscussionTextByUrls('A https://bold.dk og https://fcn.dk');
+assert.equal(multipleUrlSegments.filter((segment) => segment.type === 'url').length, 2);
 
 assert.equal(
   validateDiscussionMediaSelection(

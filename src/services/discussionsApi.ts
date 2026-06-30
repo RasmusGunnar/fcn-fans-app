@@ -46,18 +46,20 @@ function mapProfile(row: ProfileRow | undefined, userId: string) {
 }
 
 function mapLinkPreview(row: any): (LinkPreview & { id: string }) | null {
-  if (!row || row.status !== 'ready') {
+  if (!row) {
     return null;
   }
 
   const resolvedUrl = row.resolved_url || row.url;
+  const domain = row.domain || new URL(resolvedUrl).hostname.replace(/^www\./i, '');
+
   return {
     id: row.id,
     url: resolvedUrl,
-    title: row.title || row.domain || resolvedUrl,
+    title: row.title || domain || resolvedUrl,
     description: row.description || undefined,
     imageUrl: row.image_url || undefined,
-    siteName: row.domain || undefined,
+    siteName: domain || undefined,
   };
 }
 
@@ -322,7 +324,7 @@ async function fetchDiscussionLinkPreviewId(body: string): Promise<string | null
       return null;
     }
 
-    return typeof data?.id === 'string' && data.status === 'ready' ? data.id : null;
+    return typeof data?.id === 'string' ? data.id : null;
   } catch (error) {
     logger.warn('[discussionsApi] discussion-link-preview threw', error);
     return null;
@@ -457,7 +459,12 @@ export async function toggleDiscussionReaction(params: {
     reaction_type: 'like',
   });
 
-  if (error) throw error;
+  if (error) {
+    if (error.code === '23505') {
+      return true;
+    }
+    throw error;
+  }
   return true;
 }
 

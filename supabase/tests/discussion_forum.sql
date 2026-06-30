@@ -1,6 +1,6 @@
 begin;
 
-select plan(28);
+select plan(33);
 
 select has_table('public', 'discussion_threads', 'discussion_threads table exists');
 select has_table('public', 'discussion_posts', 'discussion_posts table exists');
@@ -99,6 +99,79 @@ values (
   '90000000-0000-0000-0000-000000000001',
   'Reply'
 );
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '90000000-0000-0000-0000-000000000002', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+
+select lives_ok(
+  $$
+    insert into public.discussion_reactions (
+      post_id,
+      user_id,
+      reaction_type
+    )
+    values (
+      '90000000-0000-0000-0000-000000000101',
+      '90000000-0000-0000-0000-000000000002',
+      'like'
+    )
+  $$,
+  'authenticated user can like a root discussion post'
+);
+
+select lives_ok(
+  $$
+    insert into public.discussion_reactions (
+      post_id,
+      user_id,
+      reaction_type
+    )
+    values (
+      '90000000-0000-0000-0000-000000000102',
+      '90000000-0000-0000-0000-000000000002',
+      'like'
+    )
+  $$,
+  'authenticated user can like a discussion reply'
+);
+
+select is(
+  (
+    select count(*)::integer
+    from public.discussion_reactions
+    where user_id = '90000000-0000-0000-0000-000000000002'
+      and post_id in (
+        '90000000-0000-0000-0000-000000000101',
+        '90000000-0000-0000-0000-000000000102'
+      )
+  ),
+  2,
+  'root and reply reactions are both visible to the reacting user'
+);
+
+select lives_ok(
+  $$
+    delete from public.discussion_reactions
+    where post_id = '90000000-0000-0000-0000-000000000102'
+      and user_id = '90000000-0000-0000-0000-000000000002'
+      and reaction_type = 'like'
+  $$,
+  'authenticated user can unlike a discussion reply'
+);
+
+select is(
+  (
+    select count(*)::integer
+    from public.discussion_reactions
+    where user_id = '90000000-0000-0000-0000-000000000002'
+      and post_id = '90000000-0000-0000-0000-000000000102'
+  ),
+  0,
+  'reply unlike removes the users own reaction'
+);
+
+reset role;
 
 select throws_like(
   $$

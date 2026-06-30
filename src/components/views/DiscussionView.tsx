@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Linking,
   Modal,
   Pressable,
   StyleSheet,
@@ -49,6 +50,7 @@ import {
   canEditDiscussionPost,
   DISCUSSION_MAX_IMAGES,
   groupDiscussionReplies,
+  splitDiscussionTextByUrls,
   validateDiscussionMediaSelection,
 } from '../../utils/discussion';
 
@@ -186,6 +188,32 @@ function MediaGrid({
         );
       })}
     </View>
+  );
+}
+
+function LinkedPostBody({ body }: { body: string }) {
+  const segments = useMemo(() => splitDiscussionTextByUrls(body), [body]);
+
+  return (
+    <Text style={styles.postBody}>
+      {segments.map((segment, index) => {
+        if (segment.type === 'url') {
+          return (
+            <Text
+              key={`${segment.url}-${index}`}
+              style={styles.postBodyLink}
+              onPress={() => {
+                void Linking.openURL(segment.url).catch(() => undefined);
+              }}
+            >
+              {segment.text}
+            </Text>
+          );
+        }
+
+        return <Text key={`text-${index}`}>{segment.text}</Text>;
+      })}
+    </Text>
   );
 }
 
@@ -528,7 +556,7 @@ function PostItem({
           </View>
         </View>
       ) : (
-        <Text style={styles.postBody}>{post.body}</Text>
+        <LinkedPostBody body={post.body} />
       )}
 
       {post.linkPreview ? (
@@ -1181,6 +1209,10 @@ const styles = StyleSheet.create({
   postBody: {
     color: theme.colors.text.primary,
     ...theme.typography.body,
+  },
+  postBodyLink: {
+    color: theme.colors.brand.accent,
+    textDecorationLine: 'underline',
   },
   postActions: {
     flexDirection: 'row',

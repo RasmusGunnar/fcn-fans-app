@@ -8,13 +8,19 @@ export const DISCUSSION_MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 export const DISCUSSION_EDIT_WINDOW_MS = 15 * 60 * 1000;
 
 const URL_REGEX = /\bhttps?:\/\/[^\s<>"']+/i;
+const URL_GLOBAL_REGEX = /\bhttps?:\/\/[^\s<>"']+/gi;
+const TRAILING_URL_PUNCTUATION_REGEX = /[),.;!?]+$/;
+
+export type DiscussionTextSegment =
+  | { type: 'text'; text: string }
+  | { type: 'url'; text: string; url: string };
 
 export function extractPrimaryUrl(text: string): string | null {
   const match = text.match(URL_REGEX);
   if (!match?.[0]) return null;
 
   try {
-    const url = new URL(match[0].replace(/[),.;!?]+$/, ''));
+    const url = new URL(match[0].replace(TRAILING_URL_PUNCTUATION_REGEX, ''));
     if (url.protocol !== 'http:' && url.protocol !== 'https:') {
       return null;
     }
@@ -22,6 +28,49 @@ export function extractPrimaryUrl(text: string): string | null {
   } catch {
     return null;
   }
+}
+
+export function splitDiscussionTextByUrls(text: string): DiscussionTextSegment[] {
+  const segments: DiscussionTextSegment[] = [];
+  const matches = Array.from(text.matchAll(URL_GLOBAL_REGEX));
+  let lastIndex = 0;
+
+  for (const match of matches) {
+    const rawMatch = match[0];
+    const index = match.index ?? 0;
+    const candidate = rawMatch.replace(TRAILING_URL_PUNCTUATION_REGEX, '');
+    const trailing = rawMatch.slice(candidate.length);
+
+    if (!candidate) continue;
+
+    let normalizedUrl: string;
+    try {
+      const url = new URL(candidate);
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+        continue;
+      }
+      normalizedUrl = url.toString();
+    } catch {
+      continue;
+    }
+
+    if (index > lastIndex) {
+      segments.push({ type: 'text', text: text.slice(lastIndex, index) });
+    }
+
+    segments.push({ type: 'url', text: candidate, url: normalizedUrl });
+    if (trailing) {
+      segments.push({ type: 'text', text: trailing });
+    }
+
+    lastIndex = index + rawMatch.length;
+  }
+
+  if (lastIndex < text.length) {
+    segments.push({ type: 'text', text: text.slice(lastIndex) });
+  }
+
+  return segments.length > 0 ? segments : [{ type: 'text', text }];
 }
 
 export function canEditDiscussionPost(
