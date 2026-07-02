@@ -569,6 +569,8 @@ export default function HomeScreen() {
       data={visibleFeedItems}
       keyExtractor={getFeedItemKey}
       renderItem={renderFeedItem}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
       initialNumToRender={5}
       maxToRenderPerBatch={5}
       updateCellsBatchingPeriod={16}
