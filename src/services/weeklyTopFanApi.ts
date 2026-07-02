@@ -40,6 +40,9 @@ type ReferencedPostRow = {
 type ReferencedCommentRow = {
   id: string;
   text: string | null;
+  target_type: string | null;
+  target_id: string | null;
+  parent_id?: string | null;
 };
 
 type WeeklyTopFanProfile = {
@@ -53,8 +56,7 @@ const WEEKLY_TOP_FAN_PROFILE_SELECT_ATTEMPTS = [
   'display_name, avatar_url',
 ] as const;
 const WEEKLY_TOP_FAN_DEBUG_ENABLED =
-  __DEV__ &&
-  process.env.EXPO_PUBLIC_WEEKLY_TOP_FAN_DEBUG?.trim().toLowerCase() === 'true';
+  __DEV__ && process.env.EXPO_PUBLIC_WEEKLY_TOP_FAN_DEBUG?.trim().toLowerCase() === 'true';
 const WEEKLY_TOP_FAN_ROW_SELECT = `
   id,
   week_start_date,
@@ -272,6 +274,7 @@ export async function fetchLatestPublishedWeeklyTopFan(
   let likesCount: number | null = null;
   let commentsCount: number | null = null;
   let votesCount: number | null = null;
+  let resolvedReferencePostId: string | null = row.reference_post_id;
 
   try {
     if (row.reference_post_id) {
@@ -317,7 +320,7 @@ export async function fetchLatestPublishedWeeklyTopFan(
         await Promise.all([
           supabase
             .from('comments_v2')
-            .select('id, text')
+            .select('id, text, target_type, target_id, parent_id')
             .eq('id', row.reference_comment_id)
             .maybeSingle(),
           countRows('likes_v2', [
@@ -328,13 +331,15 @@ export async function fetchLatestPublishedWeeklyTopFan(
         ]);
 
       if (commentError) {
-        logWeeklyTopFanWarning(
-          '[weeklyTopFanApi] referenced comment lookup failed:',
-          commentError,
-        );
+        logWeeklyTopFanWarning('[weeklyTopFanApi] referenced comment lookup failed:', commentError);
       }
 
       const comment = (commentData as ReferencedCommentRow | null) || null;
+      const commentTargetId =
+        typeof comment?.target_id === 'string' ? comment.target_id.trim() : '';
+      if (comment?.target_type === 'post' && commentTargetId) {
+        resolvedReferencePostId = commentTargetId;
+      }
       contentTypeLabel = '💬 Kommentar';
       highlightText = comment?.text?.trim() || highlightText;
       likesCount = commentLikesCount;
@@ -364,7 +369,7 @@ export async function fetchLatestPublishedWeeklyTopFan(
     fanLevelKey: profile?.fan_level_key ?? getSafeFanLevelKey(row.fan_level_key),
     weeklyScore: row.weekly_score,
     reasonType: row.reason_type,
-    referencePostId: row.reference_post_id,
+    referencePostId: resolvedReferencePostId,
     referenceCommentId: row.reference_comment_id,
     title: row.title,
     subtitle: row.subtitle,

@@ -467,6 +467,27 @@ export default function HomeScreen() {
     });
   }, [navigation, nextFixture?.id]);
 
+  const handleOpenProfile = useCallback(
+    (userId: string) => {
+      if (!userId) return;
+      (navigation as any).navigate('PublicProfile', { userId });
+    },
+    [navigation],
+  );
+
+  const handleOpenPost = useCallback(
+    (postId: string, commentId?: string | null) => {
+      if (!postId) return;
+
+      (navigation as any).navigate('PostDetail', {
+        postId,
+        targetType: commentId ? 'post_comment' : 'post',
+        ...(commentId ? { commentId } : {}),
+      });
+    },
+    [navigation],
+  );
+
   const handleNextMatchPrimaryAction = useCallback(async () => {
     if (!nextFixture?.id) return;
 
@@ -517,6 +538,8 @@ export default function HomeScreen() {
           removeNews={removeNews}
           incrementCommentCount={incrementCommentCount}
           addCommentPreview={addCommentPreview}
+          onPressProfile={handleOpenProfile}
+          onPressPost={handleOpenPost}
           isActiveVideo={isHomeFocused && key === activeVideoKey}
         />
       );
@@ -524,6 +547,8 @@ export default function HomeScreen() {
     [
       addCommentPreview,
       communityMap,
+      handleOpenPost,
+      handleOpenProfile,
       incrementCommentCount,
       isAppAdmin,
       isHomeFocused,

@@ -34,7 +34,7 @@ export async function uploadAvatar(userId: string): Promise<string | null> {
     // Launch image picker (without base64 initially - we'll get it after JPEG conversion)
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'], // Use new API format
-      allowsEditing: true,
+      allowsEditing: Platform.OS !== 'android',
       aspect: [1, 1],
       quality: 0.9, // High quality for avatars
       base64: false, // Get base64 after JPEG conversion
@@ -83,9 +83,25 @@ export async function uploadAvatar(userId: string): Promise<string | null> {
     });
 
     // Convert to JPEG to avoid HEIC/format issues (especially on iOS)
+    const imageActions: ImageManipulator.Action[] = [];
+    if (Platform.OS === 'android' && asset.width && asset.height) {
+      const cropSize = Math.min(asset.width, asset.height);
+      if (cropSize > 0 && asset.width !== asset.height) {
+        imageActions.push({
+          crop: {
+            originX: Math.max(0, Math.floor((asset.width - cropSize) / 2)),
+            originY: Math.max(0, Math.floor((asset.height - cropSize) / 2)),
+            width: cropSize,
+            height: cropSize,
+          },
+        });
+      }
+    }
+    imageActions.push({ resize: { width: 512 } });
+
     const manipResult = await ImageManipulator.manipulateAsync(
       asset.uri,
-      [{ resize: { width: 512 } }], // Resize to reasonable avatar size
+      imageActions, // Resize to reasonable avatar size, with Android-only square crop.
       { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG, base64: true },
     );
 

@@ -37,7 +37,7 @@ export type FeedItemRendererProps = {
   onPressFanActivity?: (item: FeedFanActivityData) => void;
   onPressCommunity?: (communityId: string, title: string) => void;
   onPressProfile?: (userId: string) => void;
-  onPressPost?: (postId: string) => void;
+  onPressPost?: (postId: string, commentId?: string | null) => void;
   /** Whether this specific item is the currently active inline video. */
   isActiveVideo?: boolean;
 };
@@ -141,6 +141,11 @@ function FeedItemRendererComponent(props: FeedItemRendererProps): React.ReactEle
     }
 
     case 'weekly_top_fan': {
+      const handlePressReference =
+        item.data.referencePostId && onPressPost
+          ? () => onPressPost(item.data.referencePostId!, item.data.referenceCommentId ?? null)
+          : undefined;
+
       return (
         <WeeklyTopFanCard
           avatarUrl={item.data.avatarUrl}
@@ -157,9 +162,7 @@ function FeedItemRendererComponent(props: FeedItemRendererProps): React.ReactEle
           commentsCount={item.data.commentsCount}
           votesCount={item.data.votesCount}
           onPressProfile={() => onPressProfile?.(item.data.userId)}
-          onPressReference={
-            item.data.referencePostId ? () => onPressPost?.(item.data.referencePostId!) : undefined
-          }
+          onPressReference={handlePressReference}
         />
       );
     }

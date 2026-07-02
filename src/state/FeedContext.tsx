@@ -71,6 +71,25 @@ type EngagementCounts = {
 const FEED_POST_SELECT =
   'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets, poll_data, link_preview, post_type';
 
+function mergeHomePostRowsById<T extends { id: string; created_at: string | null }>(
+  rows: readonly T[],
+): T[] {
+  const rowsById = new Map<string, T>();
+
+  rows.forEach((row) => {
+    if (!rowsById.has(row.id)) {
+      rowsById.set(row.id, row);
+    }
+  });
+
+  return Array.from(rowsById.values()).sort((left, right) => {
+    const leftTimestamp = new Date(left.created_at ?? 0).getTime();
+    const rightTimestamp = new Date(right.created_at ?? 0).getTime();
+
+    return rightTimestamp - leftTimestamp;
+  });
+}
+
 const FEED_PROFILE_SELECT_ATTEMPTS = [
   'id, display_name, username, avatar_url, fan_level_key',
   'id, display_name, username, avatar_url',
@@ -670,7 +689,8 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       const postsFetchStartedAt = performanceNow();
       const [
         { data: postsData, error: fetchError },
-        { data: homePostsData, error: homeFetchError },
+        { data: homeFanPostsData, error: homeFanPostsFetchError },
+        { data: homeMediaArticlesData, error: homeMediaArticlesFetchError },
       ] = await Promise.all([
         supabase
           .from('posts')
@@ -680,6 +700,14 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         supabase
           .from('posts')
           .select(FEED_POST_SELECT)
+          .eq('post_type', 'post')
+          .or(buildHomePostFeedTargetFilter())
+          .order('created_at', { ascending: false })
+          .limit(HOME_POST_FETCH_LIMIT),
+        supabase
+          .from('posts')
+          .select(FEED_POST_SELECT)
+          .eq('post_type', 'media_article')
           .or(buildHomePostFeedTargetFilter())
           .order('created_at', { ascending: false })
           .limit(HOME_POST_FETCH_LIMIT),
@@ -688,13 +716,24 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       if (fetchError) {
         throw fetchError;
       }
-      if (homeFetchError) {
-        throw homeFetchError;
+      if (homeFanPostsFetchError) {
+        throw homeFanPostsFetchError;
       }
-      const scopedHomePostsData = selectHomePostRows(homePostsData || []);
+      if (homeMediaArticlesFetchError) {
+        throw homeMediaArticlesFetchError;
+      }
+      const scopedHomeFanPostsData = selectHomePostRows(homeFanPostsData || []);
+      const scopedHomeMediaArticlesData = selectHomePostRows(homeMediaArticlesData || []);
+      const scopedHomePostsData = mergeHomePostRowsById([
+        ...scopedHomeFanPostsData,
+        ...scopedHomeMediaArticlesData,
+      ]);
       logPerformanceTiming('FeedFetch', 'posts', postsFetchStartedAt, {
         postCount: postsData?.length ?? 0,
         homePostCount: scopedHomePostsData.length,
+        fanPostCount: scopedHomeFanPostsData.length,
+        mediaArticleCount: scopedHomeMediaArticlesData.length,
+        mergedHomePostCount: scopedHomePostsData.length,
       });
 
       // Publish post rows before profile hydration so Home can render and calculate
@@ -723,12 +762,18 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         }));
       transformedPosts = mapPostRows(postsData || []);
       transformedHomePosts = mapPostRows(scopedHomePostsData);
+      const mappedHomeFanPostCount = transformedHomePosts.filter(
+        (post) => post.postType === 'post',
+      ).length;
+      const mappedHomeMediaArticleCount = transformedHomePosts.filter(
+        (post) => post.postType === 'media_article',
+      ).length;
       logPerformanceTiming('FeedMap', 'posts', mappingStartedAt, {
         postCount: transformedPosts.length,
         homePostCount: transformedHomePosts.length,
-        mediaArticleCount: transformedHomePosts.filter(
-          (post) => post.postType === 'media_article',
-        ).length,
+        fanPostCount: mappedHomeFanPostCount,
+        mediaArticleCount: mappedHomeMediaArticleCount,
+        mergedHomePostCount: transformedHomePosts.length,
       });
       logPerformanceTiming('FeedMap', 'media-preparation', mappingStartedAt, {
         attachmentCount: transformedHomePosts.reduce(
@@ -772,6 +817,9 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       logPerformanceTiming('FeedPublication', 'posts-only-enqueued', publicationStartedAt, {
         postCount: transformedPosts.length,
         homePostCount: transformedHomePosts.length,
+        fanPostCount: mappedHomeFanPostCount,
+        mediaArticleCount: mappedHomeMediaArticleCount,
+        mergedHomePostCount: transformedHomePosts.length,
         feedItemCount: postsOnlyFeedItems.length,
         homeItemCount: postsOnlyHomeItems.length,
       });
