@@ -3,10 +3,7 @@ import {
   buildNotificationDedupeKey,
   createInAppNotifications,
   createAdminClient,
-  dispatchNotifications,
-  fetchExistingNotificationDedupeKeys,
   fetchPushPreferencesByUserIds,
-  fetchPushTokensForUsers,
   isPushPreferenceEnabled,
   json,
   requireAuthenticatedUser,
@@ -25,19 +22,50 @@ type MentionPushPayload = {
   previewText?: string | null;
 };
 
-type PushTokenRow = {
-  user_id: string;
-  push_token: string;
-  platform?: string | null;
-  updated_at?: string | null;
-};
-
 type CommentEntityRow = {
   id: string;
   author_id: string;
   parent_id: string | null;
   target_type: string;
   target_id: string;
+};
+
+type EnqueueNotificationResult = {
+  job_id: string;
+  inserted: boolean;
+  job_status: string;
+  skip_reason: string | null;
+};
+
+type ProcessPushQueueResult = {
+  ok?: boolean;
+  claimed?: number;
+  totals?: {
+    deliveriesCreated?: number;
+    sentToExpo?: number;
+    failed?: number;
+    skipped?: number;
+  };
+  jobs?: {
+    jobId?: string;
+    status?: string;
+    activeDevices?: number;
+    deliveriesCreated?: number;
+    sentToExpo?: number;
+    failed?: number;
+    skipped?: number;
+    reason?: string;
+  }[];
+  error?: unknown;
+};
+
+type MentionJobResult = {
+  userId: string;
+  jobId: string | null;
+  inserted: boolean;
+  jobStatus: string | null;
+  skipped: boolean;
+  process?: ProcessPushQueueResult | null;
 };
 
 function readString(value: unknown): string | null {
@@ -50,36 +78,6 @@ function readStringArray(value: unknown): string[] {
   }
 
   return value.map((entry) => readString(entry)).filter((entry): entry is string => Boolean(entry));
-}
-
-function getIsoTime(value: string | null | undefined): number {
-  if (!value) return Number.NEGATIVE_INFINITY;
-  const timestamp = new Date(value).getTime();
-  return Number.isFinite(timestamp) ? timestamp : Number.NEGATIVE_INFINITY;
-}
-
-function pickLatestTokenPerUser(rows: PushTokenRow[]): PushTokenRow[] {
-  const latestByUser = new Map<string, PushTokenRow>();
-
-  for (const row of rows) {
-    const userId = readString(row.user_id);
-    const pushToken = readString(row.push_token);
-    if (!userId || !pushToken) continue;
-
-    const normalizedRow: PushTokenRow = {
-      user_id: userId,
-      push_token: pushToken,
-      platform: row.platform ?? null,
-      updated_at: row.updated_at ?? null,
-    };
-
-    const existing = latestByUser.get(userId);
-    if (!existing || getIsoTime(normalizedRow.updated_at) >= getIsoTime(existing.updated_at)) {
-      latestByUser.set(userId, normalizedRow);
-    }
-  }
-
-  return Array.from(latestByUser.values());
 }
 
 function getNotificationType(entityType: MentionEntityType): MentionNotificationType {
@@ -119,6 +117,94 @@ async function readRequestBody(req: Request): Promise<MentionPushPayload> {
   } catch {
     return {};
   }
+}
+
+async function enqueueMentionJob(params: {
+  supabase: any;
+  recipientUserId: string;
+  actorUserId: string;
+  notificationType: MentionNotificationType;
+  title: string;
+  body: string;
+  dedupeKey: string;
+  data: Record<string, unknown>;
+  entityId: string;
+}) {
+  const { data, error } = await params.supabase
+    .rpc('enqueue_notification', {
+      p_recipient_user_id: params.recipientUserId,
+      p_notification_type: params.notificationType,
+      p_title: params.title,
+      p_body: params.body,
+      p_dedupe_key: params.dedupeKey,
+      p_data: params.data,
+      p_actor_user_id: params.actorUserId,
+      p_preference_key: 'mentions',
+      p_source_table: 'mentions',
+      p_source_id: params.entityId,
+      p_next_attempt_at: new Date().toISOString(),
+      p_max_attempts: 5,
+    })
+    .single();
+
+  if (error) throw error;
+  return data as EnqueueNotificationResult;
+}
+
+async function processQueuedJob(jobId: string): Promise<ProcessPushQueueResult> {
+  const url = readString(Deno.env.get('SUPABASE_URL'));
+  const syncSecret = readString(Deno.env.get('SYNC_SECRET'));
+
+  if (!url || !syncSecret) {
+    throw new Error('Missing SUPABASE_URL or SYNC_SECRET');
+  }
+
+  const response = await fetch(`${url}/functions/v1/process_push_queue`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-sync-secret': syncSecret,
+    },
+    body: JSON.stringify({ jobId, limit: 1 }),
+  });
+
+  const result = (await response.json().catch(() => null)) as ProcessPushQueueResult | null;
+  if (!response.ok || !result?.ok) {
+    throw new Error(
+      `process_push_queue failed with ${response.status}: ${JSON.stringify(result ?? {})}`,
+    );
+  }
+
+  return result;
+}
+
+function getProcessCounts(results: MentionJobResult[]) {
+  return results.reduce(
+    (acc, result) => {
+      const totals = result.process?.totals ?? {};
+      const firstJob = Array.isArray(result.process?.jobs) ? result.process?.jobs[0] : null;
+
+      return {
+        total: acc.total + (result.inserted ? 1 : 0),
+        queued:
+          acc.queued +
+          (typeof totals.deliveriesCreated === 'number'
+            ? totals.deliveriesCreated
+            : (firstJob?.deliveriesCreated ?? 0)),
+        skipped:
+          acc.skipped +
+          (result.skipped ? 1 : 0) +
+          (typeof totals.skipped === 'number' ? totals.skipped : (firstJob?.skipped ?? 0)),
+        sent:
+          acc.sent +
+          (typeof totals.sentToExpo === 'number' ? totals.sentToExpo : (firstJob?.sentToExpo ?? 0)),
+        failed:
+          acc.failed +
+          (typeof totals.failed === 'number' ? totals.failed : (firstJob?.failed ?? 0)),
+      };
+    },
+    { total: 0, queued: 0, skipped: 0, sent: 0, failed: 0 },
+  );
 }
 
 Deno.serve(async (req) => {
@@ -278,66 +364,92 @@ Deno.serve(async (req) => {
       return json(200, { ok: true, skipped: 'preferences_disabled', inApp: inAppResult });
     }
 
-    const tokens = pickLatestTokenPerUser(
-      (await fetchPushTokensForUsers(supabase, recipientsAfterPreferences)) as PushTokenRow[],
-    );
-
-    if (tokens.length === 0) {
-      return json(200, { ok: true, skipped: 'no_token', inApp: inAppResult });
-    }
-
     const notificationType = getNotificationType(entityType);
     const targetType = getTargetType(entityType);
-    const dedupeKeys = tokens.map((tokenRow) =>
-      buildNotificationDedupeKey(notificationType, entityId, tokenRow.user_id),
-    );
-    const existingDedupeKeys = await fetchExistingNotificationDedupeKeys(supabase, dedupeKeys);
+    const title = `${actorName} n\u00E6vnte dig`;
+    const pushBody = getBodyText(entityType);
+    const pushData = {
+      notificationType,
+      targetType,
+      type: 'post',
+      postId: resolvedPostId,
+      commentId: resolvedCommentId,
+      parentCommentId: resolvedParentCommentId,
+      entityType,
+      entityId,
+      previewText,
+      url: `fcnfans://post/${resolvedPostId}`,
+    };
 
-    const requests = tokens.flatMap((tokenRow) => {
-      const dedupeKey = buildNotificationDedupeKey(notificationType, entityId, tokenRow.user_id);
-      if (existingDedupeKeys.has(dedupeKey)) {
-        return [];
+    const jobs: MentionJobResult[] = [];
+    for (const userId of recipientsAfterPreferences) {
+      const dedupeKey = buildNotificationDedupeKey(notificationType, entityId, userId);
+      const enqueueResult = await enqueueMentionJob({
+        supabase,
+        recipientUserId: userId,
+        actorUserId,
+        notificationType,
+        title,
+        body: pushBody,
+        dedupeKey,
+        data: pushData,
+        entityId,
+      });
+
+      if (!enqueueResult.inserted) {
+        jobs.push({
+          userId,
+          jobId: enqueueResult.job_id,
+          inserted: false,
+          jobStatus: enqueueResult.job_status,
+          skipped: true,
+          process: null,
+        });
+        continue;
       }
 
-      return [
-        {
-          userId: tokenRow.user_id,
-          pushToken: tokenRow.push_token,
-          notificationType,
-          dedupeKey,
-          title: `${actorName} n\u00E6vnte dig`,
-          body: getBodyText(entityType),
-          data: {
-            notificationType,
-            targetType,
-            type: 'post',
-            postId: resolvedPostId,
-            commentId: resolvedCommentId,
-            parentCommentId: resolvedParentCommentId,
-            entityType,
-            entityId,
-            previewText,
-            url: `fcnfans://post/${resolvedPostId}`,
-          },
-        },
-      ];
-    });
-
-    if (requests.length === 0) {
-      return json(200, { ok: true, skipped: 'duplicate', inApp: inAppResult });
+      const processResult = await processQueuedJob(enqueueResult.job_id);
+      jobs.push({
+        userId,
+        jobId: enqueueResult.job_id,
+        inserted: true,
+        jobStatus:
+          readString(processResult.jobs?.[0]?.status) ??
+          readString(enqueueResult.job_status) ??
+          'queued',
+        skipped: false,
+        process: processResult,
+      });
     }
 
-    const result = await dispatchNotifications(supabase, requests);
+    const counts = getProcessCounts(jobs);
+    const insertedJobs = jobs.filter((job) => job.inserted);
+    const duplicateJobs = jobs.filter((job) => !job.inserted);
+
     return json(200, {
       ok: true,
       entityType,
       entityId,
       postId: resolvedPostId,
       commentId: resolvedCommentId,
-      recipientsTargeted: tokens.length,
-      requestsPrepared: requests.length,
+      recipientsTargeted: recipientsAfterPreferences.length,
+      requestsPrepared: insertedJobs.length,
       inApp: inAppResult,
-      ...result,
+      total: counts.total,
+      queued: counts.queued,
+      skipped: counts.skipped,
+      sent: counts.sent,
+      failed: counts.failed,
+      ...(insertedJobs.length === 0 && duplicateJobs.length > 0
+        ? { skippedReason: 'duplicate' }
+        : {}),
+      engine: 'v2',
+      jobs: jobs.map((job) => ({
+        jobId: job.jobId,
+        inserted: job.inserted,
+        jobStatus: job.jobStatus,
+        skipped: job.skipped,
+      })),
     });
   } catch (error) {
     return json(500, { error: String(error) });
