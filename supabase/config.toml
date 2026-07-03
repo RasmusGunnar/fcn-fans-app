@@ -60,6 +60,9 @@ verify_jwt = false
 [functions.process_push_queue]
 verify_jwt = false
 
+[functions.poll_push_receipts]
+verify_jwt = false
+
 # send-push: authenticated self-test route used from the app profile screen.
 # Keep JWT verification ON and let the function enforce self-targeting.
 [functions.send-push]
