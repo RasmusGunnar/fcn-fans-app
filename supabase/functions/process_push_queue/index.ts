@@ -116,6 +116,37 @@ function isExpoPushToken(token: string): boolean {
   return token.startsWith('ExponentPushToken[') || token.startsWith('ExpoPushToken[');
 }
 
+function readInternalTargetDeviceId(data: Record<string, unknown> | null): string | null {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return null;
+  }
+
+  const internalData = (data as { __v2?: unknown }).__v2;
+  if (!internalData || typeof internalData !== 'object' || Array.isArray(internalData)) {
+    return null;
+  }
+
+  return readString((internalData as { targetDeviceId?: unknown }).targetDeviceId);
+}
+
+function filterDevicesForJob(devices: PushDevice[], job: NotificationJob): PushDevice[] {
+  const targetDeviceId = readInternalTargetDeviceId(job.data);
+  if (!targetDeviceId) {
+    return devices;
+  }
+
+  return devices.filter((device) => device.id === targetDeviceId);
+}
+
+function getPublicJobData(data: Record<string, unknown> | null): Record<string, unknown> {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return {};
+  }
+
+  const { __v2, ...publicData } = data as Record<string, unknown>;
+  return publicData;
+}
+
 function serializeError(error: unknown) {
   if (error && typeof error === 'object') {
     const maybeError = error as Record<string, unknown>;
@@ -183,13 +214,14 @@ async function sendExpoBatch(
   deliveries: NotificationDelivery[],
   job: NotificationJob,
 ): Promise<ExpoPushTicket[]> {
+  const publicData = getPublicJobData(job.data);
   const payload = deliveries.map((delivery) => ({
     to: delivery.push_token_snapshot,
     title: job.title,
     body: job.body,
     sound: 'default',
     channelId: 'default',
-    data: job.data ?? {},
+    data: publicData,
   }));
 
   const controller = new AbortController();
@@ -289,7 +321,10 @@ async function markDeliveryFailed(
 }
 
 async function processJob(supabase: any, job: NotificationJob): Promise<JobProcessResult> {
-  const devices = await loadActiveDevices(supabase, job.recipient_user_id);
+  const devices = filterDevicesForJob(
+    await loadActiveDevices(supabase, job.recipient_user_id),
+    job,
+  );
 
   if (devices.length === 0) {
     await updateJob(supabase, job.id, {
@@ -513,7 +548,10 @@ async function dryRunQueuedJobs(
 
   const rows = [];
   for (const job of jobs) {
-    const devices = await loadActiveDevices(supabase, job.recipient_user_id);
+    const devices = filterDevicesForJob(
+      await loadActiveDevices(supabase, job.recipient_user_id),
+      job,
+    );
     rows.push({
       jobId: job.id,
       notificationType: job.notification_type,
