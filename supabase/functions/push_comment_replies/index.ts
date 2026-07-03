@@ -3,10 +3,7 @@ import {
   buildNotificationDedupeKey,
   createInAppNotifications,
   createAdminClient,
-  dispatchNotifications,
-  fetchExistingNotificationDedupeKeys,
   fetchPushPreferencesByUserIds,
-  fetchPushTokensForUsers,
   isPushPreferenceEnabled,
   json,
   requireAuthenticatedUser,
@@ -32,32 +29,45 @@ type PostRow = {
   post_type: string | null;
 };
 
-type PushTokenRow = {
-  user_id: string;
-  push_token: string;
-  platform?: string | null;
-  updated_at?: string | null;
+type EnqueueNotificationResult = {
+  job_id: string;
+  inserted: boolean;
+  job_status: string;
+  skip_reason: string | null;
+};
+
+type ProcessPushQueueResult = {
+  ok?: boolean;
+  claimed?: number;
+  totals?: {
+    deliveriesCreated?: number;
+    sentToExpo?: number;
+    failed?: number;
+    skipped?: number;
+  };
+  jobs?: {
+    jobId?: string;
+    status?: string;
+    activeDevices?: number;
+    deliveriesCreated?: number;
+    sentToExpo?: number;
+    failed?: number;
+    skipped?: number;
+    reason?: string;
+  }[];
+  error?: unknown;
+};
+
+type CommentReplyJobResult = {
+  jobId: string | null;
+  inserted: boolean;
+  jobStatus: string | null;
+  skipped: boolean;
+  process?: ProcessPushQueueResult | null;
 };
 
 function readString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
-}
-
-function normalizePushTokens(rows: PushTokenRow[]): PushTokenRow[] {
-  return rows.flatMap((row) => {
-    const userId = readString(row.user_id);
-    const pushToken = readString(row.push_token);
-    if (!userId || !pushToken) return [];
-
-    return [
-      {
-        user_id: userId,
-        push_token: pushToken,
-        platform: row.platform ?? null,
-        updated_at: row.updated_at ?? null,
-      },
-    ];
-  });
 }
 
 function truncatePreview(value: string, limit = 120): string {
@@ -81,6 +91,84 @@ async function readRequestBody(req: Request): Promise<RequestBody> {
   } catch {
     return {};
   }
+}
+
+async function enqueueCommentReplyJob(params: {
+  supabase: any;
+  recipientUserId: string;
+  actorUserId: string;
+  notificationType: 'comment_on_post' | 'reply_to_comment';
+  title: string;
+  body: string;
+  dedupeKey: string;
+  data: Record<string, unknown>;
+  commentId: string;
+}) {
+  const { data, error } = await params.supabase
+    .rpc('enqueue_notification', {
+      p_recipient_user_id: params.recipientUserId,
+      p_notification_type: params.notificationType,
+      p_title: params.title,
+      p_body: params.body,
+      p_dedupe_key: params.dedupeKey,
+      p_data: params.data,
+      p_actor_user_id: params.actorUserId,
+      p_preference_key: 'replies',
+      p_source_table: 'comments_v2',
+      p_source_id: params.commentId,
+      p_next_attempt_at: new Date().toISOString(),
+      p_max_attempts: 5,
+    })
+    .single();
+
+  if (error) throw error;
+  return data as EnqueueNotificationResult;
+}
+
+async function processQueuedJob(jobId: string): Promise<ProcessPushQueueResult> {
+  const url = readString(Deno.env.get('SUPABASE_URL'));
+  const syncSecret = readString(Deno.env.get('SYNC_SECRET'));
+
+  if (!url || !syncSecret) {
+    throw new Error('Missing SUPABASE_URL or SYNC_SECRET');
+  }
+
+  const response = await fetch(`${url}/functions/v1/process_push_queue`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-sync-secret': syncSecret,
+    },
+    body: JSON.stringify({ jobId, limit: 1 }),
+  });
+
+  const result = (await response.json().catch(() => null)) as ProcessPushQueueResult | null;
+  if (!response.ok || !result?.ok) {
+    throw new Error(
+      `process_push_queue failed with ${response.status}: ${JSON.stringify(result ?? {})}`,
+    );
+  }
+
+  return result;
+}
+
+function getProcessCounts(result: CommentReplyJobResult) {
+  const totals = result.process?.totals ?? {};
+  const firstJob = Array.isArray(result.process?.jobs) ? result.process.jobs[0] : null;
+  const fallbackQueued = result.inserted && !result.process ? 1 : 0;
+
+  return {
+    total: result.inserted ? 1 : 0,
+    queued:
+      typeof totals.deliveriesCreated === 'number'
+        ? totals.deliveriesCreated
+        : (firstJob?.deliveriesCreated ?? fallbackQueued),
+    skipped:
+      (result.skipped ? 1 : 0) +
+      (typeof totals.skipped === 'number' ? totals.skipped : (firstJob?.skipped ?? 0)),
+    sent: typeof totals.sentToExpo === 'number' ? totals.sentToExpo : (firstJob?.sentToExpo ?? 0),
+    failed: typeof totals.failed === 'number' ? totals.failed : (firstJob?.failed ?? 0),
+  };
 }
 
 Deno.serve(async (req) => {
@@ -248,65 +336,35 @@ Deno.serve(async (req) => {
       });
     }
 
-    const tokens = normalizePushTokens(
-      (await fetchPushTokensForUsers(supabase, [recipientUserId])) as PushTokenRow[],
-    );
+    const dedupeKey = buildNotificationDedupeKey(notificationType, comment.id, recipientUserId);
+    const dedupeKeys = [dedupeKey];
+    const pushTitle =
+      notificationType === 'reply_to_comment'
+        ? `${senderName} svarede p\u00E5 din kommentar`
+        : `${senderName} kommenterede dit opslag`;
+    const pushData = {
+      notificationType,
+      targetType: notificationType === 'reply_to_comment' ? 'comment_reply' : 'post_comment',
+      type: 'post',
+      postId: comment.target_id,
+      commentId: comment.id,
+      parentCommentId: comment.parent_id,
+      url: `fcnfans://post/${comment.target_id}`,
+    };
 
-    if (tokens.length === 0) {
-      console.log('[push_comment_replies] skipped no token', {
-        commentId,
-        recipientUserId,
-        notificationType,
-      });
-      return json(200, { ok: true, skipped: 'no_token', recipientUserId, inApp: inAppResult });
-    }
-
-    const dedupeKeys = tokens.map((tokenRow) =>
-      buildNotificationDedupeKey(
-        notificationType,
-        comment.id,
-        recipientUserId,
-        tokenRow.push_token,
-      ),
-    );
-    const existingDedupeKeys = await fetchExistingNotificationDedupeKeys(supabase, dedupeKeys);
-    const requests = tokens.flatMap((tokenRow) => {
-      const dedupeKey = buildNotificationDedupeKey(
-        notificationType,
-        comment.id,
-        recipientUserId,
-        tokenRow.push_token,
-      );
-
-      if (existingDedupeKeys.has(dedupeKey)) {
-        return [];
-      }
-
-      return [
-        {
-          userId: recipientUserId,
-          pushToken: tokenRow.push_token,
-          notificationType,
-          dedupeKey,
-          title:
-            notificationType === 'reply_to_comment'
-              ? `${senderName} svarede p\u00E5 din kommentar`
-              : `${senderName} kommenterede dit opslag`,
-          body: bodyPreview,
-          data: {
-            notificationType,
-            targetType: notificationType === 'reply_to_comment' ? 'comment_reply' : 'post_comment',
-            type: 'post',
-            postId: comment.target_id,
-            commentId: comment.id,
-            parentCommentId: comment.parent_id,
-            url: `fcnfans://post/${comment.target_id}`,
-          },
-        },
-      ];
+    const enqueueResult = await enqueueCommentReplyJob({
+      supabase,
+      recipientUserId,
+      actorUserId: callerUserId,
+      notificationType,
+      title: pushTitle,
+      body: bodyPreview,
+      dedupeKey,
+      data: pushData,
+      commentId: comment.id,
     });
 
-    if (requests.length === 0) {
+    if (!enqueueResult.inserted) {
       console.log('[push_comment_replies] skipped duplicate', {
         commentId,
         recipientUserId,
@@ -316,24 +374,64 @@ Deno.serve(async (req) => {
       return json(200, {
         ok: true,
         skipped: 'duplicate',
+        skippedReason: 'duplicate',
         recipientUserId,
+        commentId,
+        notificationType,
         dedupeKeys,
         inApp: inAppResult,
+        total: 0,
+        queued: 0,
+        sent: 0,
+        failed: 0,
+        engine: 'v2',
+        jobId: enqueueResult.job_id,
+        jobStatus: enqueueResult.job_status,
+        inserted: false,
       });
     }
 
-    const result = await dispatchNotifications(supabase, requests);
+    let processResult: ProcessPushQueueResult | null = null;
+    let jobStatus = readString(enqueueResult.job_status) ?? 'queued';
+    try {
+      processResult = await processQueuedJob(enqueueResult.job_id);
+      jobStatus =
+        readString(processResult.jobs?.[0]?.status) ??
+        readString(enqueueResult.job_status) ??
+        'queued';
+    } catch (error) {
+      jobStatus = 'queued';
+      console.warn('[push_comment_replies] process_push_queue failed after enqueue', {
+        commentId,
+        notificationType,
+        recipientUserId,
+        jobId: enqueueResult.job_id,
+        error: String(error),
+      });
+    }
+
+    const jobResult: CommentReplyJobResult = {
+      jobId: enqueueResult.job_id,
+      inserted: true,
+      jobStatus,
+      skipped: false,
+      process: processResult,
+    };
+    const counts = getProcessCounts(jobResult);
 
     console.log('[push_comment_replies] dispatch', {
       commentId,
       notificationType,
       recipientUserId,
-      requestsPrepared: requests.length,
-      total: result.total,
-      queued: result.queued,
-      skipped: result.skipped,
-      sent: result.sent,
-      failed: result.failed,
+      requestsPrepared: 1,
+      engine: 'v2',
+      jobId: enqueueResult.job_id,
+      jobStatus,
+      total: counts.total,
+      queued: counts.queued,
+      skipped: counts.skipped,
+      sent: counts.sent,
+      failed: counts.failed,
     });
 
     return json(200, {
@@ -341,9 +439,17 @@ Deno.serve(async (req) => {
       commentId,
       notificationType,
       recipientUserId,
-      dedupeKeys: requests.map((request) => request.dedupeKey),
+      dedupeKeys,
       inApp: inAppResult,
-      ...result,
+      total: counts.total,
+      queued: counts.queued,
+      skipped: counts.skipped,
+      sent: counts.sent,
+      failed: counts.failed,
+      engine: 'v2',
+      jobId: enqueueResult.job_id,
+      jobStatus,
+      inserted: true,
     });
   } catch (error) {
     return json(500, { error: String(error) });
