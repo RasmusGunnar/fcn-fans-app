@@ -456,21 +456,28 @@ export function FanPostCard({
         )
       ) : imageUrl && !imageLoadError ? (
         <CardMedia fullBleed aspectRatio={imageAspectRatio}>
-          <Image
-            source={{ uri: imageUrl }}
-            style={styles.mediaImage}
-            resizeMode="cover"
-            onError={(e) => {
-              if (__DEV__) {
-                console.log('[PostImageError]', {
-                  postId: post.id,
-                  uri: imageUrl,
-                  native: e?.nativeEvent,
-                });
-              }
-              setImageLoadError(true);
-            }}
-          />
+          <Pressable
+            style={styles.mediaImagePressable}
+            onPress={handleOpenMediaViewer(0)}
+            accessibilityRole="button"
+            accessibilityLabel="Åbn billede"
+          >
+            <Image
+              source={{ uri: imageUrl }}
+              style={styles.mediaImage}
+              resizeMode="cover"
+              onError={(e) => {
+                if (__DEV__) {
+                  console.log('[PostImageError]', {
+                    postId: post.id,
+                    uri: imageUrl,
+                    native: e?.nativeEvent,
+                  });
+                }
+                setImageLoadError(true);
+              }}
+            />
+          </Pressable>
         </CardMedia>
       ) : imageLoadError && __DEV__ ? (
         <View style={styles.imageErrorContainer}>
@@ -484,11 +491,7 @@ export function FanPostCard({
             Uventet mediaformat
           </Text>
           {__DEV__ && (
-            <Text
-              variant="caption"
-              color="secondary"
-              style={{ marginTop: theme.spacing[1] }}
-            >
+            <Text variant="caption" color="secondary" style={{ marginTop: theme.spacing[1] }}>
               Kind: {mediaKind} • URI: {mediaUri ? 'yes' : 'no'}
             </Text>
           )}
@@ -519,6 +522,10 @@ const styles = StyleSheet.create({
   },
   mediaPressable: {
     width: '100%',
+  },
+  mediaImagePressable: {
+    width: '100%',
+    height: '100%',
   },
   videoPosterFallback: {
     width: '100%',

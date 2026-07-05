@@ -194,26 +194,23 @@ export function FeedVideo({
     void applyInlinePlaybackStatus();
   }, [applyInlinePlaybackStatus]);
 
-  const markFirstFrameReady = useCallback(
-    () => {
-      setIsFirstFrameReady(true);
+  const markFirstFrameReady = useCallback(() => {
+    setIsFirstFrameReady(true);
 
-      if (didNotifyReadyRef.current) {
-        return;
-      }
+    if (didNotifyReadyRef.current) {
+      return;
+    }
 
-      didNotifyReadyRef.current = true;
-      if (__DEV__) {
-        console.log('[FeedVideo] ready/playing', {
-          uri,
-          source: 'readyForDisplay',
-          msSinceMount: Date.now() - mountedAtRef.current,
-        });
-      }
-      onReady?.();
-    },
-    [onReady, uri],
-  );
+    didNotifyReadyRef.current = true;
+    if (__DEV__) {
+      console.log('[FeedVideo] ready/playing', {
+        uri,
+        source: 'readyForDisplay',
+        msSinceMount: Date.now() - mountedAtRef.current,
+      });
+    }
+    onReady?.();
+  }, [onReady, uri]);
 
   // Detect natural size from loaded video if metadata wasn't provided
   const handleLoad = useCallback(
@@ -354,6 +351,8 @@ const styles = StyleSheet.create({
   },
   mediaPressTarget: {
     ...StyleSheet.absoluteFillObject,
+    zIndex: 1,
+    elevation: theme.elevation.sm.android,
   },
   playOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -372,6 +371,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: theme.spacing[3],
     right: theme.spacing[3],
+    zIndex: 2,
+    elevation: theme.elevation.md.android,
     backgroundColor: theme.colors.overlay.heavy,
     borderRadius: theme.radius.pill,
     width: theme.spacing[8],
