@@ -1423,7 +1423,8 @@ const styles = StyleSheet.create({
   },
   repliesList: {
     marginTop: theme.spacing[2],
-    paddingLeft: theme.spacing[10],
+    paddingLeft: theme.spacing[6],
+    paddingRight: theme.spacing[2],
     gap: theme.spacing[1],
   },
   replyRow: {
@@ -1436,6 +1437,7 @@ const styles = StyleSheet.create({
   },
   replyContent: {
     flex: 1,
+    minWidth: 0,
   },
   replyHeaderRow: {
     flexDirection: 'row',

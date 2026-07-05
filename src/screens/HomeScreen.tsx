@@ -19,7 +19,7 @@ import { useMatchCheckIn } from '../hooks/useMatchCheckIn';
 import { useFeed } from '../state/FeedContext';
 import { useAuth } from '../auth/AuthProvider';
 import { colors, spacing, defaultTheme as theme } from '../theme';
-import { getFeedItemKey, type FeedItem } from '../types/feed';
+import { getFeedItemKey, type FeedFanActivityData, type FeedItem } from '../types/feed';
 import { filterHomeFeedItems, type HomeFeedFilter } from '../utils/homeFeedFilter';
 import {
   buildHomeStartupMediaAudit,
@@ -488,6 +488,25 @@ export default function HomeScreen() {
     [navigation],
   );
 
+  const handleOpenFanActivity = useCallback(
+    (item: FeedFanActivityData) => {
+      const fanActivityId = item.id?.trim();
+      const parentId = item.parentId?.trim();
+      if (!fanActivityId || !parentId) return;
+
+      if (item.parentType === 'match') {
+        (navigation as any).navigate('MatchDetails', { fixtureId: parentId, fanActivityId });
+        return;
+      }
+
+      (navigation as any).navigate('Main', {
+        screen: 'Events',
+        params: { screen: 'EventDetails', params: { eventId: parentId, fanActivityId } },
+      });
+    },
+    [navigation],
+  );
+
   const handleNextMatchPrimaryAction = useCallback(async () => {
     if (!nextFixture?.id) return;
 
@@ -540,6 +559,7 @@ export default function HomeScreen() {
           addCommentPreview={addCommentPreview}
           onPressProfile={handleOpenProfile}
           onPressPost={handleOpenPost}
+          onPressFanActivity={handleOpenFanActivity}
           isActiveVideo={isHomeFocused && key === activeVideoKey}
         />
       );
@@ -547,6 +567,7 @@ export default function HomeScreen() {
     [
       addCommentPreview,
       communityMap,
+      handleOpenFanActivity,
       handleOpenPost,
       handleOpenProfile,
       incrementCommentCount,

@@ -9,10 +9,12 @@ import {
   Alert,
   GestureResponderEvent,
   Image,
+  NativeSyntheticEvent,
   Pressable,
   Share,
   StyleSheet,
   TextInput,
+  TextLayoutEventData,
   View,
 } from 'react-native';
 import { Text } from '../ui';
@@ -55,6 +57,12 @@ import {
   type FanPostBadgeAuthorProfile,
 } from '../../utils/fanPostBadge';
 
+const POST_BODY_COLLAPSED_LINES = 7;
+const URL_PATTERN = /https?:\/\/[^\s<>()"'\u2018\u2019\u201c\u201d]+/gi;
+const TRAILING_URL_PUNCTUATION_PATTERN = /[.,!?;:]+$/;
+
+type BodyTextSegment = { type: 'text'; text: string } | { type: 'url'; text: string; url: string };
+
 function getTimeAgo(isoDate: string): string {
   const now = new Date();
   const date = new Date(isoDate);
@@ -68,6 +76,37 @@ function getTimeAgo(isoDate: string): string {
   if (diffHours < 24) return `For ${diffHours} time${diffHours > 1 ? 'r' : ''} siden`;
   if (diffDays < 7) return `For ${diffDays} dag${diffDays > 1 ? 'e' : ''} siden`;
   return date.toLocaleDateString('da-DK');
+}
+
+function splitBodyTextIntoSegments(text: string): BodyTextSegment[] {
+  const segments: BodyTextSegment[] = [];
+  let lastIndex = 0;
+
+  for (const match of text.matchAll(URL_PATTERN)) {
+    const rawUrl = match[0];
+    const start = match.index ?? 0;
+    if (start > lastIndex) {
+      segments.push({ type: 'text', text: text.slice(lastIndex, start) });
+    }
+
+    const urlText = rawUrl.replace(TRAILING_URL_PUNCTUATION_PATTERN, '');
+    const trailingText = rawUrl.slice(urlText.length);
+
+    if (urlText.length > 0) {
+      segments.push({ type: 'url', text: urlText, url: urlText });
+    }
+    if (trailingText.length > 0) {
+      segments.push({ type: 'text', text: trailingText });
+    }
+
+    lastIndex = start + rawUrl.length;
+  }
+
+  if (lastIndex < text.length) {
+    segments.push({ type: 'text', text: text.slice(lastIndex) });
+  }
+
+  return segments.length > 0 ? segments : [{ type: 'text', text }];
 }
 
 interface FanPostCardProps {
@@ -128,9 +167,15 @@ export function FanPostCard({
   const [editText, setEditText] = useState(post.text);
   const [imageLoadError, setImageLoadError] = useState(false);
   const [inlineVideoMuted, setInlineVideoMuted] = useState(VIDEO_MUTED_BY_DEFAULT);
+  const [bodyLineCount, setBodyLineCount] = useState(0);
+  const [isBodyExpanded, setIsBodyExpanded] = useState(false);
 
   const viewerUserId = currentUserId;
   const viewerIsAppAdmin = currentIsAppAdmin ?? false;
+  const bodySegments = useMemo(() => splitBodyTextIntoSegments(bodyText), [bodyText]);
+  const bodyCanToggle = bodyLineCount > POST_BODY_COLLAPSED_LINES;
+  const bodyNumberOfLines =
+    bodyCanToggle && !isBodyExpanded ? POST_BODY_COLLAPSED_LINES : undefined;
 
   const mediaArr = useMemo(
     () => (isMediaArticle ? [] : normalizeMedia(post.media)),
@@ -157,8 +202,20 @@ export function FanPostCard({
       setInlineVideoMuted(VIDEO_MUTED_BY_DEFAULT);
     }
   }, [isActiveVideo]);
+  useEffect(() => {
+    setBodyLineCount(0);
+    setIsBodyExpanded(false);
+  }, [bodyText, post.id]);
   const handleToggleInlineVideoMuted = useCallback(() => {
     setInlineVideoMuted(toggleVideoMuted);
+  }, []);
+  const handleBodyTextLayout = useCallback((event: NativeSyntheticEvent<TextLayoutEventData>) => {
+    const nextLineCount = Array.isArray(event.nativeEvent.lines)
+      ? event.nativeEvent.lines.length
+      : 0;
+    setBodyLineCount((currentLineCount) =>
+      currentLineCount === nextLineCount ? currentLineCount : nextLineCount,
+    );
   }, []);
   const videoAspectRatio = useMemo(() => {
     const width = firstMedia?.width ?? firstMedia?.metadata?.width;
@@ -197,6 +254,37 @@ export function FanPostCard({
 
     navigation.navigate('MediaViewer', params);
   };
+  const handleOpenBodyUrl = useCallback((url: string, event?: GestureResponderEvent) => {
+    event?.stopPropagation();
+    Linking.openURL(url).catch((error) => {
+      if (__DEV__) {
+        console.warn('[FanPostCard] Could not open link', { url, error });
+      }
+    });
+  }, []);
+  const renderBodyTextSegments = useCallback(
+    () =>
+      bodySegments.map((segment, index) =>
+        segment.type === 'url' ? (
+          <Text
+            key={`${segment.url}-${index}`}
+            variant="body"
+            color="primary"
+            style={styles.bodyLink}
+            onPress={(event) => handleOpenBodyUrl(segment.url, event)}
+          >
+            {segment.text}
+          </Text>
+        ) : (
+          segment.text
+        ),
+      ),
+    [bodySegments, handleOpenBodyUrl],
+  );
+  const handleToggleBodyExpanded = useCallback((event?: GestureResponderEvent) => {
+    event?.stopPropagation();
+    setIsBodyExpanded((current) => !current);
+  }, []);
 
   // Permission checks - use isAppAdmin from context
   // TODO: Add community role when posts have community_id
@@ -387,9 +475,45 @@ export function FanPostCard({
       ) : bodyContent ? (
         bodyContent
       ) : bodyText.length > 0 ? (
-        <Text variant="body" color="primary" style={styles.text}>
-          {bodyText}
-        </Text>
+        <View style={styles.bodyTextContainer}>
+          <View
+            style={styles.bodyMeasureLayer}
+            pointerEvents="none"
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+          >
+            <Text
+              variant="body"
+              color="primary"
+              style={styles.bodyText}
+              onTextLayout={handleBodyTextLayout}
+            >
+              {renderBodyTextSegments()}
+            </Text>
+          </View>
+          <Text
+            variant="body"
+            color="primary"
+            style={styles.bodyText}
+            numberOfLines={bodyNumberOfLines}
+          >
+            {renderBodyTextSegments()}
+          </Text>
+          {bodyCanToggle ? (
+            <Pressable
+              style={styles.bodyToggle}
+              onPress={handleToggleBodyExpanded}
+              accessibilityRole="button"
+              accessibilityLabel={
+                isBodyExpanded ? 'Vis mindre af opslaget' : 'Vis mere af opslaget'
+              }
+            >
+              <Text variant="caption" color="secondary" style={styles.bodyToggleText}>
+                {isBodyExpanded ? 'Vis mindre' : 'Vis mere'}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
       ) : null}
       {isMediaArticle && post.linkPreview ? (
         <ArticlePreview preview={post.linkPreview} fallbackLabel="Artikel" />
@@ -504,8 +628,27 @@ export function FanPostCard({
 const theme = defaultTheme;
 
 const styles = StyleSheet.create({
-  text: {
+  bodyTextContainer: {
+    position: 'relative',
     marginBottom: theme.spacing[3],
+  },
+  bodyMeasureLayer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    opacity: 0,
+  },
+  bodyText: {},
+  bodyLink: {
+    color: theme.colors.info,
+    textDecorationLine: 'underline',
+  },
+  bodyToggle: {
+    alignSelf: 'flex-start',
+    marginTop: theme.spacing[1],
+  },
+  bodyToggleText: {
+    fontWeight: theme.typography.caption.fontWeight as any,
   },
   imagePlaceholder: {
     height: 120,
