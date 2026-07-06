@@ -163,19 +163,28 @@ export function FanPostCard({
     [post.linkPreview, post.postType],
   );
   const groupDisplay = post.communityName || post.factionName;
+  const bodyMeasurementKey = `${post.id}:${bodyText}`;
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(post.text);
   const [imageLoadError, setImageLoadError] = useState(false);
   const [inlineVideoMuted, setInlineVideoMuted] = useState(VIDEO_MUTED_BY_DEFAULT);
-  const [bodyLineCount, setBodyLineCount] = useState(0);
-  const [isBodyExpanded, setIsBodyExpanded] = useState(false);
+  const [bodyMeasurement, setBodyMeasurement] = useState(() => ({
+    key: bodyMeasurementKey,
+    lineCount: 0,
+    measured: false,
+    expanded: false,
+  }));
 
   const viewerUserId = currentUserId;
   const viewerIsAppAdmin = currentIsAppAdmin ?? false;
+  const isCurrentBodyMeasurement = bodyMeasurement.key === bodyMeasurementKey;
+  const bodyLineCount = isCurrentBodyMeasurement ? bodyMeasurement.lineCount : 0;
+  const hasMeasuredBody = isCurrentBodyMeasurement ? bodyMeasurement.measured : false;
+  const isBodyExpanded = isCurrentBodyMeasurement ? bodyMeasurement.expanded : false;
   const bodySegments = useMemo(() => splitBodyTextIntoSegments(bodyText), [bodyText]);
-  const bodyCanToggle = bodyLineCount > POST_BODY_COLLAPSED_LINES;
+  const bodyCanToggle = !isMediaArticle && bodyLineCount > POST_BODY_COLLAPSED_LINES;
   const bodyNumberOfLines =
-    bodyCanToggle && !isBodyExpanded ? POST_BODY_COLLAPSED_LINES : undefined;
+    hasMeasuredBody && bodyCanToggle && !isBodyExpanded ? POST_BODY_COLLAPSED_LINES : undefined;
 
   const mediaArr = useMemo(
     () => (isMediaArticle ? [] : normalizeMedia(post.media)),
@@ -202,21 +211,33 @@ export function FanPostCard({
       setInlineVideoMuted(VIDEO_MUTED_BY_DEFAULT);
     }
   }, [isActiveVideo]);
-  useEffect(() => {
-    setBodyLineCount(0);
-    setIsBodyExpanded(false);
-  }, [bodyText, post.id]);
   const handleToggleInlineVideoMuted = useCallback(() => {
     setInlineVideoMuted(toggleVideoMuted);
   }, []);
-  const handleBodyTextLayout = useCallback((event: NativeSyntheticEvent<TextLayoutEventData>) => {
-    const nextLineCount = Array.isArray(event.nativeEvent.lines)
-      ? event.nativeEvent.lines.length
-      : 0;
-    setBodyLineCount((currentLineCount) =>
-      currentLineCount === nextLineCount ? currentLineCount : nextLineCount,
-    );
-  }, []);
+  const handleBodyTextLayout = useCallback(
+    (event: NativeSyntheticEvent<TextLayoutEventData>) => {
+      const nextLineCount = Array.isArray(event.nativeEvent.lines)
+        ? event.nativeEvent.lines.length
+        : 0;
+      setBodyMeasurement((current) => {
+        if (
+          current.key === bodyMeasurementKey &&
+          current.measured &&
+          current.lineCount === nextLineCount
+        ) {
+          return current;
+        }
+
+        return {
+          key: bodyMeasurementKey,
+          lineCount: nextLineCount,
+          measured: true,
+          expanded: current.key === bodyMeasurementKey ? current.expanded : false,
+        };
+      });
+    },
+    [bodyMeasurementKey],
+  );
   const videoAspectRatio = useMemo(() => {
     const width = firstMedia?.width ?? firstMedia?.metadata?.width;
     const height = firstMedia?.height ?? firstMedia?.metadata?.height;
@@ -281,10 +302,21 @@ export function FanPostCard({
       ),
     [bodySegments, handleOpenBodyUrl],
   );
-  const handleToggleBodyExpanded = useCallback((event?: GestureResponderEvent) => {
-    event?.stopPropagation();
-    setIsBodyExpanded((current) => !current);
-  }, []);
+  const handleToggleBodyExpanded = useCallback(
+    (event?: GestureResponderEvent) => {
+      event?.stopPropagation();
+      setBodyMeasurement((current) => {
+        const isCurrent = current.key === bodyMeasurementKey;
+        return {
+          key: bodyMeasurementKey,
+          lineCount: isCurrent ? current.lineCount : 0,
+          measured: isCurrent ? current.measured : false,
+          expanded: isCurrent ? !current.expanded : true,
+        };
+      });
+    },
+    [bodyMeasurementKey],
+  );
 
   // Permission checks - use isAppAdmin from context
   // TODO: Add community role when posts have community_id
@@ -476,26 +508,12 @@ export function FanPostCard({
         bodyContent
       ) : bodyText.length > 0 ? (
         <View style={styles.bodyTextContainer}>
-          <View
-            style={styles.bodyMeasureLayer}
-            pointerEvents="none"
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
-          >
-            <Text
-              variant="body"
-              color="primary"
-              style={styles.bodyText}
-              onTextLayout={handleBodyTextLayout}
-            >
-              {renderBodyTextSegments()}
-            </Text>
-          </View>
           <Text
             variant="body"
             color="primary"
             style={styles.bodyText}
             numberOfLines={bodyNumberOfLines}
+            onTextLayout={hasMeasuredBody ? undefined : handleBodyTextLayout}
           >
             {renderBodyTextSegments()}
           </Text>
@@ -632,23 +650,21 @@ const styles = StyleSheet.create({
     position: 'relative',
     marginBottom: theme.spacing[3],
   },
-  bodyMeasureLayer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    opacity: 0,
-  },
   bodyText: {},
   bodyLink: {
     color: theme.colors.info,
     textDecorationLine: 'underline',
   },
   bodyToggle: {
-    alignSelf: 'flex-start',
-    marginTop: theme.spacing[1],
+    alignSelf: 'flex-end',
+    marginTop: theme.spacing[2],
+    paddingHorizontal: theme.spacing[1],
+    paddingVertical: theme.spacing[1],
   },
   bodyToggleText: {
+    color: theme.colors.info,
     fontWeight: theme.typography.caption.fontWeight as any,
+    textDecorationLine: 'underline',
   },
   imagePlaceholder: {
     height: 120,

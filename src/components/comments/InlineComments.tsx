@@ -1255,6 +1255,7 @@ export function InlineComments({
 
 const theme = defaultTheme;
 const commentsInset = theme.spacing[3];
+const commentSideInset = theme.spacing[4];
 
 const styles = StyleSheet.create({
   root: {
@@ -1273,7 +1274,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   listContent: {
-    paddingHorizontal: commentsInset,
+    paddingHorizontal: commentSideInset,
     paddingTop: theme.spacing[4],
     paddingBottom: theme.spacing[12] + theme.spacing[4],
     flexGrow: 1,
@@ -1319,6 +1320,7 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   commentsList: {
+    paddingHorizontal: commentSideInset,
     marginBottom: theme.spacing[3],
   },
   commentItem: {
@@ -1423,8 +1425,8 @@ const styles = StyleSheet.create({
   },
   repliesList: {
     marginTop: theme.spacing[2],
-    paddingLeft: theme.spacing[6],
-    paddingRight: theme.spacing[2],
+    paddingLeft: theme.spacing[8],
+    paddingRight: theme.spacing[4],
     gap: theme.spacing[1],
   },
   replyRow: {
