@@ -4,6 +4,7 @@ import { createAdminClient, json, requireSyncSecret } from '../_shared/push.ts';
 type ProcessPushQueuePayload = {
   limit?: unknown;
   jobId?: unknown;
+  jobIds?: unknown;
   dryRun?: unknown;
 };
 
@@ -52,7 +53,7 @@ type ExpoPushTicket = {
 type JobProcessResult = {
   jobId: string;
   notificationType: string;
-  status: 'sent_to_expo' | 'skipped' | 'queued' | 'failed';
+  status: 'sent_to_expo' | 'skipped' | 'queued' | 'failed' | 'delivered';
   activeDevices: number;
   deliveriesCreated: number;
   sentToExpo: number;
@@ -66,6 +67,7 @@ const EXPO_BATCH_SIZE = 100;
 const EXPO_REQUEST_TIMEOUT_MS = 10_000;
 const DEFAULT_LIMIT = 5;
 const MAX_LIMIT = 25;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function readString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
@@ -89,11 +91,44 @@ function readJobId(value: unknown): string | null {
   const normalized = readString(value);
   if (!normalized) return null;
 
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-    normalized,
-  )
-    ? normalized
-    : null;
+  return UUID_PATTERN.test(normalized) ? normalized : null;
+}
+
+function readJobIds(value: unknown): { jobIds: string[] | null; error: string | null } {
+  if (value === undefined) {
+    return { jobIds: null, error: null };
+  }
+
+  if (!Array.isArray(value)) {
+    return { jobIds: null, error: 'jobIds must be an array of UUID strings' };
+  }
+
+  const uniqueJobIds: string[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    const jobId = readJobId(item);
+    if (!jobId) {
+      return { jobIds: null, error: 'jobIds must contain only valid UUID strings' };
+    }
+
+    const normalizedJobId = jobId.toLowerCase();
+    if (seen.has(normalizedJobId)) {
+      continue;
+    }
+
+    seen.add(normalizedJobId);
+    uniqueJobIds.push(normalizedJobId);
+  }
+
+  if (uniqueJobIds.length === 0) {
+    return { jobIds: null, error: 'jobIds must contain at least one UUID' };
+  }
+
+  if (uniqueJobIds.length > MAX_LIMIT) {
+    return { jobIds: null, error: `jobIds can contain at most ${MAX_LIMIT} IDs` };
+  }
+
+  return { jobIds: uniqueJobIds, error: null };
 }
 
 async function readPayload(req: Request): Promise<ProcessPushQueuePayload> {
@@ -520,9 +555,11 @@ async function dryRunQueuedJobs(
   {
     limit,
     jobId,
+    jobIds,
   }: {
     limit: number;
     jobId: string | null;
+    jobIds?: string[] | null;
   },
 ) {
   let query = supabase
@@ -533,9 +570,11 @@ async function dryRunQueuedJobs(
     .eq('status', 'queued')
     .lte('next_attempt_at', new Date().toISOString())
     .order('created_at', { ascending: true })
-    .limit(limit);
+    .limit(jobIds?.length ?? limit);
 
-  if (jobId) {
+  if (jobIds?.length) {
+    query = query.in('id', jobIds);
+  } else if (jobId) {
     query = query.eq('id', jobId);
   }
 
@@ -566,6 +605,66 @@ async function dryRunQueuedJobs(
   return rows;
 }
 
+async function processClaimedJob(supabase: any, job: NotificationJob): Promise<JobProcessResult> {
+  try {
+    return await processJob(supabase, job);
+  } catch (error) {
+    const serialized = serializeError(error);
+    await updateJob(supabase, job.id, {
+      status: job.attempt_count >= job.max_attempts ? 'failed' : 'queued',
+      locked_at: null,
+      locked_by: null,
+      next_attempt_at:
+        job.attempt_count >= job.max_attempts ? job.next_attempt_at : getRetryAtIso(job),
+      last_error_code: serialized.code ?? 'process_job_failed',
+      last_error_message: serialized.message,
+      last_error_details: serialized,
+    });
+
+    return {
+      jobId: job.id,
+      notificationType: job.notification_type,
+      status: job.attempt_count >= job.max_attempts ? 'failed' : 'queued',
+      activeDevices: 0,
+      deliveriesCreated: 0,
+      sentToExpo: 0,
+      failed: 1,
+      skipped: 0,
+      reason: serialized.message,
+    };
+  }
+}
+
+function summarizeResults(results: JobProcessResult[]) {
+  return results.reduce(
+    (acc, result) => ({
+      activeDevices: acc.activeDevices + result.activeDevices,
+      deliveriesCreated: acc.deliveriesCreated + result.deliveriesCreated,
+      sentToExpo: acc.sentToExpo + result.sentToExpo,
+      failed: acc.failed + result.failed,
+      skipped: acc.skipped + result.skipped,
+    }),
+    { activeDevices: 0, deliveriesCreated: 0, sentToExpo: 0, failed: 0, skipped: 0 },
+  );
+}
+
+function summarizeBatch(
+  requestedJobIds: string[],
+  claimedJobIds: string[],
+  notClaimableJobIds: string[],
+  results: JobProcessResult[],
+) {
+  return {
+    requested: requestedJobIds.length,
+    claimed: claimedJobIds.length,
+    sent: results.reduce((total, result) => total + result.sentToExpo, 0),
+    delivered: results.filter((result) => result.status === 'delivered').length,
+    skipped: results.reduce((total, result) => total + result.skipped, 0),
+    failed: results.reduce((total, result) => total + result.failed, 0),
+    notClaimable: notClaimableJobIds.length,
+  };
+}
+
 Deno.serve(async (req) => {
   try {
     const syncSecretError = requireSyncSecret(req);
@@ -575,20 +674,62 @@ Deno.serve(async (req) => {
 
     const payload = await readPayload(req);
     const limit = normalizeLimit(payload.limit);
+    const hasJobId = Object.prototype.hasOwnProperty.call(payload, 'jobId');
+    const hasJobIds = Object.prototype.hasOwnProperty.call(payload, 'jobIds');
     const rawJobId = readString(payload.jobId);
     const jobId = rawJobId ? readJobId(rawJobId) : null;
+    const jobIdsResult = readJobIds(payload.jobIds);
+    const jobIds = jobIdsResult.jobIds;
     const dryRun = readBoolean(payload.dryRun);
     const supabase = createAdminClient();
 
-    if (rawJobId && !jobId) {
+    if (hasJobId && hasJobIds) {
       return json(400, {
         ok: false,
-        error: { message: 'Invalid jobId' },
+        error: { message: 'jobId and jobIds cannot be used together' },
+      });
+    }
+
+    if (hasJobId && !jobId) {
+      return json(400, {
+        ok: false,
+        error: { message: 'jobId must be a valid UUID' },
+      });
+    }
+
+    if (jobIdsResult.error) {
+      return json(400, {
+        ok: false,
+        error: { message: jobIdsResult.error },
       });
     }
 
     if (dryRun) {
-      const jobs = await dryRunQueuedJobs(supabase, { limit, jobId });
+      const jobs = await dryRunQueuedJobs(supabase, { limit, jobId, jobIds });
+
+      if (jobIds) {
+        const matchedJobIds = new Set(jobs.map((job) => job.jobId));
+        const notClaimableJobIds = jobIds.filter(
+          (requestedJobId) => !matchedJobIds.has(requestedJobId),
+        );
+
+        return json(200, {
+          ok: true,
+          dryRun: true,
+          limit,
+          jobId: null,
+          jobIds,
+          requestedJobIds: jobIds,
+          claimedJobIds: jobs.map((job) => job.jobId),
+          notClaimableJobIds,
+          requested: jobIds.length,
+          claimed: jobs.length,
+          notClaimable: notClaimableJobIds.length,
+          matched: jobs.length,
+          jobs,
+        });
+      }
+
       return json(200, {
         ok: true,
         dryRun: true,
@@ -600,6 +741,52 @@ Deno.serve(async (req) => {
     }
 
     const workerId = createWorkerId();
+
+    if (jobIds) {
+      const results: JobProcessResult[] = [];
+      const claimedJobIds: string[] = [];
+      const notClaimableJobIds: string[] = [];
+
+      for (const requestedJobId of jobIds) {
+        const { data, error } = await supabase.rpc('claim_notification_jobs', {
+          p_limit: 1,
+          p_worker_id: workerId,
+          p_job_id: requestedJobId,
+        });
+
+        if (error) throw error;
+
+        const claimedJobs = (data as NotificationJob[] | null) ?? [];
+        if (claimedJobs.length === 0) {
+          notClaimableJobIds.push(requestedJobId);
+          continue;
+        }
+
+        const job = claimedJobs[0];
+        claimedJobIds.push(job.id);
+        results.push(await processClaimedJob(supabase, job));
+      }
+
+      const totals = summarizeResults(results);
+      const batch = summarizeBatch(jobIds, claimedJobIds, notClaimableJobIds, results);
+
+      return json(200, {
+        ok: true,
+        dryRun: false,
+        workerId,
+        limit,
+        jobId: null,
+        jobIds,
+        requestedJobIds: jobIds,
+        claimedJobIds,
+        notClaimableJobIds,
+        claimed: claimedJobIds.length,
+        totals,
+        ...batch,
+        jobs: results,
+      });
+    }
+
     const { data, error } = await supabase.rpc('claim_notification_jobs', {
       p_limit: limit,
       p_worker_id: workerId,
@@ -612,45 +799,10 @@ Deno.serve(async (req) => {
     const results: JobProcessResult[] = [];
 
     for (const job of jobs) {
-      try {
-        results.push(await processJob(supabase, job));
-      } catch (error) {
-        const serialized = serializeError(error);
-        await updateJob(supabase, job.id, {
-          status: job.attempt_count >= job.max_attempts ? 'failed' : 'queued',
-          locked_at: null,
-          locked_by: null,
-          next_attempt_at:
-            job.attempt_count >= job.max_attempts ? job.next_attempt_at : getRetryAtIso(job),
-          last_error_code: serialized.code ?? 'process_job_failed',
-          last_error_message: serialized.message,
-          last_error_details: serialized,
-        });
-
-        results.push({
-          jobId: job.id,
-          notificationType: job.notification_type,
-          status: job.attempt_count >= job.max_attempts ? 'failed' : 'queued',
-          activeDevices: 0,
-          deliveriesCreated: 0,
-          sentToExpo: 0,
-          failed: 1,
-          skipped: 0,
-          reason: serialized.message,
-        });
-      }
+      results.push(await processClaimedJob(supabase, job));
     }
 
-    const totals = results.reduce(
-      (acc, result) => ({
-        activeDevices: acc.activeDevices + result.activeDevices,
-        deliveriesCreated: acc.deliveriesCreated + result.deliveriesCreated,
-        sentToExpo: acc.sentToExpo + result.sentToExpo,
-        failed: acc.failed + result.failed,
-        skipped: acc.skipped + result.skipped,
-      }),
-      { activeDevices: 0, deliveriesCreated: 0, sentToExpo: 0, failed: 0, skipped: 0 },
-    );
+    const totals = summarizeResults(results);
 
     return json(200, {
       ok: true,
