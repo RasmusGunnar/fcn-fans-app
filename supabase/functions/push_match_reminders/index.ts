@@ -2,10 +2,7 @@
 import {
   buildNotificationDedupeKey,
   createAdminClient,
-  dispatchNotifications,
-  fetchExistingNotificationDedupeKeys,
   fetchPushPreferencesByUserIds,
-  fetchPushTokensForUsers,
   isPushPreferenceEnabled,
   json,
   requireSyncSecret,
@@ -15,6 +12,7 @@ const FCN_TEAM_PROVIDER_ID = '133890';
 const FCN_TEAM_NAME_MATCHERS = ['nordsjalland', 'nordsjaelland'];
 const LEAD_MINUTES = 120;
 const WINDOW_MINUTES = 15;
+const QUEUE_BATCH_SIZE = 25;
 
 type MatchReminderRequest = {
   fixtureId?: string;
@@ -23,11 +21,60 @@ type MatchReminderRequest = {
   dryRun?: boolean;
 };
 
-type PushTokenRow = {
-  user_id: string;
-  push_token: string;
-  platform?: string | null;
-  updated_at?: string | null;
+type EnqueueNotificationResult = {
+  job_id: string;
+  inserted: boolean;
+  job_status: string;
+  skip_reason: string | null;
+};
+
+type ProcessPushQueueResult = {
+  ok?: boolean;
+  requested?: number;
+  claimed?: number;
+  sent?: number;
+  delivered?: number;
+  skipped?: number;
+  failed?: number;
+  notClaimable?: number;
+  requestedJobIds?: string[];
+  claimedJobIds?: string[];
+  notClaimableJobIds?: string[];
+  totals?: {
+    deliveriesCreated?: number;
+    sentToExpo?: number;
+    failed?: number;
+    skipped?: number;
+  };
+  jobs?: {
+    jobId?: string;
+    status?: string;
+    activeDevices?: number;
+    deliveriesCreated?: number;
+    sentToExpo?: number;
+    failed?: number;
+    skipped?: number;
+    reason?: string;
+  }[];
+  error?: unknown;
+};
+
+type MatchReminderCandidate = {
+  userId: string;
+  fixtureId: string;
+  notificationType: 'match_checkin_reminder';
+  dedupeKey: string;
+  title: string;
+  body: string;
+  data: Record<string, unknown>;
+};
+
+type MatchReminderJobResult = {
+  recipientUserId: string;
+  jobId: string | null;
+  inserted: boolean;
+  skippedReason: 'duplicate' | 'enqueue_failed' | null;
+  process?: ProcessPushQueueResult | null;
 };
 
 function normalizeText(value: unknown): string {
@@ -52,9 +99,7 @@ function readString(value: unknown): string | null {
 
 function readStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
-  return value
-    .map((entry) => readString(entry))
-    .filter((entry): entry is string => Boolean(entry));
+  return value.map((entry) => readString(entry)).filter((entry): entry is string => Boolean(entry));
 }
 
 function readRaw(raw: unknown): Record<string, unknown> | null {
@@ -114,21 +159,12 @@ function buildOpponentLabel(row: Record<string, unknown>): string {
   return `${homeTeam} - ${awayTeam}`;
 }
 
-function normalizePushTokens(rows: PushTokenRow[]): PushTokenRow[] {
-  return rows.flatMap((row) => {
-    const userId = readString(row.user_id);
-    const pushToken = readString(row.push_token);
-    if (!userId || !pushToken) return [];
-
-    return [
-      {
-        user_id: userId,
-        push_token: pushToken,
-        platform: row.platform ?? null,
-        updated_at: row.updated_at ?? null,
-      },
-    ];
-  });
+function chunk<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
 }
 
 async function fetchGoingRsvpUserIds(supabase: any, fixtureId: string) {
@@ -163,6 +199,118 @@ async function fetchCheckedInUserIds(supabase: any, fixtureId: string) {
       .map((row) => readString(row.user_id))
       .filter((userId): userId is string => Boolean(userId)),
   );
+}
+
+async function fetchExistingNotificationJobDedupeKeys(supabase: any, dedupeKeys: string[]) {
+  const uniqueDedupeKeys = Array.from(new Set(dedupeKeys.filter((key) => key.length > 0)));
+  if (uniqueDedupeKeys.length === 0) return new Set<string>();
+
+  const { data, error } = await supabase
+    .from('notification_jobs')
+    .select('dedupe_key')
+    .in('dedupe_key', uniqueDedupeKeys);
+
+  if (error) throw error;
+
+  return new Set(
+    ((data as { dedupe_key?: string | null }[] | null) ?? [])
+      .map((row) => readString(row.dedupe_key))
+      .filter((key): key is string => Boolean(key)),
+  );
+}
+
+async function enqueueMatchReminderJob(params: {
+  supabase: any;
+  candidate: MatchReminderCandidate;
+}) {
+  const { data, error } = await params.supabase
+    .rpc('enqueue_notification', {
+      p_recipient_user_id: params.candidate.userId,
+      p_notification_type: params.candidate.notificationType,
+      p_title: params.candidate.title,
+      p_body: params.candidate.body,
+      p_dedupe_key: params.candidate.dedupeKey,
+      p_data: params.candidate.data,
+      p_actor_user_id: null,
+      p_preference_key: 'matchday_checkin',
+      p_source_table: 'fixtures',
+      p_source_id: params.candidate.fixtureId,
+      p_next_attempt_at: new Date().toISOString(),
+      p_max_attempts: 5,
+    })
+    .single();
+
+  if (error) throw error;
+  return data as EnqueueNotificationResult;
+}
+
+async function processQueuedJobs(jobIds: string[]): Promise<ProcessPushQueueResult> {
+  const url = readString(Deno.env.get('SUPABASE_URL'));
+  const syncSecret = readString(Deno.env.get('SYNC_SECRET'));
+
+  if (!url || !syncSecret) {
+    throw new Error('Missing SUPABASE_URL or SYNC_SECRET');
+  }
+
+  const response = await fetch(`${url}/functions/v1/process_push_queue`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-sync-secret': syncSecret,
+    },
+    body: JSON.stringify({ jobIds, limit: QUEUE_BATCH_SIZE }),
+  });
+
+  const result = (await response.json().catch(() => null)) as ProcessPushQueueResult | null;
+  if (!response.ok || !result?.ok) {
+    throw new Error(
+      `process_push_queue failed with ${response.status}: ${JSON.stringify(result ?? {})}`,
+    );
+  }
+
+  return result;
+}
+
+function getProcessCounts(results: MatchReminderJobResult[]) {
+  const processResults = Array.from(
+    new Set(
+      results
+        .map((result) => result.process)
+        .filter((result): result is ProcessPushQueueResult => Boolean(result)),
+    ),
+  );
+  const processTotals = processResults.reduce(
+    (acc, result) => ({
+      deliveriesCreated: acc.deliveriesCreated + (result.totals?.deliveriesCreated ?? 0),
+      sentToExpo: acc.sentToExpo + (result.totals?.sentToExpo ?? 0),
+      failed: acc.failed + (result.totals?.failed ?? 0),
+      skipped: acc.skipped + (result.totals?.skipped ?? 0),
+    }),
+    { deliveriesCreated: 0, sentToExpo: 0, failed: 0, skipped: 0 },
+  );
+  const processedJobIds = new Set(
+    processResults.flatMap((result) => result.jobs?.map((job) => job.jobId).filter(Boolean) ?? []),
+  );
+  const notClaimableJobIds = new Set(
+    processResults.flatMap((result) => result.notClaimableJobIds ?? []),
+  );
+  const insertedJobs = results.filter((result) => result.inserted && result.jobId);
+  const unprocessedQueued = insertedJobs.filter(
+    (result) =>
+      result.jobId && !processedJobIds.has(result.jobId) && !notClaimableJobIds.has(result.jobId),
+  ).length;
+  const duplicateJobs = results.filter((result) => result.skippedReason === 'duplicate').length;
+  const enqueueFailures = results.filter(
+    (result) => result.skippedReason === 'enqueue_failed',
+  ).length;
+
+  return {
+    total: insertedJobs.length,
+    queued: processTotals.deliveriesCreated + unprocessedQueued,
+    skipped: duplicateJobs + processTotals.skipped,
+    sent: processTotals.sentToExpo,
+    failed: enqueueFailures + processTotals.failed,
+  };
 }
 
 async function readRequestBody(req: Request): Promise<MatchReminderRequest> {
@@ -212,7 +360,11 @@ Deno.serve(async (req) => {
 
     let fixtures: any[] = [];
     if (fixtureId) {
-      const { data, error } = await supabase.from('fixtures').select('*').eq('id', fixtureId).limit(1);
+      const { data, error } = await supabase
+        .from('fixtures')
+        .select('*')
+        .eq('id', fixtureId)
+        .limit(1);
 
       if (error) throw error;
       fixtures = Array.isArray(data) ? data : [];
@@ -232,15 +384,7 @@ Deno.serve(async (req) => {
       .filter((fixture) => hasRequiredFixtureFields(fixture as Record<string, unknown>))
       .filter((fixture) => isFcnFixture(fixture as Record<string, unknown>));
 
-    const candidateRequests: {
-      userId: string;
-      pushToken: string;
-      notificationType: string;
-      dedupeKey: string;
-      title: string;
-      body: string;
-      data: Record<string, unknown>;
-    }[] = [];
+    const candidateRequests: MatchReminderCandidate[] = [];
     let rsvpUsersMatched = 0;
     let recipientsTargeted = 0;
     let recipientsSkippedCheckedIn = 0;
@@ -267,7 +411,10 @@ Deno.serve(async (req) => {
       recipientsSkippedCheckedIn += scopedUserIds.length - notCheckedInUserIds.length;
       if (notCheckedInUserIds.length === 0) continue;
 
-      const preferencesByUserId = await fetchPushPreferencesByUserIds(supabase, notCheckedInUserIds);
+      const preferencesByUserId = await fetchPushPreferencesByUserIds(
+        supabase,
+        notCheckedInUserIds,
+      );
       const usersWithPreferenceEnabled = notCheckedInUserIds.filter((userId) =>
         isPushPreferenceEnabled(preferencesByUserId, userId, 'matchday_checkin'),
       );
@@ -275,29 +422,16 @@ Deno.serve(async (req) => {
       recipientsSkippedPreference += notCheckedInUserIds.length - usersWithPreferenceEnabled.length;
       if (usersWithPreferenceEnabled.length === 0) continue;
 
-      const tokens = normalizePushTokens(
-        (await fetchPushTokensForUsers(supabase, usersWithPreferenceEnabled)) as PushTokenRow[],
-      );
-      const tokenUserIds = new Set(tokens.map((tokenRow) => tokenRow.user_id));
-
-      recipientsSkippedMissingToken += usersWithPreferenceEnabled.filter(
-        (userId) => !tokenUserIds.has(userId),
-      ).length;
-      recipientsTargeted += tokens.length;
+      recipientsTargeted += usersWithPreferenceEnabled.length;
 
       const opponent = buildOpponentLabel(fixture as Record<string, unknown>);
 
-      for (const tokenRow of tokens) {
+      for (const userId of usersWithPreferenceEnabled) {
         candidateRequests.push({
-          userId: tokenRow.user_id,
-          pushToken: tokenRow.push_token,
+          userId,
+          fixtureId: fixtureUuid,
           notificationType: 'match_checkin_reminder',
-          dedupeKey: buildNotificationDedupeKey(
-            'match_checkin_reminder',
-            fixtureUuid,
-            tokenRow.user_id,
-            tokenRow.push_token,
-          ),
+          dedupeKey: buildNotificationDedupeKey('match_checkin_reminder', fixtureUuid, userId),
           title: 'Er du p\u00E5 stadion?',
           body: `FCN m\u00F8der ${opponent} kl. ${formatTimeDa(kickoffAt)}. Husk at tjekke ind til kampen i appen.`,
           data: {
@@ -309,7 +443,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    const existingDedupeKeys = await fetchExistingNotificationDedupeKeys(
+    const existingDedupeKeys = await fetchExistingNotificationJobDedupeKeys(
       supabase,
       candidateRequests.map((request) => request.dedupeKey),
     );
@@ -318,7 +452,7 @@ Deno.serve(async (req) => {
       (request) => !existingDedupeKeys.has(request.dedupeKey),
     );
 
-    const recipientsSkippedExistingDedupe = candidateRequests.length - requests.length;
+    let recipientsSkippedExistingDedupe = candidateRequests.length - requests.length;
 
     const summary = {
       mode: fixtureId ? 'fixture_id' : 'window',
@@ -342,6 +476,7 @@ Deno.serve(async (req) => {
       console.log('[push_match_reminders] dry run', summary);
       return json(200, {
         ok: true,
+        engine: 'v2',
         ...summary,
         sampleRequests: requests.slice(0, 3).map((request) => ({
           userId: request.userId,
@@ -354,9 +489,97 @@ Deno.serve(async (req) => {
       });
     }
 
-    const result = await dispatchNotifications(supabase, requests);
-    console.log('[push_match_reminders] dispatch', {
+    const jobs: MatchReminderJobResult[] = [];
+    const processResults: ProcessPushQueueResult[] = [];
+    const processFailures: { jobIds: string[]; error: string }[] = [];
+
+    for (const request of requests) {
+      try {
+        const enqueueResult = await enqueueMatchReminderJob({
+          supabase,
+          candidate: request,
+        });
+        jobs.push({
+          recipientUserId: request.userId,
+          jobId: enqueueResult.job_id,
+          inserted: enqueueResult.inserted,
+          skippedReason: enqueueResult.inserted ? null : 'duplicate',
+        });
+      } catch (error) {
+        console.warn('[push_match_reminders] enqueue failed', {
+          fixtureId: request.fixtureId,
+          recipientUserId: request.userId,
+          error: String(error),
+        });
+        jobs.push({
+          recipientUserId: request.userId,
+          jobId: null,
+          inserted: false,
+          skippedReason: 'enqueue_failed',
+        });
+      }
+    }
+
+    recipientsSkippedExistingDedupe += jobs.filter(
+      (job) => job.skippedReason === 'duplicate',
+    ).length;
+
+    const insertedJobIds = jobs
+      .filter((job): job is MatchReminderJobResult & { jobId: string } =>
+        Boolean(job.inserted && job.jobId),
+      )
+      .map((job) => job.jobId);
+
+    if (insertedJobIds.length > 0) {
+      const jobsById = new Map(
+        jobs
+          .filter((job): job is MatchReminderJobResult & { jobId: string } => Boolean(job.jobId))
+          .map((job) => [job.jobId, job]),
+      );
+
+      for (const jobIdChunk of chunk(insertedJobIds, QUEUE_BATCH_SIZE)) {
+        try {
+          const processResult = await processQueuedJobs(jobIdChunk);
+          processResults.push(processResult);
+
+          for (const processedJob of processResult.jobs ?? []) {
+            const job = processedJob.jobId ? jobsById.get(processedJob.jobId) : null;
+            if (job) {
+              job.process = processResult;
+            }
+          }
+
+          for (const notClaimableJobId of processResult.notClaimableJobIds ?? []) {
+            const job = jobsById.get(notClaimableJobId);
+            if (job) {
+              job.process = processResult;
+            }
+          }
+        } catch (error) {
+          processFailures.push({
+            jobIds: jobIdChunk,
+            error: String(error),
+          });
+          console.warn('[push_match_reminders] process_push_queue chunk failed after enqueue', {
+            jobIds: jobIdChunk,
+            error: String(error),
+          });
+        }
+      }
+    }
+
+    const result = getProcessCounts(jobs);
+    const finalSummary = {
       ...summary,
+      recipientsSkippedExistingDedupe,
+      jobsInserted: insertedJobIds.length,
+      queueProcessChunks: processResults.length,
+      queueProcessFailures: processFailures.length,
+    };
+
+    console.log('[push_match_reminders] dispatch', {
+      ...finalSummary,
+      engine: 'v2',
       total: result.total,
       queued: result.queued,
       skipped: result.skipped,
@@ -366,7 +589,9 @@ Deno.serve(async (req) => {
 
     return json(200, {
       ok: true,
-      ...summary,
+      engine: 'v2',
+      ...finalSummary,
+      processFailures,
       ...result,
     });
   } catch (error) {
