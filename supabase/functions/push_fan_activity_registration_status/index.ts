@@ -2,10 +2,7 @@
 import {
   buildNotificationDedupeKey,
   createAdminClient,
-  dispatchNotifications,
-  fetchExistingNotificationDedupeKeys,
   fetchPushPreferencesByUserIds,
-  fetchPushTokensForUsers,
   isPushPreferenceEnabled,
   json,
   requireAuthenticatedUser,
@@ -29,6 +26,35 @@ type RegistrationRow = {
     parent_type: string | null;
     parent_id: string | null;
   } | null;
+};
+
+type EnqueueNotificationResult = {
+  job_id: string;
+  inserted: boolean;
+  job_status: string;
+  skip_reason: string | null;
+};
+
+type ProcessPushQueueResult = {
+  ok?: boolean;
+  claimed?: number;
+  totals?: {
+    deliveriesCreated?: number;
+    sentToExpo?: number;
+    failed?: number;
+    skipped?: number;
+  };
+  jobs?: {
+    jobId?: string;
+    status?: string;
+    activeDevices?: number;
+    deliveriesCreated?: number;
+    sentToExpo?: number;
+    failed?: number;
+    skipped?: number;
+    reason?: string;
+  }[];
+  error?: unknown;
 };
 
 function readString(value: unknown): string | null {
@@ -110,6 +136,81 @@ function buildFanActivityNotificationData(
   };
 }
 
+async function enqueueRegistrationStatusJob(params: {
+  supabase: any;
+  recipientUserId: string;
+  actorUserId: string;
+  notificationType: string;
+  title: string;
+  body: string;
+  dedupeKey: string;
+  data: Record<string, unknown>;
+  registrationId: string;
+}) {
+  const { data, error } = await params.supabase
+    .rpc('enqueue_notification', {
+      p_recipient_user_id: params.recipientUserId,
+      p_notification_type: params.notificationType,
+      p_title: params.title,
+      p_body: params.body,
+      p_dedupe_key: params.dedupeKey,
+      p_data: params.data,
+      p_actor_user_id: params.actorUserId,
+      p_preference_key: 'community_activity',
+      p_source_table: 'fan_activity_registrations',
+      p_source_id: params.registrationId,
+      p_next_attempt_at: new Date().toISOString(),
+      p_max_attempts: 5,
+    })
+    .single();
+
+  if (error) throw error;
+  return data as EnqueueNotificationResult;
+}
+
+async function processQueuedJob(jobId: string): Promise<ProcessPushQueueResult> {
+  const url = readString(Deno.env.get('SUPABASE_URL'));
+  const syncSecret = readString(Deno.env.get('SYNC_SECRET'));
+
+  if (!url || !syncSecret) {
+    throw new Error('Missing SUPABASE_URL or SYNC_SECRET');
+  }
+
+  const response = await fetch(`${url}/functions/v1/process_push_queue`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-sync-secret': syncSecret,
+    },
+    body: JSON.stringify({ jobId, limit: 1 }),
+  });
+
+  const result = (await response.json().catch(() => null)) as ProcessPushQueueResult | null;
+  if (!response.ok || !result?.ok) {
+    throw new Error(
+      `process_push_queue failed with ${response.status}: ${JSON.stringify(result ?? {})}`,
+    );
+  }
+
+  return result;
+}
+
+function getProcessCounts(result: ProcessPushQueueResult | null) {
+  const totals = result?.totals ?? {};
+  const firstJob = Array.isArray(result?.jobs) ? result?.jobs[0] : null;
+
+  return {
+    queued:
+      typeof totals.deliveriesCreated === 'number'
+        ? totals.deliveriesCreated
+        : (firstJob?.deliveriesCreated ?? 0),
+    skipped: typeof totals.skipped === 'number' ? totals.skipped : (firstJob?.skipped ?? 0),
+    sent: typeof totals.sentToExpo === 'number' ? totals.sentToExpo : (firstJob?.sentToExpo ?? 0),
+    failed: typeof totals.failed === 'number' ? totals.failed : (firstJob?.failed ?? 0),
+    jobStatus: readString(firstJob?.status) ?? null,
+  };
+}
+
 Deno.serve(async (req) => {
   try {
     const auth = await requireAuthenticatedUser(req);
@@ -175,48 +276,68 @@ Deno.serve(async (req) => {
       return json(200, { ok: true, skipped: 'preferences_disabled' });
     }
 
-    const tokens = await fetchPushTokensForUsers(supabase, [targetUserId]);
-    if (tokens.length === 0) {
-      return json(200, { ok: true, skipped: 'no_token' });
-    }
-
     const activityTitle = readString(row.fan_activities?.title) ?? 'fanaktiviteten';
     const copy = getNotificationCopy(status, activityTitle);
-    const dedupeKeys = tokens.map((tokenRow: any) =>
-      buildNotificationDedupeKey(copy.notificationType, registrationId, tokenRow.user_id),
+    const dedupeKey = buildNotificationDedupeKey(
+      copy.notificationType,
+      registrationId,
+      targetUserId,
     );
-    const existingDedupeKeys = await fetchExistingNotificationDedupeKeys(supabase, dedupeKeys);
 
-    const requests = tokens.flatMap((tokenRow: any) => {
-      const dedupeKey = buildNotificationDedupeKey(
-        copy.notificationType,
-        registrationId,
-        tokenRow.user_id,
-      );
-
-      if (existingDedupeKeys.has(dedupeKey)) {
-        return [];
-      }
-
-      return [
-        {
-          userId: tokenRow.user_id as string,
-          pushToken: tokenRow.push_token as string,
-          notificationType: copy.notificationType,
-          dedupeKey,
-          title: copy.title,
-          body: copy.body,
-          data: buildFanActivityNotificationData(row, registrationId, copy.notificationType),
-        },
-      ];
+    const enqueueResult = await enqueueRegistrationStatusJob({
+      supabase,
+      recipientUserId: targetUserId,
+      actorUserId: callerUserId,
+      notificationType: copy.notificationType,
+      title: copy.title,
+      body: copy.body,
+      dedupeKey,
+      data: buildFanActivityNotificationData(row, registrationId, copy.notificationType),
+      registrationId,
     });
 
-    if (requests.length === 0) {
-      return json(200, { ok: true, skipped: 'duplicate' });
+    if (!enqueueResult.inserted) {
+      return json(200, {
+        ok: true,
+        engine: 'v2',
+        skipped: 'duplicate',
+        total: 0,
+        queued: 0,
+        sent: 0,
+        failed: 0,
+        jobId: enqueueResult.job_id,
+        jobStatus: enqueueResult.job_status,
+        inserted: false,
+      });
     }
 
-    const result = await dispatchNotifications(supabase, requests);
-    return json(200, { ok: true, ...result });
+    let processResult: ProcessPushQueueResult | null = null;
+    try {
+      processResult = await processQueuedJob(enqueueResult.job_id);
+    } catch (error) {
+      console.warn(
+        '[push_fan_activity_registration_status] process_push_queue failed after enqueue',
+        {
+          registrationId,
+          jobId: enqueueResult.job_id,
+          error: String(error),
+        },
+      );
+    }
+
+    const counts = getProcessCounts(processResult);
+    return json(200, {
+      ok: true,
+      engine: 'v2',
+      total: 1,
+      queued: processResult ? counts.queued : 1,
+      skipped: counts.skipped,
+      sent: counts.sent,
+      failed: counts.failed,
+      jobId: enqueueResult.job_id,
+      jobStatus: counts.jobStatus ?? enqueueResult.job_status ?? 'queued',
+      inserted: true,
+    });
   } catch (error) {
     return json(500, { error: String(error) });
   }
