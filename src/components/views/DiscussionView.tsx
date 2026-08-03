@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -27,6 +27,7 @@ import {
   fetchDiscussionThreads,
   fetchOpenDiscussionReports,
   hideDiscussionPost,
+  markDiscussionThreadRead,
   reportDiscussionPost,
   setDiscussionThreadLocked,
   setDiscussionThreadPinned,
@@ -127,6 +128,13 @@ function ThreadCard({
               <Text style={styles.threadDescription}>{thread.description}</Text>
             ) : null}
           </View>
+          {thread.unreadCount > 0 ? (
+            <View style={styles.unreadBadge}>
+              <Text style={styles.unreadBadgeText}>
+                {thread.unreadCount > 99 ? '99+' : thread.unreadCount}
+              </Text>
+            </View>
+          ) : null}
           <Ionicons name="chevron-forward" size={20} color={theme.colors.text.secondary} />
         </View>
         <View style={styles.threadMetaRow}>
@@ -849,6 +857,33 @@ export function DiscussionView({ onInputFocus }: { onInputFocus?: DiscussionInpu
             ? groupDiscussionReplies([...flattenPosts(loadedPosts), ...flattenPosts(current)])
             : loadedPosts,
         );
+
+        if (!options?.appendOlder) {
+          const latestVisiblePost = flattenPosts(loadedPosts)
+            .filter((post) => !post.hiddenAt && !post.deletedAt)
+            .sort((left, right) => {
+              const timestampDiff =
+                new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
+              return timestampDiff !== 0 ? timestampDiff : right.id.localeCompare(left.id);
+            })[0];
+
+          if (latestVisiblePost) {
+            try {
+              await markDiscussionThreadRead({
+                threadId: thread.id,
+                lastSeenPostId: latestVisiblePost.id,
+              });
+              setThreads((current) =>
+                current.map((item) => (item.id === thread.id ? { ...item, unreadCount: 0 } : item)),
+              );
+              setSelectedThread((current) =>
+                current?.id === thread.id ? { ...current, unreadCount: 0 } : current,
+              );
+            } catch (readStateError) {
+              console.warn('[DiscussionView] Could not update thread read state:', readStateError);
+            }
+          }
+        }
       } catch (loadError: any) {
         setError(loadError?.message || 'Indlæg kunne ikke hentes.');
       } finally {
@@ -858,9 +893,13 @@ export function DiscussionView({ onInputFocus }: { onInputFocus?: DiscussionInpu
     [posts, selectedThread, userId],
   );
 
-  useEffect(() => {
-    void loadThreads();
-  }, [loadThreads]);
+  useFocusEffect(
+    useCallback(() => {
+      if (!selectedThread) {
+        void loadThreads();
+      }
+    }, [loadThreads, selectedThread]),
+  );
 
   useEffect(() => {
     if (!rulesKey) return;
@@ -1179,6 +1218,20 @@ const styles = StyleSheet.create({
   threadHeaderText: {
     flex: 1,
     minWidth: 0,
+  },
+  unreadBadge: {
+    minWidth: theme.spacing[7],
+    height: theme.spacing[7],
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unreadBadgeText: {
+    color: theme.colors.text.inverse,
+    ...theme.typography.small,
+    fontWeight: '700',
   },
   threadTitleRow: {
     flexDirection: 'row',

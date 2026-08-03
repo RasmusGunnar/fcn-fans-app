@@ -18,6 +18,7 @@ export type DiscussionThread = {
   isPinned: boolean;
   isLocked: boolean;
   replyCount: number;
+  unreadCount: number;
   lastPostAt?: string | null;
   createdAt: string;
 };

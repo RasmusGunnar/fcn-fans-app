@@ -31,6 +31,7 @@ function mapThread(row: any): DiscussionThread {
     isPinned: Boolean(row.is_pinned),
     isLocked: Boolean(row.is_locked),
     replyCount: Number(row.reply_count ?? 0),
+    unreadCount: Number(row.unread_count ?? 0),
     lastPostAt: row.last_post_at,
     createdAt: row.created_at,
   };
@@ -199,6 +200,19 @@ async function hydrateReactions(
 }
 
 export async function fetchDiscussionThreads(): Promise<DiscussionThread[]> {
+  const rpcResponse = await supabase.rpc('get_discussion_threads_with_unread');
+  if (!rpcResponse.error) {
+    return (rpcResponse.data ?? []).map(mapThread);
+  }
+
+  const isMissingUnreadRpc =
+    rpcResponse.error.code === '42883' ||
+    rpcResponse.error.code === 'PGRST202' ||
+    rpcResponse.error.message?.includes('get_discussion_threads_with_unread');
+  if (!isMissingUnreadRpc) {
+    throw rpcResponse.error;
+  }
+
   const { data, error } = await supabase
     .from('discussion_threads')
     .select(
@@ -213,6 +227,29 @@ export async function fetchDiscussionThreads(): Promise<DiscussionThread[]> {
   }
 
   return (data ?? []).map(mapThread);
+}
+
+export async function markDiscussionThreadRead(params: {
+  threadId: string;
+  lastSeenPostId: string;
+}): Promise<void> {
+  const { error } = await supabase.rpc('mark_discussion_thread_read', {
+    p_thread_id: params.threadId,
+    p_last_seen_post_id: params.lastSeenPostId,
+  });
+
+  if (!error) return;
+
+  const isMissingReadRpc =
+    error.code === '42883' ||
+    error.code === 'PGRST202' ||
+    error.message?.includes('mark_discussion_thread_read');
+  if (isMissingReadRpc) {
+    logger.warn('[discussionsApi] Read-state RPC is not deployed yet.');
+    return;
+  }
+
+  throw error;
 }
 
 export async function fetchDiscussionPosts(params: {
