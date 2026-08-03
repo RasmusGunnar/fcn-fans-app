@@ -6,14 +6,22 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AppState,
   FlatList,
-  Image,
+  type ImageStyle,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
   StyleSheet,
+  type StyleProp,
   useWindowDimensions,
   View,
 } from 'react-native';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MediaAudioBootstrap } from '../components/MediaAudioBootstrap';
 import { Text } from '../components/ui';
@@ -28,6 +36,150 @@ type MediaViewerRoute = RouteProp<RootStackParamList, 'MediaViewer'>;
 function clampIndex(index: number, count: number): number {
   if (count <= 0) return 0;
   return Math.max(0, Math.min(index, count - 1));
+}
+
+function clampWorklet(value: number, min: number, max: number): number {
+  'worklet';
+  return Math.max(min, Math.min(value, max));
+}
+
+const MIN_IMAGE_SCALE = 1;
+const MAX_IMAGE_SCALE = 4;
+const ZOOMED_SCALE_THRESHOLD = 1.02;
+
+function ZoomableImage({
+  uri,
+  style,
+  frameWidth,
+  frameHeight,
+  onZoomStateChange,
+}: {
+  uri: string;
+  style?: StyleProp<ImageStyle>;
+  frameWidth: number;
+  frameHeight: number;
+  onZoomStateChange: (isZoomed: boolean) => void;
+}) {
+  const [panEnabled, setPanEnabled] = useState(false);
+  const scale = useSharedValue(1);
+  const startScale = useSharedValue(1);
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const startTranslateX = useSharedValue(0);
+  const startTranslateY = useSharedValue(0);
+  const isZoomed = useSharedValue(false);
+
+  const syncZoomState = useCallback(
+    (nextIsZoomed: boolean) => {
+      setPanEnabled(nextIsZoomed);
+      onZoomStateChange(nextIsZoomed);
+    },
+    [onZoomStateChange],
+  );
+
+  useEffect(() => {
+    scale.value = 1;
+    startScale.value = 1;
+    translateX.value = 0;
+    translateY.value = 0;
+    startTranslateX.value = 0;
+    startTranslateY.value = 0;
+    isZoomed.value = false;
+    syncZoomState(false);
+  }, [
+    isZoomed,
+    scale,
+    startScale,
+    startTranslateX,
+    startTranslateY,
+    syncZoomState,
+    translateX,
+    translateY,
+    uri,
+  ]);
+
+  const notifyZoomState = useCallback(
+    (nextIsZoomed: boolean) => {
+      syncZoomState(nextIsZoomed);
+    },
+    [syncZoomState],
+  );
+
+  const pinchGesture = Gesture.Pinch()
+    .onBegin(() => {
+      startScale.value = scale.value;
+    })
+    .onUpdate((event) => {
+      const nextScale = clampWorklet(
+        startScale.value * event.scale,
+        MIN_IMAGE_SCALE,
+        MAX_IMAGE_SCALE,
+      );
+      scale.value = nextScale;
+
+      const maxTranslateX = Math.max(0, (frameWidth * (nextScale - 1)) / 2);
+      const maxTranslateY = Math.max(0, (frameHeight * (nextScale - 1)) / 2);
+      translateX.value = clampWorklet(translateX.value, -maxTranslateX, maxTranslateX);
+      translateY.value = clampWorklet(translateY.value, -maxTranslateY, maxTranslateY);
+
+      const nextIsZoomed = nextScale > ZOOMED_SCALE_THRESHOLD;
+      if (isZoomed.value !== nextIsZoomed) {
+        isZoomed.value = nextIsZoomed;
+        runOnJS(notifyZoomState)(nextIsZoomed);
+      }
+    })
+    .onEnd(() => {
+      if (scale.value <= ZOOMED_SCALE_THRESHOLD) {
+        scale.value = withTiming(1);
+        translateX.value = withTiming(0);
+        translateY.value = withTiming(0);
+        if (isZoomed.value) {
+          isZoomed.value = false;
+          runOnJS(notifyZoomState)(false);
+        }
+        return;
+      }
+
+      const maxTranslateX = Math.max(0, (frameWidth * (scale.value - 1)) / 2);
+      const maxTranslateY = Math.max(0, (frameHeight * (scale.value - 1)) / 2);
+      translateX.value = withTiming(clampWorklet(translateX.value, -maxTranslateX, maxTranslateX));
+      translateY.value = withTiming(clampWorklet(translateY.value, -maxTranslateY, maxTranslateY));
+    });
+
+  const panGesture = Gesture.Pan()
+    .enabled(panEnabled)
+    .onBegin(() => {
+      startTranslateX.value = translateX.value;
+      startTranslateY.value = translateY.value;
+    })
+    .onUpdate((event) => {
+      const maxTranslateX = Math.max(0, (frameWidth * (scale.value - 1)) / 2);
+      const maxTranslateY = Math.max(0, (frameHeight * (scale.value - 1)) / 2);
+      translateX.value = clampWorklet(
+        startTranslateX.value + event.translationX,
+        -maxTranslateX,
+        maxTranslateX,
+      );
+      translateY.value = clampWorklet(
+        startTranslateY.value + event.translationY,
+        -maxTranslateY,
+        maxTranslateY,
+      );
+    });
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { scale: scale.value },
+    ],
+  }));
+
+  return (
+    <GestureDetector gesture={Gesture.Simultaneous(pinchGesture, panGesture)}>
+      <Animated.Image source={{ uri }} style={[style, animatedStyle]} resizeMode="contain" />
+    </GestureDetector>
+  );
 }
 
 export default function MediaViewerScreen() {
@@ -45,6 +197,7 @@ export default function MediaViewerScreen() {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [isAppActive, setIsAppActive] = useState(true);
   const [isMuted, setIsMuted] = useState(VIDEO_MUTED_BY_DEFAULT);
+  const [isImageZoomed, setIsImageZoomed] = useState(false);
 
   useEffect(() => {
     if (items.length === 0) {
@@ -58,6 +211,7 @@ export default function MediaViewerScreen() {
 
   useEffect(() => {
     setIsMuted(VIDEO_MUTED_BY_DEFAULT);
+    setIsImageZoomed(false);
   }, [currentIndex]);
 
   useEffect(() => {
@@ -163,7 +317,20 @@ export default function MediaViewerScreen() {
                 ) : null}
               </>
             ) : (
-              <Image source={{ uri: item.uri }} style={styles.media} resizeMode="contain" />
+              <ZoomableImage
+                uri={item.uri}
+                style={styles.media}
+                frameWidth={width}
+                frameHeight={Math.max(
+                  1,
+                  height - insets.top - insets.bottom - theme.spacing[12] - theme.spacing[8],
+                )}
+                onZoomStateChange={(nextIsZoomed) => {
+                  if (index === currentIndex) {
+                    setIsImageZoomed(nextIsZoomed);
+                  }
+                }}
+              />
             )}
           </View>
         </View>
@@ -186,7 +353,7 @@ export default function MediaViewerScreen() {
   const pageLabel = `${currentIndex + 1} / ${Math.max(items.length, 1)}`;
 
   return (
-    <View style={styles.container}>
+    <GestureHandlerRootView style={styles.container}>
       <MediaAudioBootstrap />
       <StatusBar style="light" />
 
@@ -203,6 +370,7 @@ export default function MediaViewerScreen() {
         onMomentumScrollEnd={handleMomentumScrollEnd}
         showsHorizontalScrollIndicator={false}
         bounces={false}
+        scrollEnabled={!isImageZoomed}
         extraData={currentIndex}
         windowSize={2}
       />
@@ -238,7 +406,7 @@ export default function MediaViewerScreen() {
           <Ionicons name="close" size={theme.spacing[6]} color={theme.colors.text.inverse} />
         </Pressable>
       </View>
-    </View>
+    </GestureHandlerRootView>
   );
 }
 
