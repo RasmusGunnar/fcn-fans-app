@@ -57,6 +57,9 @@ verify_jwt = false
 [functions.push_hot_posts]
 verify_jwt = false
 
+[functions.push_media_digest]
+verify_jwt = false
+
 [functions.process_push_queue]
 verify_jwt = false
 
