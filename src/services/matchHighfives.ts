@@ -5,7 +5,26 @@ function isDuplicateHighfiveError(error: unknown): boolean {
   const code = (error as any)?.code;
   const message = String((error as any)?.message ?? '').toLowerCase();
 
-  return code === '23505' || message.includes('duplicate key') || message.includes('unique constraint');
+  return (
+    code === '23505' || message.includes('duplicate key') || message.includes('unique constraint')
+  );
+}
+
+async function triggerMatchHighfivePush(params: {
+  matchId: string;
+  toUserId: string;
+}): Promise<void> {
+  const { data, error } = await supabase.functions.invoke('push_match_highfive', {
+    body: params,
+  });
+
+  if (error || data?.ok !== true) {
+    logger.warn('[matchHighfives] Highfive push enqueue failed after insert:', {
+      error: error?.message ?? data?.error ?? 'Unknown push error',
+      matchId: params.matchId,
+      toUserId: params.toUserId,
+    });
+  }
 }
 
 export async function fetchSentMatchHighfives({
@@ -17,7 +36,9 @@ export async function fetchSentMatchHighfives({
   fromUserId: string;
   toUserIds: string[];
 }): Promise<string[]> {
-  const uniqueToUserIds = Array.from(new Set(toUserIds.filter((userId) => userId && userId !== fromUserId)));
+  const uniqueToUserIds = Array.from(
+    new Set(toUserIds.filter((userId) => userId && userId !== fromUserId)),
+  );
 
   if (!matchId || !fromUserId || uniqueToUserIds.length === 0) {
     return [];
@@ -61,6 +82,9 @@ export async function createMatchHighfive({
   });
 
   if (!error) {
+    void triggerMatchHighfivePush({ matchId, toUserId }).catch((pushError) => {
+      logger.warn('[matchHighfives] Highfive push trigger threw after insert:', pushError);
+    });
     return;
   }
 

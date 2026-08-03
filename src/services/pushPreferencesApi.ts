@@ -6,6 +6,8 @@ export interface PushPreferences {
   mentionsEnabled: boolean;
   matchdayCheckinEnabled: boolean;
   communityActivityEnabled: boolean;
+  highfivesEnabled: boolean;
+  mediaDigestEnabled: boolean;
   updatedAt: string | null;
 }
 
@@ -15,6 +17,8 @@ type PushPreferencesRow = {
   mentions_enabled: boolean | null;
   matchday_checkin_enabled: boolean | null;
   community_activity_enabled: boolean | null;
+  highfives_enabled: boolean | null;
+  media_digest_enabled: boolean | null;
   updated_at: string | null;
 };
 
@@ -23,6 +27,8 @@ export const DEFAULT_PUSH_PREFERENCES: PushPreferences = {
   mentionsEnabled: true,
   matchdayCheckinEnabled: true,
   communityActivityEnabled: true,
+  highfivesEnabled: true,
+  mediaDigestEnabled: true,
   updatedAt: null,
 };
 
@@ -38,6 +44,8 @@ function mapRowToPreferences(row: PushPreferencesRow | null | undefined): PushPr
       row.matchday_checkin_enabled ?? DEFAULT_PUSH_PREFERENCES.matchdayCheckinEnabled,
     communityActivityEnabled:
       row.community_activity_enabled ?? DEFAULT_PUSH_PREFERENCES.communityActivityEnabled,
+    highfivesEnabled: row.highfives_enabled ?? DEFAULT_PUSH_PREFERENCES.highfivesEnabled,
+    mediaDigestEnabled: row.media_digest_enabled ?? DEFAULT_PUSH_PREFERENCES.mediaDigestEnabled,
     updatedAt: row.updated_at ?? null,
   };
 }
@@ -53,7 +61,7 @@ export async function getPushPreferences(userId: string): Promise<PushPreference
     const { data, error } = await supabase
       .from('push_preferences')
       .select(
-        'user_id, replies_enabled, mentions_enabled, matchday_checkin_enabled, community_activity_enabled, updated_at',
+        'user_id, replies_enabled, mentions_enabled, matchday_checkin_enabled, community_activity_enabled, highfives_enabled, media_digest_enabled, updated_at',
       )
       .eq('user_id', userId)
       .maybeSingle();
@@ -78,7 +86,12 @@ export async function savePushPreferences(
   updates: Partial<
     Pick<
       PushPreferences,
-      'communityActivityEnabled' | 'matchdayCheckinEnabled' | 'mentionsEnabled' | 'repliesEnabled'
+      | 'communityActivityEnabled'
+      | 'highfivesEnabled'
+      | 'matchdayCheckinEnabled'
+      | 'mediaDigestEnabled'
+      | 'mentionsEnabled'
+      | 'repliesEnabled'
     >
   >,
 ): Promise<PushPreferences> {
@@ -92,6 +105,12 @@ export async function savePushPreferences(
     ...(updates.communityActivityEnabled !== undefined
       ? { community_activity_enabled: updates.communityActivityEnabled }
       : {}),
+    ...(updates.highfivesEnabled !== undefined
+      ? { highfives_enabled: updates.highfivesEnabled }
+      : {}),
+    ...(updates.mediaDigestEnabled !== undefined
+      ? { media_digest_enabled: updates.mediaDigestEnabled }
+      : {}),
     updated_at: new Date().toISOString(),
   };
 
@@ -99,7 +118,7 @@ export async function savePushPreferences(
     .from('push_preferences')
     .upsert(payload, { onConflict: 'user_id' })
     .select(
-      'user_id, replies_enabled, mentions_enabled, matchday_checkin_enabled, community_activity_enabled, updated_at',
+      'user_id, replies_enabled, mentions_enabled, matchday_checkin_enabled, community_activity_enabled, highfives_enabled, media_digest_enabled, updated_at',
     )
     .maybeSingle();
 

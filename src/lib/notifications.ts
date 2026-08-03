@@ -3,7 +3,11 @@ import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
-import { navigateFromNotificationData, navigateToHomeFeed, navigationRef } from '../navigation/navigationRef';
+import {
+  navigateFromNotificationData,
+  navigateToHomeFeed,
+  navigationRef,
+} from '../navigation/navigationRef';
 import { createHomeDeepLink, getNotificationDeepLinkWithOptions } from './deeplink';
 import { logger } from './logger';
 import { supabase } from './supabase';
@@ -71,10 +75,7 @@ async function clearStoredPushToken() {
   }
 }
 
-async function getRequiredPushSession(
-  userId: string,
-  reason: 'push token claim' | 'push test',
-) {
+async function getRequiredPushSession(userId: string, reason: 'push token claim' | 'push test') {
   const { data, error } = await supabase.auth.getSession();
 
   if (error) {
@@ -121,6 +122,7 @@ export async function registerForPushNotificationsAsync(options?: {
       await Notifications.setNotificationChannelAsync('default', {
         name: 'default',
         importance: Notifications.AndroidImportance.MAX,
+        showBadge: true,
       });
     }
 

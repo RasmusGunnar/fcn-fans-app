@@ -248,6 +248,7 @@ async function invalidateDevice(
 async function sendExpoBatch(
   deliveries: NotificationDelivery[],
   job: NotificationJob,
+  badge: number,
 ): Promise<ExpoPushTicket[]> {
   const publicData = getPublicJobData(job.data);
   const payload = deliveries.map((delivery) => ({
@@ -256,6 +257,7 @@ async function sendExpoBatch(
     body: job.body,
     sound: 'default',
     channelId: 'default',
+    badge,
     data: publicData,
   }));
 
@@ -286,6 +288,17 @@ async function sendExpoBatch(
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function loadUnreadBadgeCount(supabase: any, userId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from('notifications')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('read', false);
+
+  if (error) throw error;
+  return count ?? 0;
 }
 
 async function loadActiveDevices(supabase: any, userId: string): Promise<PushDevice[]> {
@@ -442,11 +455,13 @@ async function processJob(supabase: any, job: NotificationJob): Promise<JobProce
     await invalidateDevice(supabase, delivery.device_id, 'invalid_push_token');
   }
 
+  const unreadBadgeCount = await loadUnreadBadgeCount(supabase, job.recipient_user_id);
+
   for (const batch of chunk(validDeliveries, EXPO_BATCH_SIZE)) {
     let tickets: ExpoPushTicket[];
 
     try {
-      tickets = await sendExpoBatch(batch, job);
+      tickets = await sendExpoBatch(batch, job, unreadBadgeCount);
     } catch (error) {
       requestFailed = true;
       const serialized = serializeError(error);

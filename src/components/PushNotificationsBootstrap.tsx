@@ -8,13 +8,14 @@ import {
   removeCurrentPushToken,
   syncPushNotifications,
 } from '../lib/notifications';
+import { clearAppIconBadge, syncAppIconBadge } from '../services/notificationsApi';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowBanner: true,
     shouldShowList: true,
     shouldPlaySound: true,
-    shouldSetBadge: false,
+    shouldSetBadge: true,
   }),
 });
 
@@ -22,6 +23,17 @@ export function PushNotificationsBootstrap() {
   const { user, session } = useAuth();
   const syncedUserRef = useRef<string | null>(null);
   const handledResponseRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!user?.id) {
+      void clearAppIconBadge();
+      return;
+    }
+
+    if (session?.access_token) {
+      void syncAppIconBadge(user.id);
+    }
+  }, [session?.access_token, user?.id]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -56,10 +68,14 @@ export function PushNotificationsBootstrap() {
 
         if (status !== 'granted') {
           await removeCurrentPushToken(user.id);
+          await syncAppIconBadge(user.id);
           return;
         }
 
-        await syncPushNotifications(user.id, { promptIfNeeded: false });
+        await Promise.all([
+          syncPushNotifications(user.id, { promptIfNeeded: false }),
+          syncAppIconBadge(user.id),
+        ]);
       } catch (error) {
         logger.warn('[PushNotificationsBootstrap] Foreground push sync failed:', error);
       }
@@ -91,10 +107,10 @@ export function PushNotificationsBootstrap() {
       handledResponseRef.current = responseId;
 
       try {
-        await openNotificationTarget(response.notification.request.content.data as Record<
-          string,
-          unknown
-        >);
+        await openNotificationTarget({
+          ...(response.notification.request.content.data as Record<string, unknown>),
+          notificationRequestId: responseId,
+        });
       } catch (error) {
         logger.warn('[PushNotificationsBootstrap] Notification open failed:', error);
       }
@@ -102,6 +118,9 @@ export function PushNotificationsBootstrap() {
 
     const receivedSub = Notifications.addNotificationReceivedListener(() => {
       // Foreground presentation is handled by Notifications.setNotificationHandler above.
+      if (user?.id) {
+        void syncAppIconBadge(user.id);
+      }
     });
 
     const responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
@@ -127,7 +146,7 @@ export function PushNotificationsBootstrap() {
       receivedSub.remove();
       responseSub.remove();
     };
-  }, []);
+  }, [user?.id]);
 
   return null;
 }

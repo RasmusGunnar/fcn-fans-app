@@ -4,6 +4,7 @@ import * as Crypto from 'expo-crypto';
 import { removeCurrentPushToken } from '../lib/notifications';
 import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
+import { clearAppIconBadge } from '../services/notificationsApi';
 import { isSystemAdmin } from '../services/rbac';
 import { logPerformanceTiming, performanceNow } from '../utils/performanceTiming';
 
@@ -275,6 +276,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (user?.id) {
         await removeCurrentPushToken(user.id);
       }
+      await clearAppIconBadge();
       await supabase.auth.signOut();
     } catch (e: any) {
       logger.warn('Sign out error', e);

@@ -53,7 +53,7 @@ import {
   type MyCommunity,
   type UpcomingItem,
 } from '../services/profileApi';
-import { getUnreadNotificationsCount } from '../services/notificationsApi';
+import { clearAppIconBadge, getUnreadNotificationsCount } from '../services/notificationsApi';
 import { normalizeDisplayNameToUsername } from '../utils/username';
 import {
   fetchMyFanActivityRegistrations,
@@ -224,7 +224,12 @@ export default function ProfileScreen() {
   const [pushPreferenceSavingKey, setPushPreferenceSavingKey] = useState<
     | keyof Pick<
         PushPreferences,
-        'communityActivityEnabled' | 'matchdayCheckinEnabled' | 'mentionsEnabled' | 'repliesEnabled'
+        | 'communityActivityEnabled'
+        | 'highfivesEnabled'
+        | 'matchdayCheckinEnabled'
+        | 'mediaDigestEnabled'
+        | 'mentionsEnabled'
+        | 'repliesEnabled'
       >
     | null
   >(null);
@@ -548,7 +553,12 @@ export default function ProfileScreen() {
   const handleTogglePushPreference = async (
     key: keyof Pick<
       PushPreferences,
-      'communityActivityEnabled' | 'matchdayCheckinEnabled' | 'mentionsEnabled' | 'repliesEnabled'
+      | 'communityActivityEnabled'
+      | 'highfivesEnabled'
+      | 'matchdayCheckinEnabled'
+      | 'mediaDigestEnabled'
+      | 'mentionsEnabled'
+      | 'repliesEnabled'
     >,
     value: boolean,
   ) => {
@@ -603,6 +613,7 @@ export default function ProfileScreen() {
 
       try {
         await removeCurrentPushToken(user.id);
+        await clearAppIconBadge();
         await supabase.auth.signOut({ scope: 'local' } as any);
       } catch (cleanupError) {
         console.warn('[ProfileScreen] local cleanup after account deletion failed:', cleanupError);
@@ -648,6 +659,7 @@ export default function ProfileScreen() {
 
   const handleDevResetLogin = async () => {
     try {
+      await clearAppIconBadge();
       await supabase.auth.signOut({ scope: 'local' } as any);
       (navigation as any).reset({ index: 0, routes: [{ name: 'Main' }] });
     } catch (e) {
@@ -1298,6 +1310,48 @@ export default function ProfileScreen() {
               thumbColor={theme.colors.bg.card}
             />
           </View>
+
+          <View style={styles.pushPreferenceRow}>
+            <View style={styles.pushPreferenceCopy}>
+              <Text style={[styles.pushPreferenceTitle, { color: theme.colors.text.primary }]}>
+                {'Highfives'}
+              </Text>
+              <Text style={[styles.pushPreferenceBody, { color: theme.colors.text.secondary }]}>
+                {'N\u00E5r en anden fan giver dig en highfive til en kamp.'}
+              </Text>
+            </View>
+            <Switch
+              value={pushPreferences.highfivesEnabled}
+              onValueChange={(value) => handleTogglePushPreference('highfivesEnabled', value)}
+              disabled={pushPreferencesLoading || pushPreferenceSavingKey === 'highfivesEnabled'}
+              trackColor={{
+                false: theme.colors.border.default,
+                true: theme.colors.primary,
+              }}
+              thumbColor={theme.colors.bg.card}
+            />
+          </View>
+
+          <View style={styles.pushPreferenceRow}>
+            <View style={styles.pushPreferenceCopy}>
+              <Text style={[styles.pushPreferenceTitle, { color: theme.colors.text.primary }]}>
+                {'FCN i medierne'}
+              </Text>
+              <Text style={[styles.pushPreferenceBody, { color: theme.colors.text.secondary }]}>
+                {'En daglig opsamling, n\u00E5r der er nye FCN-historier i appen.'}
+              </Text>
+            </View>
+            <Switch
+              value={pushPreferences.mediaDigestEnabled}
+              onValueChange={(value) => handleTogglePushPreference('mediaDigestEnabled', value)}
+              disabled={pushPreferencesLoading || pushPreferenceSavingKey === 'mediaDigestEnabled'}
+              trackColor={{
+                false: theme.colors.border.default,
+                true: theme.colors.primary,
+              }}
+              thumbColor={theme.colors.bg.card}
+            />
+          </View>
         </View>
       </Card>
 
@@ -1308,7 +1362,7 @@ export default function ProfileScreen() {
           subtitle={
             notificationUnreadCount > 0
               ? `${notificationUnreadCount} ulæst${notificationUnreadCount === 1 ? '' : 'e'}`
-              : 'Se dine mentions og svar'
+              : 'Se dine notifikationer'
           }
           onPress={() => (navigation as any).navigate('Notifications')}
           styles={styles}

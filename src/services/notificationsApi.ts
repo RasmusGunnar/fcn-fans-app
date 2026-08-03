@@ -1,15 +1,33 @@
+import * as Notifications from 'expo-notifications';
+import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
+
+export type NotificationType =
+  | 'mention'
+  | 'reply'
+  | 'community_post'
+  | 'community_poll'
+  | 'hot_post'
+  | 'match_checkin_reminder'
+  | 'event_reminder'
+  | 'fan_activity_registration_confirmed'
+  | 'fan_activity_registration_payment_missing'
+  | 'match_highfive'
+  | 'media_digest';
 
 export type NotificationItem = {
   id: string;
   user_id: string;
-  actor_id: string;
-  type: 'mention' | 'reply';
-  entity_type: 'post' | 'comment';
-  entity_id: string;
-  post_id: string;
+  actor_id: string | null;
+  type: NotificationType;
+  entity_type: string | null;
+  entity_id: string | null;
+  post_id: string | null;
   read: boolean;
   created_at: string;
+  title?: string | null;
+  body?: string | null;
+  data?: Record<string, unknown> | null;
   actor_display_name?: string | null;
   reply_comment_parent_id?: string | null;
 };
@@ -94,12 +112,12 @@ export async function getNotifications(userId: string) {
   return {
     ...response,
     data: rows.map((row) => {
-      const hasReplyCommentParent = commentParentById.has(row.entity_id);
+      const hasReplyCommentParent = Boolean(row.entity_id && commentParentById.has(row.entity_id));
       return {
         ...row,
-        actor_display_name: actorNameById.get(row.actor_id) ?? null,
+        actor_display_name: row.actor_id ? (actorNameById.get(row.actor_id) ?? null) : null,
         ...(hasReplyCommentParent
-          ? { reply_comment_parent_id: commentParentById.get(row.entity_id) ?? null }
+          ? { reply_comment_parent_id: commentParentById.get(row.entity_id!) ?? null }
           : {}),
       };
     }),
@@ -115,16 +133,55 @@ export async function markAsRead(notificationId: string) {
   return !error;
 }
 
-export async function getUnreadNotificationsCount(userId: string): Promise<number> {
-  const { count, error } = await supabase
+export async function markAllAsRead(userId: string) {
+  const { error } = await supabase
+    .from('notifications')
+    .update({ read: true })
+    .eq('user_id', userId)
+    .eq('read', false);
+
+  return !error;
+}
+
+async function queryUnreadNotificationsCount(userId: string) {
+  return supabase
     .from('notifications')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', userId)
     .eq('read', false);
+}
+
+export async function getUnreadNotificationsCount(userId: string): Promise<number> {
+  const { count, error } = await queryUnreadNotificationsCount(userId);
 
   if (error) {
     return 0;
   }
 
   return count ?? 0;
+}
+
+export async function syncAppIconBadge(userId: string): Promise<number | null> {
+  const { count, error } = await queryUnreadNotificationsCount(userId);
+  if (error) {
+    logger.warn('[notificationsApi] Badge count sync failed:', error);
+    return null;
+  }
+
+  const unreadCount = count ?? 0;
+  try {
+    await Notifications.setBadgeCountAsync(unreadCount);
+    return unreadCount;
+  } catch (error) {
+    logger.warn('[notificationsApi] App icon badge update failed:', error);
+    return null;
+  }
+}
+
+export async function clearAppIconBadge(): Promise<void> {
+  try {
+    await Notifications.setBadgeCountAsync(0);
+  } catch (error) {
+    logger.warn('[notificationsApi] App icon badge reset failed:', error);
+  }
 }

@@ -1,4 +1,5 @@
 // deno-lint-ignore-file no-explicit-any
+/* eslint-disable import/no-unresolved */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 
 export type DispatchNotificationRequest = {
@@ -44,7 +45,13 @@ type ExpoPushTicket = {
   details?: { error?: string };
 };
 
-export type PushPreferenceKey = 'community_activity' | 'matchday_checkin' | 'replies' | 'mentions';
+export type PushPreferenceKey =
+  | 'community_activity'
+  | 'highfives'
+  | 'matchday_checkin'
+  | 'media_digest'
+  | 'replies'
+  | 'mentions';
 
 type PushPreferenceRow = {
   user_id: string;
@@ -52,6 +59,8 @@ type PushPreferenceRow = {
   mentions_enabled: boolean;
   matchday_checkin_enabled: boolean;
   community_activity_enabled: boolean;
+  highfives_enabled: boolean;
+  media_digest_enabled: boolean;
 };
 
 const EXPO_PUSH_API_URL = 'https://exp.host/--/api/v2/push/send';
@@ -61,6 +70,8 @@ const DEFAULT_PUSH_PREFERENCES: Omit<PushPreferenceRow, 'user_id'> = {
   mentions_enabled: true,
   matchday_checkin_enabled: true,
   community_activity_enabled: true,
+  highfives_enabled: true,
+  media_digest_enabled: true,
 };
 const PUSH_PREFERENCE_COLUMN_BY_KEY: Record<
   PushPreferenceKey,
@@ -70,6 +81,8 @@ const PUSH_PREFERENCE_COLUMN_BY_KEY: Record<
   mentions: 'mentions_enabled',
   matchday_checkin: 'matchday_checkin_enabled',
   community_activity: 'community_activity_enabled',
+  highfives: 'highfives_enabled',
+  media_digest: 'media_digest_enabled',
 };
 
 export function json(status: number, payload: unknown) {
@@ -296,7 +309,7 @@ export async function fetchPushPreferencesByUserIds(supabase: any, userIds: stri
   const { data, error } = await supabase
     .from('push_preferences')
     .select(
-      'user_id, replies_enabled, mentions_enabled, matchday_checkin_enabled, community_activity_enabled',
+      'user_id, replies_enabled, mentions_enabled, matchday_checkin_enabled, community_activity_enabled, highfives_enabled, media_digest_enabled',
     )
     .in('user_id', normalizedUserIds);
 
@@ -318,6 +331,9 @@ export async function fetchPushPreferencesByUserIds(supabase: any, userIds: stri
           row.matchday_checkin_enabled ?? DEFAULT_PUSH_PREFERENCES.matchday_checkin_enabled,
         community_activity_enabled:
           row.community_activity_enabled ?? DEFAULT_PUSH_PREFERENCES.community_activity_enabled,
+        highfives_enabled: row.highfives_enabled ?? DEFAULT_PUSH_PREFERENCES.highfives_enabled,
+        media_digest_enabled:
+          row.media_digest_enabled ?? DEFAULT_PUSH_PREFERENCES.media_digest_enabled,
       },
     ]) as [string, PushPreferenceRow][],
   );

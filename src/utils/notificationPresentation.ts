@@ -1,8 +1,9 @@
 export type NotificationPresentationItem = {
-  type: 'mention' | 'reply';
-  entity_type: 'post' | 'comment';
+  type: string;
+  entity_type?: string | null;
   actor_display_name?: string | null;
   reply_comment_parent_id?: string | null;
+  title?: string | null;
 };
 
 export type NotificationInteractionKind =
@@ -30,6 +31,10 @@ export function getNotificationInteractionKind(
 }
 
 export function getNotificationLabel(item: NotificationPresentationItem): string {
+  if (item.type !== 'mention' && item.type !== 'reply') {
+    return readName(item.title) ?? 'Ny notifikation';
+  }
+
   const interactionKind = getNotificationInteractionKind(item);
 
   if (interactionKind === 'mention_comment') {

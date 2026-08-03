@@ -1,11 +1,25 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  View,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useAuth } from '../auth/AuthProvider';
 import { AppHeader } from '../components/AppHeader';
 import { Text } from '../components/ui';
-import { getNotifications, markAsRead, type NotificationItem } from '../services/notificationsApi';
+import {
+  getNotifications,
+  markAllAsRead,
+  markAsRead,
+  syncAppIconBadge,
+  type NotificationItem,
+} from '../services/notificationsApi';
 import { useTheme, type Theme } from '../theme';
 import { navigateFromNotificationData } from '../navigation/navigationRef';
 import {
@@ -39,7 +53,23 @@ function formatRelativeTime(value: string): string {
   }
 }
 
+function getNotificationIcon(type: NotificationItem['type']): keyof typeof Ionicons.glyphMap {
+  if (type === 'mention') return 'at';
+  if (type === 'reply') return 'chatbubble-outline';
+  if (type === 'match_highfive') return 'hand-left-outline';
+  if (type === 'media_digest') return 'newspaper-outline';
+  if (type === 'match_checkin_reminder') return 'football-outline';
+  if (type === 'event_reminder') return 'calendar-outline';
+  if (type === 'community_post' || type === 'community_poll') return 'people-outline';
+  if (type === 'hot_post') return 'flame-outline';
+  return 'checkmark-circle-outline';
+}
+
 function buildNotificationTarget(item: NotificationItem): Record<string, unknown> {
+  if (item.data && Object.keys(item.data).length > 0) {
+    return item.data;
+  }
+
   if (item.type === 'mention' && item.entity_type === 'comment') {
     return {
       notificationType: 'mention_comment',
@@ -61,6 +91,10 @@ function buildNotificationTarget(item: NotificationItem): Record<string, unknown
     };
   }
 
+  if (item.type !== 'reply') {
+    return { targetType: 'home_feed' };
+  }
+
   const isCommentOnPost = getNotificationInteractionKind(item) === 'comment_on_post';
 
   return {
@@ -80,22 +114,33 @@ export default function NotificationsScreen() {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const load = useCallback(async () => {
-    if (!user?.id) {
-      setItems([]);
-      setLoading(false);
-      return;
-    }
+  const load = useCallback(
+    async (options?: { refresh?: boolean }) => {
+      if (!user?.id) {
+        setItems([]);
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
 
-    setLoading(true);
-    try {
-      const { data } = await getNotifications(user.id);
-      setItems((data as NotificationItem[] | null) ?? []);
-    } finally {
-      setLoading(false);
-    }
-  }, [user?.id]);
+      if (options?.refresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+      try {
+        const { data } = await getNotifications(user.id);
+        setItems((data as NotificationItem[] | null) ?? []);
+        await syncAppIconBadge(user.id);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [user?.id],
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -103,22 +148,43 @@ export default function NotificationsScreen() {
     }, [load]),
   );
 
-  const handlePress = useCallback(async (item: NotificationItem) => {
-    if (!item.read) {
-      const marked = await markAsRead(item.id);
-      if (marked) {
-        setItems((current) =>
-          current.map((entry) => (entry.id === item.id ? { ...entry, read: true } : entry)),
-        );
+  const handlePress = useCallback(
+    async (item: NotificationItem) => {
+      if (!item.read) {
+        const marked = await markAsRead(item.id);
+        if (marked) {
+          setItems((current) =>
+            current.map((entry) => (entry.id === item.id ? { ...entry, read: true } : entry)),
+          );
+          if (user?.id) {
+            await syncAppIconBadge(user.id);
+          }
+        }
       }
+
+      const didNavigate = navigateFromNotificationData(buildNotificationTarget(item));
+
+      if (!didNavigate) {
+        Alert.alert('Fejl', 'Kunne ikke åbne notifikationen.');
+      }
+    },
+    [user?.id],
+  );
+
+  const unreadCount = useMemo(() => items.filter((item) => !item.read).length, [items]);
+
+  const handleMarkAllAsRead = useCallback(async () => {
+    if (!user?.id || unreadCount === 0) return;
+
+    const marked = await markAllAsRead(user.id);
+    if (!marked) {
+      Alert.alert('Fejl', 'Kunne ikke markere notifikationerne som læst.');
+      return;
     }
 
-    const didNavigate = navigateFromNotificationData(buildNotificationTarget(item));
-
-    if (!didNavigate) {
-      Alert.alert('Fejl', 'Kunne ikke åbne opslaget.');
-    }
-  }, []);
+    setItems((current) => current.map((item) => ({ ...item, read: true })));
+    await syncAppIconBadge(user.id);
+  }, [unreadCount, user?.id]);
 
   const renderItem = useCallback(
     ({ item }: { item: NotificationItem }) => (
@@ -126,6 +192,13 @@ export default function NotificationsScreen() {
         style={[styles.row, item.read ? styles.rowRead : styles.rowUnread]}
         onPress={() => void handlePress(item)}
       >
+        <View style={styles.rowIcon}>
+          <Ionicons
+            name={getNotificationIcon(item.type)}
+            size={theme.components.icon.size.sm}
+            color={theme.colors.primary}
+          />
+        </View>
         <View style={styles.rowCopy}>
           <View style={styles.rowHeader}>
             <Text variant="body" color="primary" style={styles.rowTitle}>
@@ -136,20 +209,25 @@ export default function NotificationsScreen() {
             </Text>
           </View>
           <Text variant="small" color="secondary">
-            {item.type === 'reply'
-              ? 'Tryk for at åbne opslaget med svaret'
-              : 'Tryk for at åbne opslaget'}
+            {item.body ??
+              (item.type === 'reply'
+                ? 'Tryk for at åbne opslaget med svaret'
+                : 'Tryk for at åbne notifikationen')}
           </Text>
         </View>
         {!item.read ? <View style={styles.unreadDot} /> : null}
       </Pressable>
     ),
-    [handlePress, styles],
+    [handlePress, styles, theme.components.icon.size.sm, theme.colors.primary],
   );
 
   return (
     <View style={styles.container}>
-      <AppHeader title="Notifikationer" subtitle="Mentions og svar" showProfileButton={false} />
+      <AppHeader
+        title="Notifikationer"
+        subtitle="Din aktivitet i FCN Fans"
+        showProfileButton={false}
+      />
 
       <View style={styles.toolbar}>
         <Pressable style={styles.backButton} onPress={() => navigation.goBack()}>
@@ -162,6 +240,18 @@ export default function NotificationsScreen() {
             Tilbage
           </Text>
         </Pressable>
+        {unreadCount > 0 ? (
+          <Pressable style={styles.markAllButton} onPress={() => void handleMarkAllAsRead()}>
+            <Ionicons
+              name="checkmark-done"
+              size={theme.components.icon.size.sm}
+              color={theme.colors.primary}
+            />
+            <Text variant="small" color="primary">
+              Markér alle som læst
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {loading ? (
@@ -173,6 +263,13 @@ export default function NotificationsScreen() {
           data={items}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => void load({ refresh: true })}
+              tintColor={theme.colors.primary}
+            />
+          }
           contentContainerStyle={[
             styles.listContent,
             items.length === 0 ? styles.listContentEmpty : null,
@@ -197,14 +294,24 @@ function createStyles(theme: Theme) {
       backgroundColor: theme.colors.bg.default,
     },
     toolbar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
       paddingHorizontal: theme.layout.screenPadding,
       paddingVertical: theme.spacing[3],
+      gap: theme.spacing[3],
     },
     backButton: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: theme.spacing[1],
       alignSelf: 'flex-start',
+    },
+    markAllButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing[1],
+      minHeight: theme.spacing[9],
     },
     loadingState: {
       flex: 1,
@@ -220,6 +327,9 @@ function createStyles(theme: Theme) {
       flexGrow: 1,
     },
     row: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: theme.spacing[2],
       borderRadius: theme.radius.lg,
       borderWidth: theme.layout.borderHairline,
       borderColor: theme.colors.border.default,
@@ -233,7 +343,17 @@ function createStyles(theme: Theme) {
       backgroundColor: theme.colors.bg.surface,
     },
     rowCopy: {
+      flex: 1,
+      minWidth: 0,
       gap: theme.spacing[1],
+    },
+    rowIcon: {
+      width: theme.spacing[9],
+      height: theme.spacing[9],
+      borderRadius: theme.radius.pill,
+      backgroundColor: theme.colors.bg.subtle,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     rowHeader: {
       flexDirection: 'row',

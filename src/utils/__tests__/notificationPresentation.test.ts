@@ -55,3 +55,16 @@ test('mentions keep existing copy', () => {
     'Du blev nævnt i en kommentar',
   );
 });
+
+test('v2 notification center rows use their stored title', () => {
+  assert.equal(
+    getNotificationLabel(
+      makeNotification({
+        type: 'match_highfive',
+        entity_type: 'match',
+        title: 'Highfive på kampdagen',
+      }),
+    ),
+    'Highfive på kampdagen',
+  );
+});
