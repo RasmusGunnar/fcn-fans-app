@@ -128,6 +128,17 @@ export async function fetchSongs(): Promise<{ songs: Song[]; source: 'remote' | 
   };
 }
 
+export async function canManageWildTigersSongs(): Promise<boolean | null> {
+  const { data, error } = await supabase.rpc('can_manage_wild_tigers_songs');
+
+  if (error) {
+    logger.warn('[songsApi] can_manage_wild_tigers_songs lookup failed:', error);
+    return null;
+  }
+
+  return data === true;
+}
+
 export async function updateSong(
   songId: string,
   updates: { title: string; lyrics: string; category: SongCategory; spotifyUrl: string | null },

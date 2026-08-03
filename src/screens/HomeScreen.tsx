@@ -19,6 +19,7 @@ import { useMatchCheckIn } from '../hooks/useMatchCheckIn';
 import { useFeed } from '../state/FeedContext';
 import { useAuth } from '../auth/AuthProvider';
 import { colors, spacing, defaultTheme as theme } from '../theme';
+import type { EventAttendeeListItemParam } from '../navigation/types';
 import { getFeedItemKey, type FeedFanActivityData, type FeedItem } from '../types/feed';
 import { filterHomeFeedItems, type HomeFeedFilter } from '../utils/homeFeedFilter';
 import {
@@ -435,6 +436,75 @@ export default function HomeScreen() {
 
     return undefined;
   }, [nextMatchCheckIn.countCheckedIn, nextMatchViewState]);
+  const nextMatchFansOverview = useMemo<EventAttendeeListItemParam[]>(() => {
+    const profileById = new Map<string, { displayName: string | null; avatarUrl: string | null }>();
+
+    nextMatchAttendance.profiles.forEach((profile) => {
+      profileById.set(profile.user_id, {
+        displayName: profile.display_name,
+        avatarUrl: profile.avatar_url,
+      });
+    });
+
+    nextMatchCheckIn.profiles.forEach((profile) => {
+      profileById.set(profile.user_id, {
+        displayName: profile.display_name,
+        avatarUrl: profile.avatar_url,
+      });
+    });
+
+    const merged = new Map<
+      string,
+      {
+        item: EventAttendeeListItemParam;
+        order: number;
+      }
+    >();
+    let nextOrder = 0;
+
+    nextMatchAttendance.userIds.forEach((userId) => {
+      const profile = profileById.get(userId);
+      merged.set(userId, {
+        item: {
+          userId,
+          displayName: profile?.displayName ?? null,
+          avatarUrl: profile?.avatarUrl ?? null,
+          status: 'attendance',
+        },
+        order: nextOrder++,
+      });
+    });
+
+    nextMatchCheckIn.userIds.forEach((userId) => {
+      const profile = profileById.get(userId);
+      const existing = merged.get(userId);
+
+      merged.set(userId, {
+        item: {
+          userId,
+          displayName: profile?.displayName ?? existing?.item.displayName ?? null,
+          avatarUrl: profile?.avatarUrl ?? existing?.item.avatarUrl ?? null,
+          status: 'checkin',
+        },
+        order: existing?.order ?? nextOrder++,
+      });
+    });
+
+    return Array.from(merged.values())
+      .sort((left, right) => {
+        if (left.item.status !== right.item.status) {
+          return left.item.status === 'checkin' ? -1 : 1;
+        }
+
+        return left.order - right.order;
+      })
+      .map((entry) => entry.item);
+  }, [
+    nextMatchAttendance.profiles,
+    nextMatchAttendance.userIds,
+    nextMatchCheckIn.profiles,
+    nextMatchCheckIn.userIds,
+  ]);
   const nextMatchPrimaryLabel =
     nextMatchViewState === 'checked_in_confirmed'
       ? undefined
@@ -464,8 +534,9 @@ export default function HomeScreen() {
       entityType: 'match',
       title: 'Fans til kampen',
       subtitle: 'Se hvem der kommer, og hvem der er tjekket ind',
+      prefilledFans: nextMatchFansOverview,
     });
-  }, [navigation, nextFixture?.id]);
+  }, [navigation, nextFixture?.id, nextMatchFansOverview]);
 
   const handleOpenProfile = useCallback(
     (userId: string) => {

@@ -3,7 +3,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../../auth/AuthProvider';
 import { getMyCommunityRoleByName, WILD_TIGERS_COMMUNITY_NAME } from '../../services/rbac';
-import { deleteSong, fetchSongs, updateSong } from '../../services/songsApi';
+import {
+  canManageWildTigersSongs,
+  deleteSong,
+  fetchSongs,
+  updateSong,
+} from '../../services/songsApi';
 import { defaultTheme } from '../../theme';
 import { SONG_CATEGORY_LABELS, type Song } from '../../types/song';
 import { canEditSongs as canEditSongsPermission } from '../../utils/permissions';
@@ -89,6 +94,7 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
   const [saving, setSaving] = useState(false);
   const [deletingSongId, setDeletingSongId] = useState<string | null>(null);
   const [wildTigersRole, setWildTigersRole] = useState<'owner' | 'admin' | 'member' | null>(null);
+  const [canManageSongsViaRpc, setCanManageSongsViaRpc] = useState<boolean | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -108,6 +114,30 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
       mounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadSongPermission = async () => {
+      if (loading || !user?.id || source !== 'remote') {
+        if (mounted) {
+          setCanManageSongsViaRpc(null);
+        }
+        return;
+      }
+
+      const canManage = await canManageWildTigersSongs();
+      if (mounted) {
+        setCanManageSongsViaRpc(canManage);
+      }
+    };
+
+    void loadSongPermission();
+
+    return () => {
+      mounted = false;
+    };
+  }, [loading, source, user?.id]);
 
   useEffect(() => {
     let mounted = true;
@@ -137,17 +167,15 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
     };
   }, [isAppAdmin, loading, source, user?.id]);
 
-  const chants = useMemo(
-    () => songs.filter((song) => song.category === 'slagsang'),
-    [songs],
-  );
+  const chants = useMemo(() => songs.filter((song) => song.category === 'slagsang'), [songs]);
   const playerSongs = useMemo(
     () => songs.filter((song) => song.category === 'spillersang'),
     [songs],
   );
 
   const canEditSongs =
-    source === 'remote' && canEditSongsPermission(isAppAdmin, wildTigersRole);
+    source === 'remote' &&
+    (canManageSongsViaRpc === true || canEditSongsPermission(isAppAdmin, wildTigersRole));
   const activeSongs = activeFilter === 'slagsang' ? chants : playerSongs;
 
   const toggleSong = (songId: string) => {
