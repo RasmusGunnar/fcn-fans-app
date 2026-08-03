@@ -159,6 +159,34 @@ function buildOpponentLabel(row: Record<string, unknown>): string {
   return `${homeTeam} - ${awayTeam}`;
 }
 
+function pickCopyVariant<T>(seed: string, variants: T[]): T {
+  let hash = 0;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash * 31 + seed.charCodeAt(index)) >>> 0;
+  }
+
+  return variants[hash % variants.length] ?? variants[0];
+}
+
+function getMatchReminderCopy(seed: string, opponent: string, kickoffAt: string) {
+  const kickoffTime = formatTimeDa(kickoffAt);
+
+  return pickCopyVariant(seed, [
+    {
+      title: 'Er du p\u00E5 stadion?',
+      body: `FCN m\u00F8der ${opponent} kl. ${kickoffTime}. Husk at tjekke ind til kampen i appen.`,
+    },
+    {
+      title: 'Klar til kampdag?',
+      body: `FCN m\u00F8der ${opponent} kl. ${kickoffTime}. Tjek ind, n\u00E5r du er p\u00E5 stadion.`,
+    },
+    {
+      title: 'Stemningen starter snart',
+      body: `${opponent} venter kl. ${kickoffTime}. \u00C5bn FCN Fans og tjek ind p\u00E5 stadion.`,
+    },
+  ]);
+}
+
 function chunk<T>(items: T[], size: number): T[][] {
   const chunks: T[][] = [];
   for (let index = 0; index < items.length; index += size) {
@@ -427,13 +455,14 @@ Deno.serve(async (req) => {
       const opponent = buildOpponentLabel(fixture as Record<string, unknown>);
 
       for (const userId of usersWithPreferenceEnabled) {
+        const copy = getMatchReminderCopy(`${fixtureUuid}:${userId}`, opponent, kickoffAt);
         candidateRequests.push({
           userId,
           fixtureId: fixtureUuid,
           notificationType: 'match_checkin_reminder',
           dedupeKey: buildNotificationDedupeKey('match_checkin_reminder', fixtureUuid, userId),
-          title: 'Er du p\u00E5 stadion?',
-          body: `FCN m\u00F8der ${opponent} kl. ${formatTimeDa(kickoffAt)}. Husk at tjekke ind til kampen i appen.`,
+          title: copy.title,
+          body: copy.body,
           data: {
             type: 'match',
             fixtureId: fixtureUuid,

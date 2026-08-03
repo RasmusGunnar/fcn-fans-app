@@ -12,6 +12,8 @@ const MIN_COMMENTS = 4;
 const MAX_POSTS_PER_RUN = 1;
 const QUEUE_BATCH_SIZE = 25;
 
+type HotPostType = 'post' | 'media_article';
+
 type EnqueueNotificationResult = {
   job_id: string;
   inserted: boolean;
@@ -66,6 +68,53 @@ function readString(value: unknown): string | null {
 function isHomePost(feedTargets: unknown): boolean {
   if (!Array.isArray(feedTargets)) return true;
   return feedTargets.length === 0 || feedTargets.includes('home');
+}
+
+function normalizeHotPostType(value: unknown): HotPostType {
+  return readString(value) === 'media_article' ? 'media_article' : 'post';
+}
+
+function pickCopyVariant<T>(seed: string, variants: T[]): T {
+  let hash = 0;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash * 31 + seed.charCodeAt(index)) >>> 0;
+  }
+
+  return variants[hash % variants.length] ?? variants[0];
+}
+
+function getHotPostCopy(seed: string, postType: HotPostType) {
+  if (postType === 'media_article') {
+    return pickCopyVariant(seed, [
+      {
+        title: 'Der er gang i snakken \uD83D\uDD25',
+        body: 'Se hvad fans snakker om lige nu',
+      },
+      {
+        title: 'FCN i medierne skaber debat',
+        body: 'Fansene diskuterer en artikel lige nu',
+      },
+      {
+        title: 'Ny varme i mediesnakken',
+        body: '\u00C5bn Hjem og fang debatten om FCN i medierne',
+      },
+    ]);
+  }
+
+  return pickCopyVariant(seed, [
+    {
+      title: 'Der er gang i snakken \uD83D\uDD25',
+      body: 'Se hvad fans snakker om lige nu',
+    },
+    {
+      title: 'Et opslag tager fart',
+      body: 'Hop ind og se, hvad FCN-fansene taler om',
+    },
+    {
+      title: 'Fansene er i gang',
+      body: 'Der er nyt liv i feedet lige nu',
+    },
+  ]);
 }
 
 function chunk<T>(items: T[], size: number): T[][] {
@@ -203,7 +252,7 @@ Deno.serve(async (req) => {
     const { data: posts, error: postError } = await supabase
       .from('posts')
       .select('id, created_at, feed_targets, post_type')
-      .eq('post_type', 'post')
+      .in('post_type', ['post', 'media_article'])
       .gte('created_at', sinceIso)
       .order('created_at', { ascending: false })
       .limit(25);
@@ -260,6 +309,7 @@ Deno.serve(async (req) => {
     const hotPosts = homePosts
       .map((post: any) => ({
         id: String(post.id),
+        postType: normalizeHotPostType(post.post_type),
         likes: likeCounts.get(String(post.id)) ?? 0,
         comments: commentCounts.get(String(post.id)) ?? 0,
       }))
@@ -279,20 +329,23 @@ Deno.serve(async (req) => {
     for (const post of hotPosts) {
       for (const userId of recipientUserIds) {
         const dedupeKey = buildNotificationDedupeKey('hot_post', post.id, userId);
+        const copy = getHotPostCopy(`${post.id}:${userId}`, post.postType);
+        const isMediaArticle = post.postType === 'media_article';
         try {
           const enqueueResult = await enqueueHotPostJob({
             supabase,
             recipientUserId: userId,
             postId: post.id,
             dedupeKey,
-            title: 'Der er gang i snakken 🔥',
-            body: 'Se hvad fans snakker om lige nu',
+            title: copy.title,
+            body: copy.body,
             data: {
-              targetType: 'post',
-              type: 'post',
+              targetType: isMediaArticle ? 'home_feed' : 'post',
+              type: isMediaArticle ? 'home_feed' : 'post',
               notificationType: 'hot_post',
               postId: post.id,
-              url: `fcnfans://post/${post.id}`,
+              postType: post.postType,
+              url: isMediaArticle ? 'fcnfans://home' : `fcnfans://post/${post.id}`,
             },
           });
 

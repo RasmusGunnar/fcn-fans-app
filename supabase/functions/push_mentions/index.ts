@@ -94,6 +94,29 @@ function getBodyText(entityType: MentionEntityType): string {
   return entityType === 'post' ? 'n\u00E6vnte dig i et opslag' : 'n\u00E6vnte dig i en kommentar';
 }
 
+function getBodyTextVariants(entityType: MentionEntityType): string[] {
+  if (entityType === 'post') {
+    return ['n\u00E6vnte dig i et opslag', 'taggede dig i et nyt opslag', 'trak dig ind i snakken'];
+  }
+
+  return [
+    'n\u00E6vnte dig i en kommentar',
+    'taggede dig i kommentarsporet',
+    'trak dig ind i tr\u00E5den',
+  ];
+}
+
+function pickCopyVariant(seed: string, variants: string[]): string {
+  if (variants.length === 0) return '';
+
+  let hash = 0;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash * 31 + seed.charCodeAt(index)) >>> 0;
+  }
+
+  return variants[hash % variants.length] ?? variants[0];
+}
+
 function truncatePreview(value: string | null | undefined, limit = 120): string | null {
   const normalized = String(value ?? '')
     .replace(/\s+/g, ' ')
@@ -366,8 +389,12 @@ Deno.serve(async (req) => {
 
     const notificationType = getNotificationType(entityType);
     const targetType = getTargetType(entityType);
-    const title = `${actorName} n\u00E6vnte dig`;
-    const pushBody = getBodyText(entityType);
+    const title = pickCopyVariant(`${entityType}:${entityId}:${actorName}`, [
+      `${actorName} n\u00E6vnte dig`,
+      `${actorName} taggede dig`,
+      `Du blev n\u00E6vnt af ${actorName}`,
+    ]);
+    const pushBody = pickCopyVariant(`${entityType}:${entityId}`, getBodyTextVariants(entityType));
     const pushData = {
       notificationType,
       targetType,

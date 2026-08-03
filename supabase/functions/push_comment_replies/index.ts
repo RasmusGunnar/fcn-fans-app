@@ -77,6 +77,17 @@ function truncatePreview(value: string, limit = 120): string {
   return `${normalized.slice(0, limit - 1).trimEnd()}\u2026`;
 }
 
+function pickCopyVariant(seed: string, variants: string[]): string {
+  if (variants.length === 0) return '';
+
+  let hash = 0;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash * 31 + seed.charCodeAt(index)) >>> 0;
+  }
+
+  return variants[hash % variants.length] ?? variants[0];
+}
+
 async function readRequestBody(req: Request): Promise<RequestBody> {
   try {
     const raw = await req.text();
@@ -338,10 +349,20 @@ Deno.serve(async (req) => {
 
     const dedupeKey = buildNotificationDedupeKey(notificationType, comment.id, recipientUserId);
     const dedupeKeys = [dedupeKey];
-    const pushTitle =
+    const pushTitle = pickCopyVariant(
+      dedupeKey,
       notificationType === 'reply_to_comment'
-        ? `${senderName} svarede p\u00E5 din kommentar`
-        : `${senderName} kommenterede dit opslag`;
+        ? [
+            `${senderName} svarede p\u00E5 din kommentar`,
+            `${senderName} har svaret dig`,
+            `Nyt svar fra ${senderName}`,
+          ]
+        : [
+            `${senderName} kommenterede dit opslag`,
+            `${senderName} skrev p\u00E5 dit opslag`,
+            `Ny kommentar fra ${senderName}`,
+          ],
+    );
     const pushData = {
       notificationType,
       targetType: notificationType === 'reply_to_comment' ? 'comment_reply' : 'post_comment',
