@@ -1,5 +1,8 @@
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { NavigationContainer, getStateFromPath as defaultGetStateFromPath } from '@react-navigation/native';
+import {
+  NavigationContainer,
+  getStateFromPath as defaultGetStateFromPath,
+} from '@react-navigation/native';
 import * as Linking from 'expo-linking';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
@@ -7,7 +10,7 @@ import { useAuth } from '../auth/AuthProvider';
 import LoadingScreen from '../screens/LoadingScreen';
 import { fetchStartupProfile, type UserProfile } from '../services/profileApi';
 import { supabase } from '../lib/supabase';
-import { navigationRef } from './navigationRef';
+import { flushPendingNotificationNavigation, navigationRef } from './navigationRef';
 import {
   logPerformanceEvent,
   logPerformanceTiming,
@@ -160,6 +163,7 @@ export function RootNavigator() {
     previousRouteNameRef.current = routeName;
     setPerformanceActiveRoute(routeName);
     logPerformanceEvent('Navigation', 'container-ready', { routeName });
+    flushPendingNotificationNavigation();
   }, []);
 
   const handleNavigationStateChange = useCallback(() => {

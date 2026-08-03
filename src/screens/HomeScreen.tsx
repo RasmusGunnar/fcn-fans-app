@@ -8,7 +8,7 @@ import {
   Pressable,
   ViewToken,
 } from 'react-native';
-import { useFocusEffect, useIsFocused, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused, useNavigation, useRoute } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { AppHeader } from '../components/AppHeader';
 import NextMatchBadge from '../components/home/NextMatchBadge';
@@ -27,7 +27,9 @@ import {
   getFeedItemVisibleMediaKind,
 } from '../utils/homeStartupPerformance';
 import { fetchPrimaryFixture, formatShortDateDa, type Fixture } from '../services/fixtures';
+import { fetchPostDetailById } from '../services/postsApi';
 import { getMatchHeroUrl, getTeamHeroImage } from '../services/sportsdb';
+import { isHomePost } from '../utils/homeFeed';
 import { buildMatchdayUiModel } from '../utils/matchdayUiModel';
 import {
   getAppPerformanceStartedAt,
@@ -48,6 +50,12 @@ const HOME_FEED_FILTER_OPTIONS: { value: HomeFeedFilter; label: string }[] = [
 const EMPTY_LIKE_STATE = { liked: false, likes: 0 };
 const EMPTY_COMMENT_PREVIEWS: never[] = [];
 let hasEnteredHomeScreen = false;
+
+type HomeFeedFocusParams = {
+  focusPostId?: string;
+  feedItemType?: 'post' | 'media_article';
+  focusRequestId?: string;
+};
 
 function formatKickoffCountdown(kickoffAt: string, now: Date): string {
   const diffMs = new Date(kickoffAt).getTime() - now.getTime();
@@ -88,6 +96,7 @@ export default function HomeScreen() {
   }
 
   const navigation = useNavigation();
+  const route = useRoute() as { params?: HomeFeedFocusParams };
   const isHomeFocused = useIsFocused();
   const tabBarHeight = useBottomTabBarHeight();
   const { user, isAppAdmin } = useAuth();
@@ -100,6 +109,8 @@ export default function HomeScreen() {
     commentCountMap,
     commentPreviewMap,
     fetchPosts,
+    addPost,
+    hydratePostEngagement,
     removePost,
     removeNews,
     toggleLike,
@@ -113,6 +124,12 @@ export default function HomeScreen() {
   const [nextFixtureHeroUrl, setNextFixtureHeroUrl] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
   const [selectedFeedFilter, setSelectedFeedFilter] = useState<HomeFeedFilter>('all');
+  const [pendingFeedFocus, setPendingFeedFocus] = useState<
+    (HomeFeedFocusParams & { focusPostId: string; focusRequestId: string }) | null
+  >(null);
+  const feedListRef = useRef<FlatList<FeedItem>>(null);
+  const handledFeedFocusRequestRef = useRef<string | null>(null);
+  const focusLookupRequestRef = useRef<string | null>(null);
   const appStartedAtRef = useRef(getAppPerformanceStartedAt());
   const mountedAtRef = useRef(performanceNow());
   const initialHomeItemCountRef = useRef(Array.isArray(homeFeedItems) ? homeFeedItems.length : 0);
@@ -185,6 +202,110 @@ export default function HomeScreen() {
   useEffect(() => {
     fetchPosts();
   }, [fetchPosts]);
+
+  useEffect(() => {
+    const focusPostId = route.params?.focusPostId?.trim();
+    if (!isHomeFocused || !focusPostId) return;
+
+    const focusRequestId = route.params?.focusRequestId?.trim() || focusPostId;
+    if (handledFeedFocusRequestRef.current === focusRequestId) return;
+
+    setSelectedFeedFilter('all');
+    setPendingFeedFocus({
+      focusPostId,
+      focusRequestId,
+      ...(route.params?.feedItemType ? { feedItemType: route.params.feedItemType } : {}),
+    });
+  }, [
+    isHomeFocused,
+    route.params?.feedItemType,
+    route.params?.focusPostId,
+    route.params?.focusRequestId,
+  ]);
+
+  const completeFeedFocus = useCallback(
+    (focusRequestId: string) => {
+      handledFeedFocusRequestRef.current = focusRequestId;
+      setPendingFeedFocus(null);
+      (navigation as any).setParams({
+        focusPostId: undefined,
+        feedItemType: undefined,
+        focusRequestId: undefined,
+      });
+    },
+    [navigation],
+  );
+
+  useEffect(() => {
+    if (!pendingFeedFocus || !isHomeFocused) return;
+
+    const targetIndex = visibleFeedItems.findIndex(
+      (item) => item.kind === 'post' && item.id === pendingFeedFocus.focusPostId,
+    );
+    if (targetIndex < 0) return;
+
+    const frame = requestAnimationFrame(() => {
+      feedListRef.current?.scrollToIndex({
+        index: targetIndex,
+        animated: true,
+        viewPosition: 0.08,
+      });
+      completeFeedFocus(pendingFeedFocus.focusRequestId);
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [completeFeedFocus, isHomeFocused, pendingFeedFocus, visibleFeedItems]);
+
+  useEffect(() => {
+    if (!pendingFeedFocus || loading || !isHomeFocused) return;
+    if (
+      safeHomeFeedItems.some(
+        (item) => item.kind === 'post' && item.id === pendingFeedFocus.focusPostId,
+      )
+    ) {
+      return;
+    }
+    if (focusLookupRequestRef.current === pendingFeedFocus.focusRequestId) return;
+
+    focusLookupRequestRef.current = pendingFeedFocus.focusRequestId;
+    let cancelled = false;
+
+    void fetchPostDetailById(pendingFeedFocus.focusPostId, user?.id ?? null)
+      .then((detail) => {
+        if (cancelled) return;
+        if (!detail || !isHomePost(detail.post)) {
+          completeFeedFocus(pendingFeedFocus.focusRequestId);
+          return;
+        }
+
+        addPost(detail.post);
+        hydratePostEngagement({
+          postId: detail.post.id,
+          liked: detail.engagement.liked,
+          likes: detail.engagement.likes,
+          commentsCount: detail.engagement.commentsCount,
+          commentPreviews: detail.engagement.commentPreviews,
+        });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          completeFeedFocus(pendingFeedFocus.focusRequestId);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    addPost,
+    completeFeedFocus,
+    hydratePostEngagement,
+    isHomeFocused,
+    loading,
+    pendingFeedFocus,
+    safeHomeFeedItems,
+    user?.id,
+  ]);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
@@ -656,8 +777,22 @@ export default function HomeScreen() {
     ],
   );
 
+  const handleFeedScrollToIndexFailed = useCallback(
+    ({ index, averageItemLength }: { index: number; averageItemLength: number }) => {
+      feedListRef.current?.scrollToOffset({
+        offset: Math.max(0, averageItemLength * index),
+        animated: false,
+      });
+      setTimeout(() => {
+        feedListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.08 });
+      }, 150);
+    },
+    [],
+  );
+
   return (
     <FlatList<FeedItem>
+      ref={feedListRef}
       data={visibleFeedItems}
       keyExtractor={getFeedItemKey}
       renderItem={renderFeedItem}
@@ -670,6 +805,7 @@ export default function HomeScreen() {
       viewabilityConfig={viewabilityConfigRef.current}
       onViewableItemsChanged={onViewableItemsChangedRef.current}
       onContentSizeChange={handleFlatListContentSizeChange}
+      onScrollToIndexFailed={handleFeedScrollToIndexFailed}
       style={styles.container}
       contentContainerStyle={{ paddingBottom: tabBarHeight + spacing.lg }}
       refreshControl={

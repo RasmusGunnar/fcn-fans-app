@@ -43,8 +43,18 @@ function isPostDetailTargetType(value: NotificationTargetType | null): boolean {
   );
 }
 
-export function createHomeDeepLink(): string {
-  return Linking.createURL('/home');
+export function createHomeDeepLink(params?: {
+  postId?: string | null;
+  feedItemType?: string | null;
+}): string {
+  const postId = readString(params?.postId);
+  const feedItemType = readString(params?.feedItemType);
+  return Linking.createURL('/home', {
+    queryParams: {
+      ...(postId ? { focusPostId: postId } : {}),
+      ...(feedItemType ? { feedItemType } : {}),
+    },
+  });
 }
 
 export function createPostDeepLink(postId: string): string {
@@ -100,7 +110,10 @@ export function getNotificationDeepLinkWithOptions(
   const resolvedType = targetType ?? legacyType;
 
   if (resolvedType === 'home_feed') {
-    return createHomeDeepLink();
+    return createHomeDeepLink({
+      postId,
+      feedItemType: readString(payload.feedItemType ?? payload.postType),
+    });
   }
 
   if (isPostDetailTargetType(resolvedType) && postId) {

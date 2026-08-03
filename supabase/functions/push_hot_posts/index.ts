@@ -330,7 +330,6 @@ Deno.serve(async (req) => {
       for (const userId of recipientUserIds) {
         const dedupeKey = buildNotificationDedupeKey('hot_post', post.id, userId);
         const copy = getHotPostCopy(`${post.id}:${userId}`, post.postType);
-        const isMediaArticle = post.postType === 'media_article';
         try {
           const enqueueResult = await enqueueHotPostJob({
             supabase,
@@ -340,12 +339,13 @@ Deno.serve(async (req) => {
             title: copy.title,
             body: copy.body,
             data: {
-              targetType: isMediaArticle ? 'home_feed' : 'post',
-              type: isMediaArticle ? 'home_feed' : 'post',
+              targetType: 'home_feed',
+              type: 'home_feed',
               notificationType: 'hot_post',
               postId: post.id,
+              feedItemType: post.postType,
               postType: post.postType,
-              url: isMediaArticle ? 'fcnfans://home' : `fcnfans://post/${post.id}`,
+              url: `fcnfans://home?focusPostId=${post.id}&feedItemType=${post.postType}`,
             },
           });
 

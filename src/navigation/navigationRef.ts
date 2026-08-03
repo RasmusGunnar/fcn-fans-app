@@ -29,11 +29,17 @@ type PostDetailParams = {
   previewText?: string;
   isPoll?: boolean;
 };
+type HomeFeedParams = {
+  focusPostId?: string;
+  feedItemType?: 'post' | 'media_article';
+  focusRequestId?: string;
+};
 
 type ResolvedNotificationRoute =
   | {
       targetType: 'home_feed';
       routeLabel: 'Main > Home > HomeMain';
+      params?: HomeFeedParams;
       fallback: boolean;
     }
   | {
@@ -58,6 +64,7 @@ type ResolvedNotificationRoute =
     };
 
 export const navigationRef = createNavigationContainerRef<any>();
+let pendingNotificationPayload: Record<string, unknown> | null = null;
 
 function readString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
@@ -65,6 +72,10 @@ function readString(value: unknown): string | null {
 
 function readBoolean(value: unknown): boolean | null {
   return typeof value === 'boolean' ? value : null;
+}
+
+function readHomeFeedItemType(value: unknown): 'post' | 'media_article' | null {
+  return value === 'post' || value === 'media_article' ? value : null;
 }
 
 function normalizeNotificationTargetType(value: string | null): NotificationTargetType | null {
@@ -122,10 +133,10 @@ function buildPostDetailParams(
   return params;
 }
 
-export function navigateToHomeFeed() {
+export function navigateToHomeFeed(params?: HomeFeedParams) {
   navigationRef.navigate('Main', {
     screen: 'Home',
-    params: { screen: 'HomeMain' },
+    params: { screen: 'HomeMain', ...(params ? { params } : {}) },
   });
 }
 
@@ -139,9 +150,20 @@ function resolveNotificationRoute(payload: Record<string, unknown>): ResolvedNot
   const fanActivityId = readString(payload.fanActivityId);
 
   if (resolvedType === 'home_feed') {
+    const feedItemType = readHomeFeedItemType(payload.feedItemType ?? payload.postType);
     return {
       targetType: 'home_feed',
       routeLabel: 'Main > Home > HomeMain',
+      ...(postId
+        ? {
+            params: {
+              focusPostId: postId,
+              ...(feedItemType ? { feedItemType } : {}),
+              focusRequestId:
+                readString(payload.notificationRequestId) ?? `${Date.now()}:${postId}`,
+            },
+          }
+        : {}),
       fallback: false,
     };
   }
@@ -186,14 +208,18 @@ export function navigateFromNotificationData(
   data: NotificationPayload,
   options?: { allowHomeFallback?: boolean },
 ): boolean {
-  if (!navigationRef.isReady()) {
-    logger.log('[NotificationRoute] nav not ready', { payload: data ?? null });
-    return false;
-  }
-
   const payload = data ?? {};
   const resolvedRoute = resolveNotificationRoute(payload);
   const allowHomeFallback = options?.allowHomeFallback ?? true;
+
+  if (!navigationRef.isReady()) {
+    logger.log('[NotificationRoute] nav not ready', { payload });
+    if (!resolvedRoute.fallback) {
+      pendingNotificationPayload = payload;
+      return true;
+    }
+    return false;
+  }
 
   logger.log('[NotificationRoute] resolved', {
     payload,
@@ -243,6 +269,16 @@ export function navigateFromNotificationData(
     return false;
   }
 
-  navigateToHomeFeed();
+  navigateToHomeFeed(resolvedRoute.targetType === 'home_feed' ? resolvedRoute.params : undefined);
   return true;
+}
+
+export function flushPendingNotificationNavigation(): boolean {
+  if (!navigationRef.isReady() || !pendingNotificationPayload) {
+    return false;
+  }
+
+  const payload = pendingNotificationPayload;
+  pendingNotificationPayload = null;
+  return navigateFromNotificationData(payload);
 }

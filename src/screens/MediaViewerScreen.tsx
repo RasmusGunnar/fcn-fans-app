@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
+  cancelAnimation,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
@@ -60,7 +61,7 @@ function ZoomableImage({
   frameHeight: number;
   onZoomStateChange: (isZoomed: boolean) => void;
 }) {
-  const [panEnabled, setPanEnabled] = useState(false);
+  const onZoomStateChangeRef = useRef(onZoomStateChange);
   const scale = useSharedValue(1);
   const startScale = useSharedValue(1);
   const translateX = useSharedValue(0);
@@ -69,13 +70,13 @@ function ZoomableImage({
   const startTranslateY = useSharedValue(0);
   const isZoomed = useSharedValue(false);
 
-  const syncZoomState = useCallback(
-    (nextIsZoomed: boolean) => {
-      setPanEnabled(nextIsZoomed);
-      onZoomStateChange(nextIsZoomed);
-    },
-    [onZoomStateChange],
-  );
+  useEffect(() => {
+    onZoomStateChangeRef.current = onZoomStateChange;
+  }, [onZoomStateChange]);
+
+  const syncZoomState = useCallback((nextIsZoomed: boolean) => {
+    onZoomStateChangeRef.current(nextIsZoomed);
+  }, []);
 
   useEffect(() => {
     scale.value = 1;
@@ -107,6 +108,9 @@ function ZoomableImage({
 
   const pinchGesture = Gesture.Pinch()
     .onBegin(() => {
+      cancelAnimation(scale);
+      cancelAnimation(translateX);
+      cancelAnimation(translateY);
       startScale.value = scale.value;
     })
     .onUpdate((event) => {
@@ -128,7 +132,7 @@ function ZoomableImage({
         runOnJS(notifyZoomState)(nextIsZoomed);
       }
     })
-    .onEnd(() => {
+    .onFinalize(() => {
       if (scale.value <= ZOOMED_SCALE_THRESHOLD) {
         scale.value = withTiming(1);
         translateX.value = withTiming(0);
@@ -142,13 +146,16 @@ function ZoomableImage({
 
       const maxTranslateX = Math.max(0, (frameWidth * (scale.value - 1)) / 2);
       const maxTranslateY = Math.max(0, (frameHeight * (scale.value - 1)) / 2);
-      translateX.value = withTiming(clampWorklet(translateX.value, -maxTranslateX, maxTranslateX));
-      translateY.value = withTiming(clampWorklet(translateY.value, -maxTranslateY, maxTranslateY));
+      scale.value = clampWorklet(scale.value, MIN_IMAGE_SCALE, MAX_IMAGE_SCALE);
+      startScale.value = scale.value;
+      translateX.value = clampWorklet(translateX.value, -maxTranslateX, maxTranslateX);
+      translateY.value = clampWorklet(translateY.value, -maxTranslateY, maxTranslateY);
     });
 
   const panGesture = Gesture.Pan()
-    .enabled(panEnabled)
     .onBegin(() => {
+      cancelAnimation(translateX);
+      cancelAnimation(translateY);
       startTranslateX.value = translateX.value;
       startTranslateY.value = translateY.value;
     })
