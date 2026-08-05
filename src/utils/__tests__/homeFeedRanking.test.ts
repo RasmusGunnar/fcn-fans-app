@@ -6,6 +6,7 @@ import type { FeedNewsData, FeedPostData } from '../../types/feed';
 import {
   compareStableFeedRanks,
   dedupeByStableKey,
+  getEventFreshnessBoost,
   getFeedFreshnessBoost,
 } from '../feedFreshnessRanking';
 import {
@@ -62,6 +63,18 @@ function createNewsItem(
 
 function getNewsRankingScore(news: FeedNewsData, now: Date): number {
   return getHomeContentRecencyScore(news, now) + getHomeContentEngagementScore(news, now);
+}
+
+function getEventRankingScore(
+  createdAt: string,
+  startAt: string,
+  now: Date,
+  endAt?: string | null,
+): number {
+  return (
+    getHomeContentRecencyScore({ createdAt }, now) +
+    getEventFreshnessBoost({ createdAt, startAt, endAt }, now)
+  );
 }
 
 test('an old liked post does not outrank a much newer zero-engagement post', () => {
@@ -228,6 +241,119 @@ test('community freshness is high at two hours, moderate at two days, and zero a
   assert.equal(fiveDays, 0);
 });
 
+test('a new event ten days away gets a temporary discovery boost', () => {
+  const now = new Date('2026-08-05T12:00:00.000Z');
+  const oneHourOld = getEventFreshnessBoost(
+    {
+      createdAt: '2026-08-05T11:00:00.000Z',
+      startAt: '2026-08-15T12:00:00.000Z',
+    },
+    now,
+  );
+  const twoDaysOld = getEventFreshnessBoost(
+    {
+      createdAt: '2026-08-03T12:00:00.000Z',
+      startAt: '2026-08-15T12:00:00.000Z',
+    },
+    now,
+  );
+
+  assert.ok(oneHourOld > 0);
+  assert.equal(twoDaysOld, 0);
+});
+
+test('event proximity rises from 24 hours to two hours before start', () => {
+  const now = new Date('2026-08-05T12:00:00.000Z');
+  const createdAt = '2026-08-03T12:00:00.000Z';
+  const inTwentyFourHours = getEventFreshnessBoost(
+    { createdAt, startAt: '2026-08-06T12:00:00.000Z' },
+    now,
+  );
+  const inTwoHours = getEventFreshnessBoost(
+    { createdAt, startAt: '2026-08-05T14:00:00.000Z' },
+    now,
+  );
+
+  assert.ok(inTwentyFourHours > 0);
+  assert.ok(inTwoHours > inTwentyFourHours);
+});
+
+test('event proximity is gone three hours after start and stays gone after two days', () => {
+  const now = new Date('2026-08-05T12:00:00.000Z');
+  const createdAt = '2026-08-01T12:00:00.000Z';
+
+  assert.equal(getEventFreshnessBoost({ createdAt, startAt: '2026-08-05T09:00:00.000Z' }, now), 0);
+  assert.equal(getEventFreshnessBoost({ createdAt, startAt: '2026-08-03T12:00:00.000Z' }, now), 0);
+});
+
+test('an explicit event end removes proximity immediately', () => {
+  const now = new Date('2026-08-05T12:00:00.000Z');
+  const createdAt = '2026-08-05T11:00:00.000Z';
+
+  assert.equal(
+    getEventFreshnessBoost(
+      {
+        createdAt,
+        startAt: '2026-08-05T11:00:00.000Z',
+        endAt: '2026-08-05T11:30:00.000Z',
+      },
+      now,
+    ),
+    0,
+  );
+});
+
+test('a two-day-old distant event no longer outranks a new ordinary post', () => {
+  const now = new Date('2026-08-05T12:00:00.000Z');
+  const distantEventScore = getEventRankingScore(
+    '2026-08-03T12:00:00.000Z',
+    '2026-08-15T12:00:00.000Z',
+    now,
+  );
+  const newPost = createPostItem('new-post', '2026-08-05T11:00:00.000Z', 0);
+
+  assert.ok(getHomePostRankingScore(newPost, now) > distantEventScore);
+});
+
+test('a critical event two hours away can outrank a new ordinary post', () => {
+  const now = new Date('2026-08-05T12:00:00.000Z');
+  const criticalEventScore = getEventRankingScore(
+    '2026-08-03T12:00:00.000Z',
+    '2026-08-05T14:00:00.000Z',
+    now,
+  );
+  const newPost = createPostItem('new-post', '2026-08-05T11:00:00.000Z', 0);
+
+  assert.ok(criticalEventScore > getHomePostRankingScore(newPost, now));
+});
+
+test('new Topfan and community cards outrank a distant new event', () => {
+  const now = new Date('2026-08-05T12:00:00.000Z');
+  const createdAt = '2026-08-05T11:00:00.000Z';
+  const distantEventScore = getEventRankingScore(createdAt, '2026-08-15T12:00:00.000Z', now);
+  const baseRecency = getHomeContentRecencyScore({ createdAt }, now);
+  const topFanScore = baseRecency * 0.22 + getFeedFreshnessBoost('weekly_top_fan', createdAt, now);
+  const communityScore = baseRecency * 0.55 + getFeedFreshnessBoost('community', createdAt, now);
+
+  assert.ok(topFanScore > distantEventScore);
+  assert.ok(communityScore > distantEventScore);
+});
+
+test('event boost has no permanent component after discovery and start windows', () => {
+  const now = new Date('2026-08-05T12:00:00.000Z');
+
+  assert.equal(
+    getEventFreshnessBoost(
+      {
+        createdAt: '2026-07-20T12:00:00.000Z',
+        startAt: '2026-07-25T12:00:00.000Z',
+      },
+      now,
+    ),
+    0,
+  );
+});
+
 test('a new ordinary post outranks a five-day-old freshness boost', () => {
   const now = new Date('2026-08-05T12:00:00.000Z');
   const newPost = createPostItem('new-post', '2026-08-05T11:00:00.000Z', 0);
@@ -279,4 +405,13 @@ test('Home wires stable event and community ids to their existing nested detail 
   assert.match(homeSource, /onPressCommunity=\{handleOpenCommunity\}/);
   assert.match(eventVmSource, /ctaLabel: 'Se event'/);
   assert.doesNotMatch(eventVmSource, /unknown-\$\{Date\.now\(\)\}/);
+});
+
+test('Home ranking uses content recency rather than future event start as its tie-break timestamp', () => {
+  const homeFeedSource = fs.readFileSync(
+    path.resolve(process.cwd(), 'src/utils/homeFeed.ts'),
+    'utf8',
+  );
+
+  assert.match(homeFeedSource, /sortTimestamp: toTimestamp\(getHomeRecencyDate\(item\)\)/);
 });

@@ -2,6 +2,12 @@ const MS_PER_HOUR = 1000 * 60 * 60;
 
 export type FeedFreshnessKind = 'weekly_top_fan' | 'community';
 
+export type EventFreshnessInput = {
+  createdAt?: string | null;
+  startAt?: string | null;
+  endAt?: string | null;
+};
+
 export const FEED_FRESHNESS_RANKING = {
   weeklyTopFan: {
     firstDayHours: 24,
@@ -17,6 +23,20 @@ export const FEED_FRESHNESS_RANKING = {
     initialBoost: 72,
     firstDayEndBoost: 48,
     moderateEndBoost: 16,
+  },
+  event: {
+    discoveryHours: 24,
+    discoveryMidpointHours: 12,
+    initialDiscoveryBoost: 34,
+    midpointDiscoveryBoost: 24,
+    proximityWindowHours: 48,
+    proximityDayHours: 24,
+    proximitySoonHours: 6,
+    proximityWindowBoost: 8,
+    proximityDayBoost: 32,
+    proximitySoonBoost: 64,
+    proximityStartBoost: 84,
+    postStartDecayHours: 3,
   },
 } as const;
 
@@ -44,6 +64,91 @@ function toAgeHours(timestamp: string | null | undefined, now: Date): number | n
   const occurredAt = new Date(timestamp).getTime();
   if (!Number.isFinite(occurredAt)) return null;
   return Math.max(0, (now.getTime() - occurredAt) / MS_PER_HOUR);
+}
+
+function toTimestamp(timestamp: string | null | undefined): number | null {
+  if (!timestamp) return null;
+  const value = new Date(timestamp).getTime();
+  return Number.isFinite(value) ? value : null;
+}
+
+export function getEventFreshnessBoost(
+  { createdAt, startAt, endAt }: EventFreshnessInput,
+  now = new Date(),
+): number {
+  const curve = FEED_FRESHNESS_RANKING.event;
+  const ageHours = toAgeHours(createdAt, now);
+  let discoveryBoost = 0;
+
+  if (ageHours !== null && ageHours <= curve.discoveryMidpointHours) {
+    discoveryBoost = interpolate(
+      ageHours,
+      0,
+      curve.discoveryMidpointHours,
+      curve.initialDiscoveryBoost,
+      curve.midpointDiscoveryBoost,
+    );
+  } else if (ageHours !== null && ageHours <= curve.discoveryHours) {
+    discoveryBoost = interpolate(
+      ageHours,
+      curve.discoveryMidpointHours,
+      curve.discoveryHours,
+      curve.midpointDiscoveryBoost,
+      0,
+    );
+  }
+
+  const startTimestamp = toTimestamp(startAt);
+  if (startTimestamp === null) return discoveryBoost;
+
+  const nowTimestamp = now.getTime();
+  const endTimestamp = toTimestamp(endAt);
+  if (endTimestamp !== null && endTimestamp <= nowTimestamp) {
+    return 0;
+  }
+
+  const hoursToStart = (startTimestamp - nowTimestamp) / MS_PER_HOUR;
+  let proximityBoost = 0;
+
+  if (hoursToStart <= 0) {
+    const hoursSinceStart = Math.abs(hoursToStart);
+    if (hoursSinceStart < curve.postStartDecayHours) {
+      return interpolate(
+        hoursSinceStart,
+        0,
+        curve.postStartDecayHours,
+        curve.proximityStartBoost,
+        0,
+      );
+    }
+    return 0;
+  } else if (hoursToStart <= curve.proximitySoonHours) {
+    proximityBoost = interpolate(
+      hoursToStart,
+      0,
+      curve.proximitySoonHours,
+      curve.proximityStartBoost,
+      curve.proximitySoonBoost,
+    );
+  } else if (hoursToStart <= curve.proximityDayHours) {
+    proximityBoost = interpolate(
+      hoursToStart,
+      curve.proximitySoonHours,
+      curve.proximityDayHours,
+      curve.proximitySoonBoost,
+      curve.proximityDayBoost,
+    );
+  } else if (hoursToStart <= curve.proximityWindowHours) {
+    proximityBoost = interpolate(
+      hoursToStart,
+      curve.proximityDayHours,
+      curve.proximityWindowHours,
+      curve.proximityDayBoost,
+      curve.proximityWindowBoost,
+    );
+  }
+
+  return discoveryBoost + proximityBoost;
 }
 
 export function getFeedFreshnessBoost(

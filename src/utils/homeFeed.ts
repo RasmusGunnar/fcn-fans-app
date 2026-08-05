@@ -10,6 +10,7 @@ import { reconcileFeedItemIdentities } from './feedPublication';
 import {
   compareStableFeedRanks,
   dedupeByStableKey,
+  getEventFreshnessBoost,
   getFeedFreshnessBoost,
 } from './feedFreshnessRanking';
 import {
@@ -50,16 +51,7 @@ export const HOME_RANKING_V1 = {
     decayFloor: 0.55,
   },
   events: {
-    liveWindowHours: 3,
-    liveBoost: 10,
-    verySoonHours: 6,
-    soonHours: 24,
-    upcomingHours: 72,
     thisWeekHours: 168,
-    verySoonBoost: 30,
-    soonBoost: 22,
-    upcomingBoost: 12,
-    thisWeekBoost: 5,
   },
   weeklyTopFan: {
     recencyMultiplier: 0.22,
@@ -477,35 +469,14 @@ function getPollBoost(item: FeedItem, now: Date): number {
 function getEventTimeWindowBoost(item: FeedItem, now: Date): number {
   if (item.kind !== 'event' && item.kind !== 'bus_trip') return 0;
 
-  const startAt = toTimestamp(item.data.eventStartAt ?? item.data.startAt ?? null);
-  if (!startAt) return 0;
-
-  const endAt = toTimestamp(item.data.eventEndAt ?? null);
-  if (endAt && endAt <= now.getTime()) {
-    return 0;
-  }
-
-  const hoursToStart = (startAt - now.getTime()) / MS_PER_HOUR;
-  if (hoursToStart < 0) {
-    const hoursSinceStart = Math.abs(hoursToStart);
-    return hoursSinceStart <= HOME_RANKING_V1.events.liveWindowHours
-      ? HOME_RANKING_V1.events.liveBoost
-      : 0;
-  }
-  if (hoursToStart <= HOME_RANKING_V1.events.verySoonHours) {
-    return HOME_RANKING_V1.events.verySoonBoost;
-  }
-  if (hoursToStart <= HOME_RANKING_V1.events.soonHours) {
-    return HOME_RANKING_V1.events.soonBoost;
-  }
-  if (hoursToStart <= HOME_RANKING_V1.events.upcomingHours) {
-    return HOME_RANKING_V1.events.upcomingBoost;
-  }
-  if (hoursToStart <= HOME_RANKING_V1.events.thisWeekHours) {
-    return HOME_RANKING_V1.events.thisWeekBoost;
-  }
-
-  return 0;
+  return getEventFreshnessBoost(
+    {
+      createdAt: item.data.createdAt,
+      startAt: item.data.eventStartAt ?? item.data.startAt,
+      endAt: item.data.eventEndAt,
+    },
+    now,
+  );
 }
 
 function getWeeklyTopFanBoost(item: FeedItem, now: Date): number {
@@ -977,7 +948,7 @@ export function sortHomeFeedItems(items: FeedItem[], baseDate = new Date()): Fee
       return {
         item,
         score: breakdown.finalScore,
-        sortTimestamp: toTimestamp(getHomeSortDate(item)),
+        sortTimestamp: toTimestamp(getHomeRecencyDate(item)),
         breakdown,
       };
     })
