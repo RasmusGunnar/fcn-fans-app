@@ -41,7 +41,7 @@ import { canEditPost, canDeleteFeedItem } from '../../utils/permissions';
 import type { CommentPreview } from '../../services/likesApi';
 import type { CategoryKey } from '../../theme/categories';
 import { buildCardBehaviorModel } from './cardBehaviorModel';
-import { resolveActorLine, type ProfileMap } from '../../utils/actor';
+import { resolvePostActorIdentity, type ProfileMap } from '../../utils/actor';
 import {
   buildFeedVideoPresentation,
   buildMediaViewerParams,
@@ -357,8 +357,10 @@ export function FanPostCard({
   };
 
   // Build card behavior model to determine category, name line, and press behavior
-  const communityId = (post as any).communityId ?? (post as any).community_id ?? null;
-  const isCommunityPost = !!communityId;
+  const isCommunityPost = post.actorType === 'community';
+  const communityId = isCommunityPost
+    ? (post.actorId ?? post.communityId ?? null)
+    : (post.communityId ?? null);
   const showDeleteOption = canDeleteFeedItem({
     isAppAdmin: viewerIsAppAdmin,
     viewerUserId,
@@ -379,14 +381,25 @@ export function FanPostCard({
     });
   }
   const communityName =
-    communityId && communityMap?.[communityId] ? communityMap[communityId] : null;
+    post.actorDisplayName ??
+    (communityId && communityMap?.[communityId] ? communityMap[communityId] : null) ??
+    post.communityName ??
+    null;
+  const actorIdentity = resolvePostActorIdentity({
+    actorType: isCommunityPost ? 'community' : 'user',
+    actorDisplayName: post.actorDisplayName,
+    actorAvatarUrl: post.actorAvatarUrl,
+    communityName,
+    authorId: post.authorId,
+    authorDisplayName: authorProfile?.display_name ?? post.authorDisplayName,
+    authorName: post.authorName,
+    authorAvatarUrl: authorProfile?.avatar_url ?? post.authorAvatarUrl,
+  });
 
   const cardModel = buildCardBehaviorModel({
     kind: 'post',
     actorType: isCommunityPost ? 'community' : 'fan',
-    actorName: isCommunityPost
-      ? (communityName ?? 'Fællesskab')
-      : authorProfile?.display_name || (post as any).authorName || 'Ukendt',
+    actorName: actorIdentity.displayName,
     postLinkUrl: undefined, // Posts don't have embedded links in current data model
   });
 
@@ -398,14 +411,7 @@ export function FanPostCard({
         ? undefined
         : onOpenDetail;
 
-  const resolvedAuthor = resolveActorLine({
-    actorType: isCommunityPost ? 'community' : 'user',
-    authorId: post.authorId,
-    authorEmail: authorProfile?.display_name || (post as any).authorName || undefined,
-    profileMap,
-    communityName: isCommunityPost ? (communityName ?? undefined) : undefined,
-  });
-  const headerTitle = cardModel.nameLine ?? resolvedAuthor.displayName;
+  const headerTitle = cardModel.nameLine ?? actorIdentity.displayName;
   const headerSubtitle = isCommunityPost
     ? timeAgo
     : groupDisplay
@@ -462,10 +468,10 @@ export function FanPostCard({
           <CardHeader
             avatarSlot={
               <Avatar
-                userId={post.authorId}
-                avatarUrl={authorProfile?.avatar_url ?? post.authorAvatarUrl}
+                userId={actorIdentity.avatarUserId}
+                avatarUrl={actorIdentity.avatarUrl}
                 size={40}
-                label={authorProfile?.display_name || post.authorName || 'Fan'}
+                label={actorIdentity.displayName}
               />
             }
             nameLine={cardModel.nameLine}

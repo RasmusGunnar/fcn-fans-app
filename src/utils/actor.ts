@@ -54,3 +54,59 @@ export function resolveActorLine({
 
   return { displayName: 'Ukendt' };
 }
+
+type ResolvePostActorIdentityInput = {
+  actorType?: 'user' | 'community' | null;
+  actorDisplayName?: string | null;
+  actorAvatarUrl?: string | null;
+  communityName?: string | null;
+  authorId?: string | null;
+  authorDisplayName?: string | null;
+  authorName?: string | null;
+  authorAvatarUrl?: string | null;
+};
+
+export type ResolvedPostActorIdentity = {
+  actorType: 'user' | 'community';
+  displayName: string;
+  avatarUrl: string | null;
+  avatarUserId?: string;
+};
+
+function firstNonEmpty(...values: (string | null | undefined)[]): string | null {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return null;
+}
+
+export function resolvePostActorIdentity({
+  actorType,
+  actorDisplayName,
+  actorAvatarUrl,
+  communityName,
+  authorId,
+  authorDisplayName,
+  authorName,
+  authorAvatarUrl,
+}: ResolvePostActorIdentityInput): ResolvedPostActorIdentity {
+  if (actorType === 'community') {
+    return {
+      actorType: 'community',
+      displayName: firstNonEmpty(actorDisplayName, communityName) ?? 'Fællesskab',
+      avatarUrl: firstNonEmpty(actorAvatarUrl),
+    };
+  }
+
+  const normalizedAuthorId = firstNonEmpty(authorId) ?? undefined;
+
+  return {
+    actorType: 'user',
+    displayName: firstNonEmpty(authorDisplayName, authorName) ?? 'Ukendt',
+    avatarUrl: firstNonEmpty(authorAvatarUrl),
+    ...(normalizedAuthorId ? { avatarUserId: normalizedAuthorId } : {}),
+  };
+}

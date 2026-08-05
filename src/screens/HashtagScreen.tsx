@@ -11,6 +11,7 @@ import { useFeed } from '../state/FeedContext';
 import { useTheme, type Theme } from '../theme';
 import { normalizePostType, type Post } from '../types/post';
 import { extractHashtags } from '../utils/extractHashtags';
+import { resolveAvatarUrl } from '../utils/avatar';
 import { normalizeLinkPreview } from '../utils/linkPreview';
 import { normalizeMedia } from '../utils/media';
 import { getPostEngagementIdentity, POST_ENGAGEMENT_TARGET_TYPE } from '../utils/postEngagement';
@@ -33,6 +34,11 @@ type HashtagPostRow = {
 type HashtagCommentRow = {
   target_id: string | null;
   text: string | null;
+};
+
+type HashtagCommunityIdentity = {
+  name: string;
+  avatarUrl: string | null;
 };
 
 const HASHTAG_POST_SELECT =
@@ -88,14 +94,29 @@ export default function HashtagScreen() {
   );
 
   const mapRowToPost = useCallback(
-    (row: HashtagPostRow): Post | null => {
+    (
+      row: HashtagPostRow,
+      communityIdentityMap: ReadonlyMap<string, HashtagCommunityIdentity>,
+    ): Post | null => {
       if (!row.id) {
         return null;
       }
 
+      const actorCommunityId =
+        row.actor_type === 'community' ? (row.actor_id ?? row.community_id) : null;
+      const communityIdentity = actorCommunityId
+        ? communityIdentityMap.get(actorCommunityId)
+        : undefined;
       const cachedPost = cachedPostsById.get(row.id);
       if (cachedPost) {
-        return cachedPost;
+        return cachedPost.actorType === 'community'
+          ? {
+              ...cachedPost,
+              actorDisplayName: communityIdentity?.name ?? cachedPost.actorDisplayName,
+              actorAvatarUrl: communityIdentity?.avatarUrl ?? cachedPost.actorAvatarUrl,
+              communityName: communityIdentity?.name ?? cachedPost.communityName,
+            }
+          : cachedPost;
       }
 
       const authorProfile = row.author_id ? profileMap[row.author_id] : undefined;
@@ -111,10 +132,17 @@ export default function HashtagScreen() {
         actorType: row.actor_type ?? 'user',
         actorId: row.actor_id ?? row.author_id ?? undefined,
         actorDisplayName:
-          row.actor_type === 'community' ? null : (authorProfile?.display_name ?? null),
-        actorAvatarUrl: row.actor_type === 'community' ? null : (authorProfile?.avatar_url ?? null),
+          row.actor_type === 'community'
+            ? (communityIdentity?.name ?? null)
+            : (authorProfile?.display_name ?? null),
+        actorAvatarUrl:
+          row.actor_type === 'community'
+            ? (communityIdentity?.avatarUrl ?? null)
+            : (authorProfile?.avatar_url ?? null),
         communityId: row.community_id ?? null,
-        communityName: row.community_id ? communityMap[row.community_id] : undefined,
+        communityName:
+          communityIdentity?.name ??
+          (row.community_id ? communityMap[row.community_id] : undefined),
         feedTargets: Array.isArray(row.feed_targets) ? row.feed_targets : ['home'],
         createdAt: row.created_at,
         text: row.text ?? '',
@@ -204,10 +232,39 @@ export default function HashtagScreen() {
         ),
       );
       const commentParentPostRows = await fetchPostsByIds(missingCommentParentPostIds);
+      const hashtagPostRows = [...directPostRows, ...commentParentPostRows];
+      const communityIds = Array.from(
+        new Set(
+          hashtagPostRows
+            .filter((row) => row.actor_type === 'community')
+            .map((row) => row.actor_id ?? row.community_id)
+            .filter((communityId): communityId is string => Boolean(communityId)),
+        ),
+      );
+      const communityIdentityMap = new Map<string, HashtagCommunityIdentity>();
+
+      if (communityIds.length > 0) {
+        const { data: communityData, error: communityError } = await supabase
+          .from('communities')
+          .select('id, name, avatar_url, avatar_path')
+          .in('id', communityIds);
+
+        if (communityError) {
+          logHashtagQueryError('Community actor lookup', communityError);
+        } else {
+          (communityData || []).forEach((community) => {
+            communityIdentityMap.set(community.id, {
+              name: community.name,
+              avatarUrl: resolveAvatarUrl(community.avatar_url ?? community.avatar_path ?? null),
+            });
+          });
+        }
+      }
+
       const seenPostIds = new Set<string>();
-      const nextPosts = [...directPostRows, ...commentParentPostRows]
+      const nextPosts = hashtagPostRows
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        .map(mapRowToPost)
+        .map((row) => mapRowToPost(row, communityIdentityMap))
         .filter((post): post is Post => {
           if (!post || seenPostIds.has(post.id)) {
             return false;

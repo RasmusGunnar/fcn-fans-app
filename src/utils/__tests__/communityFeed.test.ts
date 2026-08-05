@@ -12,6 +12,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { Post } from '../../types/post';
+import { resolvePostActorIdentity } from '../actor';
 import { buildCommunityFeedTargetFilter } from '../communityFeedTargets';
 import { buildPostInsertPayload, shouldSyncPostToHome } from '../postComposerPayload';
 import { selectActiveInlineVideoKey } from '../videoPlaybackBehavior';
@@ -286,6 +287,49 @@ test('Author hydration: null display_name does not override existing author name
 
   // null display_name falls back to existing authorName
   assert.equal(hydrated.authorName, 'Existing Name');
+});
+
+test('Community actor identity uses the official community name and avatar', () => {
+  const identity = resolvePostActorIdentity({
+    actorType: 'community',
+    actorDisplayName: 'Wild Tigers',
+    actorAvatarUrl: 'communities/wild-tigers/avatar.jpg',
+    authorId: 'admin-1',
+    authorDisplayName: 'Administrator',
+    authorAvatarUrl: 'admins/admin-1/avatar.jpg',
+  });
+
+  assert.equal(identity.displayName, 'Wild Tigers');
+  assert.equal(identity.avatarUrl, 'communities/wild-tigers/avatar.jpg');
+  assert.equal(identity.avatarUserId, undefined);
+});
+
+test('Community actor fallback never leaks the creator avatar or user id', () => {
+  const identity = resolvePostActorIdentity({
+    actorType: 'community',
+    communityName: 'Farum Fans',
+    actorAvatarUrl: null,
+    authorId: 'admin-1',
+    authorDisplayName: 'Administrator',
+    authorAvatarUrl: 'admins/admin-1/avatar.jpg',
+  });
+
+  assert.equal(identity.displayName, 'Farum Fans');
+  assert.equal(identity.avatarUrl, null);
+  assert.equal(identity.avatarUserId, undefined);
+});
+
+test('Personal actor identity keeps the profile name, avatar, and user id', () => {
+  const identity = resolvePostActorIdentity({
+    actorType: 'user',
+    authorId: 'fan-1',
+    authorDisplayName: 'Freja Fan',
+    authorAvatarUrl: 'fans/fan-1/avatar.jpg',
+  });
+
+  assert.equal(identity.displayName, 'Freja Fan');
+  assert.equal(identity.avatarUrl, 'fans/fan-1/avatar.jpg');
+  assert.equal(identity.avatarUserId, 'fan-1');
 });
 
 // ---------------------------------------------------------------------------
