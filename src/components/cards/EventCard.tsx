@@ -50,6 +50,7 @@ export function EventCard({
   if (!vm) return null;
 
   const isMatch = vm.kind === 'match';
+  const detailTypeLabel = isMatch ? 'kampen' : vm.kind === 'bus_trip' ? 'busturen' : 'eventet';
   const hasLogos = isMatch && (vm.homeLogo || vm.awayLogo);
   const cleanedTitle = cleanText(vm.title);
   const cleanedDescription = cleanText(vm.description);
@@ -66,6 +67,7 @@ export function EventCard({
       currentUserId={user?.id}
       isAppAdmin={isAppAdmin}
       onOpenDetail={onPressDetail}
+      openDetailAccessibilityLabel={`Åbn ${detailTypeLabel} ${cleanedTitle}`}
       actions={{
         liked,
         likes,
@@ -230,7 +232,15 @@ export function EventCard({
       ) : null}
 
       {/* CTA button */}
-      <Pressable style={styles.ctaButton} onPress={onPressDetail}>
+      <Pressable
+        style={styles.ctaButton}
+        onPress={(event) => {
+          event.stopPropagation();
+          onPressDetail();
+        }}
+        accessibilityRole="button"
+        accessibilityLabel={`${cleanedCtaLabel}: ${cleanedTitle}`}
+      >
         <Text variant="body" color="inverse" style={styles.ctaText}>
           {cleanedCtaLabel}
         </Text>

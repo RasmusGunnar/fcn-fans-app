@@ -680,6 +680,35 @@ export default function HomeScreen() {
     [navigation],
   );
 
+  const handleOpenEvent = useCallback(
+    (eventId: string) => {
+      const normalizedEventId = eventId.trim();
+      if (!normalizedEventId) return;
+
+      (navigation as any).navigate('Main', {
+        screen: 'Events',
+        params: { screen: 'EventDetails', params: { eventId: normalizedEventId } },
+      });
+    },
+    [navigation],
+  );
+
+  const handleOpenCommunity = useCallback(
+    (communityId: string, title: string) => {
+      const normalizedCommunityId = communityId.trim();
+      if (!normalizedCommunityId) return;
+
+      (navigation as any).navigate('Main', {
+        screen: 'Communities',
+        params: {
+          screen: 'CommunityDetail',
+          params: { id: normalizedCommunityId, title: title.trim() || 'Fællesskab' },
+        },
+      });
+    },
+    [navigation],
+  );
+
   const handleOpenFanActivity = useCallback(
     (item: FeedFanActivityData) => {
       const fanActivityId = item.id?.trim();
@@ -751,6 +780,8 @@ export default function HomeScreen() {
           addCommentPreview={addCommentPreview}
           onPressProfile={handleOpenProfile}
           onPressPost={handleOpenPost}
+          onPressEvent={handleOpenEvent}
+          onPressCommunity={handleOpenCommunity}
           onPressFanActivity={handleOpenFanActivity}
           isActiveVideo={isHomeFocused && key === activeVideoKey}
         />
@@ -759,6 +790,8 @@ export default function HomeScreen() {
     [
       addCommentPreview,
       communityMap,
+      handleOpenCommunity,
+      handleOpenEvent,
       handleOpenFanActivity,
       handleOpenPost,
       handleOpenProfile,

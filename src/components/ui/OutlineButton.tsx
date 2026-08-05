@@ -26,6 +26,8 @@ export function OutlineButton({
     <Pressable
       onPress={onPress}
       disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={title}
       style={({ pressed }) => [
         styles.button,
         fullWidth && styles.fullWidth,

@@ -49,6 +49,8 @@ export function CommunityCard({
         <Pressable
           onPress={onPressJoin}
           disabled={!onPressJoin}
+          accessibilityRole="button"
+          accessibilityLabel={`Åbn fællesskabet ${cleanedName}`}
           style={({ pressed }) => [
             styles.cardPressable,
             pressed && onPressJoin ? styles.pressed : null,
@@ -97,7 +99,11 @@ export function CommunityCard({
 
         <View style={styles.actionRow}>
           <View style={styles.buttonWrap}>
-            <OutlineButton title="Deltag i fællesskabet" onPress={onPressJoin || (() => {})} fullWidth />
+            <OutlineButton
+              title="Deltag i fællesskabet"
+              onPress={onPressJoin || (() => {})}
+              fullWidth
+            />
           </View>
         </View>
       </View>

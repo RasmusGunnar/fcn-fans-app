@@ -74,7 +74,13 @@ export function toEventCardVM(item: FeedItem, ctx: EventCardVMContext = {}): Eve
   if (!item) return null;
 
   // Derive a stable id — prefer item.id, fall back to data.id
-  const id: string = item.id || (item as any).data?.id || `unknown-${Date.now()}`;
+  const id = [item.id, (item as any).data?.id]
+    .find(
+      (candidate): candidate is string =>
+        typeof candidate === 'string' && candidate.trim().length > 0,
+    )
+    ?.trim();
+  if (!id) return null;
 
   // Defensive: item.data may be undefined at runtime despite TS types
   const d: any = (item as any).data ?? {};
@@ -133,7 +139,7 @@ export function toEventCardVM(item: FeedItem, ctx: EventCardVMContext = {}): Eve
         organizerName: orgName,
         organizerAvatarUrl: null,
         statusLine: null,
-        ctaLabel: 'Tilmeld dig',
+        ctaLabel: 'Se event',
         targetType: 'event',
         attendeeCount: attendance?.count,
         attendeeAvatars: attendance?.avatars,

@@ -22,6 +22,7 @@ interface FeedCardShellProps {
   currentUserId: string | undefined;
   isAppAdmin: boolean;
   onOpenDetail?: () => void;
+  openDetailAccessibilityLabel?: string;
   actions: {
     liked?: boolean;
     likes?: number;
@@ -52,6 +53,7 @@ export function FeedCardShell({
   currentUserId,
   isAppAdmin,
   onOpenDetail,
+  openDetailAccessibilityLabel,
   actions,
   commentPreviews = [],
   children,
@@ -121,7 +123,12 @@ export function FeedCardShell({
   return (
     <Card style={styles.card}>
       {onOpenDetail ? (
-        <Pressable onPress={onOpenDetail} style={styles.pressableContent}>
+        <Pressable
+          onPress={onOpenDetail}
+          style={styles.pressableContent}
+          accessibilityRole="button"
+          accessibilityLabel={openDetailAccessibilityLabel}
+        >
           <View style={styles.contentSection}>{children}</View>
         </Pressable>
       ) : (
