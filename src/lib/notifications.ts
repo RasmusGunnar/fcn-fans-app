@@ -75,7 +75,10 @@ async function clearStoredPushToken() {
   }
 }
 
-async function getRequiredPushSession(userId: string, reason: 'push token claim' | 'push test') {
+async function getRequiredPushSession(
+  userId: string,
+  reason: 'push token claim' | 'push token revoke' | 'push test',
+) {
   const { data, error } = await supabase.auth.getSession();
 
   if (error) {
@@ -123,6 +126,7 @@ export async function registerForPushNotificationsAsync(options?: {
         name: 'default',
         importance: Notifications.AndroidImportance.MAX,
         showBadge: true,
+        sound: 'default',
       });
     }
 
@@ -189,18 +193,37 @@ export async function saveExpoPushToken(userId: string, token: string) {
 
 export async function removeCurrentPushToken(userId: string) {
   const storedToken = await getStoredPushToken();
-  if (!storedToken) {
-    return;
-  }
+  if (!storedToken) return;
 
-  const { error } = await supabase
-    .from('push_tokens')
-    .delete()
-    .eq('user_id', userId)
-    .eq('push_token', storedToken);
+  try {
+    const session = await getRequiredPushSession(userId, 'push token revoke');
+    const { data, error } = await supabase.functions.invoke('claim_push_token', {
+      body: {
+        action: 'revoke',
+        pushToken: storedToken,
+      },
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
 
-  if (error) {
-    logger.warn('[Push] removeCurrentPushToken failed:', error);
+    if (error || data?.ok !== true) {
+      throw error ?? new Error(data?.error ?? 'Kunne ikke frigive push-enheden');
+    }
+  } catch (error) {
+    logger.warn('[Push] removeCurrentPushToken v2 revoke failed:', error);
+
+    if (storedToken) {
+      const { error: legacyError } = await supabase
+        .from('push_tokens')
+        .delete()
+        .eq('user_id', userId)
+        .eq('push_token', storedToken);
+
+      if (legacyError) {
+        logger.warn('[Push] removeCurrentPushToken legacy fallback failed:', legacyError);
+      }
+    }
   }
 
   await clearStoredPushToken();

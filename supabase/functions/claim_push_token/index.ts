@@ -2,6 +2,7 @@
 import { createAdminClient, json, requireAuthenticatedUser } from '../_shared/push.ts';
 
 type Payload = {
+  action?: string | null;
   pushToken?: string | null;
   previousToken?: string | null;
   platform?: string | null;
@@ -67,7 +68,31 @@ async function claimPushDevice(params: {
       platform: params.platform,
       error: String(error),
     });
+    throw error;
   }
+}
+
+async function revokePushDevices(params: { supabase: any; userId: string; pushToken: string }) {
+  const nowIso = new Date().toISOString();
+  let deviceQuery = params.supabase
+    .from('push_devices')
+    .update({
+      invalidated_at: nowIso,
+      invalidated_reason: 'signed_out',
+      updated_at: nowIso,
+    })
+    .eq('user_id', params.userId)
+    .is('invalidated_at', null);
+  let legacyQuery = params.supabase.from('push_tokens').delete().eq('user_id', params.userId);
+
+  deviceQuery = deviceQuery.eq('push_token', params.pushToken);
+  legacyQuery = legacyQuery.eq('push_token', params.pushToken);
+
+  const { error: deviceError } = await deviceQuery;
+  if (deviceError) throw deviceError;
+
+  const { error: legacyError } = await legacyQuery;
+  if (legacyError) throw legacyError;
 }
 
 Deno.serve(async (req) => {
@@ -86,15 +111,42 @@ Deno.serve(async (req) => {
       payload = {};
     }
 
+    const action = readString(payload.action) ?? 'claim';
     const pushToken = readString(payload.pushToken);
     const previousToken = readString(payload.previousToken);
     const platform = readPlatform(payload.platform);
+
+    const supabase = createAdminClient();
+
+    if (action === 'revoke') {
+      if (!pushToken) {
+        return json(400, { error: 'Missing pushToken' });
+      }
+
+      await revokePushDevices({
+        supabase,
+        userId: callerUserId,
+        pushToken,
+      });
+
+      return json(200, {
+        ok: true,
+        action,
+        userId: callerUserId,
+      });
+    }
 
     if (!pushToken || !platform) {
       return json(400, { error: 'Missing pushToken or platform' });
     }
 
-    const supabase = createAdminClient();
+    await claimPushDevice({
+      supabase,
+      userId: callerUserId,
+      pushToken,
+      previousToken,
+      platform,
+    });
 
     if (previousToken && previousToken !== pushToken) {
       const { error: removePreviousError } = await supabase
@@ -127,14 +179,6 @@ Deno.serve(async (req) => {
     if (insertError) {
       throw insertError;
     }
-
-    await claimPushDevice({
-      supabase,
-      userId: callerUserId,
-      pushToken,
-      previousToken,
-      platform,
-    });
 
     return json(200, {
       ok: true,

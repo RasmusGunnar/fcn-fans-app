@@ -12,6 +12,7 @@ type NotificationDelivery = {
   job_id: string;
   device_id: string | null;
   status: string;
+  push_token_snapshot: string;
   expo_ticket_id: string;
   receipt_checked_at: string | null;
   created_at: string;
@@ -121,19 +122,30 @@ async function updateJob(supabase: any, jobId: string, patch: Record<string, unk
   if (error) throw error;
 }
 
-async function invalidateDevice(supabase: any, deviceId: string | null) {
-  if (!deviceId) return false;
+async function invalidateDevice(supabase: any, deviceId: string | null, pushToken: string) {
+  if (deviceId) {
+    const { error } = await supabase
+      .from('push_devices')
+      .update({
+        invalidated_at: new Date().toISOString(),
+        invalidated_reason: 'device_not_registered',
+      })
+      .eq('id', deviceId)
+      .is('invalidated_at', null);
 
-  const { error } = await supabase
-    .from('push_devices')
-    .update({
-      invalidated_at: new Date().toISOString(),
-      invalidated_reason: 'device_not_registered',
-    })
-    .eq('id', deviceId)
-    .is('invalidated_at', null);
+    if (error) throw error;
+  }
 
-  if (error) throw error;
+  const { error: legacyError } = await supabase
+    .from('push_tokens')
+    .delete()
+    .eq('push_token', pushToken);
+  if (legacyError) {
+    console.warn('[poll_push_receipts] legacy token cleanup failed', {
+      deviceId,
+      error: String(legacyError),
+    });
+  }
   return true;
 }
 
@@ -183,7 +195,7 @@ async function loadCandidateDeliveries(
   let query = supabase
     .from('notification_deliveries')
     .select(
-      'id, job_id, device_id, status, expo_ticket_id, receipt_checked_at, created_at, sent_to_expo_at',
+      'id, job_id, device_id, status, push_token_snapshot, expo_ticket_id, receipt_checked_at, created_at, sent_to_expo_at',
     )
     .eq('status', 'sent_to_expo')
     .not('expo_ticket_id', 'is', null)
@@ -246,7 +258,7 @@ async function handleReceipt(
   const errorCode = receipt.details?.error ?? 'expo_receipt_error';
   const deviceInvalidated =
     errorCode === 'DeviceNotRegistered'
-      ? await invalidateDevice(supabase, delivery.device_id)
+      ? await invalidateDevice(supabase, delivery.device_id, delivery.push_token_snapshot)
       : false;
 
   await updateDelivery(supabase, delivery.id, {

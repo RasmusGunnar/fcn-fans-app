@@ -16,6 +16,22 @@ function readName(value: string | null | undefined): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 }
 
+function normalizeUnreadCount(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+}
+
+export function formatNotificationUnreadBadge(unreadCount: number): string | null {
+  const normalizedCount = normalizeUnreadCount(unreadCount);
+  if (normalizedCount === 0) return null;
+  return normalizedCount > 99 ? '99+' : String(normalizedCount);
+}
+
+export function getNotificationBellAccessibilityLabel(unreadCount: number): string {
+  const normalizedCount = normalizeUnreadCount(unreadCount);
+  if (normalizedCount === 0) return 'Notifikationer, ingen ul\u00e6ste';
+  return `Notifikationer, ${normalizedCount} ul\u00e6st${normalizedCount === 1 ? '' : 'e'}`;
+}
+
 export function getNotificationInteractionKind(
   item: NotificationPresentationItem,
 ): NotificationInteractionKind {

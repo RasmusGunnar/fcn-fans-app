@@ -228,21 +228,34 @@ async function invalidateDevice(
   supabase: any,
   deviceId: string | null,
   reason: 'device_not_registered' | 'invalid_push_token',
+  pushToken: string,
 ) {
-  if (!deviceId) return;
+  if (deviceId) {
+    const nowIso = new Date().toISOString();
+    const { error } = await supabase
+      .from('push_devices')
+      .update({
+        invalidated_at: nowIso,
+        invalidated_reason: reason,
+        updated_at: nowIso,
+      })
+      .eq('id', deviceId)
+      .is('invalidated_at', null);
 
-  const nowIso = new Date().toISOString();
-  const { error } = await supabase
-    .from('push_devices')
-    .update({
-      invalidated_at: nowIso,
-      invalidated_reason: reason,
-      updated_at: nowIso,
-    })
-    .eq('id', deviceId)
-    .is('invalidated_at', null);
+    if (error) throw error;
+  }
 
-  if (error) throw error;
+  const { error: legacyError } = await supabase
+    .from('push_tokens')
+    .delete()
+    .eq('push_token', pushToken);
+  if (legacyError) {
+    console.warn('[process_push_queue] legacy token cleanup failed', {
+      deviceId,
+      reason,
+      error: String(legacyError),
+    });
+  }
 }
 
 async function sendExpoBatch(
@@ -452,7 +465,12 @@ async function processJob(supabase: any, job: NotificationJob): Promise<JobProce
       code: 'invalid_push_token',
       message: 'Invalid Expo push token format',
     });
-    await invalidateDevice(supabase, delivery.device_id, 'invalid_push_token');
+    await invalidateDevice(
+      supabase,
+      delivery.device_id,
+      'invalid_push_token',
+      delivery.push_token_snapshot,
+    );
   }
 
   const unreadBadgeCount = await loadUnreadBadgeCount(supabase, job.recipient_user_id);
@@ -507,7 +525,12 @@ async function processJob(supabase: any, job: NotificationJob): Promise<JobProce
       });
 
       if (errorCode === 'DeviceNotRegistered') {
-        await invalidateDevice(supabase, delivery.device_id, 'device_not_registered');
+        await invalidateDevice(
+          supabase,
+          delivery.device_id,
+          'device_not_registered',
+          delivery.push_token_snapshot,
+        );
       }
     }
   }

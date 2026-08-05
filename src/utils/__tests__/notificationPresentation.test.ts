@@ -1,10 +1,18 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import test from 'node:test';
 import {
+  formatNotificationUnreadBadge,
+  getNotificationBellAccessibilityLabel,
   getNotificationInteractionKind,
   getNotificationLabel,
   type NotificationPresentationItem,
 } from '../notificationPresentation';
+
+function readWorkspaceFile(relativePath: string): string {
+  return fs.readFileSync(path.resolve(process.cwd(), relativePath), 'utf8');
+}
 
 function makeNotification(
   override: Partial<NotificationPresentationItem>,
@@ -67,4 +75,36 @@ test('v2 notification center rows use their stored title', () => {
     ),
     'Highfive på kampdagen',
   );
+});
+
+test('notification bell badge hides zero and caps display at 99+', () => {
+  assert.equal(formatNotificationUnreadBadge(0), null);
+  assert.equal(formatNotificationUnreadBadge(1), '1');
+  assert.equal(formatNotificationUnreadBadge(99), '99');
+  assert.equal(formatNotificationUnreadBadge(100), '99+');
+});
+
+test('notification bell accessibility includes the authoritative unread count', () => {
+  assert.equal(getNotificationBellAccessibilityLabel(0), 'Notifikationer, ingen ul\u00e6ste');
+  assert.equal(getNotificationBellAccessibilityLabel(1), 'Notifikationer, 1 ul\u00e6st');
+  assert.equal(getNotificationBellAccessibilityLabel(12), 'Notifikationer, 12 ul\u00e6ste');
+});
+
+test('push lifecycle config keeps Android sound and v2 token revocation wired', () => {
+  const notificationSource = readWorkspaceFile('src/lib/notifications.ts');
+  const notificationApiSource = readWorkspaceFile('src/services/notificationsApi.ts');
+  const claimSource = readWorkspaceFile('supabase/functions/claim_push_token/index.ts');
+  const queueSource = readWorkspaceFile('supabase/functions/process_push_queue/index.ts');
+  const receiptSource = readWorkspaceFile('supabase/functions/poll_push_receipts/index.ts');
+
+  assert.match(
+    notificationSource,
+    /setNotificationChannelAsync\('default',[\s\S]*sound: 'default'/,
+  );
+  assert.match(notificationSource, /action: 'revoke'/);
+  assert.match(notificationApiSource, /App icon badge update failed[\s\S]*return unreadCount;/);
+  assert.match(claimSource, /invalidated_reason: 'signed_out'/);
+  assert.match(claimSource, /throw error;/);
+  assert.match(queueSource, /from\('push_tokens'\)[\s\S]*delete\(\)/);
+  assert.match(receiptSource, /push_token_snapshot[\s\S]*from\('push_tokens'\)/);
 });
