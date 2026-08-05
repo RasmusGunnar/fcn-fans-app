@@ -8,6 +8,11 @@ import type { NewsItem } from '../types/news';
 import type { Post } from '../types/post';
 import { reconcileFeedItemIdentities } from './feedPublication';
 import {
+  compareStableFeedRanks,
+  dedupeByStableKey,
+  getFeedFreshnessBoost,
+} from './feedFreshnessRanking';
+import {
   getHomeContentEngagementScore,
   getHomePostRecencyScore,
   HOME_POST_ENGAGEMENT_RANKING,
@@ -57,13 +62,10 @@ export const HOME_RANKING_V1 = {
     thisWeekBoost: 5,
   },
   weeklyTopFan: {
-    validWeekBoost: 10,
     recencyMultiplier: 0.22,
   },
   community: {
     recencyMultiplier: 0.55,
-    freshBoostHours: 48,
-    freshBoost: 8,
     maxAgeHours: 24 * 14,
   },
   fanActivities: {
@@ -139,17 +141,10 @@ function isValidFeedItem(item: unknown): item is FeedItem {
     return false;
   }
 
-  return (
-    typeof item.kind === 'string' &&
-    typeof item.id === 'string' &&
-    isRecord(item.data)
-  );
+  return typeof item.kind === 'string' && typeof item.id === 'string' && isRecord(item.data);
 }
 
-function sanitizeFeedItems(
-  items: readonly unknown[],
-  stage: string,
-): FeedItem[] {
+function sanitizeFeedItems(items: readonly unknown[], stage: string): FeedItem[] {
   const validItems = items.filter(isValidFeedItem);
 
   if (__DEV__ && validItems.length !== items.length) {
@@ -272,9 +267,21 @@ export function getHomeSortDate(item: FeedItem): string | null {
     case 'news':
       return item.data.sortDate ?? item.data.createdAt ?? null;
     case 'event':
-      return item.data.sortDate ?? item.data.eventStartAt ?? item.data.startAt ?? item.data.createdAt ?? null;
+      return (
+        item.data.sortDate ??
+        item.data.eventStartAt ??
+        item.data.startAt ??
+        item.data.createdAt ??
+        null
+      );
     case 'bus_trip':
-      return item.data.sortDate ?? item.data.eventStartAt ?? item.data.startAt ?? item.data.createdAt ?? null;
+      return (
+        item.data.sortDate ??
+        item.data.eventStartAt ??
+        item.data.startAt ??
+        item.data.createdAt ??
+        null
+      );
     case 'match':
       return item.data.sortDate ?? item.data.eventStartAt ?? item.data.kickoffAt ?? null;
     case 'community':
@@ -319,8 +326,8 @@ function isValidWeeklyTopFanForHome(item: FeedItem, baseDate = new Date()): bool
   if (item.kind !== 'weekly_top_fan') return false;
   const hasRequiredData = Boolean(
     item.data.id &&
-      item.data.userId &&
-      (item.data.weekStartDate || item.data.generatedAt || item.data.createdAt),
+    item.data.userId &&
+    (item.data.weekStartDate || item.data.generatedAt || item.data.createdAt),
   );
 
   if (!hasRequiredData) {
@@ -357,11 +364,10 @@ export function sortFeedItemsByDate(items: FeedItem[]): FeedItem[] {
 }
 
 function dedupeFeedItems(items: FeedItem[]): FeedItem[] {
-  const map = new Map<string, FeedItem>();
-  sanitizeFeedItems(items, 'dedupeFeedItems').forEach((item) => {
-    map.set(`${item.kind}:${item.id}`, item);
-  });
-  return Array.from(map.values());
+  return dedupeByStableKey(
+    sanitizeFeedItems(items, 'dedupeFeedItems'),
+    (item) => `${item.kind}:${item.id}`,
+  );
 }
 
 function getHomeRecencyDate(item: FeedItem): string | null {
@@ -444,10 +450,7 @@ function getEngagementScore(item: FeedItem, now: Date): number {
     commentCount * HOME_RANKING_V1.engagement.commentWeight +
     votesCount * HOME_RANKING_V1.engagement.systemVoteWeight;
 
-  return Math.min(
-    engagementCount,
-    HOME_RANKING_V1.engagement.maxPoints,
-  );
+  return Math.min(engagementCount, HOME_RANKING_V1.engagement.maxPoints);
 }
 
 function getPollBoost(item: FeedItem, now: Date): number {
@@ -459,10 +462,7 @@ function getPollBoost(item: FeedItem, now: Date): number {
   }
 
   const createdAt = toTimestamp(item.data.createdAt ?? null);
-  const fallbackDurationHours = Math.max(
-    1,
-    (expiresAt - Math.max(createdAt, 0)) / MS_PER_HOUR,
-  );
+  const fallbackDurationHours = Math.max(1, (expiresAt - Math.max(createdAt, 0)) / MS_PER_HOUR);
   const totalDurationHours = Math.max(
     1,
     (item.data.poll_data?.duration ?? 0) * 24 || fallbackDurationHours,
@@ -509,20 +509,14 @@ function getEventTimeWindowBoost(item: FeedItem, now: Date): number {
 }
 
 function getWeeklyTopFanBoost(item: FeedItem, now: Date): number {
-  if (!isValidWeeklyTopFanForHome(item, now)) return 0;
-  return HOME_RANKING_V1.weeklyTopFan.validWeekBoost;
+  if (item.kind !== 'weekly_top_fan' || !isValidWeeklyTopFanForHome(item, now)) return 0;
+  return getFeedFreshnessBoost('weekly_top_fan', item.data.generatedAt ?? item.data.createdAt, now);
 }
 
 function getCommunityBoost(item: FeedItem, now: Date): number {
   if (item.kind !== 'community') return 0;
 
-  const createdAt = toTimestamp(item.data.createdAt ?? null);
-  if (!createdAt) return 0;
-
-  const ageHours = Math.max(0, (now.getTime() - createdAt) / MS_PER_HOUR);
-  return ageHours <= HOME_RANKING_V1.community.freshBoostHours
-    ? HOME_RANKING_V1.community.freshBoost
-    : 0;
+  return getFeedFreshnessBoost('community', item.data.createdAt, now);
 }
 
 function getFanActivityBoost(item: FeedItem, now: Date): number {
@@ -655,9 +649,20 @@ type RankedHomeFeedEntry = {
 };
 
 function compareRankedHomeFeedEntries(a: RankedHomeFeedEntry, b: RankedHomeFeedEntry): number {
-  if (b.score !== a.score) return b.score - a.score;
-  if (b.sortTimestamp !== a.sortTimestamp) return b.sortTimestamp - a.sortTimestamp;
-  return compareFeedItemsByDate(a.item, b.item);
+  return compareStableFeedRanks(
+    {
+      score: a.score,
+      sortTimestamp: a.sortTimestamp,
+      kind: a.item.kind,
+      id: a.item.id,
+    },
+    {
+      score: b.score,
+      sortTimestamp: b.sortTimestamp,
+      kind: b.item.kind,
+      id: b.item.id,
+    },
+  );
 }
 
 function applyHomeRankingGuardrails(entries: RankedHomeFeedEntry[]): RankedHomeFeedEntry[] {
@@ -689,10 +694,7 @@ function applyHomeRankingGuardrails(entries: RankedHomeFeedEntry[]): RankedHomeF
   });
 
   // Best effort: if the feed only contains systemcards we still need to return all items.
-  while (
-    top.length < HOME_RANKING_V1.guardrails.topWindow &&
-    deferredSystemCards.length > 0
-  ) {
+  while (top.length < HOME_RANKING_V1.guardrails.topWindow && deferredSystemCards.length > 0) {
     top.push(deferredSystemCards.shift()!);
   }
 
@@ -862,7 +864,7 @@ function logHomeFeedAudit(
       createdAt: getFeedItemCreatedAt(entry.item),
       sortDate: getHomeSortDate(entry.item),
       score: entry.score,
-      debugSource: entry.item.kind === 'community' ? entry.item.data.debugSource ?? null : null,
+      debugSource: entry.item.kind === 'community' ? (entry.item.data.debugSource ?? null) : null,
       isSystemCard: Boolean(entry.item.data.isSystemCard),
     })),
   );
@@ -888,24 +890,36 @@ function logHomeRankingDebug(entries: RankedHomeFeedEntry[]) {
       rawScore: entry.breakdown.rawScore,
       sortDate: getHomeSortDate(entry.item),
       isSystemCard: Boolean(entry.item.data.isSystemCard),
-      debugSource: entry.item.kind === 'community' ? entry.item.data.debugSource ?? null : null,
+      debugSource: entry.item.kind === 'community' ? (entry.item.data.debugSource ?? null) : null,
     })),
   );
 }
 
 export function sortHomeFeedItems(items: FeedItem[], baseDate = new Date()): FeedItem[] {
-  const auditContext = HOME_FEED_AUDIT_DEBUG_ENABLED ? { events: [] as HomeFeedAuditEvent[] } : undefined;
-  const safeItems = sanitizeFeedItems(items, 'sortHomeFeedItems:input');
-  let hasValidWeeklyTopFan = false;
+  const auditContext = HOME_FEED_AUDIT_DEBUG_ENABLED
+    ? { events: [] as HomeFeedAuditEvent[] }
+    : undefined;
+  const safeItems = dedupeFeedItems(sanitizeFeedItems(items, 'sortHomeFeedItems:input'));
+  const latestWeeklyTopFanId = safeItems
+    .filter(
+      (item): item is Extract<FeedItem, { kind: 'weekly_top_fan' }> =>
+        item.kind === 'weekly_top_fan' && isValidWeeklyTopFanForHome(item, baseDate),
+    )
+    .sort((left, right) => {
+      const timestampDifference =
+        toTimestamp(right.data.generatedAt ?? right.data.createdAt) -
+        toTimestamp(left.data.generatedAt ?? left.data.createdAt);
+      return timestampDifference || left.id.localeCompare(right.id);
+    })[0]?.id;
   const relevantItems = safeItems.filter((item) => {
     if (item.kind === 'weekly_top_fan') {
       if (!isValidWeeklyTopFanForHome(item, baseDate)) {
         return false;
       }
 
-      if (hasValidWeeklyTopFan) {
+      if (item.id !== latestWeeklyTopFanId) {
         if (HOME_FEED_AUDIT_DEBUG_ENABLED) {
-          console.log('[homeFeed] dropping duplicate weekly_top_fan item', {
+          console.log('[homeFeed] dropping superseded weekly_top_fan item', {
             id: item.id,
             weekStartDate: item.data.weekStartDate,
           });
@@ -913,7 +927,6 @@ export function sortHomeFeedItems(items: FeedItem[], baseDate = new Date()): Fee
         return false;
       }
 
-      hasValidWeeklyTopFan = true;
       if (HOME_FEED_AUDIT_DEBUG_ENABLED) {
         console.log('[homeFeed] keeping weekly_top_fan item', {
           id: item.id,
@@ -1106,9 +1119,7 @@ function toFanActivityFeedItem(
   };
 }
 
-export function toCommunityFeedItem(
-  community: CommunityFeedSource,
-): FeedItem {
+export function toCommunityFeedItem(community: CommunityFeedSource): FeedItem {
   const createdAt = toIsoOrNull(community.created_at) ?? '';
 
   return {
@@ -1166,11 +1177,11 @@ export function buildFeedItemsFromSources({
   return sortFeedItemsByDate(
     sanitizeFeedItems(
       [
-      ...(weeklyTopFanItem ? [toWeeklyTopFanFeedItem(weeklyTopFanItem)] : []),
-      ...posts.map((post) => toPostFeedItem(post, baseDate)),
-      ...newsItems.map((newsItem) => toNewsFeedItem(newsItem)),
-      ...events.map((event) => toEventFeedItem(event)),
-      ...busTrips.map((busTrip) => toBusTripFeedItem(busTrip)),
+        ...(weeklyTopFanItem ? [toWeeklyTopFanFeedItem(weeklyTopFanItem)] : []),
+        ...posts.map((post) => toPostFeedItem(post, baseDate)),
+        ...newsItems.map((newsItem) => toNewsFeedItem(newsItem)),
+        ...events.map((event) => toEventFeedItem(event)),
+        ...busTrips.map((busTrip) => toBusTripFeedItem(busTrip)),
       ],
       'buildFeedItemsFromSources',
     ),
@@ -1230,7 +1241,7 @@ export function buildHomeFeedItemsFromSources({
           createdAt: duplicateItem?.data.createdAt ?? null,
           sortDate: duplicateItem ? getHomeSortDate(duplicateItem) : null,
           debugSource:
-            duplicateItem?.kind === 'community' ? duplicateItem.data.debugSource ?? null : null,
+            duplicateItem?.kind === 'community' ? (duplicateItem.data.debugSource ?? null) : null,
         });
       });
 

@@ -21,6 +21,7 @@
     "src/utils/commentLikeState.ts",
     "src/utils/fanPostBadge.ts",
     "src/utils/feedPublication.ts",
+    "src/utils/feedFreshnessRanking.ts",
     "src/utils/homeFeedFilter.ts",
     "src/utils/homeFeedQuery.ts",
     "src/utils/homePostRanking.ts",
