@@ -4,6 +4,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, Theme } from '../theme';
 import { startNavigationTiming } from '../utils/performanceTiming';
+import {
+  formatNotificationUnreadBadge,
+  getNotificationBellAccessibilityLabel,
+} from '../utils/notificationPresentation';
 
 interface AppHeaderProps {
   title: string;
@@ -11,6 +15,9 @@ interface AppHeaderProps {
   logoSource?: any;
   showProfileButton?: boolean;
   onPressProfile?: () => void;
+  showNotificationButton?: boolean;
+  notificationUnreadCount?: number;
+  onPressNotifications?: () => void;
 }
 
 export function AppHeader({
@@ -19,11 +26,15 @@ export function AppHeader({
   logoSource,
   showProfileButton = true,
   onPressProfile,
+  showNotificationButton = false,
+  notificationUnreadCount = 0,
+  onPressNotifications,
 }: AppHeaderProps) {
   const theme = useTheme();
   const styles = createStyles(theme);
   const insets = useSafeAreaInsets();
   const defaultLogo = require('../../assets/NewLogo.png');
+  const unreadBadgeLabel = formatNotificationUnreadBadge(notificationUnreadCount);
 
   const handleProfilePress = () => {
     if (onPressProfile) {
@@ -43,15 +54,41 @@ export function AppHeader({
             <Image source={logoSource || defaultLogo} style={styles.logo} resizeMode="contain" />
           </View>
           <View style={styles.textContainer}>
-            <Text style={styles.title}>{title}</Text>
+            <Text style={styles.title} numberOfLines={1}>
+              {title}
+            </Text>
             {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
           </View>
         </View>
-        {showProfileButton && (
-          <Pressable style={styles.profileButton} onPress={handleProfilePress}>
-            <Ionicons name="person-outline" size={20} color={theme.colors.bg.card} />
-          </Pressable>
-        )}
+        <View style={styles.actions}>
+          {showNotificationButton && onPressNotifications ? (
+            <Pressable
+              style={styles.headerActionButton}
+              onPress={onPressNotifications}
+              accessibilityRole="button"
+              accessibilityLabel={getNotificationBellAccessibilityLabel(notificationUnreadCount)}
+              hitSlop={theme.spacing[2]}
+            >
+              <Ionicons name="notifications-outline" size={20} color={theme.colors.bg.card} />
+              {unreadBadgeLabel ? (
+                <View style={styles.notificationBadge} pointerEvents="none">
+                  <Text style={styles.notificationBadgeText}>{unreadBadgeLabel}</Text>
+                </View>
+              ) : null}
+            </Pressable>
+          ) : null}
+          {showProfileButton ? (
+            <Pressable
+              style={styles.headerActionButton}
+              onPress={handleProfilePress}
+              accessibilityRole="button"
+              accessibilityLabel="Profil"
+              hitSlop={theme.spacing[2]}
+            >
+              <Ionicons name="person-outline" size={20} color={theme.colors.bg.card} />
+            </Pressable>
+          ) : null}
+        </View>
       </View>
     </View>
   );
@@ -91,6 +128,7 @@ function createStyles(theme: Theme) {
     },
     textContainer: {
       flex: 1,
+      minWidth: 0,
       marginLeft: theme.spacing[0],
     },
     title: {
@@ -103,7 +141,13 @@ function createStyles(theme: Theme) {
       color: theme.colors.bg.card,
       opacity: 0.9,
     },
-    profileButton: {
+    actions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing[1],
+      flexShrink: 0,
+    },
+    headerActionButton: {
       width: theme.spacing[8],
       height: theme.spacing[8],
       borderRadius: theme.radius.pill,
@@ -111,6 +155,26 @@ function createStyles(theme: Theme) {
       opacity: 0.8,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    notificationBadge: {
+      position: 'absolute',
+      top: -theme.spacing[1],
+      right: -theme.spacing[1],
+      minWidth: theme.spacing[4],
+      height: theme.spacing[4],
+      paddingHorizontal: theme.spacing[1],
+      borderRadius: theme.radius.pill,
+      borderWidth: theme.layout.borderHairline,
+      borderColor: theme.colors.bg.card,
+      backgroundColor: theme.colors.error,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    notificationBadgeText: {
+      color: theme.colors.bg.card,
+      fontSize: 10,
+      fontWeight: '700',
+      lineHeight: 12,
     },
   });
 }

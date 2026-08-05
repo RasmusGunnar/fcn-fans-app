@@ -3,6 +3,7 @@ import { AuthProvider } from './src/auth/AuthProvider';
 import { PushNotificationsBootstrap } from './src/components/PushNotificationsBootstrap';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { FeedProvider } from './src/state/FeedContext';
+import { NotificationUnreadProvider } from './src/state/NotificationUnreadContext';
 import {
   getRuntimePerformanceStartedAt,
   logPerformanceTiming,
@@ -18,10 +19,12 @@ export default function App() {
 
   return (
     <AuthProvider>
-      <FeedProvider>
-        <PushNotificationsBootstrap />
-        <RootNavigator />
-      </FeedProvider>
+      <NotificationUnreadProvider>
+        <FeedProvider>
+          <PushNotificationsBootstrap />
+          <RootNavigator />
+        </FeedProvider>
+      </NotificationUnreadProvider>
     </AuthProvider>
   );
 }

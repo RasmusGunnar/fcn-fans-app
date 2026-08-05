@@ -53,7 +53,8 @@ import {
   type MyCommunity,
   type UpcomingItem,
 } from '../services/profileApi';
-import { clearAppIconBadge, getUnreadNotificationsCount } from '../services/notificationsApi';
+import { clearAppIconBadge } from '../services/notificationsApi';
+import { useNotificationUnread } from '../state/NotificationUnreadContext';
 import { normalizeDisplayNameToUsername } from '../utils/username';
 import {
   fetchMyFanActivityRegistrations,
@@ -200,6 +201,7 @@ export default function ProfileScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { user, signOut, isAppAdmin } = useAuth();
+  const { unreadCount: notificationUnreadCount, refreshUnreadCount } = useNotificationUnread();
   const theme = useTheme();
   const styles = createStyles(theme);
 
@@ -233,7 +235,6 @@ export default function ProfileScreen() {
       >
     | null
   >(null);
-  const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
   const [weeklyRanking, setWeeklyRanking] = useState<WeeklyRankingData | null>(null);
   const [myRegistrations, setMyRegistrations] = useState<FanActivityRegistrationListItem[]>([]);
   const [deleteAccountLoading, setDeleteAccountLoading] = useState(false);
@@ -432,19 +433,15 @@ export default function ProfileScreen() {
   }, [user?.id]);
 
   const loadNotificationUnreadCount = useCallback(async () => {
-    if (!user?.id) {
-      setNotificationUnreadCount(0);
-      return;
-    }
+    if (!user?.id) return;
 
     const startedAt = performanceNow();
     try {
-      const count = await getUnreadNotificationsCount(user.id);
-      setNotificationUnreadCount(count);
+      await refreshUnreadCount();
     } finally {
       logPerformanceTiming('ProfileWork', 'load-notification-count', startedAt);
     }
-  }, [user?.id]);
+  }, [refreshUnreadCount, user?.id]);
 
   useFocusEffect(
     React.useCallback(() => {

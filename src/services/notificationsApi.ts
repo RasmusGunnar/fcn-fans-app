@@ -174,7 +174,7 @@ export async function syncAppIconBadge(userId: string): Promise<number | null> {
     return unreadCount;
   } catch (error) {
     logger.warn('[notificationsApi] App icon badge update failed:', error);
-    return null;
+    return unreadCount;
   }
 }
 

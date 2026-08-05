@@ -17,6 +17,7 @@ import { FeedItemRenderer } from '../components/feed/FeedItemRenderer';
 import { useAttendance } from '../hooks/useAttendance';
 import { useMatchCheckIn } from '../hooks/useMatchCheckIn';
 import { useFeed } from '../state/FeedContext';
+import { useNotificationUnread } from '../state/NotificationUnreadContext';
 import { useAuth } from '../auth/AuthProvider';
 import { colors, spacing, defaultTheme as theme } from '../theme';
 import type { EventAttendeeListItemParam } from '../navigation/types';
@@ -100,6 +101,7 @@ export default function HomeScreen() {
   const isHomeFocused = useIsFocused();
   const tabBarHeight = useBottomTabBarHeight();
   const { user, isAppAdmin } = useAuth();
+  const { unreadCount: notificationUnreadCount } = useNotificationUnread();
   const styles = homeStyles;
   const {
     homeFeedItems,
@@ -667,6 +669,11 @@ export default function HomeScreen() {
     [navigation],
   );
 
+  const handleOpenNotifications = useCallback(() => {
+    const tabNavigation = (navigation as any).getParent?.();
+    (tabNavigation ?? navigation).navigate('Profile', { screen: 'Notifications' });
+  }, [navigation]);
+
   const handleOpenPost = useCallback(
     (postId: string, commentId?: string | null) => {
       if (!postId) return;
@@ -855,6 +862,9 @@ export default function HomeScreen() {
             title="FC Nordsjælland"
             subtitle="Fan Fællesskab"
             onPressProfile={() => (navigation as any).navigate('Profile')}
+            showNotificationButton
+            notificationUnreadCount={notificationUnreadCount}
+            onPressNotifications={handleOpenNotifications}
           />
           {matchForBadge ? (
             <NextMatchBadge

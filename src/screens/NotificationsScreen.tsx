@@ -17,9 +17,9 @@ import {
   getNotifications,
   markAllAsRead,
   markAsRead,
-  syncAppIconBadge,
   type NotificationItem,
 } from '../services/notificationsApi';
+import { useNotificationUnread } from '../state/NotificationUnreadContext';
 import { useTheme, type Theme } from '../theme';
 import { navigateFromNotificationData } from '../navigation/navigationRef';
 import {
@@ -110,6 +110,7 @@ function buildNotificationTarget(item: NotificationItem): Record<string, unknown
 export default function NotificationsScreen() {
   const navigation = useNavigation<any>();
   const { user } = useAuth();
+  const { unreadCount, refreshUnreadCount } = useNotificationUnread();
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [items, setItems] = useState<NotificationItem[]>([]);
@@ -133,13 +134,13 @@ export default function NotificationsScreen() {
       try {
         const { data } = await getNotifications(user.id);
         setItems((data as NotificationItem[] | null) ?? []);
-        await syncAppIconBadge(user.id);
+        await refreshUnreadCount();
       } finally {
         setLoading(false);
         setRefreshing(false);
       }
     },
-    [user?.id],
+    [refreshUnreadCount, user?.id],
   );
 
   useFocusEffect(
@@ -156,9 +157,7 @@ export default function NotificationsScreen() {
           setItems((current) =>
             current.map((entry) => (entry.id === item.id ? { ...entry, read: true } : entry)),
           );
-          if (user?.id) {
-            await syncAppIconBadge(user.id);
-          }
+          await refreshUnreadCount();
         }
       }
 
@@ -168,10 +167,8 @@ export default function NotificationsScreen() {
         Alert.alert('Fejl', 'Kunne ikke åbne notifikationen.');
       }
     },
-    [user?.id],
+    [refreshUnreadCount],
   );
-
-  const unreadCount = useMemo(() => items.filter((item) => !item.read).length, [items]);
 
   const handleMarkAllAsRead = useCallback(async () => {
     if (!user?.id || unreadCount === 0) return;
@@ -183,8 +180,8 @@ export default function NotificationsScreen() {
     }
 
     setItems((current) => current.map((item) => ({ ...item, read: true })));
-    await syncAppIconBadge(user.id);
-  }, [unreadCount, user?.id]);
+    await refreshUnreadCount();
+  }, [refreshUnreadCount, unreadCount, user?.id]);
 
   const renderItem = useCallback(
     ({ item }: { item: NotificationItem }) => (

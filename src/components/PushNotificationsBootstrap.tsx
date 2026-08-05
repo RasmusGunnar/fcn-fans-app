@@ -8,7 +8,8 @@ import {
   removeCurrentPushToken,
   syncPushNotifications,
 } from '../lib/notifications';
-import { clearAppIconBadge, syncAppIconBadge } from '../services/notificationsApi';
+import { clearAppIconBadge } from '../services/notificationsApi';
+import { useNotificationUnread } from '../state/NotificationUnreadContext';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -21,6 +22,7 @@ Notifications.setNotificationHandler({
 
 export function PushNotificationsBootstrap() {
   const { user, session } = useAuth();
+  const { refreshUnreadCount } = useNotificationUnread();
   const syncedUserRef = useRef<string | null>(null);
   const handledResponseRef = useRef<string | null>(null);
 
@@ -31,9 +33,9 @@ export function PushNotificationsBootstrap() {
     }
 
     if (session?.access_token) {
-      void syncAppIconBadge(user.id);
+      void refreshUnreadCount();
     }
-  }, [session?.access_token, user?.id]);
+  }, [refreshUnreadCount, session?.access_token, user?.id]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -68,13 +70,13 @@ export function PushNotificationsBootstrap() {
 
         if (status !== 'granted') {
           await removeCurrentPushToken(user.id);
-          await syncAppIconBadge(user.id);
+          await refreshUnreadCount();
           return;
         }
 
         await Promise.all([
           syncPushNotifications(user.id, { promptIfNeeded: false }),
-          syncAppIconBadge(user.id),
+          refreshUnreadCount(),
         ]);
       } catch (error) {
         logger.warn('[PushNotificationsBootstrap] Foreground push sync failed:', error);
@@ -93,7 +95,7 @@ export function PushNotificationsBootstrap() {
     return () => {
       appStateSub.remove();
     };
-  }, [session?.access_token, user?.id]);
+  }, [refreshUnreadCount, session?.access_token, user?.id]);
 
   useEffect(() => {
     const handleResponse = async (response: Notifications.NotificationResponse | null) => {
@@ -119,7 +121,7 @@ export function PushNotificationsBootstrap() {
     const receivedSub = Notifications.addNotificationReceivedListener(() => {
       // Foreground presentation is handled by Notifications.setNotificationHandler above.
       if (user?.id) {
-        void syncAppIconBadge(user.id);
+        void refreshUnreadCount();
       }
     });
 
@@ -146,7 +148,7 @@ export function PushNotificationsBootstrap() {
       receivedSub.remove();
       responseSub.remove();
     };
-  }, [user?.id]);
+  }, [refreshUnreadCount, user?.id]);
 
   return null;
 }
