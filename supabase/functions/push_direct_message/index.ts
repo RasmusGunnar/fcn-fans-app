@@ -1,15 +1,7 @@
 // deno-lint-ignore-file no-explicit-any
-import {
-  createAdminClient,
-  fetchPushPreferencesByUserIds,
-  isPushPreferenceEnabled,
-  json,
-  requireAuthenticatedUser,
-} from '../_shared/push.ts';
+import { createAdminClient, json, requireAuthenticatedUser } from '../_shared/push.ts';
 
-type DirectMessagePushRequest = {
-  messageId?: unknown;
-};
+type DirectMessagePushRequest = { messageId?: unknown };
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -43,24 +35,18 @@ async function processQueuedJob(jobId: string) {
 
   const response = await fetch(`${supabaseUrl}/functions/v1/process_push_queue`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-sync-secret': syncSecret,
-    },
+    headers: { 'Content-Type': 'application/json', 'x-sync-secret': syncSecret },
     body: JSON.stringify({ jobId }),
   });
   const result = await response.json().catch(() => null);
   if (!response.ok || result?.ok !== true) {
     throw new Error(`process_push_queue failed with status ${response.status}`);
   }
-
   return result;
 }
 
 Deno.serve(async (req) => {
-  if (req.method !== 'POST') {
-    return json(405, { error: 'Method not allowed' });
-  }
+  if (req.method !== 'POST') return json(405, { error: 'Method not allowed' });
 
   const { user, response: authError } = await requireAuthenticatedUser(req);
   if (authError) return authError;
@@ -69,9 +55,7 @@ Deno.serve(async (req) => {
   const request = await readBody(req);
   const messageId = readUuid(request.messageId);
   const senderId = readUuid(user.id);
-  if (!messageId || !senderId) {
-    return json(400, { error: 'Valid messageId is required' });
-  }
+  if (!messageId || !senderId) return json(400, { error: 'Valid messageId is required' });
 
   try {
     const supabase = createAdminClient();
@@ -85,103 +69,71 @@ Deno.serve(async (req) => {
       return json(404, { error: 'Message not found' });
     }
 
-    const { data: conversation, error: conversationError } = await supabase
-      .from('conversations')
-      .select('user_low_id, user_high_id')
-      .eq('id', message.conversation_id)
+    const { data: senderMembership, error: senderMembershipError } = await supabase
+      .from('conversation_members')
+      .select('user_id')
+      .eq('conversation_id', message.conversation_id)
+      .eq('user_id', senderId)
+      .is('left_at', null)
+      .is('removed_at', null)
       .maybeSingle();
-    if (conversationError) throw conversationError;
-    if (
-      !conversation ||
-      ![conversation.user_low_id, conversation.user_high_id].includes(senderId)
-    ) {
-      return json(404, { error: 'Conversation not found' });
-    }
+    if (senderMembershipError) throw senderMembershipError;
+    if (!senderMembership) return json(404, { error: 'Conversation not found' });
 
-    const recipientId =
-      conversation.user_low_id === senderId ? conversation.user_high_id : conversation.user_low_id;
-    if (!recipientId || recipientId === senderId) {
-      return json(400, { error: 'Invalid recipient' });
-    }
-
-    const { data: blockRows, error: blockError } = await supabase
-      .from('user_blocks')
-      .select('blocker_id')
-      .or(
-        `and(blocker_id.eq.${senderId},blocked_id.eq.${recipientId}),and(blocker_id.eq.${recipientId},blocked_id.eq.${senderId})`,
-      )
-      .limit(1);
-    if (blockError) throw blockError;
-
-    const preferencesByUserId = await fetchPushPreferencesByUserIds(supabase, [recipientId]);
-    const preferenceEnabled = isPushPreferenceEnabled(
-      preferencesByUserId,
-      recipientId,
-      'direct_messages',
-    );
-
-    const { data: job, error: jobError } = await supabase
+    const { data: jobs, error: jobError } = await supabase
       .from('notification_jobs')
-      .select('id, status')
+      .select('id, status, recipient_user_id')
       .eq('notification_type', 'direct_message')
       .eq('source_table', 'messages')
-      .eq('source_id', messageId)
-      .maybeSingle();
+      .eq('source_id', messageId);
     if (jobError) throw jobError;
+    if (!jobs?.length) return json(409, { error: 'Message outbox jobs not found' });
 
-    const skipReason =
-      (blockRows ?? []).length > 0
-        ? 'direct_message_blocked'
-        : !preferenceEnabled
-          ? 'preference_disabled'
-          : null;
+    const recipientIds = jobs.map((job: any) => job.recipient_user_id);
+    const { data: memberships, error: membershipError } = await supabase
+      .from('conversation_members')
+      .select('user_id')
+      .eq('conversation_id', message.conversation_id)
+      .in('user_id', recipientIds)
+      .is('left_at', null)
+      .is('removed_at', null);
+    if (membershipError) throw membershipError;
+    const activeRecipients = new Set((memberships ?? []).map((row: any) => row.user_id));
 
-    if (skipReason) {
-      if (job?.id && job.status === 'queued') {
-        const { error: skipError } = await supabase
-          .from('notification_jobs')
-          .update({ status: 'skipped', skip_reason: skipReason })
-          .eq('id', job.id)
-          .eq('status', 'queued');
-        if (skipError) throw skipError;
+    const queuedJobs = jobs.filter(
+      (job: any) =>
+        job.status === 'queued' &&
+        job.recipient_user_id !== senderId &&
+        activeRecipients.has(job.recipient_user_id),
+    );
+    const processedJobIds: string[] = [];
+    const deferredJobIds: string[] = [];
+
+    for (const job of queuedJobs) {
+      try {
+        await processQueuedJob(job.id);
+        processedJobIds.push(job.id);
+      } catch (processError) {
+        deferredJobIds.push(job.id);
+        console.warn('[push_direct_message] queue processing deferred', {
+          jobId: job.id,
+          error: String(processError),
+        });
       }
-
-      return json(200, { ok: true, inserted: false, skipped: skipReason });
     }
 
-    if (!job?.id) {
-      return json(409, { error: 'Direct message outbox job not found' });
-    }
-
-    if (job.status !== 'queued') {
-      return json(200, {
-        ok: true,
-        jobId: job.id,
-        inserted: false,
-        skipped: 'already_processed',
-      });
-    }
-
-    try {
-      const process = await processQueuedJob(job.id);
-      return json(200, { ok: true, jobId: job.id, inserted: true, process });
-    } catch (processError) {
-      console.warn('[push_direct_message] queue processing failed after durable enqueue', {
-        jobId: job.id,
-        error: String(processError),
-      });
-      return json(200, {
-        ok: true,
-        jobId: job.id,
-        inserted: true,
-        processDeferred: true,
-      });
-    }
+    return json(200, {
+      ok: true,
+      inserted: queuedJobs.length > 0,
+      processedJobIds,
+      deferredJobIds,
+      skipped: queuedJobs.length === 0 ? 'already_processed_or_inactive' : null,
+    });
   } catch (error) {
     console.error('[push_direct_message] failed', {
       messageId,
       error: error instanceof Error ? error.message : String(error),
     });
-    return json(500, { error: 'Could not process direct message push' });
+    return json(500, { error: 'Could not process message push' });
   }
 });

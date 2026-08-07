@@ -361,26 +361,42 @@ async function getDirectMessageSkipReason(
 
   const { data: conversation, error: conversationError } = await supabase
     .from('conversations')
-    .select('user_low_id, user_high_id')
+    .select('conversation_type, user_low_id, user_high_id')
     .eq('id', message.conversation_id)
     .maybeSingle();
   if (conversationError) throw conversationError;
   if (!conversation) return 'direct_message_conversation_missing';
 
-  const participants = new Set([conversation.user_low_id, conversation.user_high_id]);
-  if (!participants.has(message.sender_id) || !participants.has(job.recipient_user_id)) {
+  const { data: memberships, error: membershipError } = await supabase
+    .from('conversation_members')
+    .select('user_id')
+    .eq('conversation_id', message.conversation_id)
+    .in('user_id', [message.sender_id, job.recipient_user_id])
+    .is('left_at', null)
+    .is('removed_at', null);
+  if (membershipError) throw membershipError;
+
+  const activeMembers = new Set((memberships ?? []).map((membership: any) => membership.user_id));
+  if (!activeMembers.has(message.sender_id) || !activeMembers.has(job.recipient_user_id)) {
     return 'direct_message_recipient_invalid';
   }
 
-  const { data: blockRows, error: blockError } = await supabase
-    .from('user_blocks')
-    .select('blocker_id')
-    .or(
-      `and(blocker_id.eq.${message.sender_id},blocked_id.eq.${job.recipient_user_id}),and(blocker_id.eq.${job.recipient_user_id},blocked_id.eq.${message.sender_id})`,
-    )
-    .limit(1);
-  if (blockError) throw blockError;
-  if ((blockRows ?? []).length > 0) return 'direct_message_blocked';
+  if (conversation.conversation_type === 'direct') {
+    const participants = new Set([conversation.user_low_id, conversation.user_high_id]);
+    if (!participants.has(message.sender_id) || !participants.has(job.recipient_user_id)) {
+      return 'direct_message_recipient_invalid';
+    }
+
+    const { data: blockRows, error: blockError } = await supabase
+      .from('user_blocks')
+      .select('blocker_id')
+      .or(
+        `and(blocker_id.eq.${message.sender_id},blocked_id.eq.${job.recipient_user_id}),and(blocker_id.eq.${job.recipient_user_id},blocked_id.eq.${message.sender_id})`,
+      )
+      .limit(1);
+    if (blockError) throw blockError;
+    if ((blockRows ?? []).length > 0) return 'direct_message_blocked';
+  }
 
   const preferencesByUserId = await fetchPushPreferencesByUserIds(supabase, [
     job.recipient_user_id,
