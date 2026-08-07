@@ -10,7 +10,8 @@ type NotificationTargetType =
   | 'community_post'
   | 'community_poll'
   | 'event'
-  | 'match';
+  | 'match'
+  | 'direct_message';
 type PostDetailTargetType =
   | 'post'
   | 'post_comment'
@@ -36,6 +37,12 @@ type HomeFeedParams = {
 };
 
 type ResolvedNotificationRoute =
+  | {
+      targetType: 'direct_message';
+      routeLabel: 'Messages > Conversation';
+      conversationId: string;
+      fallback: boolean;
+    }
   | {
       targetType: 'home_feed';
       routeLabel: 'Main > Home > HomeMain';
@@ -87,7 +94,8 @@ function normalizeNotificationTargetType(value: string | null): NotificationTarg
     value === 'community_post' ||
     value === 'community_poll' ||
     value === 'event' ||
-    value === 'match'
+    value === 'match' ||
+    value === 'direct_message'
   ) {
     return value;
   }
@@ -140,6 +148,17 @@ export function navigateToHomeFeed(params?: HomeFeedParams) {
   });
 }
 
+export function navigateToMessagesList() {
+  navigationRef.navigate('Messages', { screen: 'MessagesList' });
+}
+
+export function navigateToDirectMessageConversation(conversationId: string) {
+  navigationRef.navigate('Messages', {
+    screen: 'Conversation',
+    params: { conversationId },
+  });
+}
+
 function resolveNotificationRoute(payload: Record<string, unknown>): ResolvedNotificationRoute {
   const targetType = normalizeNotificationTargetType(readString(payload.targetType));
   const legacyType = normalizeNotificationTargetType(readString(payload.type));
@@ -148,6 +167,16 @@ function resolveNotificationRoute(payload: Record<string, unknown>): ResolvedNot
   const fixtureId = readString(payload.fixtureId ?? payload.matchId ?? payload.targetId);
   const eventId = readString(payload.eventId ?? payload.targetId);
   const fanActivityId = readString(payload.fanActivityId);
+  const conversationId = readString(payload.conversationId ?? payload.targetId);
+
+  if (resolvedType === 'direct_message' && conversationId) {
+    return {
+      targetType: 'direct_message',
+      routeLabel: 'Messages > Conversation',
+      conversationId,
+      fallback: false,
+    };
+  }
 
   if (resolvedType === 'home_feed') {
     const feedItemType = readHomeFeedItemType(payload.feedItemType ?? payload.postType);
@@ -233,6 +262,11 @@ export function navigateFromNotificationData(
       screen: 'Home',
       params: { screen: 'PostDetail', params: resolvedRoute.params },
     });
+    return true;
+  }
+
+  if (resolvedRoute.targetType === 'direct_message') {
+    navigateToDirectMessageConversation(resolvedRoute.conversationId);
     return true;
   }
 

@@ -26,6 +26,7 @@
     "test:post-media": "tsc -p tsconfig.media-article-tests.json && node build/media-article-tests/utils/__tests__/postMediaMapping.test.js",
     "test:feed-video": "tsc -p tsconfig.media-article-tests.json && node build/media-article-tests/utils/__tests__/videoPlaybackBehavior.test.js",
     "test:song-audio": "tsc -p tsconfig.song-audio-tests.json && node build/song-audio-tests/utils/__tests__/songAudio.test.js",
+    "test:direct-messages": "tsc -p tsconfig.direct-message-tests.json && node build/direct-message-tests/utils/__tests__/directMessages.test.js",
     "db:hosted": "echo \"⚠️  Use Supabase Dashboard SQL Editor + supabase/CHANGELOG_MANUAL.sql for hosted DB changes. Do NOT run 'db push' without Docker setup.\"",
     "design:check": "node scripts/design-check.js"
   },

@@ -7,24 +7,20 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 import { useAuth } from '../auth/AuthProvider';
-import {
-  clearAppIconBadge,
-  getUnreadNotificationsCount,
-  syncAppIconBadge,
-} from '../services/notificationsApi';
 import { supabase } from '../lib/supabase';
+import { getDirectMessageUnreadCount } from '../services/messagesApi';
+import { clearAppIconBadge, syncAppIconBadge } from '../services/notificationsApi';
 
-type NotificationUnreadContextValue = {
+type MessageUnreadContextValue = {
   unreadCount: number;
   refreshUnreadCount: () => Promise<number>;
 };
 
-const NotificationUnreadContext = createContext<NotificationUnreadContextValue | undefined>(
-  undefined,
-);
+const MessageUnreadContext = createContext<MessageUnreadContextValue | undefined>(undefined);
 
-export function NotificationUnreadProvider({ children }: { children: React.ReactNode }) {
+export function MessageUnreadProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
   const unreadCountRef = useRef(0);
@@ -32,8 +28,9 @@ export function NotificationUnreadProvider({ children }: { children: React.React
   activeUserIdRef.current = user?.id ?? null;
 
   const publishUnreadCount = useCallback((count: number) => {
-    unreadCountRef.current = count;
-    setUnreadCount(count);
+    const normalized = Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0;
+    unreadCountRef.current = normalized;
+    setUnreadCount(normalized);
   }, []);
 
   const refreshUnreadCount = useCallback(async (): Promise<number> => {
@@ -43,7 +40,7 @@ export function NotificationUnreadProvider({ children }: { children: React.React
       return 0;
     }
 
-    const count = await getUnreadNotificationsCount(requestedUserId);
+    const count = await getDirectMessageUnreadCount();
     if (activeUserIdRef.current === requestedUserId) {
       publishUnreadCount(count);
       void syncAppIconBadge(requestedUserId, {
@@ -69,42 +66,59 @@ export function NotificationUnreadProvider({ children }: { children: React.React
     if (!user?.id) return;
 
     const channel = supabase
-      .channel(`notification-unread-${user.id}`)
+      .channel(`message-unread-${user.id}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversations' }, () => {
+        void refreshUnreadCount();
+      })
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'UPDATE',
           schema: 'public',
-          table: 'notifications',
+          table: 'conversation_members',
           filter: `user_id=eq.${user.id}`,
         },
         () => {
           void refreshUnreadCount();
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          void refreshUnreadCount();
+        }
+      });
 
     return () => {
       void supabase.removeChannel(channel);
     };
   }, [refreshUnreadCount, user?.id]);
 
+  useEffect(() => {
+    let appState: AppStateStatus = AppState.currentState;
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const returningToForeground =
+        nextState === 'active' && (appState === 'background' || appState === 'inactive');
+      appState = nextState;
+      if (returningToForeground) {
+        void refreshUnreadCount();
+      }
+    });
+
+    return () => subscription.remove();
+  }, [refreshUnreadCount]);
+
   const value = useMemo(
     () => ({ unreadCount, refreshUnreadCount }),
     [refreshUnreadCount, unreadCount],
   );
 
-  return (
-    <NotificationUnreadContext.Provider value={value}>
-      {children}
-    </NotificationUnreadContext.Provider>
-  );
+  return <MessageUnreadContext.Provider value={value}>{children}</MessageUnreadContext.Provider>;
 }
 
-export function useNotificationUnread(): NotificationUnreadContextValue {
-  const context = useContext(NotificationUnreadContext);
+export function useMessageUnread(): MessageUnreadContextValue {
+  const context = useContext(MessageUnreadContext);
   if (!context) {
-    throw new Error('useNotificationUnread must be used within NotificationUnreadProvider');
+    throw new Error('useMessageUnread must be used within MessageUnreadProvider');
   }
   return context;
 }

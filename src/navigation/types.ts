@@ -69,6 +69,10 @@ export type RootStackParamList = {
     initialIndex?: number;
     postId?: string;
   };
+  Messages:
+    | { screen?: 'MessagesList' }
+    | { screen: 'NewMessage' }
+    | { screen: 'Conversation'; params: { conversationId: string } };
 
   MatchDetails: { fixtureId: string; fanActivityId?: string };
   EventAttendees: EventAttendeesParams;

@@ -11,7 +11,8 @@ type NotificationTargetType =
   | 'community_post'
   | 'community_poll'
   | 'event'
-  | 'match';
+  | 'match'
+  | 'direct_message';
 
 function readString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
@@ -26,7 +27,8 @@ function normalizeNotificationTargetType(value: string | null): NotificationTarg
     value === 'community_post' ||
     value === 'community_poll' ||
     value === 'event' ||
-    value === 'match'
+    value === 'match' ||
+    value === 'direct_message'
   ) {
     return value;
   }
@@ -69,6 +71,13 @@ export function createEventDeepLink(eventId: string): string {
   return Linking.createURL(`/event/${eventId}`);
 }
 
+export function createDirectMessageDeepLink(conversationId: string): string {
+  const normalizedConversationId = conversationId.trim();
+  return normalizedConversationId
+    ? `${APP_SCHEME}messages/${encodeURIComponent(normalizedConversationId)}`
+    : `${APP_SCHEME}messages`;
+}
+
 export function createFanActivityDeepLink(params: {
   parentType: 'match' | 'event';
   parentId: string;
@@ -105,9 +114,14 @@ export function getNotificationDeepLinkWithOptions(
   const fixtureId = readString(payload.fixtureId ?? payload.matchId ?? payload.targetId);
   const eventId = readString(payload.eventId ?? payload.targetId);
   const fanActivityId = readString(payload.fanActivityId);
+  const conversationId = readString(payload.conversationId ?? payload.targetId);
   const targetType = normalizeNotificationTargetType(readString(payload.targetType));
   const legacyType = normalizeNotificationTargetType(readString(payload.type));
   const resolvedType = targetType ?? legacyType;
+
+  if (resolvedType === 'direct_message' && conversationId) {
+    return createDirectMessageDeepLink(conversationId);
+  }
 
   if (resolvedType === 'home_feed') {
     return createHomeDeepLink({

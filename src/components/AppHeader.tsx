@@ -8,6 +8,10 @@ import {
   formatNotificationUnreadBadge,
   getNotificationBellAccessibilityLabel,
 } from '../utils/notificationPresentation';
+import {
+  formatMessageUnreadBadge,
+  getMessageInboxAccessibilityLabel,
+} from '../utils/directMessages';
 
 interface AppHeaderProps {
   title: string;
@@ -18,6 +22,9 @@ interface AppHeaderProps {
   showNotificationButton?: boolean;
   notificationUnreadCount?: number;
   onPressNotifications?: () => void;
+  showMessageButton?: boolean;
+  messageUnreadCount?: number;
+  onPressMessages?: () => void;
 }
 
 export function AppHeader({
@@ -29,12 +36,16 @@ export function AppHeader({
   showNotificationButton = false,
   notificationUnreadCount = 0,
   onPressNotifications,
+  showMessageButton = false,
+  messageUnreadCount = 0,
+  onPressMessages,
 }: AppHeaderProps) {
   const theme = useTheme();
   const styles = createStyles(theme);
   const insets = useSafeAreaInsets();
   const defaultLogo = require('../../assets/NewLogo.png');
   const unreadBadgeLabel = formatNotificationUnreadBadge(notificationUnreadCount);
+  const messageUnreadBadgeLabel = formatMessageUnreadBadge(messageUnreadCount);
 
   const handleProfilePress = () => {
     if (onPressProfile) {
@@ -61,6 +72,22 @@ export function AppHeader({
           </View>
         </View>
         <View style={styles.actions}>
+          {showMessageButton && onPressMessages ? (
+            <Pressable
+              style={styles.headerActionButton}
+              onPress={onPressMessages}
+              accessibilityRole="button"
+              accessibilityLabel={getMessageInboxAccessibilityLabel(messageUnreadCount)}
+              hitSlop={theme.spacing[2]}
+            >
+              <Ionicons name="chatbubble-outline" size={20} color={theme.colors.bg.card} />
+              {messageUnreadBadgeLabel ? (
+                <View style={styles.actionBadge} pointerEvents="none">
+                  <Text style={styles.actionBadgeText}>{messageUnreadBadgeLabel}</Text>
+                </View>
+              ) : null}
+            </Pressable>
+          ) : null}
           {showNotificationButton && onPressNotifications ? (
             <Pressable
               style={styles.headerActionButton}
@@ -71,8 +98,8 @@ export function AppHeader({
             >
               <Ionicons name="notifications-outline" size={20} color={theme.colors.bg.card} />
               {unreadBadgeLabel ? (
-                <View style={styles.notificationBadge} pointerEvents="none">
-                  <Text style={styles.notificationBadgeText}>{unreadBadgeLabel}</Text>
+                <View style={styles.actionBadge} pointerEvents="none">
+                  <Text style={styles.actionBadgeText}>{unreadBadgeLabel}</Text>
                 </View>
               ) : null}
             </Pressable>
@@ -156,7 +183,7 @@ function createStyles(theme: Theme) {
       alignItems: 'center',
       justifyContent: 'center',
     },
-    notificationBadge: {
+    actionBadge: {
       position: 'absolute',
       top: -theme.spacing[1],
       right: -theme.spacing[1],
@@ -170,7 +197,7 @@ function createStyles(theme: Theme) {
       alignItems: 'center',
       justifyContent: 'center',
     },
-    notificationBadgeText: {
+    actionBadgeText: {
       color: theme.colors.bg.card,
       fontSize: 10,
       fontWeight: '700',

@@ -30,6 +30,9 @@ const OnboardingStack = React.lazy(() =>
 const CreateFanActivityScreen = React.lazy(() => import('../screens/CreateFanActivityScreen'));
 const CreateNewEventScreen = React.lazy(() => import('../screens/CreateNewEventScreen'));
 const MediaViewerScreen = React.lazy(() => import('../screens/MediaViewerScreen'));
+const MessagesStack = React.lazy(() =>
+  import('./MessagesStack').then((module) => ({ default: module.MessagesStack })),
+);
 
 function normalizeFanActivityDetailPath(path: string): string {
   const normalizedPath = path.replace(/^\/+/, '');
@@ -153,6 +156,13 @@ function Inner() {
   return <AppTabs />;
 }
 
+function ProtectedMessagesStack() {
+  const { user, loading } = useAuth();
+  if (loading) return <LoadingScreen />;
+  if (!user) return <AuthStack />;
+  return <MessagesStack />;
+}
+
 export function RootNavigator() {
   const previousRouteNameRef = useRef<string | null>(null);
 
@@ -206,6 +216,14 @@ export function RootNavigator() {
             },
           },
         },
+        Messages: {
+          path: 'messages',
+          screens: {
+            MessagesList: '',
+            Conversation: ':conversationId',
+            NewMessage: 'new',
+          },
+        },
       },
     },
     getStateFromPath(path: string, options: any) {
@@ -223,6 +241,7 @@ export function RootNavigator() {
       >
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           <Stack.Screen name="Main" component={Inner} />
+          <Stack.Screen name="Messages" component={ProtectedMessagesStack} />
           <Stack.Screen
             name="CreateNewEvent"
             component={CreateNewEventScreen}

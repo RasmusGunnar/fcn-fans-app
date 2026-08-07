@@ -161,14 +161,30 @@ export async function getUnreadNotificationsCount(userId: string): Promise<numbe
   return count ?? 0;
 }
 
-export async function syncAppIconBadge(userId: string): Promise<number | null> {
-  const { count, error } = await queryUnreadNotificationsCount(userId);
-  if (error) {
-    logger.warn('[notificationsApi] Badge count sync failed:', error);
-    return null;
+export async function syncAppIconBadge(
+  userId: string,
+  options?: { shouldApply?: () => boolean },
+): Promise<number | null> {
+  const { data: combinedCount, error: combinedError } = await supabase.rpc('get_app_badge_count', {
+    p_user_id: userId,
+  });
+
+  let unreadCount: number;
+  if (!combinedError && typeof combinedCount === 'number') {
+    unreadCount = combinedCount;
+  } else {
+    const { count, error } = await queryUnreadNotificationsCount(userId);
+    if (error) {
+      logger.warn('[notificationsApi] Badge count sync failed:', error);
+      return null;
+    }
+    unreadCount = count ?? 0;
   }
 
-  const unreadCount = count ?? 0;
+  if (options?.shouldApply && !options.shouldApply()) {
+    return unreadCount;
+  }
+
   try {
     await Notifications.setBadgeCountAsync(unreadCount);
     return unreadCount;
