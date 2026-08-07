@@ -18,6 +18,7 @@ import { useAttendance } from '../hooks/useAttendance';
 import { useMatchCheckIn } from '../hooks/useMatchCheckIn';
 import { useFeed } from '../state/FeedContext';
 import { useNotificationUnread } from '../state/NotificationUnreadContext';
+import { useMessageUnread } from '../state/MessageUnreadContext';
 import { useAuth } from '../auth/AuthProvider';
 import { colors, spacing, defaultTheme as theme } from '../theme';
 import type { EventAttendeeListItemParam } from '../navigation/types';
@@ -40,6 +41,7 @@ import {
   performanceNow,
   schedulePerformanceFrame,
 } from '../utils/performanceTiming';
+import { navigateToMessagesList } from '../navigation/navigationRef';
 
 logPerformanceEvent('ScreenLifecycle', 'module-evaluated', { screen: 'HomeScreen' });
 
@@ -102,6 +104,7 @@ export default function HomeScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const { user, isAppAdmin } = useAuth();
   const { unreadCount: notificationUnreadCount } = useNotificationUnread();
+  const { unreadCount: messageUnreadCount } = useMessageUnread();
   const styles = homeStyles;
   const {
     homeFeedItems,
@@ -674,6 +677,10 @@ export default function HomeScreen() {
     (tabNavigation ?? navigation).navigate('Profile', { screen: 'Notifications' });
   }, [navigation]);
 
+  const handleOpenMessages = useCallback(() => {
+    navigateToMessagesList();
+  }, []);
+
   const handleOpenPost = useCallback(
     (postId: string, commentId?: string | null) => {
       if (!postId) return;
@@ -865,6 +872,9 @@ export default function HomeScreen() {
             showNotificationButton
             notificationUnreadCount={notificationUnreadCount}
             onPressNotifications={handleOpenNotifications}
+            showMessageButton
+            messageUnreadCount={messageUnreadCount}
+            onPressMessages={handleOpenMessages}
           />
           {matchForBadge ? (
             <NextMatchBadge

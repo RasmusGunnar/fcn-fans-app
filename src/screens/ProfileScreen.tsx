@@ -55,6 +55,8 @@ import {
 } from '../services/profileApi';
 import { clearAppIconBadge } from '../services/notificationsApi';
 import { useNotificationUnread } from '../state/NotificationUnreadContext';
+import { useMessageUnread } from '../state/MessageUnreadContext';
+import { navigateToMessagesList } from '../navigation/navigationRef';
 import { normalizeDisplayNameToUsername } from '../utils/username';
 import {
   fetchMyFanActivityRegistrations,
@@ -202,6 +204,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { user, signOut, isAppAdmin } = useAuth();
   const { unreadCount: notificationUnreadCount, refreshUnreadCount } = useNotificationUnread();
+  const { unreadCount: messageUnreadCount } = useMessageUnread();
   const theme = useTheme();
   const styles = createStyles(theme);
 
@@ -232,6 +235,7 @@ export default function ProfileScreen() {
         | 'mediaDigestEnabled'
         | 'mentionsEnabled'
         | 'repliesEnabled'
+        | 'directMessagesEnabled'
       >
     | null
   >(null);
@@ -556,6 +560,7 @@ export default function ProfileScreen() {
       | 'mediaDigestEnabled'
       | 'mentionsEnabled'
       | 'repliesEnabled'
+      | 'directMessagesEnabled'
     >,
     value: boolean,
   ) => {
@@ -1219,6 +1224,29 @@ export default function ProfileScreen() {
           <View style={styles.pushPreferenceRow}>
             <View style={styles.pushPreferenceCopy}>
               <Text style={[styles.pushPreferenceTitle, { color: theme.colors.text.primary }]}>
+                {'Direkte beskeder'}
+              </Text>
+              <Text style={[styles.pushPreferenceBody, { color: theme.colors.text.secondary }]}>
+                {'Når en anden fan sender dig en privat besked.'}
+              </Text>
+            </View>
+            <Switch
+              value={pushPreferences.directMessagesEnabled}
+              onValueChange={(value) => handleTogglePushPreference('directMessagesEnabled', value)}
+              disabled={
+                pushPreferencesLoading || pushPreferenceSavingKey === 'directMessagesEnabled'
+              }
+              trackColor={{
+                false: theme.colors.border.default,
+                true: theme.colors.primary,
+              }}
+              thumbColor={theme.colors.bg.card}
+            />
+          </View>
+
+          <View style={styles.pushPreferenceRow}>
+            <View style={styles.pushPreferenceCopy}>
+              <Text style={[styles.pushPreferenceTitle, { color: theme.colors.text.primary }]}>
                 {'Mentions'}
               </Text>
               <Text style={[styles.pushPreferenceBody, { color: theme.colors.text.secondary }]}>
@@ -1353,6 +1381,17 @@ export default function ProfileScreen() {
       </Card>
 
       <Card style={{ marginBottom: spacing.md }}>
+        <ProfileRow
+          icon="chatbubble"
+          title="Beskeder"
+          subtitle={
+            messageUnreadCount > 0
+              ? `${messageUnreadCount} ulæst${messageUnreadCount === 1 ? '' : 'e'}`
+              : 'Se dine beskeder'
+          }
+          onPress={navigateToMessagesList}
+          styles={styles}
+        />
         <ProfileRow
           icon="notifications"
           title="Notifikationer"

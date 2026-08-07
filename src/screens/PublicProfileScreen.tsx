@@ -3,7 +3,7 @@
 // NO hardcoded numbers or color strings allowed.
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { FlatList, Platform, StyleSheet, View } from 'react-native';
+import { Alert, FlatList, Platform, StyleSheet, View } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import { useAuth } from '../auth/AuthProvider';
 import { Avatar } from '../components/Avatar';
@@ -17,6 +17,11 @@ import { getSafeFanLevelKey } from '../lib/fanLevel';
 import { getFanLevelDescription } from '../lib/fanbarometer';
 import { fetchUserCommentedPostIds } from '../services/commentsApi';
 import { fetchPublicProfileById } from '../services/profileApi';
+import {
+  createOrGetDirectConversation,
+  getDirectMessageBlockStatus,
+} from '../services/messagesApi';
+import { navigateToDirectMessageConversation } from '../navigation/navigationRef';
 import { confirmAndSubmitReport } from '../services/reporting';
 import { useFeed } from '../state/FeedContext';
 import { useTheme, type Theme } from '../theme';
@@ -46,6 +51,9 @@ export default function PublicProfileScreen() {
   const [resolvedProfile, setResolvedProfile] = useState<Awaited<
     ReturnType<typeof fetchPublicProfileById>
   > | null>(null);
+  const [messageBlocked, setMessageBlocked] = useState(true);
+  const [messageAccessLoading, setMessageAccessLoading] = useState(false);
+  const [openingConversation, setOpeningConversation] = useState(false);
 
   useEffect(() => {
     if (!userId) {
@@ -64,6 +72,27 @@ export default function PublicProfileScreen() {
       cancelled = true;
     };
   }, [userId]);
+
+  useEffect(() => {
+    if (!user?.id || !userId || user.id === userId) {
+      setMessageBlocked(true);
+      setMessageAccessLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setMessageAccessLoading(true);
+    void getDirectMessageBlockStatus(userId)
+      .then((blocked) => {
+        if (!cancelled) setMessageBlocked(blocked);
+      })
+      .finally(() => {
+        if (!cancelled) setMessageAccessLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, userId]);
 
   const authorProfile = userId ? profileMap?.[userId] : undefined;
   const effectiveAuthorProfile = resolvedProfile ?? authorProfile;
@@ -249,6 +278,22 @@ export default function PublicProfileScreen() {
     });
   }, [user?.id, userId]);
 
+  const handleStartConversation = useCallback(async () => {
+    if (!userId || openingConversation || messageBlocked) return;
+    setOpeningConversation(true);
+    try {
+      const conversationId = await createOrGetDirectConversation(userId);
+      navigateToDirectMessageConversation(conversationId);
+    } catch (error) {
+      Alert.alert(
+        'Samtalen kunne ikke åbnes',
+        error instanceof Error ? error.message : 'Prøv igen.',
+      );
+    } finally {
+      setOpeningConversation(false);
+    }
+  }, [messageBlocked, openingConversation, userId]);
+
   const ListHeader = (
     <View style={styles.headerCard}>
       <Avatar userId={userId} avatarUrl={avatarUrl} size={80} label={displayName} />
@@ -265,6 +310,15 @@ export default function PublicProfileScreen() {
         </Text>
       </View>
       <FanBarometerCompactCard level={fanLevel} state="ready" />
+      {canReportUser && !messageAccessLoading && !messageBlocked ? (
+        <View style={styles.reportButtonWrap}>
+          <OutlineButton
+            title={openingConversation ? 'Åbner...' : 'Send besked'}
+            onPress={() => void handleStartConversation()}
+            disabled={openingConversation}
+          />
+        </View>
+      ) : null}
       {canReportUser ? (
         <View style={styles.reportButtonWrap}>
           <OutlineButton title="Rapportér bruger" onPress={handleReportUser} />
