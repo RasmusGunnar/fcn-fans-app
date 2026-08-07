@@ -1,16 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useMemo } from 'react';
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text as RNText,
-  View,
-} from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text as RNText, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { defaultTheme } from '../../theme';
+import { getSongAudioPublicUrl } from '../../services/songAudio';
 import type { Song } from '../../types/song';
+import { SongAudioPlayer } from './SongAudioPlayer';
 import { Card } from '../ui/Card';
 import { Text } from '../ui';
 
@@ -21,7 +16,10 @@ interface SongReaderModalProps {
 }
 
 function normalizeLyricsForReading(value: string): string {
-  return value.replace(/\r\n?/g, '\n').replace(/[\u2028\u2029]/g, '\n').trim();
+  return value
+    .replace(/\r\n?/g, '\n')
+    .replace(/[\u2028\u2029]/g, '\n')
+    .trim();
 }
 
 const theme = defaultTheme;
@@ -32,6 +30,7 @@ export function SongReaderModal({ visible, song, onClose }: SongReaderModalProps
     () => normalizeLyricsForReading(song?.lyrics ?? ''),
     [song?.lyrics],
   );
+  const audioUrl = useMemo(() => getSongAudioPublicUrl(song?.audioPath), [song?.audioPath]);
 
   return (
     <Modal
@@ -76,6 +75,8 @@ export function SongReaderModal({ visible, song, onClose }: SongReaderModalProps
               </View>
             ) : null}
           </View>
+
+          {visible && audioUrl ? <SongAudioPlayer key={song?.audioPath} url={audioUrl} /> : null}
 
           <Card style={styles.lyricsCard}>
             <View style={styles.lyricsCardHeader}>

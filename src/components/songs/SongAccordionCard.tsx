@@ -10,6 +10,7 @@ interface SongAccordionCardProps {
   title: string;
   lyrics: string;
   spotifyUrl?: string;
+  hasAudio?: boolean;
   isExpanded: boolean;
   onToggle: () => void;
   onOpenReader?: () => void;
@@ -31,6 +32,7 @@ export function SongAccordionCard({
   title,
   lyrics,
   spotifyUrl,
+  hasAudio = false,
   isExpanded,
   onToggle,
   onOpenReader,
@@ -47,7 +49,23 @@ export function SongAccordionCard({
           <View style={styles.iconContainer}>
             <Ionicons name="musical-notes" size={theme.spacing[5]} color={theme.colors.primary} />
           </View>
-          <Text style={styles.title}>{title}</Text>
+          <View style={styles.titleBlock}>
+            <Text style={styles.title}>{title}</Text>
+            {hasAudio ? (
+              <View
+                style={styles.audioIndicator}
+                accessible
+                accessibilityLabel="Lydfil tilgængelig"
+              >
+                <Ionicons
+                  name="volume-high-outline"
+                  size={theme.components.icon.size.sm}
+                  color={theme.colors.brand.accent}
+                />
+                <Text style={styles.audioIndicatorText}>Lyd</Text>
+              </View>
+            ) : null}
+          </View>
         </View>
         <Ionicons
           name={isExpanded ? 'chevron-up' : 'chevron-down'}
@@ -58,11 +76,7 @@ export function SongAccordionCard({
 
       {isExpanded ? (
         <View style={styles.expandedContent}>
-          <Pressable
-            onPress={onOpenReader}
-            style={styles.lyricsContainer}
-            disabled={!onOpenReader}
-          >
+          <Pressable onPress={onOpenReader} style={styles.lyricsContainer} disabled={!onOpenReader}>
             <View style={styles.lyricsBlock}>
               {lyricLines.map((line, index) => (
                 <Text key={`${title}-line-${index}`} style={styles.lyrics}>
@@ -116,6 +130,21 @@ const styles = StyleSheet.create({
     ...theme.typography.h3,
     color: theme.colors.text.primary,
     flex: 1,
+  },
+  titleBlock: {
+    flex: 1,
+    minWidth: 0,
+    gap: theme.spacing[1],
+  },
+  audioIndicator: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[1],
+  },
+  audioIndicatorText: {
+    ...theme.typography.small,
+    color: theme.colors.brand.accent,
   },
   expandedContent: {
     marginTop: theme.spacing[1],
