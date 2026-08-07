@@ -3,7 +3,7 @@
     "name": "FCN Fans",
     "slug": "fcn-fans-mvp",
     "scheme": "fcnfans",
-    "version": "0.1.4",
+    "version": "0.1.5",
     "orientation": "portrait",
     "icon": "./assets/app-icon.png",
     "userInterfaceStyle": "automatic",
