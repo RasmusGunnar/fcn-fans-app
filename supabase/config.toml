@@ -90,6 +90,10 @@ verify_jwt = true
 [functions.push_match_highfive]
 verify_jwt = true
 
+# push_direct_message: authenticated sender validates and wakes an existing DB outbox job.
+[functions.push_direct_message]
+verify_jwt = true
+
 # delete_my_account: authenticated self-service account deletion from the profile screen.
 [functions.delete_my_account]
 verify_jwt = true

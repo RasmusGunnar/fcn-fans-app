@@ -47,6 +47,7 @@ type ExpoPushTicket = {
 
 export type PushPreferenceKey =
   | 'community_activity'
+  | 'direct_messages'
   | 'highfives'
   | 'matchday_checkin'
   | 'media_digest'
@@ -55,6 +56,7 @@ export type PushPreferenceKey =
 
 type PushPreferenceRow = {
   user_id: string;
+  direct_messages_enabled: boolean;
   replies_enabled: boolean;
   mentions_enabled: boolean;
   matchday_checkin_enabled: boolean;
@@ -66,6 +68,7 @@ type PushPreferenceRow = {
 const EXPO_PUSH_API_URL = 'https://exp.host/--/api/v2/push/send';
 const ACTIVE_NOTIFICATION_STATUSES = ['queued', 'sent'] as const;
 const DEFAULT_PUSH_PREFERENCES: Omit<PushPreferenceRow, 'user_id'> = {
+  direct_messages_enabled: true,
   replies_enabled: true,
   mentions_enabled: true,
   matchday_checkin_enabled: true,
@@ -77,6 +80,7 @@ const PUSH_PREFERENCE_COLUMN_BY_KEY: Record<
   PushPreferenceKey,
   keyof Omit<PushPreferenceRow, 'user_id'>
 > = {
+  direct_messages: 'direct_messages_enabled',
   replies: 'replies_enabled',
   mentions: 'mentions_enabled',
   matchday_checkin: 'matchday_checkin_enabled',
@@ -309,7 +313,7 @@ export async function fetchPushPreferencesByUserIds(supabase: any, userIds: stri
   const { data, error } = await supabase
     .from('push_preferences')
     .select(
-      'user_id, replies_enabled, mentions_enabled, matchday_checkin_enabled, community_activity_enabled, highfives_enabled, media_digest_enabled',
+      'user_id, replies_enabled, mentions_enabled, matchday_checkin_enabled, community_activity_enabled, highfives_enabled, media_digest_enabled, direct_messages_enabled',
     )
     .in('user_id', normalizedUserIds);
 
@@ -325,6 +329,8 @@ export async function fetchPushPreferencesByUserIds(supabase: any, userIds: stri
       row.user_id,
       {
         user_id: row.user_id,
+        direct_messages_enabled:
+          row.direct_messages_enabled ?? DEFAULT_PUSH_PREFERENCES.direct_messages_enabled,
         replies_enabled: row.replies_enabled ?? DEFAULT_PUSH_PREFERENCES.replies_enabled,
         mentions_enabled: row.mentions_enabled ?? DEFAULT_PUSH_PREFERENCES.mentions_enabled,
         matchday_checkin_enabled:

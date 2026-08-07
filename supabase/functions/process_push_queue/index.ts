@@ -1,5 +1,11 @@
 // deno-lint-ignore-file no-explicit-any
-import { createAdminClient, json, requireSyncSecret } from '../_shared/push.ts';
+import {
+  createAdminClient,
+  fetchPushPreferencesByUserIds,
+  isPushPreferenceEnabled,
+  json,
+  requireSyncSecret,
+} from '../_shared/push.ts';
 
 type ProcessPushQueuePayload = {
   limit?: unknown;
@@ -11,10 +17,14 @@ type ProcessPushQueuePayload = {
 type NotificationJob = {
   id: string;
   recipient_user_id: string;
+  actor_user_id: string | null;
   notification_type: string;
+  preference_key: string | null;
   title: string;
   body: string;
   data: Record<string, unknown> | null;
+  source_table: string | null;
+  source_id: string | null;
   status: string;
   attempt_count: number;
   max_attempts: number;
@@ -304,6 +314,14 @@ async function sendExpoBatch(
 }
 
 async function loadUnreadBadgeCount(supabase: any, userId: string): Promise<number> {
+  const { data: appBadgeCount, error: appBadgeError } = await supabase.rpc('get_app_badge_count', {
+    p_user_id: userId,
+  });
+
+  if (!appBadgeError && typeof appBadgeCount === 'number') {
+    return appBadgeCount;
+  }
+
   const { count, error } = await supabase
     .from('notifications')
     .select('id', { count: 'exact', head: true })
@@ -312,6 +330,66 @@ async function loadUnreadBadgeCount(supabase: any, userId: string): Promise<numb
 
   if (error) throw error;
   return count ?? 0;
+}
+
+async function getDirectMessageSkipReason(
+  supabase: any,
+  job: NotificationJob,
+): Promise<string | null> {
+  if (job.notification_type !== 'direct_message') {
+    return null;
+  }
+
+  if (!job.source_id || job.source_table !== 'messages') {
+    return 'direct_message_source_missing';
+  }
+
+  const { data: message, error: messageError } = await supabase
+    .from('messages')
+    .select('id, conversation_id, sender_id')
+    .eq('id', job.source_id)
+    .maybeSingle();
+  if (messageError) throw messageError;
+  if (!message) return 'direct_message_source_missing';
+
+  if (
+    message.sender_id === job.recipient_user_id ||
+    (job.actor_user_id && message.sender_id !== job.actor_user_id)
+  ) {
+    return 'direct_message_recipient_invalid';
+  }
+
+  const { data: conversation, error: conversationError } = await supabase
+    .from('conversations')
+    .select('user_low_id, user_high_id')
+    .eq('id', message.conversation_id)
+    .maybeSingle();
+  if (conversationError) throw conversationError;
+  if (!conversation) return 'direct_message_conversation_missing';
+
+  const participants = new Set([conversation.user_low_id, conversation.user_high_id]);
+  if (!participants.has(message.sender_id) || !participants.has(job.recipient_user_id)) {
+    return 'direct_message_recipient_invalid';
+  }
+
+  const { data: blockRows, error: blockError } = await supabase
+    .from('user_blocks')
+    .select('blocker_id')
+    .or(
+      `and(blocker_id.eq.${message.sender_id},blocked_id.eq.${job.recipient_user_id}),and(blocker_id.eq.${job.recipient_user_id},blocked_id.eq.${message.sender_id})`,
+    )
+    .limit(1);
+  if (blockError) throw blockError;
+  if ((blockRows ?? []).length > 0) return 'direct_message_blocked';
+
+  const preferencesByUserId = await fetchPushPreferencesByUserIds(supabase, [
+    job.recipient_user_id,
+  ]);
+  if (!isPushPreferenceEnabled(preferencesByUserId, job.recipient_user_id, 'direct_messages')) {
+    return 'preference_disabled';
+  }
+
+  return null;
 }
 
 async function loadActiveDevices(supabase: any, userId: string): Promise<PushDevice[]> {
@@ -382,6 +460,31 @@ async function markDeliveryFailed(
 }
 
 async function processJob(supabase: any, job: NotificationJob): Promise<JobProcessResult> {
+  const directMessageSkipReason = await getDirectMessageSkipReason(supabase, job);
+  if (directMessageSkipReason) {
+    await updateJob(supabase, job.id, {
+      status: 'skipped',
+      skip_reason: directMessageSkipReason,
+      locked_at: null,
+      locked_by: null,
+      last_error_code: null,
+      last_error_message: null,
+      last_error_details: null,
+    });
+
+    return {
+      jobId: job.id,
+      notificationType: job.notification_type,
+      status: 'skipped',
+      activeDevices: 0,
+      deliveriesCreated: 0,
+      sentToExpo: 0,
+      failed: 0,
+      skipped: 1,
+      reason: directMessageSkipReason,
+    };
+  }
+
   const devices = filterDevicesForJob(
     await loadActiveDevices(supabase, job.recipient_user_id),
     job,
