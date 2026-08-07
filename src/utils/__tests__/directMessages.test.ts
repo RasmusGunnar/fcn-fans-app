@@ -6,13 +6,21 @@ import type { DirectMessage } from '../../types/messages';
 import {
   canSubmitDirectMessage,
   createOrReuseDirectMessageSendAttempt,
+  formatMessageDateSeparator,
   formatMessageUnreadBadge,
+  getConversationPreview,
+  getConversationTitle,
   getDirectMessageNotificationConversationId,
   getMessageInboxAccessibilityLabel,
+  getTypingLabel,
+  isLatestOwnDirectMessageSeen,
+  mapConversationInboxRow,
   mapDirectMessageInboxRow,
   mergeDirectMessages,
   parseDirectMessageDeepLink,
   sanitizeDirectMessagePreview,
+  updateTypingUsers,
+  validateGroupCreation,
 } from '../directMessages';
 
 const CONVERSATION_ID = '11111111-1111-4111-8111-111111111111';
@@ -26,8 +34,18 @@ function message(id: string, createdAt: string): DirectMessage {
     id,
     conversationId: CONVERSATION_ID,
     senderId: '22222222-2222-4222-8222-222222222222',
+    senderDisplayName: 'Freja',
+    senderUsername: 'freja',
+    senderAvatarUrl: null,
     clientMessageId: `33333333-3333-4333-8333-${id.padStart(12, '0')}`,
     body: `Besked ${id}`,
+    type: 'text',
+    mediaPath: null,
+    mediaUrl: null,
+    mediaMimeType: null,
+    mediaWidth: null,
+    mediaHeight: null,
+    mediaSizeBytes: null,
     createdAt,
     deletedAt: null,
   };
@@ -50,7 +68,7 @@ test('maps the allowlisted inbox RPC row to the app model', () => {
   });
 
   assert.equal(result.id, CONVERSATION_ID);
-  assert.equal(result.peer.displayName, 'Freja');
+  assert.equal(result.peer?.displayName, 'Freja');
   assert.equal(result.lastMessageBody, 'Hej fra Farum');
   assert.equal(result.unreadCount, 2);
 });
@@ -133,11 +151,157 @@ test('provider and navigation sources keep account reset and DM routing wired', 
   assert.match(conversationSource, /Du kan ikke sende beskeder i denne samtale\./);
   assert.match(
     conversationSource,
-    /markDirectConversationRead\(conversationId, latestLoadedMessage\.id\)/,
+    /markConversationRead\(conversationId, latestLoadedMessage\.id\)/,
   );
   assert.match(
     navigationSource,
     /targetType === 'direct_message'[\s\S]*navigateToDirectMessageConversation/,
   );
   assert.match(queueSource, /getDirectMessageSkipReason[\s\S]*direct_message_blocked/);
+});
+
+test('maps direct and group inbox rows without assuming a peer', () => {
+  const direct = mapConversationInboxRow({
+    conversation_id: CONVERSATION_ID,
+    conversation_type: 'direct',
+    peer_id: '22222222-2222-4222-8222-222222222222',
+    peer_display_name: 'Freja',
+    last_message_id: '44444444-4444-4444-8444-444444444444',
+    last_message_body: 'Hej',
+    last_message_type: 'text',
+    last_message_at: '2026-08-07T10:00:00.000Z',
+    activity_at: '2026-08-07T10:00:00.000Z',
+    member_count: 2,
+  });
+  const group = mapConversationInboxRow({
+    conversation_id: CONVERSATION_ID,
+    conversation_type: 'group',
+    conversation_name: 'Udebaneturen',
+    last_message_id: '44444444-4444-4444-8444-444444444444',
+    last_message_type: 'image',
+    last_message_sender_id: '22222222-2222-4222-8222-222222222222',
+    last_message_sender_name: 'Freja',
+    last_message_at: '2026-08-07T10:00:00.000Z',
+    activity_at: '2026-08-07T10:00:00.000Z',
+    member_count: 3,
+    current_user_role: 'owner',
+  });
+
+  assert.equal(getConversationTitle(direct), 'Freja');
+  assert.equal(group.peer, null);
+  assert.equal(getConversationTitle(group), 'Udebaneturen');
+  assert.equal(getConversationPreview(group, 'other-user'), 'Freja: 📷 Billede');
+  assert.equal(group.memberCount, 3);
+});
+
+test('group creation requires a name and between one and nine other users', () => {
+  assert.equal(validateGroupCreation('', ['a']), 'Gruppen skal have et navn på højst 80 tegn.');
+  assert.equal(validateGroupCreation('Tur', []), 'Vælg mindst en anden fan.');
+  assert.equal(
+    validateGroupCreation(
+      'Tur',
+      Array.from({ length: 10 }, (_, index) => String(index)),
+    ),
+    'Du kan vælge højst 9 andre fans.',
+  );
+  assert.equal(validateGroupCreation('Tur', ['a', 'a']), null);
+});
+
+test('image messages can submit without text and image previews identify sender', () => {
+  assert.equal(
+    canSubmitDirectMessage({ body: '', hasImage: true, blocked: false, sending: false }),
+    true,
+  );
+  assert.equal(
+    getConversationPreview(
+      {
+        type: 'group',
+        lastMessageBody: null,
+        lastMessageType: 'image',
+        lastMessageSenderId: 'me',
+        lastMessageSenderName: 'Rasmus',
+      },
+      'me',
+    ),
+    'Dig: 📷 Billede',
+  );
+});
+
+test('typing state ignores self, expires, and formats one or several users', () => {
+  const first = updateTypingUsers(
+    [],
+    { userId: 'a', displayName: 'Freja', typing: true },
+    'me',
+    1000,
+  );
+  const ignored = updateTypingUsers(
+    first,
+    { userId: 'me', displayName: 'Mig', typing: true },
+    'me',
+    1000,
+  );
+  const second = updateTypingUsers(
+    ignored,
+    { userId: 'b', displayName: 'Maria', typing: true },
+    'me',
+    1000,
+  );
+  const expired = updateTypingUsers(
+    second,
+    { userId: 'b', displayName: 'Maria', typing: false },
+    'me',
+    5000,
+  );
+  assert.equal(ignored.length, 1);
+  assert.equal(getTypingLabel(first), 'Freja skriver...');
+  assert.equal(getTypingLabel(second), 'Freja og Maria skriver...');
+  assert.equal(expired.length, 0);
+});
+
+test('seen is only true for the latest own direct message at or before peer read pointer', () => {
+  const own = message('2', '2026-08-07T10:01:00.000Z');
+  assert.equal(
+    isLatestOwnDirectMessageSeen({
+      message: own,
+      latestOwnMessageId: own.id,
+      peerLastReadAt: own.createdAt,
+      peerLastReadMessageId: own.id,
+    }),
+    true,
+  );
+  assert.equal(
+    isLatestOwnDirectMessageSeen({
+      message: own,
+      latestOwnMessageId: 'another',
+      peerLastReadAt: own.createdAt,
+      peerLastReadMessageId: own.id,
+    }),
+    false,
+  );
+});
+
+test('date separators use today, yesterday, and a full date', () => {
+  const now = new Date('2026-08-07T12:00:00.000Z');
+  assert.equal(formatMessageDateSeparator('2026-08-07T10:00:00.000Z', now), 'I dag');
+  assert.equal(formatMessageDateSeparator('2026-08-06T10:00:00.000Z', now), 'I går');
+  assert.match(formatMessageDateSeparator('2026-08-01T10:00:00.000Z', now), /2026/);
+});
+
+test('V1.5 UI sources keep private media, typing, group info, and direct-only seen explicit', () => {
+  const conversationSource = readWorkspaceFile('src/screens/ConversationScreen.tsx');
+  const groupInfoSource = readWorkspaceFile('src/screens/GroupInfoScreen.tsx');
+  const mediaSource = readWorkspaceFile('src/lib/messageMedia.ts');
+  const typingSource = readWorkspaceFile('src/hooks/useConversationTyping.ts');
+  const migrationSource = readWorkspaceFile(
+    'supabase/migrations/20260807151000_add_message_media.sql',
+  );
+
+  assert.match(conversationSource, /details\?\.type === 'direct'[\s\S]*seen \? 'Set' : 'Sendt'/);
+  assert.match(conversationSource, /details\?\.type === 'group' \? <TypingIndicator/);
+  assert.match(groupInfoSource, /removeGroupMember/);
+  assert.match(groupInfoSource, /updateGroupMemberRole/);
+  assert.match(mediaSource, /MESSAGE_MEDIA_BUCKET = 'message-media'/);
+  assert.match(typingSource, /config: \{ private: true \}/);
+  assert.match(migrationSource, /public false|false,/);
+  assert.match(migrationSource, /membership\.left_at is null/);
 });
