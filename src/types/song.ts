@@ -15,6 +15,9 @@ export interface Song {
   importedAt?: string | null;
   lastSyncedAt?: string | null;
   isManuallyEdited?: boolean;
+  audioPath?: string | null;
+  audioMimeType?: string | null;
+  audioSizeBytes?: number | null;
   createdAt?: string | null;
   updatedAt?: string | null;
 }

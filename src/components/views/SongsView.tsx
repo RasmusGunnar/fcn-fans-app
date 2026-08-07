@@ -2,16 +2,25 @@ import { useNavigation } from '@react-navigation/native';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../../auth/AuthProvider';
+import { logger } from '../../lib/logger';
 import { getMyCommunityRoleByName, WILD_TIGERS_COMMUNITY_NAME } from '../../services/rbac';
+import { deleteSongAudio, SongAudioUploadError, uploadSongAudio } from '../../services/songAudio';
 import {
+  assertSongVersionCurrent,
   canManageWildTigersSongs,
   deleteSong,
   fetchSongs,
+  SongConflictError,
   updateSong,
 } from '../../services/songsApi';
 import { defaultTheme } from '../../theme';
 import { SONG_CATEGORY_LABELS, type Song } from '../../types/song';
 import { canEditSongs as canEditSongsPermission } from '../../utils/permissions';
+import {
+  runSongAudioSaveSaga,
+  runSongDeleteSaga,
+  type SongAudioChange,
+} from '../../utils/songAudio';
 import { SongAccordionCard } from '../songs/SongAccordionCard';
 import { SongEditModal } from '../songs/SongEditModal';
 import { SongReaderModal } from '../songs/SongReaderModal';
@@ -23,6 +32,25 @@ function isValidSpotifyUrl(value: string | null): boolean {
   if (!value) return true;
   const trimmed = value.trim();
   return /^(https?:\/\/(open\.)?spotify\.com\/|spotify:)/i.test(trimmed);
+}
+
+function getSongMutationErrorMessage(error: unknown, action: 'save' | 'delete'): string {
+  if (error instanceof SongConflictError) {
+    return 'Sangen er blevet ændret af en anden. Genindlæs og prøv igen.';
+  }
+  if (error instanceof SongAudioUploadError) {
+    if (error.message === 'offline') {
+      return 'Du er offline. Opret forbindelse, og prøv igen.';
+    }
+    if (error.message === 'permission_lost') {
+      return 'Du har ikke længere adgang til at redigere sangbogen.';
+    }
+    if (error.message === 'timeout') {
+      return 'Upload af lydfil tog for lang tid. Prøv igen.';
+    }
+    return 'Upload af lydfil mislykkedes. Prøv igen.';
+  }
+  return action === 'delete' ? 'Kunne ikke slette sangen.' : 'Kunne ikke gemme sangen.';
 }
 
 export interface SongsViewProps {
@@ -68,6 +96,7 @@ function SongSection({
             title={song.title}
             lyrics={song.lyrics}
             spotifyUrl={song.spotifyUrl ?? undefined}
+            hasAudio={!!song.audioPath}
             isExpanded={expandedSongId === song.id}
             onToggle={() => onToggle(song.id)}
             onOpenReader={() => onOpenReader(song)}
@@ -92,6 +121,7 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
   const [readingSong, setReadingSong] = useState<Song | null>(null);
   const [activeFilter, setActiveFilter] = useState<Song['category']>('slagsang');
   const [saving, setSaving] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [deletingSongId, setDeletingSongId] = useState<string | null>(null);
   const [wildTigersRole, setWildTigersRole] = useState<'owner' | 'admin' | 'member' | null>(null);
   const [canManageSongsViaRpc, setCanManageSongsViaRpc] = useState<boolean | null>(null);
@@ -191,6 +221,7 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
     lyrics: string;
     category: Song['category'];
     spotifyUrl: string | null;
+    audioChange: SongAudioChange;
   }) => {
     if (!editingSong) return;
     if (!isValidSpotifyUrl(values.spotifyUrl)) {
@@ -200,16 +231,36 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
 
     try {
       setSaving(true);
-      const updatedSong = await updateSong(editingSong.id, values);
+      setUploadProgress(values.audioChange.kind === 'replace' ? 0 : null);
+      const canStillManage = await canManageWildTigersSongs();
+      if (canStillManage !== true) {
+        throw new SongAudioUploadError('permission_lost');
+      }
+      if (!editingSong.updatedAt) {
+        throw new SongConflictError();
+      }
+
+      await assertSongVersionCurrent(editingSong.id, editingSong.updatedAt);
+      const updatedSong = await runSongAudioSaveSaga({
+        change: values.audioChange,
+        currentAudioPath: editingSong.audioPath,
+        upload: (file) => uploadSongAudio(file, setUploadProgress),
+        update: (audio) => updateSong(editingSong.id, values, editingSong.updatedAt!, audio),
+        deleteAudio: deleteSongAudio,
+        onCleanupError: () => {
+          logger.warn('[SongsView] Song audio cleanup failed after save.');
+        },
+      });
       setSongs((current) =>
         current.map((song) => (song.id === updatedSong.id ? updatedSong : song)),
       );
-      setEditingSong(updatedSong);
+      setReadingSong((current) => (current?.id === updatedSong.id ? updatedSong : current));
       Alert.alert('Succes', 'Sangen er opdateret.');
       setEditingSong(null);
-    } catch (error: any) {
-      Alert.alert('Fejl', error?.message ?? 'Kunne ikke gemme sangen.');
+    } catch (error) {
+      Alert.alert('Fejl', getSongMutationErrorMessage(error, 'save'));
     } finally {
+      setUploadProgress(null);
       setSaving(false);
     }
   };
@@ -217,13 +268,29 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
   const performDeleteSong = async (song: Song) => {
     try {
       setDeletingSongId(song.id);
-      await deleteSong(song.id);
+      const canStillManage = await canManageWildTigersSongs();
+      if (canStillManage !== true) {
+        throw new SongAudioUploadError('permission_lost');
+      }
+      if (!song.updatedAt) {
+        throw new SongConflictError();
+      }
+
+      await assertSongVersionCurrent(song.id, song.updatedAt);
+      await runSongDeleteSaga({
+        audioPath: song.audioPath,
+        deleteSongRow: () => deleteSong(song.id, song.updatedAt!),
+        deleteAudio: deleteSongAudio,
+        onCleanupError: () => {
+          logger.warn('[SongsView] Song audio cleanup failed after song deletion.');
+        },
+      });
       setSongs((current) => current.filter((item) => item.id !== song.id));
       setExpandedSongId((current) => (current === song.id ? null : current));
       setEditingSong((current) => (current?.id === song.id ? null : current));
       setReadingSong((current) => (current?.id === song.id ? null : current));
-    } catch (error: any) {
-      Alert.alert('Fejl', error?.message ?? 'Kunne ikke slette sangen.');
+    } catch (error) {
+      Alert.alert('Fejl', getSongMutationErrorMessage(error, 'delete'));
     } finally {
       setDeletingSongId(null);
     }
@@ -291,6 +358,7 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
         visible={!!editingSong}
         song={editingSong}
         saving={saving || deletingSongId !== null}
+        uploadProgress={uploadProgress}
         onClose={() => {
           if (!saving && deletingSongId === null) setEditingSong(null);
         }}

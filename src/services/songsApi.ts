@@ -17,12 +17,15 @@ type SongRow = {
   imported_at?: string | null;
   last_synced_at?: string | null;
   is_manually_edited?: boolean | null;
+  audio_path?: string | null;
+  audio_mime_type?: string | null;
+  audio_size_bytes?: number | null;
   created_at?: string | null;
   updated_at?: string | null;
 };
 
 const SONG_COLUMNS =
-  'id, title, lyrics, spotify_url, melody_reference, category, sort_order, source, source_url, source_key, source_hash, imported_at, last_synced_at, is_manually_edited, created_at, updated_at';
+  'id, title, lyrics, spotify_url, melody_reference, category, sort_order, source, source_url, source_key, source_hash, imported_at, last_synced_at, is_manually_edited, audio_path, audio_mime_type, audio_size_bytes, created_at, updated_at';
 
 const FALLBACK_SONGS: Song[] = [
   {
@@ -98,6 +101,9 @@ function mapSongRow(row: SongRow): Song {
     importedAt: row.imported_at ?? null,
     lastSyncedAt: row.last_synced_at ?? null,
     isManuallyEdited: row.is_manually_edited ?? false,
+    audioPath: row.audio_path ?? null,
+    audioMimeType: row.audio_mime_type ?? null,
+    audioSizeBytes: row.audio_size_bytes ?? null,
     createdAt: row.created_at ?? null,
     updatedAt: row.updated_at ?? null,
   };
@@ -139,11 +145,40 @@ export async function canManageWildTigersSongs(): Promise<boolean | null> {
   return data === true;
 }
 
+export class SongConflictError extends Error {
+  constructor() {
+    super('song_conflict');
+    this.name = 'SongConflictError';
+  }
+}
+
+export async function assertSongVersionCurrent(
+  songId: string,
+  originalUpdatedAt: string,
+): Promise<void> {
+  const { data, error } = await supabase
+    .from('songs')
+    .select('id')
+    .eq('id', songId)
+    .eq('updated_at', originalUpdatedAt)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) throw new SongConflictError();
+}
+
+type SongAudioUpdate =
+  | { path: string; mimeType: 'audio/mpeg' | 'audio/mp4' | 'audio/aac'; sizeBytes: number }
+  | null
+  | undefined;
+
 export async function updateSong(
   songId: string,
   updates: { title: string; lyrics: string; category: SongCategory; spotifyUrl: string | null },
+  originalUpdatedAt: string,
+  audio: SongAudioUpdate,
 ): Promise<Song> {
-  const payload = {
+  const payload: Record<string, string | number | boolean | null> = {
     title: updates.title.trim(),
     lyrics: updates.lyrics.trim(),
     category: updates.category,
@@ -152,24 +187,44 @@ export async function updateSong(
     updated_at: new Date().toISOString(),
   };
 
+  if (audio !== undefined) {
+    payload.audio_path = audio?.path ?? null;
+    payload.audio_mime_type = audio?.mimeType ?? null;
+    payload.audio_size_bytes = audio?.sizeBytes ?? null;
+  }
+
   const { data, error } = await supabase
     .from('songs')
     .update(payload)
     .eq('id', songId)
+    .eq('updated_at', originalUpdatedAt)
     .select(SONG_COLUMNS)
-    .single();
+    .maybeSingle();
 
   if (error) {
     throw error;
   }
 
+  if (!data) {
+    throw new SongConflictError();
+  }
+
   return mapSongRow(data as SongRow);
 }
 
-export async function deleteSong(songId: string): Promise<void> {
-  const { error } = await supabase.from('songs').delete().eq('id', songId);
+export async function deleteSong(songId: string, originalUpdatedAt: string): Promise<void> {
+  const { data, error } = await supabase
+    .from('songs')
+    .delete()
+    .eq('id', songId)
+    .eq('updated_at', originalUpdatedAt)
+    .select('id')
+    .maybeSingle();
 
   if (error) {
     throw error;
+  }
+  if (!data) {
+    throw new SongConflictError();
   }
 }
