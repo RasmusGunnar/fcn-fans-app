@@ -12,6 +12,19 @@ import {
   type SongAudioUploadCandidate,
   validateSongAudioFile,
 } from '../songAudio';
+import {
+  pauseSongAudioForCleanup,
+  replaceSongAudioSource,
+  resetSongAudioForCleanup,
+  stopAndResetSongAudioForCleanup,
+} from '../songAudioNative';
+import {
+  claimSongAudioPlayback,
+  registerSongAudioPlayback,
+  stopActiveSongAudio,
+  teardownSongAudio,
+  unregisterSongAudioPlayback,
+} from '../songAudioPlayback';
 
 const SONG_ID = '11111111-1111-4111-8111-111111111111';
 const FILE_ID = '22222222-2222-4222-8222-222222222222';
@@ -239,4 +252,156 @@ test('player utilities format time, handle missing duration, and reset ended pla
   assert.equal(formatSongAudioTime(null), '--:--');
   assert.equal(getSongAudioDisplayPosition(134, 134, true), 0);
   assert.equal(getSongAudioDisplayPosition(200, 134, false), 134);
+});
+
+test('unregister removes the owner so a later global stop is a no-op', () => {
+  const owner = Symbol('unmounted');
+  const calls: string[] = [];
+
+  registerSongAudioPlayback(owner, 'song-unmounted', () => calls.push('stop'));
+  assert.equal(claimSongAudioPlayback(owner), true);
+  unregisterSongAudioPlayback(owner);
+  stopActiveSongAudio();
+
+  assert.deepEqual(calls, []);
+});
+
+test('claiming owner B stops registered owner A exactly once', () => {
+  const firstOwner = Symbol('first');
+  const secondOwner = Symbol('second');
+  const calls: string[] = [];
+
+  registerSongAudioPlayback(firstOwner, 'song-1', () => calls.push('stop-first'));
+  registerSongAudioPlayback(secondOwner, 'song-2', () => calls.push('stop-second'));
+  assert.equal(claimSongAudioPlayback(firstOwner), true);
+  assert.equal(claimSongAudioPlayback(secondOwner), true);
+  assert.deepEqual(calls, ['stop-first']);
+
+  teardownSongAudio('song-1');
+  teardownSongAudio('song-2');
+  assert.deepEqual(calls, ['stop-first', 'stop-second']);
+});
+
+test('an unregistered owner A is never stopped when owner B replaces it', () => {
+  const firstOwner = Symbol('first-unregistered');
+  const secondOwner = Symbol('second-active');
+  const calls: string[] = [];
+
+  registerSongAudioPlayback(firstOwner, 'song-a', () => calls.push('stale-stop'));
+  assert.equal(claimSongAudioPlayback(firstOwner), true);
+  unregisterSongAudioPlayback(firstOwner);
+  registerSongAudioPlayback(secondOwner, 'song-b', () => calls.push('stop-b'));
+  assert.equal(claimSongAudioPlayback(secondOwner), true);
+  stopActiveSongAudio();
+
+  assert.deepEqual(calls, ['stop-b']);
+  unregisterSongAudioPlayback(secondOwner);
+});
+
+test('remove audio stops active playback, unregisters it, and tolerates duplicate cleanup', () => {
+  const owner = Symbol('remove-active');
+  const calls: string[] = [];
+
+  registerSongAudioPlayback(owner, 'song-remove', () => calls.push('stop-remove'));
+  assert.equal(claimSongAudioPlayback(owner), true);
+  teardownSongAudio('song-remove');
+  teardownSongAudio('song-remove');
+  stopActiveSongAudio('song-remove');
+
+  assert.deepEqual(calls, ['stop-remove']);
+});
+
+test('background stop after unmount cannot call the disposed player callback', () => {
+  const owner = Symbol('background-after-unmount');
+  const calls: string[] = [];
+  const unregister = registerSongAudioPlayback(owner, 'song-background', () =>
+    calls.push('stale-pause'),
+  );
+
+  assert.equal(claimSongAudioPlayback(owner), true);
+  unregister();
+  stopActiveSongAudio();
+
+  assert.deepEqual(calls, []);
+});
+
+test('replace source unregisters the old owner before the new owner becomes active', () => {
+  const oldOwner = Symbol('old-source');
+  const newOwner = Symbol('new-source');
+  const calls: string[] = [];
+
+  registerSongAudioPlayback(oldOwner, 'song-replace', () => calls.push('stop-old'));
+  assert.equal(claimSongAudioPlayback(oldOwner), true);
+  teardownSongAudio('song-replace');
+  registerSongAudioPlayback(newOwner, 'song-replace', () => calls.push('stop-new'));
+  assert.equal(claimSongAudioPlayback(newOwner), true);
+  stopActiveSongAudio('song-replace');
+
+  assert.deepEqual(calls, ['stop-old', 'stop-new']);
+  unregisterSongAudioPlayback(newOwner);
+});
+
+test('cleanup wrappers ignore only disposed native shared-object failures', async () => {
+  const cause = new Error(
+    'Unable to find the native shared object associated with given JavaScript object',
+  );
+  cause.name = 'NativeSharedObjectNotFoundException';
+  const disposedError = new Error("Calling the 'pause' function has failed") as Error & {
+    cause?: unknown;
+  };
+  disposedError.cause = cause;
+  const reports: string[] = [];
+  const report = (operation: 'pause' | 'seek') => reports.push(operation);
+  let staleSeekCalls = 0;
+
+  assert.equal(
+    await stopAndResetSongAudioForCleanup(
+      {
+        pause: () => {
+          throw disposedError;
+        },
+        seekTo: async () => {
+          staleSeekCalls += 1;
+        },
+      },
+      report,
+    ),
+    false,
+  );
+  assert.equal(staleSeekCalls, 0);
+  assert.equal(
+    await resetSongAudioForCleanup({ seekTo: async () => Promise.reject(disposedError) }, report),
+    false,
+  );
+  assert.deepEqual(reports, []);
+
+  const ordinaryError = new Error('audio session unavailable');
+  pauseSongAudioForCleanup(
+    {
+      pause: () => {
+        throw ordinaryError;
+      },
+    },
+    report,
+  );
+  assert.deepEqual(reports, ['pause']);
+});
+
+test('source replacement calls the current player and does not hide ordinary errors', () => {
+  const sources: string[] = [];
+  replaceSongAudioSource({ replace: (source) => sources.push(source) }, 'new-audio.mp3');
+  assert.deepEqual(sources, ['new-audio.mp3']);
+
+  assert.throws(
+    () =>
+      replaceSongAudioSource(
+        {
+          replace: () => {
+            throw new Error('replace failed');
+          },
+        },
+        'broken-audio.mp3',
+      ),
+    /replace failed/,
+  );
 });

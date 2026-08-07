@@ -1,20 +1,34 @@
 import { Ionicons } from '@expo/vector-icons';
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, Pressable, StyleSheet, Text, View } from 'react-native';
+import { logger } from '../../lib/logger';
 import { defaultTheme } from '../../theme';
 import { formatSongAudioTime, getSongAudioDisplayPosition } from '../../utils/songAudio';
+import {
+  pauseSongAudioForCleanup,
+  replaceSongAudioSource,
+  stopAndResetSongAudioForCleanup,
+  type SongAudioCleanupReporter,
+} from '../../utils/songAudioNative';
+import {
+  claimSongAudioPlayback,
+  registerSongAudioPlayback,
+  releaseSongAudioPlayback,
+} from '../../utils/songAudioPlayback';
 
 const theme = defaultTheme;
 const LOAD_TIMEOUT_MS = 15_000;
 
 type SongAudioPlayerProps = {
+  songId: string;
   url: string;
 };
 
-export function SongAudioPlayer({ url }: SongAudioPlayerProps) {
+export function SongAudioPlayer({ songId, url }: SongAudioPlayerProps) {
   const player = useAudioPlayer(url, { updateInterval: 250, downloadFirst: false });
   const status = useAudioPlayerStatus(player);
+  const owner = useRef(Symbol(`song-audio-reader:${songId}`)).current;
   const [trackWidth, setTrackWidth] = useState(0);
   const [loadTimedOut, setLoadTimedOut] = useState(false);
   const [retryAttempt, setRetryAttempt] = useState(0);
@@ -26,6 +40,12 @@ export function SongAudioPlayer({ url }: SongAudioPlayerProps) {
     status.didJustFinish,
   );
   const progress = status.duration > 0 ? displayPosition / status.duration : 0;
+  const reportCleanupError = useCallback<SongAudioCleanupReporter>((operation, error) => {
+    logger.warn(`[SongAudioPlayer] ${operation} cleanup failed.`, error);
+  }, []);
+  const stopAndReset = useCallback(() => {
+    void stopAndResetSongAudioForCleanup(player, reportCleanupError);
+  }, [player, reportCleanupError]);
 
   useEffect(() => {
     void setAudioModeAsync({
@@ -38,16 +58,21 @@ export function SongAudioPlayer({ url }: SongAudioPlayerProps) {
   }, []);
 
   useEffect(() => {
+    return registerSongAudioPlayback(owner, songId, stopAndReset);
+  }, [owner, songId, stopAndReset]);
+
+  useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
-      if (nextState !== 'active') player.pause();
+      if (nextState !== 'active') {
+        releaseSongAudioPlayback(owner);
+        pauseSongAudioForCleanup(player, reportCleanupError);
+      }
     });
 
     return () => {
       subscription.remove();
-      player.pause();
-      void player.seekTo(0).catch(() => undefined);
     };
-  }, [player]);
+  }, [owner, player, reportCleanupError]);
 
   useEffect(() => {
     if (status.isLoaded) {
@@ -60,29 +85,55 @@ export function SongAudioPlayer({ url }: SongAudioPlayerProps) {
 
   useEffect(() => {
     if (!status.didJustFinish) return;
-    player.pause();
-    void player.seekTo(0).catch(() => undefined);
-  }, [player, status.didJustFinish]);
+    releaseSongAudioPlayback(owner);
+    stopAndReset();
+  }, [owner, status.didJustFinish, stopAndReset]);
+
+  useEffect(() => {
+    if (!status.playbackState.toLowerCase().includes('error')) return;
+    releaseSongAudioPlayback(owner);
+  }, [owner, status.playbackState]);
 
   const handlePlayPause = () => {
     if (!status.isLoaded || playbackFailed) return;
     if (status.playing) {
-      player.pause();
+      try {
+        player.pause();
+        releaseSongAudioPlayback(owner);
+      } catch (error) {
+        logger.warn('[SongAudioPlayer] Pause failed.', error);
+        setLoadTimedOut(true);
+      }
       return;
     }
-    player.play();
+    if (!claimSongAudioPlayback(owner)) return;
+    try {
+      player.play();
+    } catch (error) {
+      releaseSongAudioPlayback(owner);
+      logger.warn('[SongAudioPlayer] Playback failed.', error);
+      setLoadTimedOut(true);
+    }
   };
 
   const seekToFraction = (fraction: number) => {
     if (!status.isLoaded || status.duration <= 0) return;
-    void player.seekTo(Math.max(0, Math.min(1, fraction)) * status.duration).catch(() => undefined);
+    void player
+      .seekTo(Math.max(0, Math.min(1, fraction)) * status.duration)
+      .catch((error) => logger.warn('[SongAudioPlayer] Seek failed.', error));
   };
 
   const retry = () => {
-    player.pause();
-    setLoadTimedOut(false);
-    setRetryAttempt((current) => current + 1);
-    player.replace(url);
+    try {
+      player.pause();
+      releaseSongAudioPlayback(owner);
+      setLoadTimedOut(false);
+      setRetryAttempt((current) => current + 1);
+      replaceSongAudioSource(player, url);
+    } catch (error) {
+      logger.warn('[SongAudioPlayer] Reload failed.', error);
+      setLoadTimedOut(true);
+    }
   };
 
   if (playbackFailed) {

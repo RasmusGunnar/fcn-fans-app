@@ -76,7 +76,9 @@ export function SongReaderModal({ visible, song, onClose }: SongReaderModalProps
             ) : null}
           </View>
 
-          {visible && audioUrl ? <SongAudioPlayer key={song?.audioPath} url={audioUrl} /> : null}
+          {visible && audioUrl && song ? (
+            <SongAudioPlayer key={song.audioPath} songId={song.id} url={audioUrl} />
+          ) : null}
 
           <Card style={styles.lyricsCard}>
             <View style={styles.lyricsCardHeader}>

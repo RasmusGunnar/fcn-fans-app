@@ -5,12 +5,14 @@ import { defaultTheme } from '../../theme';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { SpotifyButton } from '../ui/SpotifyButton';
+import { SongAudioAction } from './SongAudioAction';
 
 interface SongAccordionCardProps {
+  songId: string;
   title: string;
   lyrics: string;
   spotifyUrl?: string;
-  hasAudio?: boolean;
+  audioUrl?: string;
   isExpanded: boolean;
   onToggle: () => void;
   onOpenReader?: () => void;
@@ -29,10 +31,11 @@ function normalizeLyricsForDisplay(value: string): string[] {
 const theme = defaultTheme;
 
 export function SongAccordionCard({
+  songId,
   title,
   lyrics,
   spotifyUrl,
-  hasAudio = false,
+  audioUrl,
   isExpanded,
   onToggle,
   onOpenReader,
@@ -49,23 +52,7 @@ export function SongAccordionCard({
           <View style={styles.iconContainer}>
             <Ionicons name="musical-notes" size={theme.spacing[5]} color={theme.colors.primary} />
           </View>
-          <View style={styles.titleBlock}>
-            <Text style={styles.title}>{title}</Text>
-            {hasAudio ? (
-              <View
-                style={styles.audioIndicator}
-                accessible
-                accessibilityLabel="Lydfil tilgængelig"
-              >
-                <Ionicons
-                  name="volume-high-outline"
-                  size={theme.components.icon.size.sm}
-                  color={theme.colors.brand.accent}
-                />
-                <Text style={styles.audioIndicatorText}>Lyd</Text>
-              </View>
-            ) : null}
-          </View>
+          <Text style={styles.title}>{title}</Text>
         </View>
         <Ionicons
           name={isExpanded ? 'chevron-up' : 'chevron-down'}
@@ -85,6 +72,18 @@ export function SongAccordionCard({
               ))}
             </View>
           </Pressable>
+          {audioUrl || spotifyUrl ? (
+            <View style={styles.mediaActions}>
+              {audioUrl ? (
+                <SongAudioAction key={audioUrl} songId={songId} title={title} url={audioUrl} />
+              ) : null}
+              {spotifyUrl ? (
+                <View style={styles.mediaAction}>
+                  <SpotifyButton spotifyUrl={spotifyUrl} compact />
+                </View>
+              ) : null}
+            </View>
+          ) : null}
           {canEdit && (onPressEdit || onPressDelete) ? (
             <View style={styles.actions}>
               {onPressEdit ? (
@@ -95,7 +94,6 @@ export function SongAccordionCard({
               ) : null}
             </View>
           ) : null}
-          {spotifyUrl ? <SpotifyButton spotifyUrl={spotifyUrl} /> : null}
         </View>
       ) : null}
     </Card>
@@ -131,21 +129,6 @@ const styles = StyleSheet.create({
     color: theme.colors.text.primary,
     flex: 1,
   },
-  titleBlock: {
-    flex: 1,
-    minWidth: 0,
-    gap: theme.spacing[1],
-  },
-  audioIndicator: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing[1],
-  },
-  audioIndicatorText: {
-    ...theme.typography.small,
-    color: theme.colors.brand.accent,
-  },
   expandedContent: {
     marginTop: theme.spacing[1],
     gap: theme.spacing[2],
@@ -166,5 +149,15 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     flexDirection: 'row',
     gap: theme.spacing[2],
+  },
+  mediaActions: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: theme.spacing[2],
+  },
+  mediaAction: {
+    flex: 1,
+    minWidth: 0,
   },
 });

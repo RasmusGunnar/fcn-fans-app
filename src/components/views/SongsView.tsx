@@ -4,7 +4,12 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'rea
 import { useAuth } from '../../auth/AuthProvider';
 import { logger } from '../../lib/logger';
 import { getMyCommunityRoleByName, WILD_TIGERS_COMMUNITY_NAME } from '../../services/rbac';
-import { deleteSongAudio, SongAudioUploadError, uploadSongAudio } from '../../services/songAudio';
+import {
+  deleteSongAudio,
+  getSongAudioPublicUrl,
+  SongAudioUploadError,
+  uploadSongAudio,
+} from '../../services/songAudio';
 import {
   assertSongVersionCurrent,
   canManageWildTigersSongs,
@@ -21,6 +26,7 @@ import {
   runSongDeleteSaga,
   type SongAudioChange,
 } from '../../utils/songAudio';
+import { stopActiveSongAudio, teardownSongAudio } from '../../utils/songAudioPlayback';
 import { SongAccordionCard } from '../songs/SongAccordionCard';
 import { SongEditModal } from '../songs/SongEditModal';
 import { SongReaderModal } from '../songs/SongReaderModal';
@@ -93,10 +99,11 @@ function SongSection({
       {songs.map((song) => (
         <View key={song.id} style={styles.card}>
           <SongAccordionCard
+            songId={song.id}
             title={song.title}
             lyrics={song.lyrics}
             spotifyUrl={song.spotifyUrl ?? undefined}
-            hasAudio={!!song.audioPath}
+            audioUrl={getSongAudioPublicUrl(song.audioPath) ?? undefined}
             isExpanded={expandedSongId === song.id}
             onToggle={() => onToggle(song.id)}
             onOpenReader={() => onOpenReader(song)}
@@ -208,12 +215,34 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
     (canManageSongsViaRpc === true || canEditSongsPermission(isAppAdmin, wildTigersRole));
   const activeSongs = activeFilter === 'slagsang' ? chants : playerSongs;
 
+  useEffect(() => {
+    return navigation.addListener('blur', () => stopActiveSongAudio());
+  }, [navigation]);
+
   const toggleSong = (songId: string) => {
+    if (expandedSongId) stopActiveSongAudio(expandedSongId);
     setExpandedSongId((current) => (current === songId ? null : songId));
+  };
+
+  const handleFilterChange = (category: Song['category']) => {
+    if (category === activeFilter) return;
+    if (expandedSongId) stopActiveSongAudio(expandedSongId);
+    setExpandedSongId(null);
+    setActiveFilter(category);
   };
 
   const handleSuggestSong = () => {
     (navigation as any).navigate('Create');
+  };
+
+  const handleOpenReader = (song: Song) => {
+    stopActiveSongAudio();
+    setReadingSong(song);
+  };
+
+  const handleCloseReader = () => {
+    if (readingSong) stopActiveSongAudio(readingSong.id);
+    setReadingSong(null);
   };
 
   const handleSaveSong = async (values: {
@@ -241,6 +270,8 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
       }
 
       await assertSongVersionCurrent(editingSong.id, editingSong.updatedAt);
+      const changesAudioSource = values.audioChange.kind !== 'keep';
+      if (changesAudioSource) stopActiveSongAudio(editingSong.id);
       const updatedSong = await runSongAudioSaveSaga({
         change: values.audioChange,
         currentAudioPath: editingSong.audioPath,
@@ -251,6 +282,7 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
           logger.warn('[SongsView] Song audio cleanup failed after save.');
         },
       });
+      if (changesAudioSource) teardownSongAudio(editingSong.id);
       setSongs((current) =>
         current.map((song) => (song.id === updatedSong.id ? updatedSong : song)),
       );
@@ -267,6 +299,7 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
 
   const performDeleteSong = async (song: Song) => {
     try {
+      stopActiveSongAudio(song.id);
       setDeletingSongId(song.id);
       const canStillManage = await canManageWildTigersSongs();
       if (canStillManage !== true) {
@@ -285,6 +318,7 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
           logger.warn('[SongsView] Song audio cleanup failed after song deletion.');
         },
       });
+      teardownSongAudio(song.id);
       setSongs((current) => current.filter((item) => item.id !== song.id));
       setExpandedSongId((current) => (current === song.id ? null : current));
       setEditingSong((current) => (current?.id === song.id ? null : current));
@@ -328,7 +362,7 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
           return (
             <Pressable
               key={category}
-              onPress={() => setActiveFilter(category)}
+              onPress={() => handleFilterChange(category)}
               style={[styles.filterPill, isActive && styles.filterPillActive]}
             >
               <Text style={[styles.filterText, isActive && styles.filterTextActive]}>
@@ -344,7 +378,7 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
         songs={activeSongs}
         expandedSongId={expandedSongId}
         onToggle={toggleSong}
-        onOpenReader={setReadingSong}
+        onOpenReader={handleOpenReader}
         canEdit={canEditSongs}
         onEdit={setEditingSong}
         onDelete={handleDeleteSong}
@@ -364,11 +398,7 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
         }}
         onSave={handleSaveSong}
       />
-      <SongReaderModal
-        visible={!!readingSong}
-        song={readingSong}
-        onClose={() => setReadingSong(null)}
-      />
+      <SongReaderModal visible={!!readingSong} song={readingSong} onClose={handleCloseReader} />
     </View>
   );
 }

@@ -10,5 +10,10 @@
     "types": ["node"],
     "skipLibCheck": true
   },
-  "include": ["src/utils/songAudio.ts", "src/utils/__tests__/songAudio.test.ts"]
+  "include": [
+    "src/utils/songAudio.ts",
+    "src/utils/songAudioNative.ts",
+    "src/utils/songAudioPlayback.ts",
+    "src/utils/__tests__/songAudio.test.ts"
+  ]
 }

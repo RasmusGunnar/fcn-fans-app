@@ -1,10 +1,18 @@
 import React from 'react';
-import { Alert, Linking, Pressable, StyleSheet, Text } from 'react-native';
+import {
+  Alert,
+  type GestureResponderEvent,
+  Linking,
+  Pressable,
+  StyleSheet,
+  Text,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { defaultTheme } from '../../theme';
 
 interface SpotifyButtonProps {
   spotifyUrl: string;
+  compact?: boolean;
 }
 
 const theme = defaultTheme;
@@ -12,7 +20,7 @@ const SPOTIFY_LABEL = 'H\u00F8r melodien p\u00E5 Spotify';
 const OPEN_ERROR_TITLE = 'Kunne ikke \u00E5bne link';
 const OPEN_ERROR_MESSAGE = 'Spotify-linket kunne ikke \u00E5bnes lige nu.';
 
-export function SpotifyButton({ spotifyUrl }: SpotifyButtonProps) {
+export function SpotifyButton({ spotifyUrl, compact = false }: SpotifyButtonProps) {
   const handlePress = async () => {
     try {
       await Linking.openURL(spotifyUrl);
@@ -22,9 +30,17 @@ export function SpotifyButton({ spotifyUrl }: SpotifyButtonProps) {
   };
 
   return (
-    <Pressable onPress={handlePress} style={styles.button}>
+    <Pressable
+      onPress={(event: GestureResponderEvent) => {
+        event.stopPropagation();
+        void handlePress();
+      }}
+      style={[styles.button, compact && styles.compactButton]}
+      accessibilityRole="button"
+      accessibilityLabel={SPOTIFY_LABEL}
+    >
       <Ionicons name="musical-notes" size={theme.spacing[5]} color={theme.colors.text.inverse} />
-      <Text style={styles.text}>{SPOTIFY_LABEL}</Text>
+      <Text style={styles.text}>{compact ? 'Spotify' : SPOTIFY_LABEL}</Text>
       <Ionicons name="open-outline" size={theme.spacing[5]} color={theme.colors.text.inverse} />
     </Pressable>
   );
@@ -48,5 +64,11 @@ const styles = StyleSheet.create({
     color: theme.colors.text.inverse,
     flexShrink: 1,
     textAlign: 'center',
+  },
+  compactButton: {
+    minHeight: theme.spacing[11],
+    marginTop: theme.spacing[0],
+    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
   },
 });
