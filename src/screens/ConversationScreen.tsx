@@ -7,6 +7,7 @@ import {
   AppState,
   type AppStateStatus,
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -15,40 +16,53 @@ import {
   View,
 } from 'react-native';
 import { useAuth } from '../auth/AuthProvider';
+import { Avatar } from '../components/Avatar';
 import { DirectMessageReportModal } from '../components/messages/DirectMessageReportModal';
+import { GroupAvatar } from '../components/messages/GroupAvatar';
+import { MessageImage } from '../components/messages/MessageImage';
 import { MessageScreenHeader } from '../components/messages/MessageScreenHeader';
+import { TypingIndicator } from '../components/messages/TypingIndicator';
 import { Text } from '../components/ui';
+import { useConversationTyping } from '../hooks/useConversationTyping';
+import { removeMessageImage, uploadMessageImage } from '../lib/messageMedia';
+import { pickCameraPhoto, pickImageFromLibrary, type PickedMedia } from '../lib/mediaPicker';
 import { supabase } from '../lib/supabase';
 import {
   blockDirectMessageUser,
   createDirectMessageClientId,
-  getDirectConversationDetails,
-  getDirectMessages,
-  mapDirectMessageRow,
-  markDirectConversationRead,
-  reportDirectMessage,
-  sendDirectMessage,
+  getConversationDetails,
+  getConversationMessages,
+  markConversationRead,
+  reportConversation,
+  sendMessage,
   unblockDirectMessageUser,
 } from '../services/messagesApi';
 import { useMessageUnread } from '../state/MessageUnreadContext';
 import { useTheme, type Theme } from '../theme';
 import type {
   ConversationDetails,
-  DirectMessage,
+  ConversationMessage,
   DirectMessageReportReason,
   MessageCursor,
+  MessageMediaUpload,
   MessagePeer,
 } from '../types/messages';
 import {
   canSubmitDirectMessage,
-  createOrReuseDirectMessageSendAttempt,
   formatDirectMessageTimestamp,
+  formatMessageDateSeparator,
+  getConversationTitle,
+  isLatestOwnDirectMessageSeen,
   mergeDirectMessages,
-  type DirectMessageSendAttempt,
 } from '../utils/directMessages';
 
-type ConversationRoute = {
-  params?: { conversationId?: string; peer?: MessagePeer };
+type ConversationRoute = { params?: { conversationId?: string; peer?: MessagePeer } };
+
+type PendingSend = {
+  body: string;
+  clientMessageId: string;
+  selectedImageUri: string | null;
+  media: MessageMediaUpload | null;
 };
 
 export default function ConversationScreen() {
@@ -62,20 +76,22 @@ export default function ConversationScreen() {
   const conversationId = route.params?.conversationId?.trim() ?? '';
   const routePeer = route.params?.peer ?? null;
   const [details, setDetails] = useState<ConversationDetails | null>(null);
-  const [messages, setMessages] = useState<DirectMessage[]>([]);
+  const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [composer, setComposer] = useState('');
+  const [selectedImage, setSelectedImage] = useState<PickedMedia | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasOlder, setHasOlder] = useState(true);
   const [sending, setSending] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
-  const [pendingSend, setPendingSend] = useState<DirectMessageSendAttempt | null>(null);
+  const [pendingSend, setPendingSend] = useState<PendingSend | null>(null);
   const [reportVisible, setReportVisible] = useState(false);
   const [reportSubmitting, setReportSubmitting] = useState(false);
   const requestIdRef = useRef(0);
-  const messagesRef = useRef<DirectMessage[]>([]);
+  const messagesRef = useRef<ConversationMessage[]>([]);
   const detailsRef = useRef<ConversationDetails | null>(null);
+  const pendingSendRef = useRef<PendingSend | null>(null);
   const hasOlderRef = useRef(true);
   const loadingOlderRef = useRef(false);
   const readMessageIdRef = useRef<string | null>(null);
@@ -83,21 +99,35 @@ export default function ConversationScreen() {
 
   messagesRef.current = messages;
   detailsRef.current = details;
+  pendingSendRef.current = pendingSend;
   hasOlderRef.current = hasOlder;
   loadingOlderRef.current = loadingOlder;
 
-  const returnToInbox = useCallback(() => {
-    if (accessFallbackRef.current) return;
-    accessFallbackRef.current = true;
-    navigation.replace('MessagesList');
-  }, [navigation]);
+  const currentDisplayName =
+    String(user?.user_metadata?.display_name ?? user?.user_metadata?.username ?? '').trim() ||
+    'En fan';
+  const { typingLabel, notifyComposerChanged, stopTyping } = useConversationTyping({
+    conversationId,
+    userId: user?.id,
+    displayName: currentDisplayName,
+    enabled: Boolean(isFocused && details),
+  });
+
+  const returnToInbox = useCallback(
+    (showMessage = false) => {
+      if (accessFallbackRef.current) return;
+      accessFallbackRef.current = true;
+      if (showMessage) {
+        Alert.alert('Samtalen er ikke tilgængelig', 'Du har ikke længere adgang til samtalen.');
+      }
+      navigation.replace('MessagesList');
+    },
+    [navigation],
+  );
 
   const loadConversation = useCallback(
     async (mode: 'initial' | 'refresh' | 'older' = 'initial') => {
-      if (!conversationId) {
-        returnToInbox();
-        return;
-      }
+      if (!conversationId) return returnToInbox();
       if (mode === 'older' && (loadingOlderRef.current || !hasOlderRef.current)) return;
 
       const requestId = ++requestIdRef.current;
@@ -107,7 +137,6 @@ export default function ConversationScreen() {
         setLoadingOlder(true);
       }
       setLoadError(null);
-
       const oldestMessage =
         mode === 'older' ? messagesRef.current[messagesRef.current.length - 1] : null;
       const cursor: MessageCursor | null = oldestMessage
@@ -118,15 +147,11 @@ export default function ConversationScreen() {
         const [nextDetails, page] = await Promise.all([
           mode === 'older'
             ? Promise.resolve(detailsRef.current)
-            : getDirectConversationDetails(conversationId),
-          getDirectMessages(conversationId, cursor),
+            : getConversationDetails(conversationId),
+          getConversationMessages(conversationId, cursor),
         ]);
         if (requestIdRef.current !== requestId) return;
-        if (!nextDetails) {
-          returnToInbox();
-          return;
-        }
-
+        if (!nextDetails) return returnToInbox(mode !== 'initial');
         setDetails(nextDetails);
         setMessages((current) =>
           mode === 'older' ? mergeDirectMessages(current, page) : mergeDirectMessages([], page),
@@ -135,11 +160,12 @@ export default function ConversationScreen() {
         setHasOlder(page.length === 30);
       } catch (error) {
         if (requestIdRef.current !== requestId) return;
-        if (mode === 'initial') {
-          returnToInbox();
-          return;
+        const message = error instanceof Error ? error.message : 'Samtalen kunne ikke hentes.';
+        if (mode === 'initial' || message.includes('ikke længere tilgængelig')) {
+          returnToInbox(mode !== 'initial');
+        } else {
+          setLoadError(message);
         }
-        setLoadError(error instanceof Error ? error.message : 'Samtalen kunne ikke hentes.');
       } finally {
         if (requestIdRef.current === requestId) {
           setLoading(false);
@@ -151,15 +177,17 @@ export default function ConversationScreen() {
     [conversationId, returnToInbox],
   );
 
-  useEffect(() => {
-    void loadConversation('initial');
-  }, [loadConversation]);
+  useEffect(() => void loadConversation('initial'), [loadConversation]);
 
   useEffect(() => {
     if (!conversationId || !user?.id) return;
-
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleRefresh = () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => void loadConversation('refresh'), 100);
+    };
     const channel = supabase
-      .channel(`direct-messages-${conversationId}-${user.id}`)
+      .channel(`conversation-v2-${conversationId}-${user.id}`)
       .on(
         'postgres_changes',
         {
@@ -168,16 +196,33 @@ export default function ConversationScreen() {
           table: 'messages',
           filter: `conversation_id=eq.${conversationId}`,
         },
-        (payload) => {
-          const incoming = mapDirectMessageRow(payload.new);
-          setMessages((current) => mergeDirectMessages(current, [incoming]));
+        scheduleRefresh,
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'conversations',
+          filter: `id=eq.${conversationId}`,
         },
+        scheduleRefresh,
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'conversation_members',
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        scheduleRefresh,
       )
       .subscribe((status) => {
-        if (status === 'SUBSCRIBED') void loadConversation('refresh');
+        if (status === 'SUBSCRIBED') scheduleRefresh();
       });
-
     return () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
       void supabase.removeChannel(channel);
     };
   }, [conversationId, loadConversation, user?.id]);
@@ -187,19 +232,19 @@ export default function ConversationScreen() {
     const subscription = AppState.addEventListener('change', (nextState) => {
       const returnedToForeground =
         nextState === 'active' && (currentState === 'background' || currentState === 'inactive');
+      if (nextState !== 'active') stopTyping();
       currentState = nextState;
       if (returnedToForeground && isFocused) void loadConversation('refresh');
     });
     return () => subscription.remove();
-  }, [isFocused, loadConversation]);
+  }, [isFocused, loadConversation, stopTyping]);
 
   useEffect(() => {
     const latestLoadedMessage = messages[0];
     if (!isFocused || !conversationId || !latestLoadedMessage) return;
     if (readMessageIdRef.current === latestLoadedMessage.id) return;
-
     const timer = setTimeout(() => {
-      void markDirectConversationRead(conversationId, latestLoadedMessage.id)
+      void markConversationRead(conversationId, latestLoadedMessage.id)
         .then(() => {
           readMessageIdRef.current = latestLoadedMessage.id;
           void refreshUnreadCount();
@@ -209,40 +254,103 @@ export default function ConversationScreen() {
     return () => clearTimeout(timer);
   }, [conversationId, isFocused, messages, refreshUnreadCount]);
 
-  const submitMessage = useCallback(
-    async (retry?: DirectMessageSendAttempt) => {
-      if (!conversationId || sending || details?.blocked) return;
-      const attempt =
-        retry ??
-        createOrReuseDirectMessageSendAttempt(composer, pendingSend, createDirectMessageClientId);
-      if (!attempt) return;
-      setPendingSend(attempt);
-      setSending(true);
-      setSendError(null);
-
-      try {
-        const result = await sendDirectMessage({ conversationId, ...attempt });
-        setMessages((current) => mergeDirectMessages(current, [result.message]));
-        setComposer('');
-        setPendingSend(null);
-      } catch (error) {
-        setSendError(
-          error instanceof Error ? error.message : 'Beskeden kunne ikke sendes. Prøv igen.',
-        );
-      } finally {
-        setSending(false);
-      }
+  useEffect(
+    () => () => {
+      const orphanPath = pendingSendRef.current?.media?.path;
+      if (orphanPath) void removeMessageImage(orphanPath);
     },
-    [composer, conversationId, details?.blocked, pendingSend, sending],
+    [],
   );
 
+  const clearPending = useCallback((removeUpload: boolean) => {
+    const orphanPath = pendingSendRef.current?.media?.path;
+    if (removeUpload && orphanPath) void removeMessageImage(orphanPath);
+    setPendingSend(null);
+    setSendError(null);
+  }, []);
+
+  const selectImage = useCallback(
+    (source: 'camera' | 'library') => {
+      const picker = source === 'camera' ? pickCameraPhoto : pickImageFromLibrary;
+      void picker().then((asset) => {
+        if (!asset) return;
+        clearPending(true);
+        setSelectedImage(asset);
+      });
+    },
+    [clearPending],
+  );
+
+  const openImagePicker = useCallback(() => {
+    Alert.alert('Tilføj billede', undefined, [
+      { text: 'Tag billede', onPress: () => selectImage('camera') },
+      { text: 'Vælg fra bibliotek', onPress: () => selectImage('library') },
+      { text: 'Annuller', style: 'cancel' },
+    ]);
+  }, [selectImage]);
+
+  const submitMessage = useCallback(async () => {
+    if (!conversationId || !user?.id || sending || details?.blocked) return;
+    const normalizedBody = composer.trim();
+    const imageUri = selectedImage?.uri ?? null;
+    let attempt = pendingSend;
+    if (!attempt || attempt.body !== normalizedBody || attempt.selectedImageUri !== imageUri) {
+      if (attempt?.media?.path) void removeMessageImage(attempt.media.path);
+      attempt = {
+        body: normalizedBody,
+        clientMessageId: createDirectMessageClientId(),
+        selectedImageUri: imageUri,
+        media: null,
+      };
+      setPendingSend(attempt);
+    }
+    if (!attempt.body && !selectedImage) return;
+
+    setSending(true);
+    setSendError(null);
+    stopTyping();
+    try {
+      let media = attempt.media;
+      if (selectedImage && !media) {
+        media = await uploadMessageImage(conversationId, user.id, selectedImage);
+        attempt = { ...attempt, media };
+        setPendingSend(attempt);
+      }
+      const result = await sendMessage({
+        conversationId,
+        body: attempt.body,
+        clientMessageId: attempt.clientMessageId,
+        media,
+      });
+      setMessages((current) => mergeDirectMessages(current, [result.message]));
+      setComposer('');
+      setSelectedImage(null);
+      setPendingSend(null);
+    } catch (error) {
+      setSendError(
+        error instanceof Error ? error.message : 'Beskeden kunne ikke sendes. Prøv igen.',
+      );
+    } finally {
+      setSending(false);
+    }
+  }, [
+    composer,
+    conversationId,
+    details?.blocked,
+    pendingSend,
+    selectedImage,
+    sending,
+    stopTyping,
+    user?.id,
+  ]);
+
   const confirmBlock = useCallback(() => {
-    if (!details) return;
+    if (!details?.peer || details.type !== 'direct') return;
     Alert.alert(
       details.blockedByMe ? 'Fjern blokering' : 'Blokér bruger',
       details.blockedByMe
         ? `Vil du tillade beskeder med ${details.peer.displayName} igen?`
-        : `Vil du blokere ${details.peer.displayName}? I kan stadig se jeres eksisterende beskeder.`,
+        : `Vil du blokere ${details.peer.displayName}? I kan stadig være i samme gruppe.`,
       [
         { text: 'Annuller', style: 'cancel' },
         {
@@ -250,8 +358,8 @@ export default function ConversationScreen() {
           style: details.blockedByMe ? 'default' : 'destructive',
           onPress: () => {
             const action = details.blockedByMe
-              ? unblockDirectMessageUser(details.peer.id)
-              : blockDirectMessageUser(details.peer.id);
+              ? unblockDirectMessageUser(details.peer!.id)
+              : blockDirectMessageUser(details.peer!.id);
             void action
               .then(() => loadConversation('refresh'))
               .catch((error) =>
@@ -268,6 +376,14 @@ export default function ConversationScreen() {
 
   const openConversationMenu = useCallback(() => {
     if (!details) return;
+    if (details.type === 'group') {
+      Alert.alert(getConversationTitle(details), undefined, [
+        { text: 'Gruppeinfo', onPress: () => navigation.navigate('GroupInfo', { conversationId }) },
+        { text: 'Rapportér gruppe', onPress: () => setReportVisible(true) },
+        { text: 'Annuller', style: 'cancel' },
+      ]);
+      return;
+    }
     const actions: Parameters<typeof Alert.alert>[2] = [];
     if (!details.blocked || details.blockedByMe) {
       actions.push({
@@ -278,22 +394,23 @@ export default function ConversationScreen() {
     }
     actions.push({ text: 'Rapportér', onPress: () => setReportVisible(true) });
     actions.push({ text: 'Annuller', style: 'cancel' });
-    Alert.alert(details.peer.displayName, undefined, actions);
-  }, [confirmBlock, details]);
+    Alert.alert(getConversationTitle(details), undefined, actions);
+  }, [confirmBlock, conversationId, details, navigation]);
 
   const submitReport = useCallback(
     async (reason: DirectMessageReportReason, note: string) => {
       if (!details || reportSubmitting) return;
       setReportSubmitting(true);
       try {
-        await reportDirectMessage({
+        await reportConversation({
           conversationId: details.id,
-          reportedUserId: details.peer.id,
+          targetType: details.type === 'group' ? 'conversation' : 'user',
+          reportedUserId: details.peer?.id,
           reason,
           note,
         });
         setReportVisible(false);
-        Alert.alert('Tak', 'Tak. Din rapport er sendt.');
+        Alert.alert('Tak', 'Din rapport er sendt.');
       } catch (error) {
         Alert.alert(
           'Rapporten kunne ikke sendes',
@@ -306,31 +423,94 @@ export default function ConversationScreen() {
     [details, reportSubmitting],
   );
 
-  const peer = details?.peer ?? routePeer;
+  const title = details ? getConversationTitle(details) : (routePeer?.displayName ?? 'Samtale');
   const canSend = Boolean(
-    details && canSubmitDirectMessage({ body: composer, blocked: details.blocked, sending }),
+    details &&
+    canSubmitDirectMessage({
+      body: composer,
+      hasImage: Boolean(selectedImage),
+      blocked: details.blocked,
+      sending,
+    }),
   );
+  const latestOwnMessageId = messages.find((message) => message.senderId === user?.id)?.id ?? null;
 
   const renderMessage = useCallback(
-    ({ item }: { item: DirectMessage }) => {
+    ({ item, index }: { item: ConversationMessage; index: number }) => {
       const own = item.senderId === user?.id;
+      const olderMessage = messages[index + 1];
+      const showDate =
+        !olderMessage ||
+        formatMessageDateSeparator(olderMessage.createdAt) !==
+          formatMessageDateSeparator(item.createdAt);
+      const seen =
+        details?.type === 'direct' &&
+        own &&
+        isLatestOwnDirectMessageSeen({
+          message: item,
+          latestOwnMessageId,
+          peerLastReadAt: details.peerLastReadAt,
+          peerLastReadMessageId: details.peerLastReadMessageId,
+        });
       return (
-        <View style={[styles.messageRow, own ? styles.ownRow : styles.peerRow]}>
-          <View style={[styles.bubble, own ? styles.ownBubble : styles.peerBubble]}>
-            <Text variant="body" style={own ? styles.ownBubbleText : undefined}>
-              {item.body}
-            </Text>
-            <Text
-              variant="small"
-              style={[styles.messageTime, own ? styles.ownMessageTime : styles.peerMessageTime]}
-            >
-              {formatDirectMessageTimestamp(item.createdAt)}
-            </Text>
+        <View>
+          {showDate ? (
+            <View style={styles.dateSeparator}>
+              <Text variant="small" color="muted">
+                {formatMessageDateSeparator(item.createdAt)}
+              </Text>
+            </View>
+          ) : null}
+          <View style={[styles.messageRow, own ? styles.ownRow : styles.peerRow]}>
+            {!own && details?.type === 'group' ? (
+              <Avatar
+                userId={item.senderId}
+                avatarUrl={item.senderAvatarUrl}
+                label={item.senderDisplayName}
+                size={theme.spacing[7]}
+              />
+            ) : null}
+            <View style={[styles.bubble, own ? styles.ownBubble : styles.peerBubble]}>
+              {!own && details?.type === 'group' ? (
+                <Text variant="small" color="secondary">
+                  {item.senderDisplayName}
+                </Text>
+              ) : null}
+              {item.mediaPath ? (
+                <MessageImage
+                  uri={item.mediaUrl}
+                  width={item.mediaWidth}
+                  height={item.mediaHeight}
+                  onPress={() => {
+                    if (!item.mediaUrl) return;
+                    navigation.getParent()?.navigate('MediaViewer', {
+                      items: [{ uri: item.mediaUrl, url: item.mediaUrl, type: 'image' }],
+                      initialIndex: 0,
+                    });
+                  }}
+                />
+              ) : null}
+              {item.body ? (
+                <Text variant="body" style={own ? styles.ownBubbleText : undefined}>
+                  {item.body}
+                </Text>
+              ) : null}
+              <View style={styles.messageMeta}>
+                <Text variant="small" style={own ? styles.ownMessageTime : styles.peerMessageTime}>
+                  {formatDirectMessageTimestamp(item.createdAt)}
+                </Text>
+                {own && item.id === latestOwnMessageId && details?.type === 'direct' ? (
+                  <Text variant="small" style={styles.ownMessageTime}>
+                    {seen ? 'Set' : 'Sendt'}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
           </View>
         </View>
       );
     },
-    [styles, user?.id],
+    [details, latestOwnMessageId, messages, navigation, styles, theme.spacing, user?.id],
   );
 
   return (
@@ -340,8 +520,21 @@ export default function ConversationScreen() {
       keyboardVerticalOffset={Platform.OS === 'ios' ? theme.spacing[2] : 0}
     >
       <MessageScreenHeader
-        title={peer?.displayName ?? 'Samtale'}
-        peer={peer}
+        title={title}
+        subtitle={details?.type === 'group' ? `${details.memberCount} medlemmer` : typingLabel}
+        peer={details?.type === 'direct' ? (details.peer ?? routePeer) : null}
+        leading={
+          details?.type === 'group' ? (
+            <GroupAvatar name={title} avatarUrl={details.avatarUrl} size={theme.spacing[8]} />
+          ) : undefined
+        }
+        onTitlePress={
+          details?.type === 'group'
+            ? () => navigation.navigate('GroupInfo', { conversationId })
+            : details?.peer
+              ? () => navigation.navigate('PublicProfile', { userId: details.peer!.id })
+              : undefined
+        }
         onBack={() => navigation.goBack()}
         rightIcon="ellipsis-horizontal"
         onRightPress={details ? openConversationMenu : undefined}
@@ -368,7 +561,7 @@ export default function ConversationScreen() {
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <Text variant="body" color="secondary" style={styles.centeredText}>
-                Skriv den første besked til {peer?.displayName ?? 'denne fan'}.
+                Skriv den første besked i {title}.
               </Text>
             </View>
           }
@@ -381,6 +574,7 @@ export default function ConversationScreen() {
           </Text>
         </Pressable>
       ) : null}
+      {details?.type === 'group' ? <TypingIndicator label={typingLabel} /> : null}
       {details?.blocked ? (
         <View style={styles.blockedComposer}>
           <Ionicons name="ban-outline" size={20} color={theme.colors.text.secondary} />
@@ -389,43 +583,68 @@ export default function ConversationScreen() {
           </Text>
         </View>
       ) : (
-        <View style={styles.composerWrap}>
-          <TextInput
-            style={styles.composerInput}
-            value={composer}
-            onChangeText={(value) => {
-              setComposer(value);
-              if (pendingSend && value.trim() !== pendingSend.body) {
-                setPendingSend(null);
-                setSendError(null);
-              }
-            }}
-            placeholder="Skriv en besked"
-            placeholderTextColor={theme.colors.text.muted}
-            multiline
-            maxLength={2000}
-            editable={!sending}
-            accessibilityLabel="Skriv en besked"
-          />
-          <Pressable
-            style={[styles.sendButton, !canSend && styles.sendButtonDisabled]}
-            onPress={() => void submitMessage()}
-            disabled={!canSend}
-            accessibilityRole="button"
-            accessibilityLabel="Send besked"
-          >
-            {sending ? (
-              <ActivityIndicator size="small" color={theme.colors.text.inverse} />
-            ) : (
-              <Ionicons name="send" size={20} color={theme.colors.text.inverse} />
-            )}
-          </Pressable>
-        </View>
+        <>
+          {selectedImage ? (
+            <View style={styles.imagePreviewRow}>
+              <Image source={{ uri: selectedImage.uri }} style={styles.imagePreview} />
+              <Pressable
+                style={styles.removeImageButton}
+                onPress={() => {
+                  clearPending(true);
+                  setSelectedImage(null);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Fjern valgt billede"
+              >
+                <Ionicons name="close" size={20} color={theme.colors.text.inverse} />
+              </Pressable>
+            </View>
+          ) : null}
+          <View style={styles.composerWrap}>
+            <Pressable
+              style={styles.mediaButton}
+              onPress={openImagePicker}
+              disabled={sending || !details}
+              accessibilityRole="button"
+              accessibilityLabel="Tilføj billede"
+            >
+              <Ionicons name="image-outline" size={23} color={theme.colors.primary} />
+            </Pressable>
+            <TextInput
+              style={styles.composerInput}
+              value={composer}
+              onChangeText={(value) => {
+                setComposer(value);
+                notifyComposerChanged(value);
+                if (pendingSend && value.trim() !== pendingSend.body) clearPending(true);
+              }}
+              placeholder={selectedImage ? 'Tilføj en tekst (valgfrit)' : 'Skriv en besked'}
+              placeholderTextColor={theme.colors.text.muted}
+              multiline
+              maxLength={2000}
+              editable={!sending && Boolean(details)}
+              accessibilityLabel="Skriv en besked"
+            />
+            <Pressable
+              style={[styles.sendButton, !canSend && styles.sendButtonDisabled]}
+              onPress={() => void submitMessage()}
+              disabled={!canSend}
+              accessibilityRole="button"
+              accessibilityLabel="Send besked"
+            >
+              {sending ? (
+                <ActivityIndicator size="small" color={theme.colors.text.inverse} />
+              ) : (
+                <Ionicons name="send" size={20} color={theme.colors.text.inverse} />
+              )}
+            </Pressable>
+          </View>
+        </>
       )}
       {sendError && pendingSend ? (
         <Pressable
           style={styles.retryBand}
-          onPress={() => void submitMessage(pendingSend)}
+          onPress={() => void submitMessage()}
           disabled={sending}
           accessibilityRole="button"
           accessibilityLabel="Prøv at sende beskeden igen"
@@ -455,7 +674,13 @@ function createStyles(theme: Theme) {
       paddingVertical: theme.spacing[4],
       gap: theme.spacing[2],
     },
-    messageRow: { width: '100%', flexDirection: 'row' },
+    dateSeparator: { alignItems: 'center', paddingVertical: theme.spacing[3] },
+    messageRow: {
+      width: '100%',
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      gap: theme.spacing[2],
+    },
     ownRow: { justifyContent: 'flex-end' },
     peerRow: { justifyContent: 'flex-start' },
     bubble: {
@@ -472,7 +697,7 @@ function createStyles(theme: Theme) {
       borderColor: theme.colors.border.subtle,
     },
     ownBubbleText: { color: theme.colors.text.inverse },
-    messageTime: { alignSelf: 'flex-end' },
+    messageMeta: { alignSelf: 'flex-end', flexDirection: 'row', gap: theme.spacing[2] },
     ownMessageTime: { color: theme.colors.text.inverse, opacity: 0.8 },
     peerMessageTime: { color: theme.colors.text.muted },
     emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -481,6 +706,25 @@ function createStyles(theme: Theme) {
       paddingHorizontal: theme.layout.screenPadding,
       paddingVertical: theme.spacing[2],
       backgroundColor: theme.colors.pill.red.bg,
+    },
+    imagePreviewRow: {
+      minHeight: theme.spacing[16] + theme.spacing[4],
+      paddingHorizontal: theme.layout.screenPadding,
+      paddingTop: theme.spacing[2],
+      alignItems: 'flex-start',
+      backgroundColor: theme.colors.bg.card,
+    },
+    imagePreview: { width: 96, height: 96, borderRadius: theme.radius.md },
+    removeImageButton: {
+      position: 'absolute',
+      top: theme.spacing[1],
+      left: theme.layout.screenPadding + 78,
+      width: theme.spacing[7],
+      height: theme.spacing[7],
+      borderRadius: theme.radius.pill,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.colors.overlay.heavy,
     },
     composerWrap: {
       paddingHorizontal: theme.layout.screenPadding,
@@ -491,6 +735,12 @@ function createStyles(theme: Theme) {
       borderTopWidth: theme.layout.borderHairline,
       borderTopColor: theme.colors.border.default,
       backgroundColor: theme.colors.bg.card,
+    },
+    mediaButton: {
+      width: theme.spacing[10],
+      height: theme.spacing[10],
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     composerInput: {
       flex: 1,

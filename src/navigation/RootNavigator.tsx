@@ -222,6 +222,7 @@ export function RootNavigator() {
             MessagesList: '',
             Conversation: ':conversationId',
             NewMessage: 'new',
+            GroupInfo: ':conversationId/info',
           },
         },
       },

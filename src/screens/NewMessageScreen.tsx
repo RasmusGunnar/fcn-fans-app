@@ -1,22 +1,41 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
 import { Avatar } from '../components/Avatar';
 import { MessageScreenHeader } from '../components/messages/MessageScreenHeader';
-import { Text } from '../components/ui';
-import { createOrGetDirectConversation, searchDirectMessageUsers } from '../services/messagesApi';
+import { Button, SegmentedControl, Text } from '../components/ui';
+import {
+  createGroupConversation,
+  createOrGetDirectConversation,
+  searchDirectMessageUsers,
+} from '../services/messagesApi';
 import { useTheme, type Theme } from '../theme';
 import type { MessageUserSearchResult } from '../types/messages';
+import { validateGroupCreation } from '../utils/directMessages';
+
+type ComposeMode = 'direct' | 'group';
 
 export default function NewMessageScreen() {
   const navigation = useNavigation<any>();
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const [mode, setMode] = useState<ComposeMode>('direct');
   const [query, setQuery] = useState('');
+  const [groupName, setGroupName] = useState('');
   const [results, setResults] = useState<MessageUserSearchResult[]>([]);
+  const [selected, setSelected] = useState<MessageUserSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [openingUserId, setOpeningUserId] = useState<string | null>(null);
+  const [creatingGroup, setCreatingGroup] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
 
@@ -47,12 +66,11 @@ export default function NewMessageScreen() {
           if (requestIdRef.current === requestId) setSearching(false);
         });
     }, 300);
-
     return () => clearTimeout(timer);
   }, [query]);
 
   const openConversation = async (peer: MessageUserSearchResult) => {
-    if (openingUserId) return;
+    if (openingUserId || creatingGroup) return;
     setOpeningUserId(peer.id);
     setError(null);
     try {
@@ -65,9 +83,113 @@ export default function NewMessageScreen() {
     }
   };
 
+  const toggleSelected = (peer: MessageUserSearchResult) => {
+    setError(null);
+    setSelected((current) => {
+      if (current.some((item) => item.id === peer.id)) {
+        return current.filter((item) => item.id !== peer.id);
+      }
+      if (current.length >= 9) {
+        setError('Du kan vælge højst 9 andre fans.');
+        return current;
+      }
+      return [...current, peer];
+    });
+  };
+
+  const submitGroup = async () => {
+    const validationError = validateGroupCreation(
+      groupName,
+      selected.map((item) => item.id),
+    );
+    if (validationError || creatingGroup) {
+      setError(validationError);
+      return;
+    }
+    setCreatingGroup(true);
+    setError(null);
+    try {
+      const conversationId = await createGroupConversation(
+        groupName,
+        selected.map((item) => item.id),
+      );
+      navigation.replace('Conversation', { conversationId });
+    } catch (createError) {
+      setError(createError instanceof Error ? createError.message : 'Gruppen kunne ikke oprettes.');
+    } finally {
+      setCreatingGroup(false);
+    }
+  };
+
+  const groupValidation = validateGroupCreation(
+    groupName,
+    selected.map((item) => item.id),
+  );
+
   return (
     <View style={styles.container}>
-      <MessageScreenHeader title="Ny besked" onBack={() => navigation.goBack()} />
+      <MessageScreenHeader title="Ny samtale" onBack={() => navigation.goBack()} />
+      <SegmentedControl
+        items={[
+          { key: 'direct', label: 'Ny besked' },
+          { key: 'group', label: 'Ny gruppe' },
+        ]}
+        activeKey={mode}
+        onChange={(nextMode) => {
+          setMode(nextMode);
+          setError(null);
+        }}
+        style={styles.segmented}
+      />
+
+      {mode === 'group' ? (
+        <View style={styles.groupSetup}>
+          <TextInput
+            style={styles.groupNameInput}
+            value={groupName}
+            onChangeText={setGroupName}
+            placeholder="Gruppenavn"
+            placeholderTextColor={theme.colors.text.muted}
+            maxLength={80}
+            accessibilityLabel="Gruppenavn"
+          />
+          {selected.length > 0 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.selectedList}
+            >
+              {selected.map((peer) => (
+                <Pressable
+                  key={peer.id}
+                  style={styles.selectedChip}
+                  onPress={() => toggleSelected(peer)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Fjern ${peer.displayName}`}
+                >
+                  <Avatar
+                    userId={peer.id}
+                    avatarUrl={peer.avatarUrl}
+                    label={peer.displayName}
+                    size={theme.spacing[7]}
+                  />
+                  <Text variant="small" numberOfLines={1} style={styles.selectedName}>
+                    {peer.displayName}
+                  </Text>
+                  <Ionicons name="close" size={16} color={theme.colors.text.secondary} />
+                </Pressable>
+              ))}
+            </ScrollView>
+          ) : null}
+          <Button
+            title={creatingGroup ? 'Opretter...' : `Opret gruppe (${selected.length + 1}/10)`}
+            onPress={() => void submitGroup()}
+            disabled={Boolean(groupValidation) || creatingGroup}
+            fullWidth
+          />
+        </View>
+      ) : null}
+
       <View style={styles.searchWrap}>
         <Ionicons name="search" size={20} color={theme.colors.text.muted} />
         <TextInput
@@ -78,7 +200,6 @@ export default function NewMessageScreen() {
           placeholderTextColor={theme.colors.text.muted}
           autoCapitalize="none"
           autoCorrect={false}
-          autoFocus
           returnKeyType="search"
           accessibilityLabel="Søg efter bruger"
         />
@@ -95,43 +216,60 @@ export default function NewMessageScreen() {
         data={results}
         keyExtractor={(item) => item.id}
         keyboardShouldPersistTaps="handled"
-        renderItem={({ item }) => (
-          <Pressable
-            style={({ pressed }) => [styles.resultRow, pressed && styles.resultPressed]}
-            onPress={() => void openConversation(item)}
-            disabled={Boolean(openingUserId)}
-            accessibilityRole="button"
-            accessibilityLabel={`Start samtale med ${item.displayName}`}
-          >
-            <Avatar
-              userId={item.id}
-              avatarUrl={item.avatarUrl}
-              label={item.displayName}
-              size={theme.spacing[12]}
-            />
-            <View style={styles.resultCopy}>
-              <Text variant="bodyBold" numberOfLines={1}>
-                {item.displayName}
-              </Text>
-              {item.username ? (
-                <Text variant="small" color="secondary">
-                  @{item.username}
+        renderItem={({ item }) => {
+          const isSelected = selected.some((peer) => peer.id === item.id);
+          return (
+            <Pressable
+              style={({ pressed }) => [
+                styles.resultRow,
+                isSelected && styles.resultSelected,
+                pressed && styles.resultPressed,
+              ]}
+              onPress={() =>
+                mode === 'group' ? toggleSelected(item) : void openConversation(item)
+              }
+              disabled={Boolean(openingUserId) || creatingGroup}
+              accessibilityRole="button"
+              accessibilityLabel={
+                mode === 'group'
+                  ? `${isSelected ? 'Fjern' : 'Vælg'} ${item.displayName}`
+                  : `Start samtale med ${item.displayName}`
+              }
+            >
+              <Avatar
+                userId={item.id}
+                avatarUrl={item.avatarUrl}
+                label={item.displayName}
+                size={theme.spacing[12]}
+              />
+              <View style={styles.resultCopy}>
+                <Text variant="bodyBold" numberOfLines={1}>
+                  {item.displayName}
                 </Text>
-              ) : null}
-              {item.mutualCommunityCount > 0 ? (
-                <Text variant="small" color="muted">
-                  {item.mutualCommunityCount} fælles fællesskab
-                  {item.mutualCommunityCount === 1 ? '' : 'er'}
-                </Text>
-              ) : null}
-            </View>
-            {openingUserId === item.id ? (
-              <ActivityIndicator color={theme.colors.primary} />
-            ) : (
-              <Ionicons name="chevron-forward" size={20} color={theme.colors.text.muted} />
-            )}
-          </Pressable>
-        )}
+                {item.username ? (
+                  <Text variant="small" color="secondary">
+                    @{item.username}
+                  </Text>
+                ) : null}
+              </View>
+              {openingUserId === item.id ? (
+                <ActivityIndicator color={theme.colors.primary} />
+              ) : (
+                <Ionicons
+                  name={
+                    mode === 'group'
+                      ? isSelected
+                        ? 'checkmark-circle'
+                        : 'add-circle-outline'
+                      : 'chevron-forward'
+                  }
+                  size={22}
+                  color={isSelected ? theme.colors.primary : theme.colors.text.muted}
+                />
+              )}
+            </Pressable>
+          );
+        }}
         ListEmptyComponent={
           query.trim().length < 2 ? (
             <View style={styles.emptyState}>
@@ -156,6 +294,30 @@ export default function NewMessageScreen() {
 function createStyles(theme: Theme) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.bg.default },
+    segmented: { marginHorizontal: theme.layout.screenPadding },
+    groupSetup: { paddingHorizontal: theme.layout.screenPadding, gap: theme.spacing[2] },
+    groupNameInput: {
+      minHeight: theme.spacing[11],
+      paddingHorizontal: theme.spacing[3],
+      borderWidth: theme.layout.borderWidth,
+      borderColor: theme.colors.border.default,
+      borderRadius: theme.radius.md,
+      color: theme.colors.text.primary,
+      backgroundColor: theme.colors.bg.card,
+      fontSize: theme.typography.body.fontSize,
+    },
+    selectedList: { gap: theme.spacing[2] },
+    selectedChip: {
+      maxWidth: 170,
+      minHeight: theme.spacing[9],
+      paddingHorizontal: theme.spacing[2],
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing[1],
+      borderRadius: theme.radius.pill,
+      backgroundColor: theme.colors.bg.subtle,
+    },
+    selectedName: { flexShrink: 1 },
     searchWrap: {
       margin: theme.layout.screenPadding,
       minHeight: theme.spacing[12],
@@ -183,7 +345,8 @@ function createStyles(theme: Theme) {
       borderBottomColor: theme.colors.border.subtle,
       backgroundColor: theme.colors.bg.card,
     },
-    resultPressed: { backgroundColor: theme.colors.bg.subtle },
+    resultSelected: { backgroundColor: theme.colors.bg.subtle },
+    resultPressed: { opacity: 0.8 },
     resultCopy: { flex: 1, minWidth: 0, gap: theme.spacing[0] },
     errorBand: { paddingHorizontal: theme.layout.screenPadding, paddingBottom: theme.spacing[3] },
     emptyList: { flexGrow: 1 },

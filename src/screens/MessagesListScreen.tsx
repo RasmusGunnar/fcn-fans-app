@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../auth/AuthProvider';
 import { Avatar } from '../components/Avatar';
+import { GroupAvatar } from '../components/messages/GroupAvatar';
 import { MessageScreenHeader } from '../components/messages/MessageScreenHeader';
 import { Text } from '../components/ui';
 import { supabase } from '../lib/supabase';
@@ -18,7 +19,12 @@ import { getDirectMessagesInbox } from '../services/messagesApi';
 import { useMessageUnread } from '../state/MessageUnreadContext';
 import { useTheme, type Theme } from '../theme';
 import type { ConversationSummary, InboxCursor } from '../types/messages';
-import { formatDirectMessageTimestamp, formatMessageUnreadBadge } from '../utils/directMessages';
+import {
+  formatDirectMessageTimestamp,
+  formatMessageUnreadBadge,
+  getConversationPreview,
+  getConversationTitle,
+} from '../utils/directMessages';
 
 export default function MessagesListScreen() {
   const navigation = useNavigation<any>();
@@ -64,7 +70,7 @@ export default function MessagesListScreen() {
         mode === 'more' ? currentConversations[currentConversations.length - 1] : null;
       const cursor: InboxCursor | null = lastConversation
         ? {
-            lastMessageAt: lastConversation.lastMessageAt,
+            activityAt: lastConversation.activityAt,
             conversationId: lastConversation.id,
           }
         : null;
@@ -143,32 +149,36 @@ export default function MessagesListScreen() {
   const renderConversation = useCallback(
     ({ item }: { item: ConversationSummary }) => {
       const unreadLabel = formatMessageUnreadBadge(item.unreadCount);
-      const ownLastMessage = item.lastMessageSenderId === user?.id;
+      const title = getConversationTitle(item);
       return (
         <Pressable
           style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
           onPress={() =>
             navigation.navigate('Conversation', {
               conversationId: item.id,
-              peer: item.peer,
+              peer: item.peer ?? undefined,
             })
           }
           accessibilityRole="button"
-          accessibilityLabel={`Samtale med ${item.peer.displayName}`}
+          accessibilityLabel={`Åbn ${title}`}
         >
-          <Avatar
-            userId={item.peer.id}
-            avatarUrl={item.peer.avatarUrl}
-            label={item.peer.displayName}
-            size={theme.spacing[12]}
-          />
+          {item.type === 'group' ? (
+            <GroupAvatar name={title} avatarUrl={item.avatarUrl} size={theme.spacing[12]} />
+          ) : item.peer ? (
+            <Avatar
+              userId={item.peer.id}
+              avatarUrl={item.peer.avatarUrl}
+              label={item.peer.displayName}
+              size={theme.spacing[12]}
+            />
+          ) : null}
           <View style={styles.rowCopy}>
             <View style={styles.rowTopLine}>
               <Text variant="bodyBold" numberOfLines={1} style={styles.peerName}>
-                {item.peer.displayName}
+                {title}
               </Text>
               <Text variant="small" color="muted">
-                {formatDirectMessageTimestamp(item.lastMessageAt)}
+                {formatDirectMessageTimestamp(item.activityAt)}
               </Text>
             </View>
             <View style={styles.rowBottomLine}>
@@ -178,8 +188,7 @@ export default function MessagesListScreen() {
                 numberOfLines={1}
                 style={styles.preview}
               >
-                {ownLastMessage ? 'Dig: ' : ''}
-                {item.lastMessageBody}
+                {getConversationPreview(item, user?.id)}
               </Text>
               {unreadLabel ? (
                 <View style={styles.unreadBadge}>

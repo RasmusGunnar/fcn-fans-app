@@ -9,8 +9,11 @@ import type { MessagePeer } from '../../types/messages';
 
 type MessageScreenHeaderProps = {
   title: string;
+  subtitle?: string | null;
   peer?: MessagePeer | null;
+  leading?: React.ReactNode;
   onBack: () => void;
+  onTitlePress?: () => void;
   rightIcon?: keyof typeof Ionicons.glyphMap;
   onRightPress?: () => void;
   rightAccessibilityLabel?: string;
@@ -18,8 +21,11 @@ type MessageScreenHeaderProps = {
 
 export function MessageScreenHeader({
   title,
+  subtitle,
   peer,
+  leading,
   onBack,
+  onTitlePress,
   rightIcon,
   onRightPress,
   rightAccessibilityLabel,
@@ -40,19 +46,32 @@ export function MessageScreenHeader({
         >
           <Ionicons name="chevron-back" size={24} color={theme.colors.text.inverse} />
         </Pressable>
-        <View style={styles.titleRow}>
-          {peer ? (
-            <Avatar
-              userId={peer.id}
-              avatarUrl={peer.avatarUrl}
-              label={peer.displayName}
-              size={theme.spacing[8]}
-            />
-          ) : null}
-          <Text variant="h3" numberOfLines={1} style={styles.title}>
-            {title}
-          </Text>
-        </View>
+        <Pressable
+          style={styles.titleRow}
+          onPress={onTitlePress}
+          disabled={!onTitlePress}
+          accessibilityRole={onTitlePress ? 'button' : undefined}
+        >
+          {leading ??
+            (peer ? (
+              <Avatar
+                userId={peer.id}
+                avatarUrl={peer.avatarUrl}
+                label={peer.displayName}
+                size={theme.spacing[8]}
+              />
+            ) : null)}
+          <View style={styles.titleCopy}>
+            <Text variant="h3" numberOfLines={1} style={styles.title}>
+              {title}
+            </Text>
+            {subtitle ? (
+              <Text variant="small" numberOfLines={1} style={styles.subtitle}>
+                {subtitle}
+              </Text>
+            ) : null}
+          </View>
+        </Pressable>
         {rightIcon && onRightPress ? (
           <Pressable
             style={styles.iconButton}
@@ -96,8 +115,9 @@ function createStyles(theme: Theme) {
       gap: theme.spacing[2],
     },
     title: {
-      flex: 1,
       color: theme.colors.text.inverse,
     },
+    titleCopy: { flex: 1, minWidth: 0 },
+    subtitle: { color: theme.colors.text.inverse, opacity: 0.8 },
   });
 }
