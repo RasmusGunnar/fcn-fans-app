@@ -54,9 +54,10 @@ function formatCountdownLabel(kickoffAt: string, now: Date): string {
   return `Starter om ${Math.ceil(diffHours / 24)} dage`;
 }
 
-function buildCheckInSocialProof(
-  checkedInCount: number,
-): { countLabel?: string | null; text: string } {
+function buildCheckInSocialProof(checkedInCount: number): {
+  countLabel?: string | null;
+  text: string;
+} {
   if (checkedInCount <= 0) {
     return {
       countLabel: null,
@@ -177,7 +178,9 @@ export default function MatchDetailsScreen() {
       return;
     }
 
-    const matchedActivity = fanActivities.find((activity) => activity.id === requestedFanActivityId);
+    const matchedActivity = fanActivities.find(
+      (activity) => activity.id === requestedFanActivityId,
+    );
     if (!matchedActivity) {
       return;
     }
@@ -306,10 +309,7 @@ export default function MatchDetailsScreen() {
       return 'checked_in';
     }
     return 'check_in';
-  }, [
-    effectiveIsMatchday,
-    matchdayUiModel?.effectiveIsCheckedIn,
-  ]);
+  }, [effectiveIsMatchday, matchdayUiModel?.effectiveIsCheckedIn]);
   const matchdayPanelText = useMemo(() => {
     if (!effectiveIsMatchday) {
       return {
@@ -323,15 +323,15 @@ export default function MatchDetailsScreen() {
         title: 'Du er tjekket ind',
         body:
           matchdayUiModel.previewMode === 'off'
-            ? `Fans kan nu se, at du er på stadion.\n+${MATCH_CHECKIN_FANPOINTS} fanpoint`
-            : 'Fans kan nu se, at du er på stadion.',
+            ? `Du vælger selv synlighed i Stadion Live.\n+${MATCH_CHECKIN_FANPOINTS} fanpoint`
+            : 'Du vælger selv synlighed i Stadion Live.',
       };
     }
 
     if (matchdayUiModel?.effectiveIsGoing) {
       return {
         title: 'Du har sagt, at du kommer – klar til at tjekke ind?',
-        body: 'Tjek ind, når du er på stadion, så andre fans kan se stemningen live.',
+        body: 'Tjek ind på stadion. Du vælger selv, om du vil være synlig i Stadion Live.',
       };
     }
 
@@ -357,95 +357,11 @@ export default function MatchDetailsScreen() {
     }
 
     return buildCheckInSocialProof(matchCheckIn.countCheckedIn);
-  }, [
-    effectiveIsMatchday,
-    matchCheckIn.countCheckedIn,
-  ]);
-  const matchFansOverview = useMemo(() => {
-    const profileById = new Map<string, { displayName: string | null; avatarUrl: string | null }>();
-
-    attendance.profiles.forEach((profile) => {
-      profileById.set(profile.user_id, {
-        displayName: profile.display_name,
-        avatarUrl: profile.avatar_url,
-      });
-    });
-
-    matchCheckIn.profiles.forEach((profile) => {
-      profileById.set(profile.user_id, {
-        displayName: profile.display_name,
-        avatarUrl: profile.avatar_url,
-      });
-    });
-
-    const merged = new Map<
-      string,
-      {
-        item: {
-          userId: string;
-          displayName: string | null;
-          avatarUrl: string | null;
-          status: 'checkin' | 'attendance';
-        };
-        order: number;
-      }
-    >();
-    let nextOrder = 0;
-
-    attendance.userIds.forEach((userId) => {
-      const profile = profileById.get(userId);
-      merged.set(userId, {
-        item: {
-          userId,
-          displayName: profile?.displayName ?? null,
-          avatarUrl: profile?.avatarUrl ?? null,
-          status: 'attendance',
-        },
-        order: nextOrder++,
-      });
-    });
-
-    matchCheckIn.userIds.forEach((userId) => {
-      const profile = profileById.get(userId);
-      const existing = merged.get(userId);
-
-      merged.set(userId, {
-        item: {
-          userId,
-          displayName: profile?.displayName ?? existing?.item.displayName ?? null,
-          avatarUrl: profile?.avatarUrl ?? existing?.item.avatarUrl ?? null,
-          status: 'checkin',
-        },
-        order: existing?.order ?? nextOrder++,
-      });
-    });
-
-    const items = Array.from(merged.values())
-      .sort((left, right) => {
-        if (left.item.status !== right.item.status) {
-          return left.item.status === 'checkin' ? -1 : 1;
-        }
-
-        return left.order - right.order;
-      })
-      .map((entry) => entry.item);
-
-    return items;
-  }, [
-    attendance.profiles,
-    attendance.userIds,
-    matchCheckIn.profiles,
-    matchCheckIn.userIds,
-  ]);
-
+  }, [effectiveIsMatchday, matchCheckIn.countCheckedIn]);
   const handleDeleteFanActivity = useCallback(
     (fanActivityId: string) => {
-      setFanActivities((current) =>
-        current.filter((activity) => activity.id !== fanActivityId),
-      );
-      setSelectedFanActivity((current) =>
-        current?.id === fanActivityId ? null : current,
-      );
+      setFanActivities((current) => current.filter((activity) => activity.id !== fanActivityId));
+      setSelectedFanActivity((current) => (current?.id === fanActivityId ? null : current));
       void loadFanActivities();
     },
     [loadFanActivities],
@@ -519,7 +435,8 @@ export default function MatchDetailsScreen() {
   const matchViewState = resolvedMatchdayUiModel.viewState;
   const isGoingToMatch = resolvedMatchdayUiModel.effectiveIsGoing;
   const showFanActivitiesSection = fanActivities.length > 0 || canCreateFanActivities;
-  const matchLocationLabel = [fixture.venue, fixture.venue_city].filter(Boolean).join(' · ') || null;
+  const matchLocationLabel =
+    [fixture.venue, fixture.venue_city].filter(Boolean).join(' · ') || null;
 
   const handleOpenRoute = async () => {
     if (!mapsUrl) return;
@@ -542,13 +459,7 @@ export default function MatchDetailsScreen() {
   };
 
   const handleOpenMatchFans = () => {
-    (navigation as any).navigate('EventAttendees', {
-      entityId: fixture.id,
-      entityType: 'match',
-      title: 'Fans til kampen',
-      subtitle: 'Se hvem der kommer, og hvem der er tjekket ind',
-      prefilledFans: matchFansOverview,
-    });
+    (navigation as any).navigate('StadiumLive', { eventId: fixture.id });
   };
 
   const handleCreateFanActivity = () => {
@@ -626,7 +537,7 @@ export default function MatchDetailsScreen() {
               : 'Jeg kommer';
     const panelPrimaryDisabled =
       participationUiMode === 'checked_in'
-          ? true
+        ? true
         : participationUiMode === 'check_in'
           ? matchCheckIn.loading
           : attendance.loading;
@@ -650,7 +561,7 @@ export default function MatchDetailsScreen() {
         titleOverride={matchdayPanelText.title}
         bodyOverride={
           participationUiMode === 'checked_in'
-            ? 'Fans kan nu se, at du er på stadion.'
+            ? 'Du vælger selv synlighed i Stadion Live.'
             : matchdayPanelText.body
         }
         socialCopyOverride={matchdaySocialProofOverride}
@@ -661,9 +572,7 @@ export default function MatchDetailsScreen() {
             : () => handleSelectParticipation('going')
         }
         onPressSecondary={
-          usesAttendanceSocial
-            ? () => handleSelectParticipation('not_going')
-            : undefined
+          usesAttendanceSocial ? () => handleSelectParticipation('not_going') : undefined
         }
         onPressSocial={handleOpenMatchFans}
         style={styles.statusPanel}
@@ -780,6 +689,29 @@ export default function MatchDetailsScreen() {
             <View style={styles.participationModule}>
               {renderStatusPanel()}
 
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Åbn Stadion Live"
+                onPress={handleOpenMatchFans}
+                style={({ pressed }) => [
+                  styles.stadiumLiveAction,
+                  pressed ? styles.utilityActionPressed : null,
+                ]}
+              >
+                <View style={styles.stadiumLiveActionIcon}>
+                  <Ionicons name="radio-outline" size={20} color={theme.colors.primary} />
+                </View>
+                <View style={styles.stadiumLiveActionCopy}>
+                  <Text style={styles.stadiumLiveActionTitle}>På stadion</Text>
+                  <Text style={styles.stadiumLiveActionBody}>
+                    {matchCheckIn.isCheckedIn
+                      ? `Se ${matchCheckIn.countCheckedIn} synlige fans`
+                      : 'Check ind for at se de andre fans'}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={theme.colors.text.secondary} />
+              </Pressable>
+
               <View style={styles.utilityActionsWrap}>
                 <View style={styles.utilityActionsRow}>
                   <Pressable
@@ -883,10 +815,7 @@ export default function MatchDetailsScreen() {
                 composerPlaceholder="Skriv om stemningen før kamp..."
                 quickActionMode="prefill"
                 replyModeLabel="Svar"
-                quickActionChips={[
-                  'Mit bud: FCN vinder ...',
-                  'Hvem mødes før kamp?',
-                ]}
+                quickActionChips={['Mit bud: FCN vinder ...', 'Hvem mødes før kamp?']}
               />
             </Card>
           </View>
@@ -1038,7 +967,7 @@ const stylesFactory = (theme: ReturnType<typeof useTheme>) =>
       gap: spacing.md,
     },
     topExperienceShell: {
-      marginTop: -(theme.spacing[8]),
+      marginTop: -theme.spacing[8],
       zIndex: 2,
       borderRadius: theme.radius.xl,
       backgroundColor: theme.colors.bg.surface,
@@ -1090,6 +1019,40 @@ const stylesFactory = (theme: ReturnType<typeof useTheme>) =>
     },
     utilityActionsWrap: {
       paddingTop: theme.spacing[2],
+    },
+    stadiumLiveAction: {
+      minHeight: theme.spacing[14],
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing[3],
+      paddingHorizontal: theme.spacing[3],
+      paddingVertical: theme.spacing[2],
+      borderWidth: theme.layout.borderHairline,
+      borderColor: theme.colors.border.default,
+      borderRadius: theme.radius.md,
+      backgroundColor: theme.colors.bg.default,
+    },
+    stadiumLiveActionIcon: {
+      width: theme.spacing[10],
+      height: theme.spacing[10],
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: theme.radius.pill,
+      backgroundColor: theme.colors.bg.subtle,
+    },
+    stadiumLiveActionCopy: {
+      flex: 1,
+      minWidth: 0,
+      gap: theme.spacing[0],
+    },
+    stadiumLiveActionTitle: {
+      color: theme.colors.text.primary,
+      fontSize: theme.typography.body.fontSize,
+      fontWeight: '700',
+    },
+    stadiumLiveActionBody: {
+      color: theme.colors.text.secondary,
+      fontSize: theme.typography.small.fontSize,
     },
     utilityActionsRow: {
       flexDirection: 'row',
@@ -1239,5 +1202,3 @@ const stylesFactory = (theme: ReturnType<typeof useTheme>) =>
       marginTop: spacing.md,
     },
   });
-
-

@@ -54,10 +54,16 @@ import {
   type UpcomingItem,
 } from '../services/profileApi';
 import { clearAppIconBadge } from '../services/notificationsApi';
+import {
+  getStadiumLivePreferences,
+  updateStadiumLivePreferences,
+} from '../services/stadiumLiveApi';
+import type { StadiumLivePreferences } from '../types/stadiumLive';
 import { useNotificationUnread } from '../state/NotificationUnreadContext';
 import { useMessageUnread } from '../state/MessageUnreadContext';
 import { navigateToMessagesList } from '../navigation/navigationRef';
 import { normalizeDisplayNameToUsername } from '../utils/username';
+import { sanitizeStadiumSection } from '../utils/stadiumLive';
 import {
   fetchMyFanActivityRegistrations,
   type FanActivityRegistrationListItem,
@@ -236,9 +242,18 @@ export default function ProfileScreen() {
         | 'mentionsEnabled'
         | 'repliesEnabled'
         | 'directMessagesEnabled'
+        | 'stadiumReactionsEnabled'
       >
     | null
   >(null);
+  const [stadiumPreferences, setStadiumPreferences] = useState<StadiumLivePreferences>({
+    isVisible: false,
+    reactionsEnabled: true,
+    sectionLabel: null,
+    updatedAt: null,
+  });
+  const [stadiumSectionDraft, setStadiumSectionDraft] = useState('');
+  const [stadiumPreferenceSaving, setStadiumPreferenceSaving] = useState(false);
   const [weeklyRanking, setWeeklyRanking] = useState<WeeklyRankingData | null>(null);
   const [myRegistrations, setMyRegistrations] = useState<FanActivityRegistrationListItem[]>([]);
   const [deleteAccountLoading, setDeleteAccountLoading] = useState(false);
@@ -436,6 +451,17 @@ export default function ProfileScreen() {
     }
   }, [user?.id]);
 
+  const loadStadiumPreferences = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const preferences = await getStadiumLivePreferences();
+      setStadiumPreferences(preferences);
+      setStadiumSectionDraft(preferences.sectionLabel ?? '');
+    } catch (error) {
+      console.warn('[ProfileScreen] loadStadiumPreferences failed:', error);
+    }
+  }, [user?.id]);
+
   const loadNotificationUnreadCount = useCallback(async () => {
     if (!user?.id) return;
 
@@ -463,6 +489,7 @@ export default function ProfileScreen() {
         loadData(),
         loadPushStatus(),
         loadPushPreferences(),
+        loadStadiumPreferences(),
         loadNotificationUnreadCount(),
       ];
       void Promise.allSettled(tasks).then(() => {
@@ -472,7 +499,13 @@ export default function ProfileScreen() {
       });
 
       return cancelFrame;
-    }, [loadData, loadPushStatus, loadPushPreferences, loadNotificationUnreadCount]),
+    }, [
+      loadData,
+      loadPushStatus,
+      loadPushPreferences,
+      loadStadiumPreferences,
+      loadNotificationUnreadCount,
+    ]),
   );
 
   const handlePushSetup = async () => {
@@ -561,6 +594,7 @@ export default function ProfileScreen() {
       | 'mentionsEnabled'
       | 'repliesEnabled'
       | 'directMessagesEnabled'
+      | 'stadiumReactionsEnabled'
     >,
     value: boolean,
   ) => {
@@ -579,6 +613,37 @@ export default function ProfileScreen() {
       Alert.alert('Fejl', 'Kunne ikke gemme push-indstillingen. Prøv igen.');
     } finally {
       setPushPreferenceSavingKey(null);
+    }
+  };
+
+  const handleSaveStadiumPreferences = async (
+    updates: Partial<
+      Pick<StadiumLivePreferences, 'isVisible' | 'reactionsEnabled' | 'sectionLabel'>
+    >,
+  ) => {
+    if (stadiumPreferenceSaving) return;
+    const previous = stadiumPreferences;
+    const next = {
+      ...stadiumPreferences,
+      ...updates,
+      sectionLabel:
+        updates.sectionLabel !== undefined
+          ? sanitizeStadiumSection(updates.sectionLabel ?? '')
+          : stadiumPreferences.sectionLabel,
+    };
+    setStadiumPreferenceSaving(true);
+    setStadiumPreferences(next);
+    try {
+      const saved = await updateStadiumLivePreferences(next);
+      setStadiumPreferences(saved);
+      setStadiumSectionDraft(saved.sectionLabel ?? '');
+    } catch (error) {
+      console.warn('[ProfileScreen] saveStadiumPreferences failed:', error);
+      setStadiumPreferences(previous);
+      setStadiumSectionDraft(previous.sectionLabel ?? '');
+      Alert.alert('Fejl', 'Kunne ikke gemme Stadion Live-indstillingen. Prøv igen.');
+    } finally {
+      setStadiumPreferenceSaving(false);
     }
   };
 
@@ -1166,6 +1231,77 @@ export default function ProfileScreen() {
       <Card style={{ marginBottom: spacing.md }}>
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: theme.colors.text.primary }]}>
+            STADION LIVE
+          </Text>
+          <Ionicons
+            name="radio-outline"
+            size={theme.components.icon.size.sm}
+            color={theme.colors.primary}
+          />
+        </View>
+        <Text style={[styles.pushPreferenceBody, { color: theme.colors.text.secondary }]}>
+          Når du er checket ind, kan andre synlige fans se din profil og sende hurtige reaktioner.
+        </Text>
+        <View style={styles.stadiumPreferencesList}>
+          <View style={styles.pushPreferenceRow}>
+            <View style={styles.pushPreferenceCopy}>
+              <Text style={[styles.pushPreferenceTitle, { color: theme.colors.text.primary }]}>
+                Vis mig for andre fans
+              </Text>
+              <Text style={[styles.pushPreferenceBody, { color: theme.colors.text.secondary }]}>
+                Du er skjult som standard og vises kun ved dit eget valg.
+              </Text>
+            </View>
+            <Switch
+              value={stadiumPreferences.isVisible}
+              disabled={stadiumPreferenceSaving}
+              onValueChange={(isVisible) => void handleSaveStadiumPreferences({ isVisible })}
+              trackColor={{ false: theme.colors.border.default, true: theme.colors.primary }}
+              thumbColor={theme.colors.bg.card}
+            />
+          </View>
+          <View style={styles.pushPreferenceRow}>
+            <View style={styles.pushPreferenceCopy}>
+              <Text style={[styles.pushPreferenceTitle, { color: theme.colors.text.primary }]}>
+                Tillad stadionreaktioner
+              </Text>
+              <Text style={[styles.pushPreferenceBody, { color: theme.colors.text.secondary }]}>
+                Gælder kun, når du er synlig og checket ind til samme kamp.
+              </Text>
+            </View>
+            <Switch
+              value={stadiumPreferences.reactionsEnabled}
+              disabled={stadiumPreferenceSaving || !stadiumPreferences.isVisible}
+              onValueChange={(reactionsEnabled) =>
+                void handleSaveStadiumPreferences({ reactionsEnabled })
+              }
+              trackColor={{ false: theme.colors.border.default, true: theme.colors.primary }}
+              thumbColor={theme.colors.bg.card}
+            />
+          </View>
+          <View style={styles.stadiumSectionField}>
+            <Text style={[styles.pushPreferenceTitle, { color: theme.colors.text.primary }]}>
+              Afsnit eller tribune (valgfrit)
+            </Text>
+            <TextInput
+              value={stadiumSectionDraft}
+              editable={!stadiumPreferenceSaving}
+              maxLength={30}
+              placeholder="Fx A-tribunen"
+              placeholderTextColor={theme.colors.text.muted}
+              onChangeText={(value) => setStadiumSectionDraft(value.slice(0, 30))}
+              onEndEditing={() =>
+                void handleSaveStadiumPreferences({ sectionLabel: stadiumSectionDraft })
+              }
+              style={styles.stadiumSectionInput}
+            />
+          </View>
+        </View>
+      </Card>
+
+      <Card style={{ marginBottom: spacing.md }}>
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text.primary }]}>
             NOTIFIKATIONER
           </Text>
           <Ionicons
@@ -1235,6 +1371,31 @@ export default function ProfileScreen() {
               onValueChange={(value) => handleTogglePushPreference('directMessagesEnabled', value)}
               disabled={
                 pushPreferencesLoading || pushPreferenceSavingKey === 'directMessagesEnabled'
+              }
+              trackColor={{
+                false: theme.colors.border.default,
+                true: theme.colors.primary,
+              }}
+              thumbColor={theme.colors.bg.card}
+            />
+          </View>
+
+          <View style={styles.pushPreferenceRow}>
+            <View style={styles.pushPreferenceCopy}>
+              <Text style={[styles.pushPreferenceTitle, { color: theme.colors.text.primary }]}>
+                {'Stadionreaktioner'}
+              </Text>
+              <Text style={[styles.pushPreferenceBody, { color: theme.colors.text.secondary }]}>
+                {'Når en synlig fan sender dig en personlig reaktion på stadion.'}
+              </Text>
+            </View>
+            <Switch
+              value={pushPreferences.stadiumReactionsEnabled}
+              onValueChange={(value) =>
+                handleTogglePushPreference('stadiumReactionsEnabled', value)
+              }
+              disabled={
+                pushPreferencesLoading || pushPreferenceSavingKey === 'stadiumReactionsEnabled'
               }
               trackColor={{
                 false: theme.colors.border.default,
@@ -1775,6 +1936,22 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       paddingTop: spacing.md,
       borderTopWidth: theme.layout.borderHairline,
       gap: spacing.sm,
+    },
+    stadiumPreferencesList: {
+      marginTop: spacing.md,
+      gap: spacing.md,
+    },
+    stadiumSectionField: {
+      gap: theme.spacing[1],
+    },
+    stadiumSectionInput: {
+      minHeight: theme.spacing[11],
+      borderWidth: theme.layout.borderHairline,
+      borderColor: theme.colors.border.default,
+      borderRadius: theme.radius.md,
+      paddingHorizontal: theme.spacing[3],
+      color: theme.colors.text.primary,
+      backgroundColor: theme.colors.bg.surface,
     },
     pushPreferenceRow: {
       flexDirection: 'row',

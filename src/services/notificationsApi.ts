@@ -13,7 +13,8 @@ export type NotificationType =
   | 'fan_activity_registration_confirmed'
   | 'fan_activity_registration_payment_missing'
   | 'match_highfive'
-  | 'media_digest';
+  | 'media_digest'
+  | 'stadium_reaction';
 
 export type NotificationItem = {
   id: string;

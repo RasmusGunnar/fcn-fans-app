@@ -57,6 +57,7 @@ function getNotificationIcon(type: NotificationItem['type']): keyof typeof Ionic
   if (type === 'mention') return 'at';
   if (type === 'reply') return 'chatbubble-outline';
   if (type === 'match_highfive') return 'hand-left-outline';
+  if (type === 'stadium_reaction') return 'radio-outline';
   if (type === 'media_digest') return 'newspaper-outline';
   if (type === 'match_checkin_reminder') return 'football-outline';
   if (type === 'event_reminder') return 'calendar-outline';

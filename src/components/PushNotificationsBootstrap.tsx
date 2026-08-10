@@ -13,10 +13,10 @@ import { useNotificationUnread } from '../state/NotificationUnreadContext';
 import { useMessageUnread } from '../state/MessageUnreadContext';
 
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
+  handleNotification: async (notification) => ({
+    shouldShowBanner: notification.request.content.data?.type !== 'stadium_reaction',
     shouldShowList: true,
-    shouldPlaySound: true,
+    shouldPlaySound: notification.request.content.data?.type !== 'stadium_reaction',
     shouldSetBadge: true,
   }),
 });

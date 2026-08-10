@@ -2,6 +2,7 @@ import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { resolveAvatarUrl } from '../utils/avatar';
 import { canCreateMatchCheckIn } from '../utils/matchdayState';
+import { getStadiumLiveParticipants } from './stadiumLiveApi';
 
 export interface MatchCheckInSnapshot {
   countCheckedIn: number;
@@ -17,45 +18,34 @@ export interface CheckInProfile {
   avatar_url: string | null;
 }
 
-async function fetchProfiles(userIds: string[]): Promise<CheckInProfile[]> {
-  if (userIds.length === 0) return [];
-
-  const { data, error } = await supabase.from('profiles').select('id, display_name, avatar_url').in('id', userIds);
-  if (error) throw error;
-
-  return (data || []).map((profile) => ({
-    user_id: profile.id,
-    display_name: profile.display_name,
-    avatar_url: profile.avatar_url,
-  }));
-}
-
 export async function fetchMatchCheckInSnapshot({
   matchId,
-  currentUserId,
 }: {
   matchId: string;
   currentUserId?: string;
 }): Promise<MatchCheckInSnapshot> {
-  const { data, error } = await supabase
-    .from('match_checkins')
-    .select('user_id')
-    .eq('match_id', matchId)
-    .order('created_at', { ascending: false });
+  const { data, error } = await supabase.rpc('get_match_checkin_snapshot', {
+    p_match_id: matchId,
+  });
 
   if (error) throw error;
 
-  const userIds = (data || []).map((row: { user_id: string }) => row.user_id);
-  const profiles = await fetchProfiles(userIds);
+  const payload = (data ?? {}) as {
+    count_checked_in?: number;
+    is_checked_in?: boolean;
+    profiles?: CheckInProfile[];
+  };
+  const profiles = Array.isArray(payload.profiles) ? payload.profiles : [];
+  const userIds = profiles.map((profile) => profile.user_id);
 
   return {
-    countCheckedIn: userIds.length,
+    countCheckedIn: Number(payload.count_checked_in ?? 0),
     profiles,
     userIds,
     avatars: profiles
       .map((profile) => resolveAvatarUrl(profile.avatar_url))
       .filter((url): url is string => !!url),
-    isCheckedIn: !!(currentUserId && userIds.includes(currentUserId)),
+    isCheckedIn: payload.is_checked_in === true,
   };
 }
 
@@ -84,16 +74,12 @@ export async function createMatchCheckIn({
 
 export async function fetchMatchCheckIns(matchId: string): Promise<CheckInProfile[]> {
   try {
-    const { data, error } = await supabase
-      .from('match_checkins')
-      .select('user_id')
-      .eq('match_id', matchId)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-
-    const userIds = (data || []).map((row: { user_id: string }) => row.user_id);
-    return fetchProfiles(userIds);
+    const page = await getStadiumLiveParticipants({ eventId: matchId, limit: 50 });
+    return page.participants.map((participant) => ({
+      user_id: participant.userId,
+      display_name: participant.displayName,
+      avatar_url: participant.avatarUrl,
+    }));
   } catch (error) {
     logger.error('[checkins] Error loading check-ins:', error);
     throw error;

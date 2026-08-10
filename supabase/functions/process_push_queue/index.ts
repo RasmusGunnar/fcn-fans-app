@@ -408,6 +408,63 @@ async function getDirectMessageSkipReason(
   return null;
 }
 
+async function getStadiumReactionSkipReason(
+  supabase: any,
+  job: NotificationJob,
+): Promise<string | null> {
+  if (job.notification_type !== 'stadium_reaction') {
+    return null;
+  }
+
+  if (!job.source_id || job.source_table !== 'social_reactions') {
+    return 'stadium_reaction_source_missing';
+  }
+
+  const { data: reaction, error: reactionError } = await supabase
+    .from('social_reactions')
+    .select('id, actor_id, recipient_user_id, context_type')
+    .eq('id', job.source_id)
+    .maybeSingle();
+  if (reactionError) throw reactionError;
+  if (!reaction || reaction.context_type !== 'stadium') return 'stadium_reaction_source_missing';
+
+  if (
+    reaction.recipient_user_id !== job.recipient_user_id ||
+    (job.actor_user_id && reaction.actor_id !== job.actor_user_id)
+  ) {
+    return 'stadium_reaction_recipient_invalid';
+  }
+
+  const { data: blocks, error: blockError } = await supabase
+    .from('user_blocks')
+    .select('blocker_id')
+    .or(
+      `and(blocker_id.eq.${reaction.actor_id},blocked_id.eq.${reaction.recipient_user_id}),and(blocker_id.eq.${reaction.recipient_user_id},blocked_id.eq.${reaction.actor_id})`,
+    )
+    .limit(1);
+  if (blockError) throw blockError;
+  if ((blocks ?? []).length > 0) return 'stadium_reaction_blocked';
+
+  const { data: stadiumPreference, error: stadiumPreferenceError } = await supabase
+    .from('stadium_live_preferences')
+    .select('is_visible, reactions_enabled')
+    .eq('user_id', job.recipient_user_id)
+    .maybeSingle();
+  if (stadiumPreferenceError) throw stadiumPreferenceError;
+  if (!stadiumPreference?.is_visible || !stadiumPreference.reactions_enabled) {
+    return 'stadium_reaction_recipient_opted_out';
+  }
+
+  const preferencesByUserId = await fetchPushPreferencesByUserIds(supabase, [
+    job.recipient_user_id,
+  ]);
+  if (!isPushPreferenceEnabled(preferencesByUserId, job.recipient_user_id, 'stadium_reactions')) {
+    return 'preference_disabled';
+  }
+
+  return null;
+}
+
 async function loadActiveDevices(supabase: any, userId: string): Promise<PushDevice[]> {
   const { data, error } = await supabase
     .from('push_devices')
@@ -476,11 +533,13 @@ async function markDeliveryFailed(
 }
 
 async function processJob(supabase: any, job: NotificationJob): Promise<JobProcessResult> {
-  const directMessageSkipReason = await getDirectMessageSkipReason(supabase, job);
-  if (directMessageSkipReason) {
+  const deliverySkipReason =
+    (await getDirectMessageSkipReason(supabase, job)) ??
+    (await getStadiumReactionSkipReason(supabase, job));
+  if (deliverySkipReason) {
     await updateJob(supabase, job.id, {
       status: 'skipped',
-      skip_reason: directMessageSkipReason,
+      skip_reason: deliverySkipReason,
       locked_at: null,
       locked_by: null,
       last_error_code: null,
@@ -497,7 +556,7 @@ async function processJob(supabase: any, job: NotificationJob): Promise<JobProce
       sentToExpo: 0,
       failed: 0,
       skipped: 1,
-      reason: directMessageSkipReason,
+      reason: deliverySkipReason,
     };
   }
 

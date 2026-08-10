@@ -51,6 +51,7 @@ export type PushPreferenceKey =
   | 'highfives'
   | 'matchday_checkin'
   | 'media_digest'
+  | 'stadium_reactions'
   | 'replies'
   | 'mentions';
 
@@ -63,6 +64,7 @@ type PushPreferenceRow = {
   community_activity_enabled: boolean;
   highfives_enabled: boolean;
   media_digest_enabled: boolean;
+  stadium_reactions_enabled: boolean;
 };
 
 const EXPO_PUSH_API_URL = 'https://exp.host/--/api/v2/push/send';
@@ -75,6 +77,7 @@ const DEFAULT_PUSH_PREFERENCES: Omit<PushPreferenceRow, 'user_id'> = {
   community_activity_enabled: true,
   highfives_enabled: true,
   media_digest_enabled: true,
+  stadium_reactions_enabled: true,
 };
 const PUSH_PREFERENCE_COLUMN_BY_KEY: Record<
   PushPreferenceKey,
@@ -87,6 +90,7 @@ const PUSH_PREFERENCE_COLUMN_BY_KEY: Record<
   community_activity: 'community_activity_enabled',
   highfives: 'highfives_enabled',
   media_digest: 'media_digest_enabled',
+  stadium_reactions: 'stadium_reactions_enabled',
 };
 
 export function json(status: number, payload: unknown) {
@@ -313,7 +317,7 @@ export async function fetchPushPreferencesByUserIds(supabase: any, userIds: stri
   const { data, error } = await supabase
     .from('push_preferences')
     .select(
-      'user_id, replies_enabled, mentions_enabled, matchday_checkin_enabled, community_activity_enabled, highfives_enabled, media_digest_enabled, direct_messages_enabled',
+      'user_id, replies_enabled, mentions_enabled, matchday_checkin_enabled, community_activity_enabled, highfives_enabled, media_digest_enabled, direct_messages_enabled, stadium_reactions_enabled',
     )
     .in('user_id', normalizedUserIds);
 
@@ -340,6 +344,8 @@ export async function fetchPushPreferencesByUserIds(supabase: any, userIds: stri
         highfives_enabled: row.highfives_enabled ?? DEFAULT_PUSH_PREFERENCES.highfives_enabled,
         media_digest_enabled:
           row.media_digest_enabled ?? DEFAULT_PUSH_PREFERENCES.media_digest_enabled,
+        stadium_reactions_enabled:
+          row.stadium_reactions_enabled ?? DEFAULT_PUSH_PREFERENCES.stadium_reactions_enabled,
       },
     ]) as [string, PushPreferenceRow][],
   );

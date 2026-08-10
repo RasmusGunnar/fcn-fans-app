@@ -1,31 +1,5 @@
-import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
-
-function isDuplicateHighfiveError(error: unknown): boolean {
-  const code = (error as any)?.code;
-  const message = String((error as any)?.message ?? '').toLowerCase();
-
-  return (
-    code === '23505' || message.includes('duplicate key') || message.includes('unique constraint')
-  );
-}
-
-async function triggerMatchHighfivePush(params: {
-  matchId: string;
-  toUserId: string;
-}): Promise<void> {
-  const { data, error } = await supabase.functions.invoke('push_match_highfive', {
-    body: params,
-  });
-
-  if (error || data?.ok !== true) {
-    logger.warn('[matchHighfives] Highfive push enqueue failed after insert:', {
-      error: error?.message ?? data?.error ?? 'Unknown push error',
-      matchId: params.matchId,
-      toUserId: params.toUserId,
-    });
-  }
-}
+import { sendStadiumReaction } from './stadiumLiveApi';
 
 export async function fetchSentMatchHighfives({
   matchId,
@@ -45,19 +19,20 @@ export async function fetchSentMatchHighfives({
   }
 
   const { data, error } = await supabase
-    .from('match_highfives')
-    .select('to_user_id')
-    .eq('match_id', matchId)
-    .eq('from_user_id', fromUserId)
-    .in('to_user_id', uniqueToUserIds);
+    .from('social_reactions')
+    .select('recipient_user_id')
+    .eq('context_type', 'stadium')
+    .eq('context_id', matchId)
+    .eq('actor_id', fromUserId)
+    .eq('reaction_type', 'high_five')
+    .in('recipient_user_id', uniqueToUserIds);
 
   if (error) {
-    logger.error('[matchHighfives] Error loading sent highfives:', error);
     throw error;
   }
 
   return (data ?? [])
-    .map((row: { to_user_id: string | null }) => row.to_user_id)
+    .map((row: { recipient_user_id: string | null }) => row.recipient_user_id)
     .filter((userId): userId is string => !!userId);
 }
 
@@ -75,23 +50,9 @@ export async function createMatchHighfive({
   if (!toUserId) throw new Error('Manglende fan');
   if (fromUserId === toUserId) throw new Error('Du kan ikke highfive dig selv.');
 
-  const { error } = await supabase.from('match_highfives').insert({
-    match_id: matchId,
-    from_user_id: fromUserId,
-    to_user_id: toUserId,
+  await sendStadiumReaction({
+    eventId: matchId,
+    recipientUserId: toUserId,
+    reactionType: 'high_five',
   });
-
-  if (!error) {
-    void triggerMatchHighfivePush({ matchId, toUserId }).catch((pushError) => {
-      logger.warn('[matchHighfives] Highfive push trigger threw after insert:', pushError);
-    });
-    return;
-  }
-
-  if (isDuplicateHighfiveError(error)) {
-    return;
-  }
-
-  logger.error('[matchHighfives] Error creating highfive:', error);
-  throw error;
 }

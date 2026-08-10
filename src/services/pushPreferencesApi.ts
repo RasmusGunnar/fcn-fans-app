@@ -9,6 +9,7 @@ export interface PushPreferences {
   highfivesEnabled: boolean;
   mediaDigestEnabled: boolean;
   directMessagesEnabled: boolean;
+  stadiumReactionsEnabled: boolean;
   updatedAt: string | null;
 }
 
@@ -21,6 +22,7 @@ type PushPreferencesRow = {
   highfives_enabled: boolean | null;
   media_digest_enabled: boolean | null;
   direct_messages_enabled: boolean | null;
+  stadium_reactions_enabled: boolean | null;
   updated_at: string | null;
 };
 
@@ -32,6 +34,7 @@ export const DEFAULT_PUSH_PREFERENCES: PushPreferences = {
   highfivesEnabled: true,
   mediaDigestEnabled: true,
   directMessagesEnabled: true,
+  stadiumReactionsEnabled: true,
   updatedAt: null,
 };
 
@@ -51,6 +54,8 @@ function mapRowToPreferences(row: PushPreferencesRow | null | undefined): PushPr
     mediaDigestEnabled: row.media_digest_enabled ?? DEFAULT_PUSH_PREFERENCES.mediaDigestEnabled,
     directMessagesEnabled:
       row.direct_messages_enabled ?? DEFAULT_PUSH_PREFERENCES.directMessagesEnabled,
+    stadiumReactionsEnabled:
+      row.stadium_reactions_enabled ?? DEFAULT_PUSH_PREFERENCES.stadiumReactionsEnabled,
     updatedAt: row.updated_at ?? null,
   };
 }
@@ -66,7 +71,7 @@ export async function getPushPreferences(userId: string): Promise<PushPreference
     const { data, error } = await supabase
       .from('push_preferences')
       .select(
-        'user_id, replies_enabled, mentions_enabled, matchday_checkin_enabled, community_activity_enabled, highfives_enabled, media_digest_enabled, direct_messages_enabled, updated_at',
+        'user_id, replies_enabled, mentions_enabled, matchday_checkin_enabled, community_activity_enabled, highfives_enabled, media_digest_enabled, direct_messages_enabled, stadium_reactions_enabled, updated_at',
       )
       .eq('user_id', userId)
       .maybeSingle();
@@ -98,6 +103,7 @@ export async function savePushPreferences(
       | 'mentionsEnabled'
       | 'repliesEnabled'
       | 'directMessagesEnabled'
+      | 'stadiumReactionsEnabled'
     >
   >,
 ): Promise<PushPreferences> {
@@ -120,6 +126,9 @@ export async function savePushPreferences(
     ...(updates.directMessagesEnabled !== undefined
       ? { direct_messages_enabled: updates.directMessagesEnabled }
       : {}),
+    ...(updates.stadiumReactionsEnabled !== undefined
+      ? { stadium_reactions_enabled: updates.stadiumReactionsEnabled }
+      : {}),
     updated_at: new Date().toISOString(),
   };
 
@@ -127,7 +136,7 @@ export async function savePushPreferences(
     .from('push_preferences')
     .upsert(payload, { onConflict: 'user_id' })
     .select(
-      'user_id, replies_enabled, mentions_enabled, matchday_checkin_enabled, community_activity_enabled, highfives_enabled, media_digest_enabled, direct_messages_enabled, updated_at',
+      'user_id, replies_enabled, mentions_enabled, matchday_checkin_enabled, community_activity_enabled, highfives_enabled, media_digest_enabled, direct_messages_enabled, stadium_reactions_enabled, updated_at',
     )
     .maybeSingle();
 
