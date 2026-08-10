@@ -5,6 +5,7 @@ import { RootNavigator } from './src/navigation/RootNavigator';
 import { FeedProvider } from './src/state/FeedContext';
 import { NotificationUnreadProvider } from './src/state/NotificationUnreadContext';
 import { MessageUnreadProvider } from './src/state/MessageUnreadContext';
+import { StadiumReactionProvider } from './src/state/StadiumReactionContext';
 import {
   getRuntimePerformanceStartedAt,
   logPerformanceTiming,
@@ -22,10 +23,12 @@ export default function App() {
     <AuthProvider>
       <NotificationUnreadProvider>
         <MessageUnreadProvider>
-          <FeedProvider>
-            <PushNotificationsBootstrap />
-            <RootNavigator />
-          </FeedProvider>
+          <StadiumReactionProvider>
+            <FeedProvider>
+              <PushNotificationsBootstrap />
+              <RootNavigator />
+            </FeedProvider>
+          </StadiumReactionProvider>
         </MessageUnreadProvider>
       </NotificationUnreadProvider>
     </AuthProvider>

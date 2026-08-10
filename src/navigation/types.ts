@@ -76,6 +76,7 @@ export type RootStackParamList = {
     | { screen: 'GroupInfo'; params: { conversationId: string } };
 
   MatchDetails: { fixtureId: string; fanActivityId?: string };
+  StadiumLive: { eventId: string; highlightReactionId?: string };
   EventAttendees: EventAttendeesParams;
 
   // Existing routes are declared in stack navigators

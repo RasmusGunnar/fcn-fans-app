@@ -198,6 +198,7 @@ export function RootNavigator() {
               screens: {
                 HomeMain: 'home',
                 MatchDetails: 'match/:fixtureId',
+                StadiumLive: 'stadium/:eventId',
                 PostDetail: 'post/:postId',
               },
             },

@@ -8,6 +8,7 @@ import EventsScreen from '../screens/EventsScreen';
 import HashtagScreen from '../screens/HashtagScreen';
 import MatchDetailsScreen from '../screens/MatchDetailsScreen';
 import PublicProfileScreen from '../screens/PublicProfileScreen';
+import StadiumLiveScreen from '../screens/StadiumLiveScreen';
 import { logPerformanceEvent } from '../utils/performanceTiming';
 
 logPerformanceEvent('LazyStack', 'module-evaluated', { stackName: 'EventsStack' });
@@ -19,6 +20,7 @@ export function EventsStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="EventsList" component={EventsScreen} />
       <Stack.Screen name="MatchDetails" component={MatchDetailsScreen} />
+      <Stack.Screen name="StadiumLive" component={StadiumLiveScreen} />
       <Stack.Screen name="BusTripDetails" component={BusTripDetailsScreen} />
       <Stack.Screen name="EventDetails" component={EventDetailsScreen} />
       <Stack.Screen name="EventAttendees" component={EventAttendeesScreen} />

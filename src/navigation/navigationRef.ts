@@ -11,6 +11,7 @@ type NotificationTargetType =
   | 'community_poll'
   | 'event'
   | 'match'
+  | 'stadium_reaction'
   | 'direct_message';
 type PostDetailTargetType =
   | 'post'
@@ -37,6 +38,13 @@ type HomeFeedParams = {
 };
 
 type ResolvedNotificationRoute =
+  | {
+      targetType: 'stadium_reaction';
+      routeLabel: 'Main > Home > StadiumLive';
+      eventId: string;
+      reactionId?: string;
+      fallback: boolean;
+    }
   | {
       targetType: 'direct_message';
       routeLabel: 'Messages > Conversation';
@@ -95,6 +103,7 @@ function normalizeNotificationTargetType(value: string | null): NotificationTarg
     value === 'community_poll' ||
     value === 'event' ||
     value === 'match' ||
+    value === 'stadium_reaction' ||
     value === 'direct_message'
   ) {
     return value;
@@ -159,6 +168,16 @@ export function navigateToDirectMessageConversation(conversationId: string) {
   });
 }
 
+export function navigateToStadiumLive(eventId: string, highlightReactionId?: string) {
+  navigationRef.navigate('Main', {
+    screen: 'Home',
+    params: {
+      screen: 'StadiumLive',
+      params: { eventId, ...(highlightReactionId ? { highlightReactionId } : {}) },
+    },
+  });
+}
+
 function resolveNotificationRoute(payload: Record<string, unknown>): ResolvedNotificationRoute {
   const targetType = normalizeNotificationTargetType(readString(payload.targetType));
   const legacyType = normalizeNotificationTargetType(readString(payload.type));
@@ -168,6 +187,17 @@ function resolveNotificationRoute(payload: Record<string, unknown>): ResolvedNot
   const eventId = readString(payload.eventId ?? payload.targetId);
   const fanActivityId = readString(payload.fanActivityId);
   const conversationId = readString(payload.conversationId ?? payload.targetId);
+  const reactionId = readString(payload.reactionId);
+
+  if (resolvedType === 'stadium_reaction' && eventId) {
+    return {
+      targetType: 'stadium_reaction',
+      routeLabel: 'Main > Home > StadiumLive',
+      eventId,
+      ...(reactionId ? { reactionId } : {}),
+      fallback: false,
+    };
+  }
 
   if (resolvedType === 'direct_message' && conversationId) {
     return {
@@ -267,6 +297,11 @@ export function navigateFromNotificationData(
 
   if (resolvedRoute.targetType === 'direct_message') {
     navigateToDirectMessageConversation(resolvedRoute.conversationId);
+    return true;
+  }
+
+  if (resolvedRoute.targetType === 'stadium_reaction') {
+    navigateToStadiumLive(resolvedRoute.eventId, resolvedRoute.reactionId);
     return true;
   }
 

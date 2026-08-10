@@ -11,12 +11,14 @@ const HashtagScreen = React.lazy(() => import('../screens/HashtagScreen'));
 const MatchDetailsScreen = React.lazy(() => import('../screens/MatchDetailsScreen'));
 const PostDetailScreen = React.lazy(() => import('../screens/PostDetailScreen'));
 const PublicProfileScreen = React.lazy(() => import('../screens/PublicProfileScreen'));
+const StadiumLiveScreen = React.lazy(() => import('../screens/StadiumLiveScreen'));
 
 export function HomeStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="HomeMain" component={HomeScreen} />
       <Stack.Screen name="MatchDetails" component={MatchDetailsScreen} />
+      <Stack.Screen name="StadiumLive" component={StadiumLiveScreen} />
       <Stack.Screen name="EventAttendees" component={EventAttendeesScreen} />
       <Stack.Screen name="PostDetail" component={PostDetailScreen} />
       <Stack.Screen name="PublicProfile" component={PublicProfileScreen} />
