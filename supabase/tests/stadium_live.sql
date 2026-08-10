@@ -1,6 +1,6 @@
 begin;
 
-select plan(49);
+select plan(72);
 
 select has_table('public', 'stadium_live_preferences', 'stadium preferences table exists');
 select has_table('public', 'social_reactions', 'social reactions table exists');
@@ -37,6 +37,170 @@ select ok(
   ),
   'social reactions are in the realtime publication'
 );
+
+select is(
+  has_function_privilege('anon', 'public.set_stadium_live_preferences_updated_at()', 'EXECUTE'),
+  false,
+  'anon cannot execute the stadium preferences trigger function'
+);
+select is(
+  has_function_privilege('anon', 'public.is_stadium_live_match_open(uuid,timestamptz)', 'EXECUTE'),
+  false,
+  'anon cannot execute the match-window helper'
+);
+select is(
+  has_function_privilege('anon', 'public.is_stadium_live_blocked(uuid,uuid)', 'EXECUTE'),
+  false,
+  'anon cannot execute the block helper'
+);
+select is(
+  has_function_privilege('anon', 'public.get_stadium_live_preferences()', 'EXECUTE'),
+  false,
+  'anon cannot read stadium preferences'
+);
+select is(
+  has_function_privilege('anon', 'public.update_stadium_live_preferences(boolean,boolean,text)', 'EXECUTE'),
+  false,
+  'anon cannot update stadium preferences'
+);
+select is(
+  has_function_privilege('anon', 'public.get_match_checkin_snapshot(uuid)', 'EXECUTE'),
+  false,
+  'anon cannot read a match check-in snapshot'
+);
+select is(
+  has_function_privilege('anon', 'public.get_stadium_live_count(uuid)', 'EXECUTE'),
+  false,
+  'anon cannot read the stadium count RPC'
+);
+select is(
+  has_function_privilege('anon', 'public.get_stadium_live_participants(uuid,integer,uuid,integer)', 'EXECUTE'),
+  false,
+  'anon cannot read the stadium participant directory'
+);
+select is(
+  has_function_privilege('anon', 'public.send_stadium_reaction(uuid,uuid,text,uuid)', 'EXECUTE'),
+  false,
+  'anon cannot send stadium reactions'
+);
+select is(
+  has_function_privilege('anon', 'public.get_stadium_reactions(uuid,timestamptz,uuid,integer)', 'EXECUTE'),
+  false,
+  'anon cannot read stadium reactions'
+);
+
+select is(
+  has_function_privilege('authenticated', 'public.set_stadium_live_preferences_updated_at()', 'EXECUTE'),
+  false,
+  'authenticated cannot execute the trigger function directly'
+);
+select is(
+  has_function_privilege('authenticated', 'public.is_stadium_live_match_open(uuid,timestamptz)', 'EXECUTE'),
+  false,
+  'authenticated cannot execute the internal match-window helper directly'
+);
+select is(
+  has_function_privilege('authenticated', 'public.is_stadium_live_blocked(uuid,uuid)', 'EXECUTE'),
+  true,
+  'authenticated retains the block helper privilege required by reaction RLS'
+);
+select is(
+  has_function_privilege('authenticated', 'public.get_stadium_live_preferences()', 'EXECUTE'),
+  true,
+  'authenticated can read stadium preferences'
+);
+select is(
+  has_function_privilege('authenticated', 'public.update_stadium_live_preferences(boolean,boolean,text)', 'EXECUTE'),
+  true,
+  'authenticated can update stadium preferences'
+);
+select is(
+  has_function_privilege('authenticated', 'public.get_match_checkin_snapshot(uuid)', 'EXECUTE'),
+  true,
+  'authenticated can read a match check-in snapshot'
+);
+select is(
+  has_function_privilege('authenticated', 'public.get_stadium_live_count(uuid)', 'EXECUTE'),
+  true,
+  'authenticated can read the stadium count RPC'
+);
+select is(
+  has_function_privilege('authenticated', 'public.get_stadium_live_participants(uuid,integer,uuid,integer)', 'EXECUTE'),
+  true,
+  'authenticated can read the stadium participant directory'
+);
+select is(
+  has_function_privilege('authenticated', 'public.send_stadium_reaction(uuid,uuid,text,uuid)', 'EXECUTE'),
+  true,
+  'authenticated can send stadium reactions'
+);
+select is(
+  has_function_privilege('authenticated', 'public.get_stadium_reactions(uuid,timestamptz,uuid,integer)', 'EXECUTE'),
+  true,
+  'authenticated can read stadium reactions'
+);
+
+with stadium_functions(function_oid) as (
+  select unnest(array[
+    'public.set_stadium_live_preferences_updated_at()'::regprocedure,
+    'public.is_stadium_live_match_open(uuid,timestamptz)'::regprocedure,
+    'public.is_stadium_live_blocked(uuid,uuid)'::regprocedure,
+    'public.get_stadium_live_preferences()'::regprocedure,
+    'public.update_stadium_live_preferences(boolean,boolean,text)'::regprocedure,
+    'public.get_match_checkin_snapshot(uuid)'::regprocedure,
+    'public.get_stadium_live_count(uuid)'::regprocedure,
+    'public.get_stadium_live_participants(uuid,integer,uuid,integer)'::regprocedure,
+    'public.send_stadium_reaction(uuid,uuid,text,uuid)'::regprocedure,
+    'public.get_stadium_reactions(uuid,timestamptz,uuid,integer)'::regprocedure
+  ])
+)
+select is(
+  (
+    select count(*)::integer
+    from stadium_functions target
+    join pg_proc function_row on function_row.oid = target.function_oid
+    cross join lateral aclexplode(
+      coalesce(function_row.proacl, acldefault('f', function_row.proowner))
+    ) privilege
+    where privilege.grantee = 0
+      and privilege.privilege_type = 'EXECUTE'
+  ),
+  0,
+  'PUBLIC has no execute privilege on any Stadium Live function'
+);
+
+with stadium_functions(function_oid) as (
+  select unnest(array[
+    'public.set_stadium_live_preferences_updated_at()'::regprocedure,
+    'public.is_stadium_live_match_open(uuid,timestamptz)'::regprocedure,
+    'public.is_stadium_live_blocked(uuid,uuid)'::regprocedure,
+    'public.get_stadium_live_preferences()'::regprocedure,
+    'public.update_stadium_live_preferences(boolean,boolean,text)'::regprocedure,
+    'public.get_match_checkin_snapshot(uuid)'::regprocedure,
+    'public.get_stadium_live_count(uuid)'::regprocedure,
+    'public.get_stadium_live_participants(uuid,integer,uuid,integer)'::regprocedure,
+    'public.send_stadium_reaction(uuid,uuid,text,uuid)'::regprocedure,
+    'public.get_stadium_reactions(uuid,timestamptz,uuid,integer)'::regprocedure
+  ])
+)
+select is(
+  (
+    select count(*)::integer
+    from stadium_functions target
+    where has_function_privilege('service_role', target.function_oid, 'EXECUTE')
+  ),
+  0,
+  'service_role has no unnecessary direct Stadium Live function privileges'
+);
+
+set local role anon;
+select set_config('request.jwt.claim.role', 'anon', true);
+select throws_like(
+  $$ select public.is_stadium_live_blocked('00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000002') $$,
+  '%permission denied for function is_stadium_live_blocked%',
+  'anonymous block-helper invocation is rejected by PostgreSQL privileges'
+);
+reset role;
 
 insert into auth.users (
   id, aud, role, email, encrypted_password, email_confirmed_at,
