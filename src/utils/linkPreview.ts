@@ -1,4 +1,5 @@
 import type { LinkPreview } from '../types/news';
+export { isInstagramUrl } from '../lib/instagram';
 
 const URL_MATCH_REGEX = /(?:https?:\/\/|www\.)[^\s<>"'`]+/i;
 const TRAILING_PUNCTUATION_REGEX = /[),.!?;:]+$/;
@@ -71,11 +72,6 @@ export function getLinkPreviewDomain(
   }
 }
 
-export function isInstagramUrl(url: string | null | undefined): boolean {
-  const hostname = getLinkPreviewDomain(url, { stripWww: false })?.toLowerCase() || '';
-  return hostname.includes('instagram.com') || hostname === 'instagr.am';
-}
-
 export function normalizeLinkPreview(value: unknown): LinkPreview | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return null;
@@ -94,6 +90,14 @@ export function normalizeLinkPreview(value: unknown): LinkPreview | null {
   const sourceName =
     readOptionalString(record.sourceName) ?? readOptionalString(record.source_name);
   const provider = readOptionalString(record.provider);
+  const displayUrl = normalizeHttpUrl(readOptionalString(record.displayUrl) ?? '');
+  const resourceType =
+    record.resourceType === 'post' ||
+    record.resourceType === 'reel' ||
+    record.resourceType === 'profile'
+      ? record.resourceType
+      : undefined;
+  const externalId = readOptionalString(record.externalId);
   const faviconUrl = normalizeHttpUrl(
     readOptionalString(record.faviconUrl) ?? readOptionalString(record.favicon_url) ?? '',
   );
@@ -104,20 +108,21 @@ export function normalizeLinkPreview(value: unknown): LinkPreview | null {
     readOptionalString(record.logoUrl) ?? readOptionalString(record.logo_url) ?? '',
   );
   const sourceLogoUrl = normalizeHttpUrl(
-    readOptionalString(record.sourceLogoUrl) ??
-      readOptionalString(record.source_logo_url) ??
-      '',
+    readOptionalString(record.sourceLogoUrl) ?? readOptionalString(record.source_logo_url) ?? '',
   );
   const hasVideo = typeof record.hasVideo === 'boolean' ? record.hasVideo : undefined;
 
   return {
     url,
+    ...(displayUrl ? { displayUrl } : {}),
     ...(title ? { title } : {}),
     ...(description ? { description } : {}),
     ...(imageUrl ? { imageUrl } : {}),
     ...(siteName ? { siteName } : {}),
     ...(sourceName ? { sourceName } : {}),
     ...(provider ? { provider } : {}),
+    ...(resourceType ? { resourceType } : {}),
+    ...(externalId ? { externalId } : {}),
     ...(faviconUrl ? { faviconUrl } : {}),
     ...(iconUrl ? { iconUrl } : {}),
     ...(logoUrl ? { logoUrl } : {}),

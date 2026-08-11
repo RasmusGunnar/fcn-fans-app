@@ -19,12 +19,15 @@ export interface NewsItem {
 
 export interface LinkPreview {
   url: string;
+  displayUrl?: string;
   title?: string;
   description?: string;
   imageUrl?: string;
   siteName?: string;
   sourceName?: string;
   provider?: string;
+  resourceType?: import('./externalShare').ExternalShareResourceType;
+  externalId?: string;
   faviconUrl?: string;
   iconUrl?: string;
   logoUrl?: string;

@@ -52,6 +52,8 @@ import { ArticlePreview } from './ArticlePreview';
 import { getMediaArticleHeaderPresentation } from '../../utils/mediaArticlePresentation';
 import { MediaArticleSourceAvatar } from './MediaArticleSourceAvatar';
 import { FeedVideo } from '../feed/FeedVideo';
+import { InstagramCard } from '../shared/InstagramCard';
+import { fromInstagramLinkPreview } from '../../lib/instagram';
 import {
   resolveFanPostBadgeCandidate,
   type FanPostBadgeAuthorProfile,
@@ -161,6 +163,10 @@ export function FanPostCard({
   const mediaArticleHeader = useMemo(
     () => getMediaArticleHeaderPresentation(post.postType, post.linkPreview),
     [post.linkPreview, post.postType],
+  );
+  const instagramShare = useMemo(
+    () => fromInstagramLinkPreview(post.linkPreview),
+    [post.linkPreview],
   );
   const groupDisplay = post.communityName || post.factionName;
   const bodyMeasurementKey = `${post.id}:${bodyText}`;
@@ -539,6 +545,11 @@ export function FanPostCard({
           ) : null}
         </View>
       ) : null}
+      {!isMediaArticle && instagramShare ? (
+        <View style={styles.externalShareContainer}>
+          <InstagramCard attachment={instagramShare} />
+        </View>
+      ) : null}
       {isMediaArticle && post.linkPreview ? (
         <ArticlePreview preview={post.linkPreview} fallbackLabel="Artikel" />
       ) : !firstMedia ? null : isVideo ? (
@@ -657,6 +668,9 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing[3],
   },
   bodyText: {},
+  externalShareContainer: {
+    marginBottom: theme.spacing[3],
+  },
   bodyLink: {
     color: theme.colors.info,
     textDecorationLine: 'underline',

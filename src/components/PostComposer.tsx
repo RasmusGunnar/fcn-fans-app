@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -12,6 +12,11 @@ import {
 import { useAuth } from '../auth/AuthProvider';
 import { useEntityAutocomplete } from '../hooks/useEntityAutocomplete';
 import { logger } from '../lib/logger';
+import {
+  extractInstagramShare,
+  removeStandaloneInstagramUrl,
+  toInstagramLinkPreview,
+} from '../lib/instagram';
 import {
   pickCameraPhoto,
   pickFromLibrary,
@@ -28,20 +33,28 @@ import { triggerCommunityPostPush } from '../services/postPushApi';
 import { useFeed } from '../state/FeedContext';
 import { type Theme, useTheme } from '../theme';
 import type { Actor } from '../types/news';
+import type { SharedLinkAttachment } from '../types/externalShare';
 import { normalizePostType, type Post } from '../types/post';
 import { extractFirstUrl, normalizeLinkPreview } from '../utils/linkPreview';
 import { buildPostInsertPayload, shouldSyncPostToHome } from '../utils/postComposerPayload';
 import { EntityAutocompleteList } from './composer/EntityAutocompleteList';
 import { PrimaryButton } from './PrimaryButton';
 import { Card } from './ui/Card';
+import { InstagramCard } from './shared/InstagramCard';
 
 interface PostComposerProps {
   onSuccess?: () => void;
   actor?: Actor;
   feedTargets?: string[];
+  initialExternalShare?: SharedLinkAttachment;
 }
 
-export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProps) {
+export function PostComposer({
+  onSuccess,
+  actor,
+  feedTargets,
+  initialExternalShare,
+}: PostComposerProps) {
   const theme = useTheme();
   const styles = createStyles(theme);
   const { user } = useAuth();
@@ -50,8 +63,21 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
   const [selection, setSelection] = useState({ start: 0, end: 0 });
   const [isInputFocused, setIsInputFocused] = useState(false);
   const [attachment, setAttachment] = useState<PickedMedia | null>(null);
+  const [externalShare, setExternalShare] = useState<SharedLinkAttachment | null>(
+    initialExternalShare ?? null,
+  );
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<TextInput | null>(null);
+
+  useEffect(() => {
+    if (initialExternalShare) setExternalShare(initialExternalShare);
+  }, [initialExternalShare]);
+
+  const handleTextChange = useCallback((value: string) => {
+    const parsed = extractInstagramShare(value);
+    if (parsed) setExternalShare(parsed);
+    setText(removeStandaloneInstagramUrl(value, parsed));
+  }, []);
   const {
     activeMatch,
     mentionSuggestions,
@@ -182,8 +208,8 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
 
   const handlePublish = async () => {
     const normalizedText = text.trim();
-    if (!normalizedText) {
-      alert('Skriv noget før du udgiver!');
+    if (!normalizedText && !externalShare) {
+      alert('Skriv noget eller tilføj et Instagram-link før du udgiver!');
       return;
     }
     if (!user?.id) {
@@ -228,8 +254,8 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
       return;
     }
 
-    let linkPreview = null;
-    const firstUrl = extractFirstUrl(normalizedText);
+    let linkPreview = externalShare ? toInstagramLinkPreview(externalShare) : null;
+    const firstUrl = externalShare ? null : extractFirstUrl(normalizedText);
     if (firstUrl) {
       try {
         linkPreview = await fetchLinkPreview(firstUrl);
@@ -324,8 +350,11 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
     setSelection({ start: 0, end: 0 });
     clearAutocomplete();
     setAttachment(null);
+    setExternalShare(null);
     onSuccess?.();
   };
+
+  const canPublish = Boolean(text.trim() || externalShare);
 
   return (
     <View style={styles.container}>
@@ -339,7 +368,7 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
           multiline
           numberOfLines={6}
           value={text}
-          onChangeText={setText}
+          onChangeText={handleTextChange}
           selection={selection}
           onSelectionChange={({ nativeEvent }) => setSelection(nativeEvent.selection)}
           onFocus={() => setIsInputFocused(true)}
@@ -359,6 +388,11 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
           onSelectMention={handleSelectMentionSuggestion}
           onSelectHashtag={handleSelectHashtagSuggestion}
         />
+        {externalShare ? (
+          <View style={styles.externalSharePreview}>
+            <InstagramCard attachment={externalShare} onRemove={() => setExternalShare(null)} />
+          </View>
+        ) : null}
         {attachment && (
           <View style={styles.previewContainer}>
             {attachment.type === 'image' ? (
@@ -408,14 +442,14 @@ export function PostComposer({ onSuccess, actor, feedTargets }: PostComposerProp
       <View
         style={[
           styles.submitButtonWrap,
-          !text.trim() || loading ? styles.submitButtonWrapDisabled : null,
+          !canPublish || loading ? styles.submitButtonWrapDisabled : null,
         ]}
       >
         <View style={styles.submitButtonInner}>
           <PrimaryButton
             title={loading ? 'Deler...' : 'Del opslag'}
             onPress={handlePublish}
-            disabled={!text.trim() || loading}
+            disabled={!canPublish || loading}
           />
         </View>
       </View>
@@ -462,6 +496,9 @@ function createStyles(theme: Theme) {
     previewContainer: {
       marginTop: theme.spacing[4],
       gap: theme.spacing[2],
+    },
+    externalSharePreview: {
+      marginTop: theme.spacing[4],
     },
     previewImage: {
       width: '100%',
