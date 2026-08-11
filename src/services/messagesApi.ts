@@ -2,6 +2,7 @@ import * as Crypto from 'expo-crypto';
 import { signMessageImage } from '../lib/messageMedia';
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
+import { fromDatabaseExternalShare, toDatabaseExternalShare } from '../lib/instagram';
 import type {
   ConversationDetails,
   ConversationMessage,
@@ -18,6 +19,7 @@ import type {
   MessageUserSearchResult,
   SendMessageResult,
 } from '../types/messages';
+import type { SharedLinkAttachment } from '../types/externalShare';
 import { getDirectMessageErrorMessage, mapConversationInboxRow } from '../utils/directMessages';
 
 type RpcError = { message?: string; code?: string };
@@ -53,7 +55,12 @@ function readConversationRole(value: unknown): ConversationRole {
 }
 
 function readMessageType(value: unknown): MessageType {
-  return value === 'image' || value === 'image_text' ? value : 'text';
+  return value === 'image' ||
+    value === 'image_text' ||
+    value === 'external_link' ||
+    value === 'external_link_text'
+    ? value
+    : 'text';
 }
 
 function mapPeer(row: Record<string, unknown>): MessagePeer | null {
@@ -87,6 +94,7 @@ export function mapDirectMessageRow(row: Record<string, unknown>): ConversationM
     mediaWidth: row.media_width == null ? null : Number(row.media_width),
     mediaHeight: row.media_height == null ? null : Number(row.media_height),
     mediaSizeBytes: row.media_size_bytes == null ? null : Number(row.media_size_bytes),
+    externalShare: fromDatabaseExternalShare(row.external_share),
     createdAt: String(row.created_at ?? ''),
     deletedAt: readString(row.deleted_at),
   };
@@ -204,22 +212,37 @@ export async function sendMessage(params: {
   body: string;
   clientMessageId: string;
   media?: MessageMediaUpload | null;
+  externalShare?: SharedLinkAttachment | null;
 }): Promise<SendMessageResult> {
   const body = params.body.trim();
-  const messageType: MessageType = params.media ? (body ? 'image_text' : 'image') : 'text';
-  const { data, error } = await supabase
-    .rpc('send_message', {
-      p_conversation_id: params.conversationId,
-      p_body: body || null,
-      p_client_message_id: params.clientMessageId,
-      p_message_type: messageType,
-      p_media_path: params.media?.path ?? null,
-      p_media_mime_type: params.media?.mimeType ?? null,
-      p_media_width: params.media?.width ?? null,
-      p_media_height: params.media?.height ?? null,
-      p_media_size_bytes: params.media?.sizeBytes ?? null,
-    })
-    .single();
+  if (params.media && params.externalShare) {
+    throw new DirectMessageServiceError('Vælg enten et billede eller et Instagram-link.');
+  }
+  const messageType: MessageType = params.media
+    ? body
+      ? 'image_text'
+      : 'image'
+    : params.externalShare
+      ? body
+        ? 'external_link_text'
+        : 'external_link'
+      : 'text';
+  const rpcName = params.externalShare ? 'send_message_v2' : 'send_message';
+  const rpcParams = {
+    p_conversation_id: params.conversationId,
+    p_body: body || null,
+    p_client_message_id: params.clientMessageId,
+    p_message_type: messageType,
+    p_media_path: params.media?.path ?? null,
+    p_media_mime_type: params.media?.mimeType ?? null,
+    p_media_width: params.media?.width ?? null,
+    p_media_height: params.media?.height ?? null,
+    p_media_size_bytes: params.media?.sizeBytes ?? null,
+    ...(params.externalShare
+      ? { p_external_share: toDatabaseExternalShare(params.externalShare) }
+      : {}),
+  };
+  const { data, error } = await supabase.rpc(rpcName, rpcParams).single();
   if (error || !data) throwFriendlyError(error, 'Beskeden kunne ikke sendes. Prøv igen.');
 
   const row = data as Record<string, unknown>;

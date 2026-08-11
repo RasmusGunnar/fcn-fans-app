@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -20,12 +20,15 @@ import {
 } from '../services/messagesApi';
 import { useTheme, type Theme } from '../theme';
 import type { MessageUserSearchResult } from '../types/messages';
+import type { SharedLinkAttachment } from '../types/externalShare';
 import { validateGroupCreation } from '../utils/directMessages';
 
 type ComposeMode = 'direct' | 'group';
 
 export default function NewMessageScreen() {
   const navigation = useNavigation<any>();
+  const route = useRoute() as { params?: { externalShare?: SharedLinkAttachment } };
+  const externalShare = route.params?.externalShare;
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [mode, setMode] = useState<ComposeMode>('direct');
@@ -75,7 +78,7 @@ export default function NewMessageScreen() {
     setError(null);
     try {
       const conversationId = await createOrGetDirectConversation(peer.id);
-      navigation.replace('Conversation', { conversationId, peer });
+      navigation.replace('Conversation', { conversationId, peer, externalShare });
     } catch (openError) {
       setError(openError instanceof Error ? openError.message : 'Samtalen kunne ikke startes.');
     } finally {
@@ -113,7 +116,7 @@ export default function NewMessageScreen() {
         groupName,
         selected.map((item) => item.id),
       );
-      navigation.replace('Conversation', { conversationId });
+      navigation.replace('Conversation', { conversationId, externalShare });
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : 'Gruppen kunne ikke oprettes.');
     } finally {

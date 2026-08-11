@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../auth/AuthProvider';
 import { Avatar } from '../components/Avatar';
+import { InstagramCard } from '../components/shared/InstagramCard';
 import { DirectMessageReportModal } from '../components/messages/DirectMessageReportModal';
 import { GroupAvatar } from '../components/messages/GroupAvatar';
 import { MessageImage } from '../components/messages/MessageImage';
@@ -27,6 +28,7 @@ import { useConversationTyping } from '../hooks/useConversationTyping';
 import { removeMessageImage, uploadMessageImage } from '../lib/messageMedia';
 import { pickCameraPhoto, pickImageFromLibrary, type PickedMedia } from '../lib/mediaPicker';
 import { supabase } from '../lib/supabase';
+import { extractInstagramShare, removeStandaloneInstagramUrl } from '../lib/instagram';
 import {
   blockDirectMessageUser,
   createDirectMessageClientId,
@@ -47,6 +49,7 @@ import type {
   MessageMediaUpload,
   MessagePeer,
 } from '../types/messages';
+import type { SharedLinkAttachment } from '../types/externalShare';
 import {
   canSubmitDirectMessage,
   formatDirectMessageTimestamp,
@@ -56,12 +59,19 @@ import {
   mergeDirectMessages,
 } from '../utils/directMessages';
 
-type ConversationRoute = { params?: { conversationId?: string; peer?: MessagePeer } };
+type ConversationRoute = {
+  params?: {
+    conversationId?: string;
+    peer?: MessagePeer;
+    externalShare?: SharedLinkAttachment;
+  };
+};
 
 type PendingSend = {
   body: string;
   clientMessageId: string;
   selectedImageUri: string | null;
+  externalShareCanonicalUrl: string | null;
   media: MessageMediaUpload | null;
 };
 
@@ -79,6 +89,9 @@ export default function ConversationScreen() {
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [composer, setComposer] = useState('');
   const [selectedImage, setSelectedImage] = useState<PickedMedia | null>(null);
+  const [externalShare, setExternalShare] = useState<SharedLinkAttachment | null>(
+    route.params?.externalShare ?? null,
+  );
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasOlder, setHasOlder] = useState(true);
@@ -275,6 +288,7 @@ export default function ConversationScreen() {
       void picker().then((asset) => {
         if (!asset) return;
         clearPending(true);
+        setExternalShare(null);
         setSelectedImage(asset);
       });
     },
@@ -293,18 +307,25 @@ export default function ConversationScreen() {
     if (!conversationId || !user?.id || sending || details?.blocked) return;
     const normalizedBody = composer.trim();
     const imageUri = selectedImage?.uri ?? null;
+    const externalShareCanonicalUrl = externalShare?.canonicalUrl ?? null;
     let attempt = pendingSend;
-    if (!attempt || attempt.body !== normalizedBody || attempt.selectedImageUri !== imageUri) {
+    if (
+      !attempt ||
+      attempt.body !== normalizedBody ||
+      attempt.selectedImageUri !== imageUri ||
+      attempt.externalShareCanonicalUrl !== externalShareCanonicalUrl
+    ) {
       if (attempt?.media?.path) void removeMessageImage(attempt.media.path);
       attempt = {
         body: normalizedBody,
         clientMessageId: createDirectMessageClientId(),
         selectedImageUri: imageUri,
+        externalShareCanonicalUrl,
         media: null,
       };
       setPendingSend(attempt);
     }
-    if (!attempt.body && !selectedImage) return;
+    if (!attempt.body && !selectedImage && !externalShare) return;
 
     setSending(true);
     setSendError(null);
@@ -321,10 +342,12 @@ export default function ConversationScreen() {
         body: attempt.body,
         clientMessageId: attempt.clientMessageId,
         media,
+        externalShare,
       });
       setMessages((current) => mergeDirectMessages(current, [result.message]));
       setComposer('');
       setSelectedImage(null);
+      setExternalShare(null);
       setPendingSend(null);
     } catch (error) {
       setSendError(
@@ -337,6 +360,7 @@ export default function ConversationScreen() {
     composer,
     conversationId,
     details?.blocked,
+    externalShare,
     pendingSend,
     selectedImage,
     sending,
@@ -429,6 +453,7 @@ export default function ConversationScreen() {
     canSubmitDirectMessage({
       body: composer,
       hasImage: Boolean(selectedImage),
+      hasExternalShare: Boolean(externalShare),
       blocked: details.blocked,
       sending,
     }),
@@ -489,6 +514,9 @@ export default function ConversationScreen() {
                     });
                   }}
                 />
+              ) : null}
+              {item.externalShare ? (
+                <InstagramCard attachment={item.externalShare} compact />
               ) : null}
               {item.body ? (
                 <Text variant="body" style={own ? styles.ownBubbleText : undefined}>
@@ -600,6 +628,18 @@ export default function ConversationScreen() {
               </Pressable>
             </View>
           ) : null}
+          {externalShare ? (
+            <View style={styles.externalSharePreview}>
+              <InstagramCard
+                attachment={externalShare}
+                compact
+                onRemove={() => {
+                  clearPending(true);
+                  setExternalShare(null);
+                }}
+              />
+            </View>
+          ) : null}
           <View style={styles.composerWrap}>
             <Pressable
               style={styles.mediaButton}
@@ -614,11 +654,19 @@ export default function ConversationScreen() {
               style={styles.composerInput}
               value={composer}
               onChangeText={(value) => {
-                setComposer(value);
-                notifyComposerChanged(value);
-                if (pendingSend && value.trim() !== pendingSend.body) clearPending(true);
+                const detectedShare = extractInstagramShare(value);
+                const nextComposer = removeStandaloneInstagramUrl(value, detectedShare);
+                if (detectedShare) {
+                  setExternalShare(detectedShare);
+                  setSelectedImage(null);
+                }
+                setComposer(nextComposer);
+                notifyComposerChanged(nextComposer);
+                if (pendingSend && nextComposer.trim() !== pendingSend.body) clearPending(true);
               }}
-              placeholder={selectedImage ? 'Tilføj en tekst (valgfrit)' : 'Skriv en besked'}
+              placeholder={
+                selectedImage || externalShare ? 'Tilføj en tekst (valgfrit)' : 'Skriv en besked'
+              }
               placeholderTextColor={theme.colors.text.muted}
               multiline
               maxLength={2000}
@@ -715,6 +763,11 @@ function createStyles(theme: Theme) {
       backgroundColor: theme.colors.bg.card,
     },
     imagePreview: { width: 96, height: 96, borderRadius: theme.radius.md },
+    externalSharePreview: {
+      paddingHorizontal: theme.layout.screenPadding,
+      paddingTop: theme.spacing[2],
+      backgroundColor: theme.colors.bg.card,
+    },
     removeImageButton: {
       position: 'absolute',
       top: theme.spacing[1],

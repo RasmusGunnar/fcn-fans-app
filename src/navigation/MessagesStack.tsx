@@ -6,12 +6,17 @@ import MessagesListScreen from '../screens/MessagesListScreen';
 import NewMessageScreen from '../screens/NewMessageScreen';
 import PublicProfileScreen from '../screens/PublicProfileScreen';
 import type { MessagePeer } from '../types/messages';
+import type { SharedLinkAttachment } from '../types/externalShare';
 
 export type MessagesStackParamList = {
-  MessagesList: undefined;
-  Conversation: { conversationId: string; peer?: MessagePeer };
+  MessagesList: { externalShare?: SharedLinkAttachment } | undefined;
+  Conversation: {
+    conversationId: string;
+    peer?: MessagePeer;
+    externalShare?: SharedLinkAttachment;
+  };
   GroupInfo: { conversationId: string };
-  NewMessage: undefined;
+  NewMessage: { externalShare?: SharedLinkAttachment } | undefined;
   PublicProfile: { userId: string };
 };
 

@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -19,6 +19,7 @@ import { getDirectMessagesInbox } from '../services/messagesApi';
 import { useMessageUnread } from '../state/MessageUnreadContext';
 import { useTheme, type Theme } from '../theme';
 import type { ConversationSummary, InboxCursor } from '../types/messages';
+import type { SharedLinkAttachment } from '../types/externalShare';
 import {
   formatDirectMessageTimestamp,
   formatMessageUnreadBadge,
@@ -28,6 +29,8 @@ import {
 
 export default function MessagesListScreen() {
   const navigation = useNavigation<any>();
+  const route = useRoute() as { params?: { externalShare?: SharedLinkAttachment } };
+  const externalShare = route.params?.externalShare;
   const { user } = useAuth();
   const { refreshUnreadCount } = useMessageUnread();
   const theme = useTheme();
@@ -157,6 +160,7 @@ export default function MessagesListScreen() {
             navigation.navigate('Conversation', {
               conversationId: item.id,
               peer: item.peer ?? undefined,
+              externalShare,
             })
           }
           accessibilityRole="button"
@@ -207,16 +211,16 @@ export default function MessagesListScreen() {
         </Pressable>
       );
     },
-    [navigation, styles, theme.spacing, user?.id],
+    [externalShare, navigation, styles, theme.spacing, user?.id],
   );
 
   return (
     <View style={styles.container}>
       <MessageScreenHeader
-        title="Beskeder"
+        title={externalShare ? 'Vælg samtale' : 'Beskeder'}
         onBack={() => navigation.goBack()}
         rightIcon="create-outline"
-        onRightPress={() => navigation.navigate('NewMessage')}
+        onRightPress={() => navigation.navigate('NewMessage', { externalShare })}
         rightAccessibilityLabel="Start ny samtale"
       />
       {loading && conversations.length === 0 ? (

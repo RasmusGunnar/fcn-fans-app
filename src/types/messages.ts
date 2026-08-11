@@ -1,8 +1,11 @@
+import type { SharedLinkAttachment } from './externalShare';
+
 export type DirectMessageReportReason = 'spam' | 'abuse' | 'harassment' | 'personal_info' | 'other';
 
 export type ConversationType = 'direct' | 'group';
 export type ConversationRole = 'owner' | 'admin' | 'member';
-export type MessageType = 'text' | 'image' | 'image_text';
+
+export type MessageType = 'text' | 'image' | 'image_text' | 'external_link' | 'external_link_text';
 
 export type MessagePeer = {
   id: string;
@@ -32,6 +35,7 @@ export type ConversationSummary = ConversationDetails & {
   lastMessageBody: string | null;
   lastMessageType: MessageType | null;
   lastMessageMediaPath: string | null;
+  lastMessageExternalShare: SharedLinkAttachment | null;
   lastMessageSenderId: string | null;
   lastMessageSenderName: string | null;
   activityAt: string;
@@ -54,6 +58,7 @@ export type ConversationMessage = {
   mediaWidth: number | null;
   mediaHeight: number | null;
   mediaSizeBytes: number | null;
+  externalShare: SharedLinkAttachment | null;
   createdAt: string;
   deletedAt: string | null;
 };

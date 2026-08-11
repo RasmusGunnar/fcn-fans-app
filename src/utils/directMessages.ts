@@ -7,6 +7,7 @@ import type {
   MessagePeer,
   MessageType,
 } from '../types/messages';
+import { fromDatabaseExternalShare, getInstagramMessageLabel } from '../lib/instagram';
 
 export type DirectMessageSendAttempt = {
   body: string;
@@ -32,7 +33,13 @@ function readConversationRole(value: unknown): ConversationRole {
 }
 
 function readMessageType(value: unknown): MessageType | null {
-  return value === 'text' || value === 'image' || value === 'image_text' ? value : null;
+  return value === 'text' ||
+    value === 'image' ||
+    value === 'image_text' ||
+    value === 'external_link' ||
+    value === 'external_link_text'
+    ? value
+    : null;
 }
 
 function normalizeUnreadCount(value: number): number {
@@ -86,6 +93,7 @@ export function mapConversationInboxRow(row: Record<string, unknown>): Conversat
       readMessageType(row.last_message_type) ??
       (readOptionalString(row.last_message_id) ? 'text' : null),
     lastMessageMediaPath: readOptionalString(row.last_message_media_path),
+    lastMessageExternalShare: fromDatabaseExternalShare(row.last_message_external_share),
     lastMessageSenderId: readOptionalString(row.last_message_sender_id),
     lastMessageSenderName: readOptionalString(row.last_message_sender_name),
     lastMessageAt: readOptionalString(row.last_message_at),
@@ -105,6 +113,7 @@ export function mapDirectMessageInboxRow(row: Record<string, unknown>): Conversa
     conversation_type: 'direct',
     activity_at: row.last_message_at,
     last_message_type: 'text',
+    last_message_external_share: null,
     member_count: 2,
     current_user_role: 'member',
     ...row,
@@ -122,7 +131,12 @@ export function getConversationTitle(
 export function getConversationPreview(
   conversation: Pick<
     ConversationSummary,
-    'type' | 'lastMessageBody' | 'lastMessageType' | 'lastMessageSenderId' | 'lastMessageSenderName'
+    | 'type'
+    | 'lastMessageBody'
+    | 'lastMessageType'
+    | 'lastMessageExternalShare'
+    | 'lastMessageSenderId'
+    | 'lastMessageSenderName'
   >,
   currentUserId: string | null | undefined,
 ): string {
@@ -130,7 +144,12 @@ export function getConversationPreview(
   const content =
     conversation.lastMessageType === 'text'
       ? conversation.lastMessageBody || 'Besked slettet'
-      : `${String.fromCodePoint(0x1f4f7)} Billede`;
+      : conversation.lastMessageType === 'external_link' ||
+          conversation.lastMessageType === 'external_link_text'
+        ? conversation.lastMessageExternalShare
+          ? getInstagramMessageLabel(conversation.lastMessageExternalShare.resourceType)
+          : 'Eksternt link'
+        : `${String.fromCodePoint(0x1f4f7)} Billede`;
   if (conversation.lastMessageSenderId === currentUserId) return `Dig: ${content}`;
   if (conversation.type === 'group' && conversation.lastMessageSenderName) {
     return `${conversation.lastMessageSenderName}: ${content}`;
@@ -152,13 +171,14 @@ export function createOrReuseDirectMessageSendAttempt(
 export function canSubmitDirectMessage(params: {
   body: string;
   hasImage?: boolean;
+  hasExternalShare?: boolean;
   blocked: boolean;
   sending: boolean;
 }): boolean {
   return (
     !params.blocked &&
     !params.sending &&
-    (params.body.trim().length > 0 || params.hasImage === true)
+    (params.body.trim().length > 0 || params.hasImage === true || params.hasExternalShare === true)
   );
 }
 
