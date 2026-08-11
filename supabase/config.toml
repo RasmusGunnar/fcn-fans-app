@@ -31,6 +31,10 @@ verify_jwt = false
 [functions.discussion-link-preview]
 verify_jwt = true
 
+# instagram_oembed: authenticated fixed-target Meta oEmbed adapter with server-only cache.
+[functions.instagram_oembed]
+verify_jwt = true
+
 # Manual app-admin ingestion into the private media article review queue.
 [functions.ingest-media-article-candidates]
 verify_jwt = true
