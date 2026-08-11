@@ -2,7 +2,8 @@ import { useNavigation } from '@react-navigation/native';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { useAuth } from '../auth/AuthProvider';
-import { InstagramCard } from '../components/shared/InstagramCard';
+import { InstagramEmbedModal } from '../components/shared/InstagramEmbedModal';
+import { InstagramEmbedPreview } from '../components/shared/InstagramEmbedPreview';
 import { Button, Text } from '../components/ui';
 import { useIncomingShare } from '../state/IncomingShareContext';
 import { useTheme, type Theme } from '../theme';
@@ -12,6 +13,7 @@ export default function IncomingShareScreen() {
   const { user } = useAuth();
   const { pendingShare, loading, discardPendingShare, takePendingShare } = useIncomingShare();
   const [opening, setOpening] = useState<'post' | 'message' | 'cancel' | null>(null);
+  const [previewVisible, setPreviewVisible] = useState(false);
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
@@ -65,7 +67,7 @@ export default function IncomingShareScreen() {
             Vælg, hvor linket skal deles. Intet bliver sendt automatisk.
           </Text>
         </View>
-        <InstagramCard attachment={pendingShare} />
+        <InstagramEmbedPreview attachment={pendingShare} onPress={() => setPreviewVisible(true)} />
         {!user ? (
           <Text variant="body" color="secondary" style={styles.loggedOutCopy}>
             Log ind for at fortsætte. Linket gemmes i op til 10 minutter.
@@ -94,6 +96,11 @@ export default function IncomingShareScreen() {
             />
           </View>
         )}
+        <InstagramEmbedModal
+          attachment={pendingShare}
+          visible={previewVisible}
+          onClose={() => setPreviewVisible(false)}
+        />
       </View>
     </View>
   );

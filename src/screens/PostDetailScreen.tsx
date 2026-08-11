@@ -115,7 +115,7 @@ export default function PostDetailScreen() {
 
   const post = feedPost ?? detailData?.post ?? null;
   const authorProfile = post?.authorId
-    ? profileMap[post.authorId] ?? detailData?.authorProfile ?? undefined
+    ? (profileMap[post.authorId] ?? detailData?.authorProfile ?? undefined)
     : undefined;
   const postProfileMap = useMemo(() => {
     if (!post?.authorId || !authorProfile) {
@@ -131,11 +131,10 @@ export default function PostDetailScreen() {
     };
   }, [authorProfile, post?.authorId, profileMap]);
   const engagementKey = post ? getPostEngagementIdentity(post.id).key : null;
-  const likeState =
-    (engagementKey ? likeMap[engagementKey] : undefined) ?? {
-      liked: detailData?.engagement.liked ?? post?.likedByMe ?? false,
-      likes: detailData?.engagement.likes ?? post?.likesCount ?? 0,
-    };
+  const likeState = (engagementKey ? likeMap[engagementKey] : undefined) ?? {
+    liked: detailData?.engagement.liked ?? post?.likedByMe ?? false,
+    likes: detailData?.engagement.likes ?? post?.likesCount ?? 0,
+  };
   const commentsCount =
     (engagementKey ? commentCountMap[engagementKey] : undefined) ??
     detailData?.engagement.commentsCount ??
@@ -205,6 +204,7 @@ export default function PostDetailScreen() {
           commentPreviews={commentPreviews}
           initiallyOpenComments={hasCommentContext}
           maxInlineComments={hasCommentContext ? Number.MAX_SAFE_INTEGER : 2}
+          isInstagramEmbedActive
           onToggleLike={() => {
             if (user?.id) {
               void toggleLike(POST_ENGAGEMENT_TARGET_TYPE, post.id, user.id);
@@ -216,7 +216,9 @@ export default function PostDetailScreen() {
             addCommentPreview(POST_ENGAGEMENT_TARGET_TYPE, post.id, comment);
           }}
           bodyContent={
-            post.poll_data ? <PollCard pollData={post.poll_data} postId={post.id} profileMap={postProfileMap} /> : undefined
+            post.poll_data ? (
+              <PollCard pollData={post.poll_data} postId={post.id} profileMap={postProfileMap} />
+            ) : undefined
           }
         />
       </View>

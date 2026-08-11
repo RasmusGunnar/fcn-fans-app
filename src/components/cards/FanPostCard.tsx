@@ -52,7 +52,7 @@ import { ArticlePreview } from './ArticlePreview';
 import { getMediaArticleHeaderPresentation } from '../../utils/mediaArticlePresentation';
 import { MediaArticleSourceAvatar } from './MediaArticleSourceAvatar';
 import { FeedVideo } from '../feed/FeedVideo';
-import { InstagramCard } from '../shared/InstagramCard';
+import { InstagramEmbedCard } from '../shared/InstagramEmbedCard';
 import { fromInstagramLinkPreview } from '../../lib/instagram';
 import {
   resolveFanPostBadgeCandidate,
@@ -133,6 +133,8 @@ interface FanPostCardProps {
   bodyContent?: React.ReactNode;
   /** Whether this card's video is the currently active inline player. */
   isActiveVideo?: boolean;
+  /** Whether this card may mount its rich Instagram WebView. */
+  isInstagramEmbedActive?: boolean;
 }
 
 export function FanPostCard({
@@ -155,6 +157,7 @@ export function FanPostCard({
   maxInlineComments = 2,
   bodyContent,
   isActiveVideo = false,
+  isInstagramEmbedActive = false,
 }: FanPostCardProps) {
   const navigation = useNavigation<any>();
   const timeAgo = getTimeAgo(post.createdAt);
@@ -547,7 +550,7 @@ export function FanPostCard({
       ) : null}
       {!isMediaArticle && instagramShare ? (
         <View style={styles.externalShareContainer}>
-          <InstagramCard attachment={instagramShare} />
+          <InstagramEmbedCard attachment={instagramShare} enabled={isInstagramEmbedActive} />
         </View>
       ) : null}
       {isMediaArticle && post.linkPreview ? (

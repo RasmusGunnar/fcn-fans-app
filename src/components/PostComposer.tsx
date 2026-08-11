@@ -40,7 +40,7 @@ import { buildPostInsertPayload, shouldSyncPostToHome } from '../utils/postCompo
 import { EntityAutocompleteList } from './composer/EntityAutocompleteList';
 import { PrimaryButton } from './PrimaryButton';
 import { Card } from './ui/Card';
-import { InstagramCard } from './shared/InstagramCard';
+import { InstagramEmbedPreview } from './shared/InstagramEmbedPreview';
 
 interface PostComposerProps {
   onSuccess?: () => void;
@@ -390,7 +390,10 @@ export function PostComposer({
         />
         {externalShare ? (
           <View style={styles.externalSharePreview}>
-            <InstagramCard attachment={externalShare} onRemove={() => setExternalShare(null)} />
+            <InstagramEmbedPreview
+              attachment={externalShare}
+              onRemove={() => setExternalShare(null)}
+            />
           </View>
         ) : null}
         {attachment && (

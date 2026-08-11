@@ -40,6 +40,8 @@ export type FeedItemRendererProps = {
   onPressPost?: (postId: string, commentId?: string | null) => void;
   /** Whether this specific item is the currently active inline video. */
   isActiveVideo?: boolean;
+  /** Whether this post may mount its rich Instagram WebView. */
+  isInstagramEmbedActive?: boolean;
 };
 
 function FeedItemRendererComponent(props: FeedItemRendererProps): React.ReactElement | null {
@@ -67,6 +69,7 @@ function FeedItemRendererComponent(props: FeedItemRendererProps): React.ReactEle
     onPressProfile,
     onPressPost,
     isActiveVideo,
+    isInstagramEmbedActive,
   } = props;
   recordRenderCount('FeedItemRenderer', itemKey);
 
@@ -101,6 +104,7 @@ function FeedItemRendererComponent(props: FeedItemRendererProps): React.ReactEle
             addCommentPreview(POST_ENGAGEMENT_TARGET_TYPE, item.id, comment);
           }}
           isActiveVideo={isActiveVideo}
+          isInstagramEmbedActive={isInstagramEmbedActive}
           bodyContent={
             pollData ? (
               <PollCard pollData={pollData} postId={item.id} profileMap={safeProfileMap} />

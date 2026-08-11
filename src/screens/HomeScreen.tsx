@@ -41,6 +41,8 @@ import {
   schedulePerformanceFrame,
 } from '../utils/performanceTiming';
 import { navigateToMessagesList } from '../navigation/navigationRef';
+import { fromInstagramLinkPreview } from '../lib/instagram';
+import { isRichInstagramUrl } from '../utils/instagramEmbed';
 
 logPerformanceEvent('ScreenLifecycle', 'module-evaluated', { screen: 'HomeScreen' });
 
@@ -425,10 +427,12 @@ export default function HomeScreen() {
   }, [selectedFeedFilter, visibleFeedItems]);
 
   const [activeVideoKey, setActiveVideoKey] = useState<string | null>(null);
+  const [activeInstagramEmbedKeys, setActiveInstagramEmbedKeys] = useState<string[]>([]);
 
   // Reset active video when the feed filter changes so no stale player stays mounted
   useEffect(() => {
     setActiveVideoKey(null);
+    setActiveInstagramEmbedKeys([]);
   }, [selectedFeedFilter]);
 
   // Stable viewability config — 65 % of item must be visible for at least 200 ms
@@ -451,6 +455,24 @@ export default function HomeScreen() {
       }
       return nextKey;
     });
+
+    const nextInstagramKeys = viewableItems
+      .filter(({ item, isViewable }: ViewToken) => {
+        const feedItem = item as FeedItem;
+        const instagramShare =
+          feedItem.kind === 'post' ? fromInstagramLinkPreview(feedItem.data.linkPreview) : null;
+        return (
+          isViewable && instagramShare !== null && isRichInstagramUrl(instagramShare.canonicalUrl)
+        );
+      })
+      .slice(0, 2)
+      .map(({ item }: ViewToken) => getFeedItemKey(item as FeedItem));
+    setActiveInstagramEmbedKeys((previous) =>
+      previous.length === nextInstagramKeys.length &&
+      previous.every((key, index) => key === nextInstagramKeys[index])
+        ? previous
+        : nextInstagramKeys,
+    );
   });
 
   const handleFlatListContentSizeChange = useCallback(
@@ -722,6 +744,7 @@ export default function HomeScreen() {
           onPressCommunity={handleOpenCommunity}
           onPressFanActivity={handleOpenFanActivity}
           isActiveVideo={isHomeFocused && key === activeVideoKey}
+          isInstagramEmbedActive={isHomeFocused && activeInstagramEmbedKeys.includes(key)}
         />
       );
     },
@@ -745,6 +768,7 @@ export default function HomeScreen() {
       toggleLike,
       user,
       activeVideoKey,
+      activeInstagramEmbedKeys,
     ],
   );
 

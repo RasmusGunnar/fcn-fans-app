@@ -17,7 +17,8 @@ import {
 } from 'react-native';
 import { useAuth } from '../auth/AuthProvider';
 import { Avatar } from '../components/Avatar';
-import { InstagramCard } from '../components/shared/InstagramCard';
+import { InstagramEmbedModal } from '../components/shared/InstagramEmbedModal';
+import { InstagramEmbedPreview } from '../components/shared/InstagramEmbedPreview';
 import { DirectMessageReportModal } from '../components/messages/DirectMessageReportModal';
 import { GroupAvatar } from '../components/messages/GroupAvatar';
 import { MessageImage } from '../components/messages/MessageImage';
@@ -91,6 +92,9 @@ export default function ConversationScreen() {
   const [selectedImage, setSelectedImage] = useState<PickedMedia | null>(null);
   const [externalShare, setExternalShare] = useState<SharedLinkAttachment | null>(
     route.params?.externalShare ?? null,
+  );
+  const [selectedInstagramShare, setSelectedInstagramShare] = useState<SharedLinkAttachment | null>(
+    null,
   );
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -516,7 +520,10 @@ export default function ConversationScreen() {
                 />
               ) : null}
               {item.externalShare ? (
-                <InstagramCard attachment={item.externalShare} compact />
+                <InstagramEmbedPreview
+                  attachment={item.externalShare}
+                  onPress={() => setSelectedInstagramShare(item.externalShare ?? null)}
+                />
               ) : null}
               {item.body ? (
                 <Text variant="body" style={own ? styles.ownBubbleText : undefined}>
@@ -630,9 +637,8 @@ export default function ConversationScreen() {
           ) : null}
           {externalShare ? (
             <View style={styles.externalSharePreview}>
-              <InstagramCard
+              <InstagramEmbedPreview
                 attachment={externalShare}
-                compact
                 onRemove={() => {
                   clearPending(true);
                   setExternalShare(null);
@@ -707,6 +713,11 @@ export default function ConversationScreen() {
         submitting={reportSubmitting}
         onClose={() => setReportVisible(false)}
         onSubmit={(reason, note) => void submitReport(reason, note)}
+      />
+      <InstagramEmbedModal
+        attachment={selectedInstagramShare}
+        visible={Boolean(selectedInstagramShare)}
+        onClose={() => setSelectedInstagramShare(null)}
       />
     </KeyboardAvoidingView>
   );

@@ -10,9 +10,15 @@ type InstagramCardProps = {
   attachment: SharedLinkAttachment;
   compact?: boolean;
   onRemove?: () => void;
+  unavailable?: boolean;
 };
 
-export function InstagramCard({ attachment, compact = false, onRemove }: InstagramCardProps) {
+export function InstagramCard({
+  attachment,
+  compact = false,
+  onRemove,
+  unavailable = false,
+}: InstagramCardProps) {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const validated = parseInstagramUrl(attachment.canonicalUrl);
@@ -49,7 +55,9 @@ export function InstagramCard({ attachment, compact = false, onRemove }: Instagr
       </View>
       {!compact ? (
         <Text variant="small" color="muted" style={styles.notice}>
-          Indholdet åbnes på Instagram og kan kræve adgang.
+          {unavailable
+            ? 'Indholdet er privat, slettet eller midlertidigt utilgængeligt.'
+            : 'Indholdet åbnes på Instagram og kan kræve adgang.'}
         </Text>
       ) : null}
       <Pressable
