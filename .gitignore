@@ -24,4 +24,10 @@ rc
 ios/
 android/
 
+# Keep native source for the local Expo incoming-share module.
+!modules/incoming-share/ios/
+!modules/incoming-share/ios/**
+!modules/incoming-share/android/
+!modules/incoming-share/android/**
+
 Udkast/

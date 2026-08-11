@@ -19,6 +19,7 @@ import {
   startJsThreadLagDetector,
 } from '../utils/performanceTiming';
 import { AppTabs } from './AppTabs';
+import { useIncomingShare } from '../state/IncomingShareContext';
 
 const Stack = createNativeStackNavigator();
 const AuthStack = React.lazy(() =>
@@ -33,6 +34,8 @@ const MediaViewerScreen = React.lazy(() => import('../screens/MediaViewerScreen'
 const MessagesStack = React.lazy(() =>
   import('./MessagesStack').then((module) => ({ default: module.MessagesStack })),
 );
+const IncomingShareScreen = React.lazy(() => import('../screens/IncomingShareScreen'));
+const SharePostComposerScreen = React.lazy(() => import('../screens/SharePostComposerScreen'));
 
 function normalizeFanActivityDetailPath(path: string): string {
   const normalizedPath = path.replace(/^\/+/, '');
@@ -163,8 +166,31 @@ function ProtectedMessagesStack() {
   return <MessagesStack />;
 }
 
+function ProtectedIncomingShareScreen() {
+  const { user, loading } = useAuth();
+  if (loading) return <LoadingScreen />;
+  if (!user) return <AuthStack />;
+  return <IncomingShareScreen />;
+}
+
+function ProtectedSharePostComposerScreen() {
+  const { user, loading } = useAuth();
+  if (loading) return <LoadingScreen />;
+  if (!user) return <AuthStack />;
+  return <SharePostComposerScreen />;
+}
+
 export function RootNavigator() {
+  const { user } = useAuth();
+  const { pendingShare } = useIncomingShare();
   const previousRouteNameRef = useRef<string | null>(null);
+
+  const openPendingShare = useCallback(() => {
+    if (!user?.id || !pendingShare || !navigationRef.isReady()) return;
+    if (navigationRef.getCurrentRoute()?.name !== 'IncomingShare') {
+      navigationRef.navigate('IncomingShare');
+    }
+  }, [pendingShare, user?.id]);
 
   useEffect(() => startJsThreadLagDetector(), []);
 
@@ -174,7 +200,12 @@ export function RootNavigator() {
     setPerformanceActiveRoute(routeName);
     logPerformanceEvent('Navigation', 'container-ready', { routeName });
     flushPendingNotificationNavigation();
-  }, []);
+    openPendingShare();
+  }, [openPendingShare]);
+
+  useEffect(() => {
+    openPendingShare();
+  }, [openPendingShare]);
 
   const handleNavigationStateChange = useCallback(() => {
     const nextRouteName = navigationRef.getCurrentRoute()?.name ?? null;
@@ -226,6 +257,7 @@ export function RootNavigator() {
             GroupInfo: ':conversationId/info',
           },
         },
+        IncomingShare: 'incoming-share',
       },
     },
     getStateFromPath(path: string, options: any) {
@@ -244,6 +276,12 @@ export function RootNavigator() {
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           <Stack.Screen name="Main" component={Inner} />
           <Stack.Screen name="Messages" component={ProtectedMessagesStack} />
+          <Stack.Screen name="IncomingShare" component={ProtectedIncomingShareScreen} />
+          <Stack.Screen
+            name="SharePostComposer"
+            component={ProtectedSharePostComposerScreen}
+            options={{ presentation: 'modal' }}
+          />
           <Stack.Screen
             name="CreateNewEvent"
             component={CreateNewEventScreen}

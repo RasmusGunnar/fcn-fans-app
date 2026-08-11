@@ -6,6 +6,7 @@ import { FeedProvider } from './src/state/FeedContext';
 import { NotificationUnreadProvider } from './src/state/NotificationUnreadContext';
 import { MessageUnreadProvider } from './src/state/MessageUnreadContext';
 import { StadiumReactionProvider } from './src/state/StadiumReactionContext';
+import { IncomingShareProvider } from './src/state/IncomingShareContext';
 import {
   getRuntimePerformanceStartedAt,
   logPerformanceTiming,
@@ -21,16 +22,18 @@ export default function App() {
 
   return (
     <AuthProvider>
-      <NotificationUnreadProvider>
-        <MessageUnreadProvider>
-          <StadiumReactionProvider>
-            <FeedProvider>
-              <PushNotificationsBootstrap />
-              <RootNavigator />
-            </FeedProvider>
-          </StadiumReactionProvider>
-        </MessageUnreadProvider>
-      </NotificationUnreadProvider>
+      <IncomingShareProvider>
+        <NotificationUnreadProvider>
+          <MessageUnreadProvider>
+            <StadiumReactionProvider>
+              <FeedProvider>
+                <PushNotificationsBootstrap />
+                <RootNavigator />
+              </FeedProvider>
+            </StadiumReactionProvider>
+          </MessageUnreadProvider>
+        </NotificationUnreadProvider>
+      </IncomingShareProvider>
     </AuthProvider>
   );
 }

@@ -1,0 +1,13 @@
+{
+  "name": "fcn-incoming-share",
+  "version": "1.0.0",
+  "description": "FCN Fans native bridge for incoming share payloads",
+  "main": "index.js",
+  "license": "UNLICENSED",
+  "private": true,
+  "peerDependencies": {
+    "expo": "*",
+    "react": "*",
+    "react-native": "*"
+  }
+}

@@ -3,6 +3,11 @@
   "version": "0.1.0",
   "main": "node_modules/expo/AppEntry.js",
   "private": true,
+  "expo": {
+    "autolinking": {
+      "nativeModulesDir": "./modules"
+    }
+  },
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
@@ -27,6 +32,7 @@
     "test:feed-video": "tsc -p tsconfig.media-article-tests.json && node build/media-article-tests/utils/__tests__/videoPlaybackBehavior.test.js",
     "test:song-audio": "tsc -p tsconfig.song-audio-tests.json && node build/song-audio-tests/utils/__tests__/songAudio.test.js",
     "test:direct-messages": "tsc -p tsconfig.direct-message-tests.json && node build/direct-message-tests/utils/__tests__/directMessages.test.js",
+    "test:instagram-sharing": "tsc -p tsconfig.instagram-sharing-tests.json && node build/instagram-sharing-tests/utils/__tests__/instagramSharing.test.js",
     "test:stadium-live": "tsc -p tsconfig.stadium-live-tests.json && node build/stadium-live-tests/utils/__tests__/stadiumLive.test.js",
     "db:hosted": "echo \"⚠️  Use Supabase Dashboard SQL Editor + supabase/CHANGELOG_MANUAL.sql for hosted DB changes. Do NOT run 'db push' without Docker setup.\"",
     "design:check": "node scripts/design-check.js"

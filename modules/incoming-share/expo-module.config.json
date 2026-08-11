@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["FCNIncomingShareModule"]
+  },
+  "android": {
+    "modules": ["dk.fcnfans.incomingshare.FCNIncomingShareModule"]
+  }
+}
