@@ -46,6 +46,7 @@ function message(id: string, createdAt: string): DirectMessage {
     mediaWidth: null,
     mediaHeight: null,
     mediaSizeBytes: null,
+    externalShare: null,
     createdAt,
     deletedAt: null,
   };
@@ -218,6 +219,7 @@ test('image messages can submit without text and image previews identify sender'
         type: 'group',
         lastMessageBody: null,
         lastMessageType: 'image',
+        lastMessageExternalShare: null,
         lastMessageSenderId: 'me',
         lastMessageSenderName: 'Rasmus',
       },
@@ -225,6 +227,36 @@ test('image messages can submit without text and image previews identify sender'
     ),
     'Dig: 📷 Billede',
   );
+});
+
+test('external-link messages can submit without text and produce a safe inbox preview', () => {
+  assert.equal(
+    canSubmitDirectMessage({
+      body: '',
+      hasExternalShare: true,
+      blocked: false,
+      sending: false,
+    }),
+    true,
+  );
+  const conversation = mapConversationInboxRow({
+    conversation_id: CONVERSATION_ID,
+    conversation_type: 'direct',
+    peer_id: '22222222-2222-4222-8222-222222222222',
+    last_message_id: '44444444-4444-4444-8444-444444444444',
+    last_message_type: 'external_link',
+    last_message_external_share: {
+      provider: 'instagram',
+      canonical_url: 'https://www.instagram.com/reel/ABCDE_12/',
+      display_url: 'https://www.instagram.com/reel/ABCDE_12/',
+      resource_type: 'reel',
+      external_id: 'ABCDE_12',
+    },
+    last_message_sender_id: '22222222-2222-4222-8222-222222222222',
+    activity_at: '2026-08-11T12:00:00.000Z',
+  });
+  assert.equal(conversation.lastMessageExternalShare?.resourceType, 'reel');
+  assert.equal(getConversationPreview(conversation, 'me'), 'Instagram-reel');
 });
 
 test('typing state ignores self, expires, and formats one or several users', () => {
