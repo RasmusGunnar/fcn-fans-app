@@ -162,7 +162,8 @@ test('native configuration declares only text sharing and no media download path
   assert.match(context, /consumePendingNativeShare/);
   assert.match(context, /AsyncStorage\.removeItem/);
   assert.match(chooser, /discardPendingShare/);
-  assert.match(feedRenderer, /InstagramCard/);
+  assert.match(feedRenderer, /InstagramEmbedCard/);
+  assert.match(messageRenderer, /InstagramEmbedPreview/);
   assert.match(messageRenderer, /item\.externalShare/);
   assert.doesNotMatch(
     `${plugin}\n${ios}\n${android}`,

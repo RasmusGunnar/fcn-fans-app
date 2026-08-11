@@ -1,6 +1,6 @@
 # Instagram Sharing V1
 
-FCN Fans accepts Instagram post, reel and profile links from the system share sheet or by pasting a link into a post/message composer. V1 stores and renders a validated link attachment only. It does not scrape Instagram, download remote media, call private APIs or publish without a final user action.
+FCN Fans accepts Instagram post, reel and profile links from the system share sheet or by pasting a link into a post/message composer. The source-of-truth remains a validated link attachment. For supported public content, the app can render Meta's official tokenless Instagram oEmbed; private, deleted, unsupported or temporarily unavailable content keeps the safe link-card fallback. The implementation does not scrape Instagram, download or rehost remote media, call private APIs, request an Instagram login or publish without a final user action.
 
 ## Architecture
 
@@ -9,6 +9,16 @@ FCN Fans accepts Instagram post, reel and profile links from the system share sh
 - JavaScript revalidates every native payload, deduplicates canonical URLs, expires pending shares after 10 minutes and binds a share received during an authenticated session to that account.
 - The chooser never posts automatically. It sends the user to either a dedicated feed composer or an explicit conversation picker.
 - Feed attachments use the existing `posts.link_preview` JSON column. Messages use the new `messages.external_share` JSON column and `send_message_v2`; the existing `send_message` contract remains unchanged.
+- An authenticated `instagram_oembed` Edge Function validates the canonical URL and calls only Meta's fixed, tokenless `https://graph.facebook.com/v25.0/instagram_oembed` endpoint. It is not a generic proxy and does not follow redirects.
+- The Edge Function removes scripts from Meta's returned HTML and stores the controlled result in the server-only `instagram_embed_cache`. Successful results expire after 12 hours; unavailable results expire after 10 minutes.
+- The React Native client revalidates the response and renders it in an isolated `react-native-webview` shell. The shell loads only the official `https://www.instagram.com/embed.js`, applies a restrictive CSP, disables shared cookies/file access/window creation and accepts only a finite, clamped height message.
+- Home mounts rich WebViews only for at most two sufficiently visible Instagram posts. Direct-message rows and composers use compact metadata/thumbnail previews and open one shared rich modal on demand.
+
+## Official Meta integration
+
+The implementation follows the current `facebook/meta-embeds-for-wordpress` provider model: the fixed Instagram oEmbed endpoint is registered without an access token, returned script tags are removed, and the official Instagram embed script is loaded separately. Do not add an access token, user Instagram session, undocumented endpoint, scraper or media mirroring without a new compliance review.
+
+The rich path supports the shapes currently covered by the official provider: `/p/{shortcode}/`, `/reel/{shortcode}/` and profile URLs. Legacy `/tv/` links remain valid V1 link attachments but deliberately use the safe card because that route is not in the current official provider matcher.
 
 ## Apple setup
 
@@ -29,7 +39,12 @@ The config plugin adds one `ACTION_SEND` intent filter for `text/plain` to the e
 
 ## Database deployment
 
-Apply `supabase/migrations/20260811120000_add_instagram_sharing_v1.sql` before releasing the app binary. The migration:
+Apply both migrations, in order, before releasing the app binary:
+
+1. `supabase/migrations/20260811120000_add_instagram_sharing_v1.sql`
+2. `supabase/migrations/20260811121000_add_instagram_embed_cache.sql`
+
+The first migration:
 
 - validates exact canonical `https://www.instagram.com/.../` shapes server-side;
 - adds the feed check constraint and `messages.external_share`;
@@ -38,7 +53,9 @@ Apply `supabase/migrations/20260811120000_add_instagram_sharing_v1.sql` before r
 - returns attachments from inbox/conversation readers;
 - retains active-membership, block, rate-limit, idempotency, unread and notification-job behavior.
 
-Run the local pgTAP suite, including `supabase/tests/instagram_sharing_v1.sql`, against a reset local database before deployment.
+The second migration creates only the separate server cache. RLS is enabled, `anon` and `authenticated` have no direct table privileges, and only `service_role` can read/write it from the Edge Function. It does not alter post or message attachment contracts.
+
+Run the local pgTAP suite, including `supabase/tests/instagram_sharing_v1.sql` and `supabase/tests/instagram_embed_cache.sql`, against a reset local database before deployment.
 
 ## Physical smoke test
 
@@ -51,14 +68,17 @@ Test on a real iPhone and Android device with a native development/production bu
 5. Repeat with the app terminated (cold) and already open (warm).
 6. Share while logged out, log in within 10 minutes and confirm the chooser resumes without auto-posting.
 7. Sign out/account-switch after receiving a share and confirm another account cannot receive the bound payload.
-8. Open cards for public and private Instagram content; confirm private content falls back to Instagram access/login.
-9. Try lookalike hosts, HTTP links, unsupported story URLs and malformed identifiers; confirm rejection.
-10. Retry a failed DM send and confirm only one message/push job set is created.
+8. Confirm a public post, reel and profile render through the official rich embed in Home and the shared DM modal.
+9. Confirm Home never mounts more than two Instagram WebViews and DM message rows never mount a WebView.
+10. Open private/deleted/unavailable content and confirm the safe card explains the fallback and can open Instagram.
+11. Disable connectivity or simulate a Meta timeout; confirm publishing/sending remains possible and the fallback appears.
+12. Try lookalike hosts, HTTP links, unsupported story/TV URLs and malformed identifiers; confirm rich lookup rejection without any arbitrary fetch.
+13. Retry a failed DM send and confirm only one message/push job set is created.
 
 ## Official fan-club workflow
 
 An official club account can use Instagram’s normal Share action and then deliberately choose a feed destination or conversation. V1 grants no privileged import path and never treats an “official” URL differently; the operator remains responsible for audience, caption and final publish/send confirmation.
 
-## V1.1 boundary
+## Future boundary
 
-Possible future work includes a compliant server-side Instagram API integration for accounts that explicitly authorize it, richer metadata obtained through approved APIs, and a supported iOS host-opening mechanism if Apple/Expo provides one. Auto-import, background polling, scraping, media mirroring and automatic publication are deliberately outside V1.
+Possible future work includes a supported iOS host-opening mechanism if Apple/Expo provides one and product-specific consent controls for third-party embeds. Access-token integrations, auto-import, background polling, scraping, media mirroring and automatic publication remain deliberately outside V1.
