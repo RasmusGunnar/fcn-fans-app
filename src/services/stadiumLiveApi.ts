@@ -104,10 +104,12 @@ function stadiumErrorMessage(error: any): string {
     return 'Du har sendt mange reaktioner. Prøv igen om lidt.';
   if (message.includes('kan ikke modtage')) return 'Denne fan modtager ikke stadionreaktioner.';
   if (message.includes('kan ikke sendes')) return 'Reaktionen kan ikke sendes.';
-  return message || 'Stadion Live kunne ikke opdateres.';
+  if (message.includes('højst være 30 tegn')) return 'Afsnit eller tribune må højst være 30 tegn.';
+  return 'Stadion Live kunne ikke opdateres. Prøv igen.';
 }
 
 function throwStadiumError(error: any): never {
+  logger.error('[stadiumLiveApi] RPC failed', error);
   throw new Error(stadiumErrorMessage(error));
 }
 
