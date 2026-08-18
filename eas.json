@@ -21,5 +21,12 @@
       "autoIncrement": true,
       "channel": "testflight"
     }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "ascAppId": "6758399593"
+      }
+    }
   }
 }
