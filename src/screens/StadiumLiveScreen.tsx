@@ -16,10 +16,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../auth/AuthProvider';
 import { StadiumParticipantRow } from '../components/stadium/StadiumParticipantRow';
 import { Button, Card, Text } from '../components/ui';
-import { fetchMatchCheckInSnapshot } from '../services/checkins';
 import { createOrGetDirectConversation } from '../services/messagesApi';
 import {
-  getStadiumLiveCount,
   getStadiumLiveParticipants,
   getStadiumLivePreferences,
   getStadiumReactions,
@@ -29,6 +27,7 @@ import {
 import { confirmAndSubmitReport } from '../services/reporting';
 import { navigateToDirectMessageConversation } from '../navigation/navigationRef';
 import { useStadiumReactions } from '../state/StadiumReactionContext';
+import { useMatchdayState } from '../state/MatchdayStateContext';
 import { useTheme } from '../theme';
 import type {
   StadiumLivePreferences,
@@ -58,11 +57,13 @@ export default function StadiumLiveScreen() {
   const theme = useTheme();
   const styles = createStyles(theme);
   const eventId = route.params.eventId;
+  const matchdayState = useMatchdayState(eventId);
+  const refreshMatchdayState = matchdayState.refresh;
+  const checkInToMatch = matchdayState.checkIn;
+  const checkOutOfMatch = matchdayState.checkOut;
 
   const [preferences, setPreferences] = useState<StadiumLivePreferences | null>(null);
   const [sectionDraft, setSectionDraft] = useState('');
-  const [isCheckedIn, setIsCheckedIn] = useState(false);
-  const [visibleCount, setVisibleCount] = useState(0);
   const [participants, setParticipants] = useState<StadiumParticipant[]>([]);
   const [participantCursor, setParticipantCursor] = useState<{
     rank: number;
@@ -72,6 +73,7 @@ export default function StadiumLiveScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [savingPreferences, setSavingPreferences] = useState(false);
+  const [changingParticipation, setChangingParticipation] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingUserId, setPendingUserId] = useState<string | null>(null);
@@ -87,17 +89,14 @@ export default function StadiumLiveScreen() {
       }
       setError(null);
       try {
-        const [nextPreferences, snapshot, count] = await Promise.all([
+        const [nextPreferences, snapshot] = await Promise.all([
           getStadiumLivePreferences(),
-          fetchMatchCheckInSnapshot({ matchId: eventId, currentUserId: user.id }),
-          getStadiumLiveCount(eventId),
+          refreshMatchdayState(),
         ]);
         setPreferences(nextPreferences);
         setSectionDraft(nextPreferences.sectionLabel ?? '');
-        setIsCheckedIn(snapshot.isCheckedIn);
-        setVisibleCount(count);
 
-        if (snapshot.isCheckedIn && nextPreferences.isVisible) {
+        if (snapshot.isCheckedIn && snapshot.stadiumLiveOpen) {
           const [participantPage, recentReactions] = await Promise.all([
             getStadiumLiveParticipants({ eventId, limit: 50 }),
             getStadiumReactions({ eventId, limit: 30 }),
@@ -119,7 +118,7 @@ export default function StadiumLiveScreen() {
         setRefreshing(false);
       }
     },
-    [eventId, user?.id],
+    [eventId, refreshMatchdayState, user?.id],
   );
 
   useFocusEffect(
@@ -156,6 +155,44 @@ export default function StadiumLiveScreen() {
     },
     [load, savingPreferences],
   );
+
+  const handleCheckIn = useCallback(async () => {
+    if (changingParticipation) return;
+    setChangingParticipation(true);
+    setError(null);
+    try {
+      await checkInToMatch();
+      await load({ refresh: true });
+    } catch (checkInError) {
+      setError(
+        checkInError instanceof Error
+          ? checkInError.message
+          : 'Kunne ikke tjekke dig ind. Prøv igen.',
+      );
+    } finally {
+      setChangingParticipation(false);
+    }
+  }, [changingParticipation, checkInToMatch, load]);
+
+  const handleCheckOut = useCallback(async () => {
+    if (changingParticipation) return;
+    setChangingParticipation(true);
+    setError(null);
+    try {
+      await checkOutOfMatch();
+      setParticipants([]);
+      setParticipantCursor(null);
+      setReactions([]);
+    } catch (checkOutError) {
+      setError(
+        checkOutError instanceof Error
+          ? checkOutError.message
+          : 'Kunne ikke tjekke dig ud. Prøv igen.',
+      );
+    } finally {
+      setChangingParticipation(false);
+    }
+  }, [changingParticipation, checkOutOfMatch]);
 
   const handleSendReaction = useCallback(
     async (
@@ -279,18 +316,27 @@ export default function StadiumLiveScreen() {
           <Ionicons name="radio-outline" size={22} color={theme.colors.primary} />
         </View>
         <View style={styles.preferenceCopy}>
-          <Text variant="bodyBold">Bliv synlig for andre fans</Text>
+          <Text variant="bodyBold">Stadion Live-indstillinger</Text>
           <Text variant="small" color="secondary">
-            Kun checkede-in fans kan se dig og sende hurtige reaktioner.
+            Din synlighed følger automatisk dit aktive check-in.
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.preferenceRow}>
+        <View style={styles.preferenceCopy}>
+          <Text variant="bodyBold">Tillad stadionreaktioner</Text>
+          <Text variant="small" color="secondary">
+            Andre checkede-in fans kan sende dig reaktioner under kampen.
           </Text>
         </View>
         <Switch
-          value={preferences?.isVisible ?? false}
-          disabled={!isCheckedIn || savingPreferences}
-          onValueChange={(isVisible) =>
+          value={preferences?.reactionsEnabled ?? true}
+          disabled={savingPreferences}
+          onValueChange={(reactionsEnabled) =>
             void savePreferences({
-              isVisible,
-              reactionsEnabled: preferences?.reactionsEnabled ?? true,
+              isVisible: true,
+              reactionsEnabled,
               sectionLabel: sanitizeStadiumSection(sectionDraft),
             })
           }
@@ -298,69 +344,79 @@ export default function StadiumLiveScreen() {
           thumbColor={theme.colors.bg.card}
         />
       </View>
-
-      {preferences?.isVisible ? (
-        <>
-          <View style={styles.preferenceRow}>
-            <View style={styles.preferenceCopy}>
-              <Text variant="bodyBold">Tillad stadionreaktioner</Text>
-              <Text variant="small" color="secondary">
-                Andre synlige fans kan sende dig reaktioner under kampen.
-              </Text>
-            </View>
-            <Switch
-              value={preferences.reactionsEnabled}
-              disabled={savingPreferences}
-              onValueChange={(reactionsEnabled) =>
-                void savePreferences({
-                  isVisible: true,
-                  reactionsEnabled,
-                  sectionLabel: sanitizeStadiumSection(sectionDraft),
-                })
-              }
-              trackColor={{ false: theme.colors.border.default, true: theme.colors.primary }}
-              thumbColor={theme.colors.bg.card}
-            />
-          </View>
-          <View style={styles.sectionField}>
-            <Text variant="small" color="secondary">
-              Afsnit eller tribune (valgfrit)
-            </Text>
-            <TextInput
-              value={sectionDraft}
-              onChangeText={(value) => setSectionDraft(value.slice(0, 30))}
-              onEndEditing={() =>
-                void savePreferences({
-                  isVisible: true,
-                  reactionsEnabled: preferences.reactionsEnabled,
-                  sectionLabel: sanitizeStadiumSection(sectionDraft),
-                })
-              }
-              maxLength={30}
-              placeholder="Fx A-tribunen"
-              placeholderTextColor={theme.colors.text.muted}
-              style={styles.sectionInput}
-            />
-          </View>
-        </>
-      ) : null}
+      <View style={styles.sectionField}>
+        <Text variant="small" color="secondary">
+          Afsnit eller tribune (valgfrit)
+        </Text>
+        <TextInput
+          value={sectionDraft}
+          onChangeText={(value) => setSectionDraft(value.slice(0, 30))}
+          onEndEditing={() =>
+            void savePreferences({
+              isVisible: true,
+              reactionsEnabled: preferences?.reactionsEnabled ?? true,
+              sectionLabel: sanitizeStadiumSection(sectionDraft),
+            })
+          }
+          maxLength={30}
+          placeholder="Fx A-tribunen"
+          placeholderTextColor={theme.colors.text.muted}
+          style={styles.sectionInput}
+        />
+      </View>
     </Card>
   );
 
   const ListHeader = (
     <View style={styles.listHeader}>
-      {renderPreferences()}
-      {!isCheckedIn ? (
+      {matchdayState.isCheckedIn ? (
+        <Card style={styles.participationCard}>
+          <View style={styles.participationCopy}>
+            <Ionicons name="checkmark-circle" size={28} color={theme.colors.state.success} />
+            <View style={styles.preferenceCopy}>
+              <Text variant="h3">Du er checket ind</Text>
+              <Text color="secondary">Andre checkede-in fans kan se dig og sende reaktioner.</Text>
+            </View>
+          </View>
+          <Button
+            title={changingParticipation ? 'Tjekker ud…' : 'Check ud'}
+            variant="outline"
+            size="sm"
+            onPress={() => void handleCheckOut()}
+            disabled={changingParticipation}
+          />
+        </Card>
+      ) : null}
+      {!matchdayState.stadiumLiveOpen ? (
+        <Card style={styles.stateCard}>
+          <Ionicons name="time-outline" size={32} color={theme.colors.primary} />
+          <Text variant="h3" style={styles.centerText}>
+            Stadion Live er lukket
+          </Text>
+          <Text color="secondary" style={styles.centerText}>
+            Stadion Live åbner seks timer før kickoff og lukker seks timer efter.
+          </Text>
+        </Card>
+      ) : !matchdayState.isCheckedIn ? (
         <Card style={styles.stateCard}>
           <Ionicons name="location-outline" size={32} color={theme.colors.primary} />
           <Text variant="h3" style={styles.centerText}>
-            Check ind til kampen
+            Check ind på stadion
           </Text>
           <Text color="secondary" style={styles.centerText}>
-            Check ind til kampen for at se, hvem der er på stadion.
+            Check ind på stadion for at se og interagere med andre fans.
           </Text>
+          <Button
+            title={changingParticipation ? 'Tjekker ind…' : 'Check ind på stadion'}
+            onPress={() => void handleCheckIn()}
+            disabled={changingParticipation || matchdayState.loading}
+            fullWidth
+          />
         </Card>
-      ) : preferences?.isVisible && receivedReactions.length > 0 ? (
+      ) : (
+        renderPreferences()
+      )}
+      {matchdayState.isCheckedIn && receivedReactions.length > 0 ? (
         <View style={styles.recentSection}>
           <Text variant="h3">Seneste til dig</Text>
           {receivedReactions.map((reaction) => (
@@ -403,12 +459,16 @@ export default function StadiumLiveScreen() {
           <Button title="Prøv igen" variant="outline" size="sm" onPress={() => void load()} />
         </Card>
       ) : null}
-      {isCheckedIn && preferences?.isVisible && participants.length === 0 && !loading && !error ? (
+      {matchdayState.isCheckedIn &&
+      matchdayState.stadiumLiveOpen &&
+      participants.length === 0 &&
+      !loading &&
+      !error ? (
         <Card style={styles.stateCard}>
           <Ionicons name="people-outline" size={32} color={theme.colors.primary} />
-          <Text variant="h3">Ingen andre synlige fans endnu</Text>
+          <Text variant="h3">Du er den første her</Text>
           <Text color="secondary" style={styles.centerText}>
-            Listen opdateres, når andre checkede-in fans vælger at være synlige.
+            Andre fans dukker op her, når de checker ind.
           </Text>
         </Card>
       ) : null}
@@ -430,8 +490,8 @@ export default function StadiumLiveScreen() {
             På stadion
           </Text>
           <Text variant="small" color="inverse" style={styles.headerSubtitle}>
-            {visibleCount} {visibleCount === 1 ? 'fan er' : 'fans er'} synlig
-            {visibleCount === 1 ? '' : 'e'} her
+            {matchdayState.participantCount}{' '}
+            {matchdayState.participantCount === 1 ? 'fan er her' : 'fans er her'}
           </Text>
         </View>
       </View>
@@ -494,6 +554,12 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     content: { padding: theme.spacing[4], paddingBottom: theme.spacing[10] },
     listHeader: { gap: theme.spacing[4], marginBottom: theme.spacing[4] },
     preferencesCard: { gap: theme.spacing[3] },
+    participationCard: { gap: theme.spacing[3] },
+    participationCopy: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: theme.spacing[3],
+    },
     preferenceHeader: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3] },
     preferenceRow: {
       flexDirection: 'row',

@@ -1,8 +1,11 @@
 import { useEffect, useState, useCallback } from 'react';
-import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
 import { useAuth } from '../auth/AuthProvider';
-import { fetchAttendanceSnapshot, type AttendeeProfile } from '../services/attendance';
+import {
+  fetchAttendanceSnapshot,
+  setAttendanceStatus,
+  type AttendeeProfile,
+} from '../services/attendance';
 
 export interface AttendanceResult {
   countGoing: number;
@@ -16,7 +19,13 @@ export interface AttendanceResult {
   error: string | null;
 }
 
-export function useAttendance({ entityType, entityId }: { entityType: 'event' | 'match'; entityId: string }): AttendanceResult {
+export function useAttendance({
+  entityType,
+  entityId,
+}: {
+  entityType: 'event' | 'match';
+  entityId: string;
+}): AttendanceResult {
   const { user } = useAuth();
   const [countGoing, setCountGoing] = useState(0);
   const [avatars, setAvatars] = useState<string[]>([]);
@@ -75,33 +84,12 @@ export function useAttendance({ entityType, entityId }: { entityType: 'event' | 
       setCountGoing((current) => Math.max(0, current + (nextIsGoing ? 1 : -1)));
 
       logger.log('[Attendance] toggle start', { entityId, entityType, userId, isGoing });
-      if (isGoing) {
-        // Delete RSVP
-        const { data: deleteData, error: delError } = await supabase
-          .from('rsvps')
-          .delete()
-          .eq('entity_type', entityType)
-          .eq('entity_id', entityId)
-          .eq('user_id', userId);
-        logger.log('[Attendance] delete result', { data: deleteData, error: delError });
-        if (delError) throw delError;
-      } else {
-        // Upsert RSVP
-        const payload = [
-          {
-            entity_type: entityType,
-            entity_id: entityId,
-            user_id: userId,
-            status: 'going',
-          },
-        ];
-        logger.log('[Attendance] insert payload', payload);
-        const { data: upsertData, error: upsertError } = await supabase
-          .from('rsvps')
-          .upsert(payload, { onConflict: 'entity_type,entity_id,user_id' });
-        logger.log('[Attendance] insert result', { data: upsertData, error: upsertError });
-        if (upsertError) throw upsertError;
-      }
+      await setAttendanceStatus({
+        entityType,
+        entityId,
+        userId,
+        status: isGoing ? null : 'going',
+      });
       await fetchAttendance();
     } catch (err: any) {
       setIsGoing(isGoing);

@@ -8,7 +8,10 @@ export interface AttendanceSnapshot {
   profiles: AttendeeProfile[];
   userIds: string[];
   isGoing: boolean;
+  rsvpStatus: RsvpStatus;
 }
+
+export type RsvpStatus = 'going' | 'interested' | 'not_going' | null;
 
 export interface AttendeeProfile {
   user_id: string;
@@ -42,15 +45,28 @@ export async function fetchAttendanceSnapshot({
   entityId: string;
   currentUserId?: string;
 }): Promise<AttendanceSnapshot> {
-  const { data: rsvps, error: rsvpsError } = await supabase
+  const goingQuery = supabase
     .from('rsvps')
     .select('user_id')
     .eq('entity_type', entityType)
     .eq('entity_id', entityId)
     .eq('status', 'going')
     .order('created_at', { ascending: false });
+  const ownStatusQuery = currentUserId
+    ? supabase
+        .from('rsvps')
+        .select('status')
+        .eq('entity_type', entityType)
+        .eq('entity_id', entityId)
+        .eq('user_id', currentUserId)
+        .maybeSingle()
+    : Promise.resolve({ data: null, error: null });
+
+  const [goingResult, ownStatusResult] = await Promise.all([goingQuery, ownStatusQuery]);
+  const { data: rsvps, error: rsvpsError } = goingResult;
 
   if (rsvpsError) throw rsvpsError;
+  if (ownStatusResult.error) throw ownStatusResult.error;
 
   const userIds = (rsvps || []).map((rsvp: { user_id: string }) => rsvp.user_id);
   const attendeeProfiles = await fetchAttendeeProfiles(userIds);
@@ -63,7 +79,42 @@ export async function fetchAttendanceSnapshot({
       .map((profile) => resolveAvatarUrl(profile.avatar_url))
       .filter((url): url is string => !!url),
     isGoing: !!(currentUserId && userIds.includes(currentUserId)),
+    rsvpStatus: (ownStatusResult.data?.status as RsvpStatus | undefined) ?? null,
   };
+}
+
+export async function setAttendanceStatus({
+  entityType,
+  entityId,
+  userId,
+  status,
+}: {
+  entityType: 'event' | 'match';
+  entityId: string;
+  userId: string;
+  status: RsvpStatus;
+}): Promise<void> {
+  if (status === null) {
+    const { error } = await supabase
+      .from('rsvps')
+      .delete()
+      .eq('entity_type', entityType)
+      .eq('entity_id', entityId)
+      .eq('user_id', userId);
+    if (error) throw error;
+    return;
+  }
+
+  const { error } = await supabase.from('rsvps').upsert(
+    {
+      entity_type: entityType,
+      entity_id: entityId,
+      user_id: userId,
+      status,
+    },
+    { onConflict: 'entity_type,entity_id,user_id' },
+  );
+  if (error) throw error;
 }
 
 export async function fetchAttendees({

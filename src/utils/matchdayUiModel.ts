@@ -28,6 +28,7 @@ export interface MatchdayCheckInSnapshotInput {
 export interface MatchdayUiModelInput {
   kickoffAt: string;
   now: Date;
+  stadiumLiveOpen?: boolean;
   attendance: MatchdayAttendanceSnapshotInput;
   checkIn: MatchdayCheckInSnapshotInput;
   participationChoice?: MatchParticipationChoice;
@@ -51,19 +52,22 @@ export interface MatchdayUiModel {
 export function buildMatchdayUiModel({
   kickoffAt,
   now,
+  stadiumLiveOpen,
   attendance,
   checkIn,
   participationChoice = null,
   previewMode = getMatchdayPreviewMode(),
 }: MatchdayUiModelInput): MatchdayUiModel {
-  const timing = getResolvedMatchdayTiming(kickoffAt, now, previewMode);
+  const resolvedTiming = getResolvedMatchdayTiming(kickoffAt, now, previewMode);
+  const timing =
+    previewMode === 'off' && stadiumLiveOpen !== undefined
+      ? { ...resolvedTiming, isMatchday: stadiumLiveOpen }
+      : resolvedTiming;
   const baseIsGoing = participationChoice === 'going' || attendance.isGoing;
   // `matchday` preview should only open the matchday window.
   // A real successful check-in must still be allowed to promote the UI into
   // the confirmed state on both MatchDetails and Home.
-  const effectiveIsCheckedIn = isCheckedInPreviewActive(previewMode)
-    ? true
-    : checkIn.isCheckedIn;
+  const effectiveIsCheckedIn = isCheckedInPreviewActive(previewMode) ? true : checkIn.isCheckedIn;
 
   const viewState = getMatchViewState({
     isMatchday: timing.isMatchday,
@@ -81,8 +85,7 @@ export function buildMatchdayUiModel({
     effectiveIsGoing: baseIsGoing || isCheckedInConfirmed,
     effectiveIsCheckedIn,
     socialSource,
-    socialCount:
-      socialSource === 'attendance' ? attendance.countGoing : checkIn.countCheckedIn,
+    socialCount: socialSource === 'attendance' ? attendance.countGoing : checkIn.countCheckedIn,
     socialAvatars: socialSource === 'attendance' ? attendance.avatars : checkIn.avatars,
     isPreMatch: viewState === 'pre_match',
     isMatchdayAction: viewState === 'matchday_action',

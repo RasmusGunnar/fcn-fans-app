@@ -14,9 +14,8 @@ import { AppHeader } from '../components/AppHeader';
 import NextMatchBadge from '../components/home/NextMatchBadge';
 import { Card } from '../components/ui/Card';
 import { FeedItemRenderer } from '../components/feed/FeedItemRenderer';
-import { useAttendance } from '../hooks/useAttendance';
-import { useMatchCheckIn } from '../hooks/useMatchCheckIn';
 import { useFeed } from '../state/FeedContext';
+import { useMatchdayState } from '../state/MatchdayStateContext';
 import { useNotificationUnread } from '../state/NotificationUnreadContext';
 import { useMessageUnread } from '../state/MessageUnreadContext';
 import { useAuth } from '../auth/AuthProvider';
@@ -40,7 +39,7 @@ import {
   performanceNow,
   schedulePerformanceFrame,
 } from '../utils/performanceTiming';
-import { navigateToMessagesList } from '../navigation/navigationRef';
+import { navigateToMessagesList, navigateToStadiumLive } from '../navigation/navigationRef';
 import { fromInstagramLinkPreview } from '../lib/instagram';
 import { isRichInstagramUrl } from '../utils/instagramEmbed';
 
@@ -145,13 +144,10 @@ export default function HomeScreen() {
   const didLogStartupMediaAuditRef = useRef(false);
   const didLogFlatListRenderedRef = useRef(false);
   const feedItemsReadyAtRef = useRef<number | null>(null);
-  const nextMatchAttendance = useAttendance({
-    entityType: 'match',
-    entityId: nextFixture?.id ?? '',
-  });
-  const nextMatchCheckIn = useMatchCheckIn(nextFixture?.id ?? '', nextFixture?.kickoff_at ?? null);
-  const nextMatchAttendanceRefresh = nextMatchAttendance.refresh;
-  const nextMatchCheckInRefresh = nextMatchCheckIn.refresh;
+  const nextMatchState = useMatchdayState(nextFixture?.id ?? '');
+  const nextMatchStateRefresh = nextMatchState.refresh;
+  const checkInToNextMatch = nextMatchState.checkIn;
+  const setNextMatchRsvpStatus = nextMatchState.setRsvpStatus;
 
   const safeHomeFeedItems = useMemo(
     () =>
@@ -373,10 +369,9 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       if (nextFixture?.id) {
-        void nextMatchAttendanceRefresh();
-        void nextMatchCheckInRefresh();
+        void nextMatchStateRefresh().catch(() => undefined);
       }
-    }, [nextFixture?.id, nextMatchAttendanceRefresh, nextMatchCheckInRefresh]),
+    }, [nextFixture?.id, nextMatchStateRefresh]),
   );
 
   useEffect(() => {
@@ -527,25 +522,27 @@ export default function HomeScreen() {
     return buildMatchdayUiModel({
       kickoffAt: nextFixture.kickoff_at,
       now,
+      stadiumLiveOpen: nextMatchState.stadiumLiveOpen,
       attendance: {
-        isGoing: nextMatchAttendance.isGoing,
-        countGoing: nextMatchAttendance.countGoing,
-        avatars: nextMatchAttendance.avatars,
+        isGoing: nextMatchState.rsvpStatus === 'going',
+        countGoing: nextMatchState.attendanceCount,
+        avatars: nextMatchState.attendanceAvatars,
       },
       checkIn: {
-        isCheckedIn: nextMatchCheckIn.isCheckedIn,
-        countCheckedIn: nextMatchCheckIn.countCheckedIn,
-        avatars: nextMatchCheckIn.avatars,
+        isCheckedIn: nextMatchState.isCheckedIn,
+        countCheckedIn: nextMatchState.participantCount,
+        avatars: nextMatchState.participantAvatars,
       },
     });
   }, [
     nextFixture?.kickoff_at,
-    nextMatchAttendance.avatars,
-    nextMatchAttendance.countGoing,
-    nextMatchAttendance.isGoing,
-    nextMatchCheckIn.avatars,
-    nextMatchCheckIn.countCheckedIn,
-    nextMatchCheckIn.isCheckedIn,
+    nextMatchState.attendanceAvatars,
+    nextMatchState.attendanceCount,
+    nextMatchState.isCheckedIn,
+    nextMatchState.participantAvatars,
+    nextMatchState.participantCount,
+    nextMatchState.rsvpStatus,
+    nextMatchState.stadiumLiveOpen,
     now,
   ]);
 
@@ -571,23 +568,23 @@ export default function HomeScreen() {
     }
 
     if (nextMatchViewState === 'checked_in_confirmed') {
-      return 'Du vælger selv synlighed i Stadion Live.';
+      return 'Du deltager i Stadion Live og er synlig for andre checkede-in fans.';
     }
 
     return undefined;
   }, [nextMatchUiModel?.effectiveIsGoing, nextMatchViewState]);
   const nextMatchSocialCopyOverride = useMemo(() => {
     if (nextMatchViewState === 'matchday_action' || nextMatchViewState === 'checked_in_confirmed') {
-      return buildCheckInSocialProof(nextMatchCheckIn.countCheckedIn);
+      return buildCheckInSocialProof(nextMatchState.participantCount);
     }
 
     return undefined;
-  }, [nextMatchCheckIn.countCheckedIn, nextMatchViewState]);
+  }, [nextMatchState.participantCount, nextMatchViewState]);
   const nextMatchPrimaryLabel =
     nextMatchViewState === 'checked_in_confirmed'
       ? undefined
       : nextMatchViewState === 'matchday_action'
-        ? nextMatchCheckIn.loading
+        ? nextMatchState.loading
           ? 'Tjekker ind...'
           : 'Tjek ind'
         : nextMatchUiModel?.effectiveIsGoing
@@ -597,8 +594,8 @@ export default function HomeScreen() {
     nextMatchViewState === 'checked_in_confirmed'
       ? true
       : nextMatchViewState === 'matchday_action'
-        ? nextMatchCheckIn.loading
-        : Boolean(nextMatchUiModel?.effectiveIsGoing) || nextMatchAttendance.loading;
+        ? nextMatchState.loading || !nextMatchState.canCheckIn
+        : Boolean(nextMatchUiModel?.effectiveIsGoing) || nextMatchState.loading;
 
   const handleOpenNextMatch = useCallback(() => {
     if (!matchForBadge) return;
@@ -607,8 +604,8 @@ export default function HomeScreen() {
 
   const handleOpenNextMatchFans = useCallback(() => {
     if (!nextFixture?.id) return;
-    (navigation as any).navigate('StadiumLive', { eventId: nextFixture.id });
-  }, [navigation, nextFixture?.id]);
+    navigateToStadiumLive(nextFixture.id);
+  }, [nextFixture?.id]);
 
   const handleOpenProfile = useCallback(
     (userId: string) => {
@@ -693,25 +690,25 @@ export default function HomeScreen() {
 
     if (nextMatchViewState === 'matchday_action') {
       try {
-        await nextMatchCheckIn.checkIn();
+        await checkInToNextMatch();
       } catch {
         // The status panel remains in its previous state when check-in fails.
       }
       return;
     }
 
-    if (nextMatchViewState === 'pre_match' && !nextMatchAttendance.isGoing) {
+    if (nextMatchViewState === 'pre_match' && nextMatchState.rsvpStatus !== 'going') {
       try {
-        await nextMatchAttendance.toggleGoing();
+        await setNextMatchRsvpStatus('going');
       } catch {
         // The attendance hook restores its optimistic state on failure.
       }
     }
   }, [
     nextFixture?.id,
-    nextMatchAttendance.isGoing,
-    nextMatchAttendance.toggleGoing,
-    nextMatchCheckIn.checkIn,
+    nextMatchState.rsvpStatus,
+    checkInToNextMatch,
+    setNextMatchRsvpStatus,
     nextMatchViewState,
   ]);
 
@@ -830,7 +827,8 @@ export default function HomeScreen() {
               countdownLabel={nextMatchCountdownLabel ?? undefined}
               matchStatusPanel={{
                 viewState: nextMatchViewState,
-                isGoing: nextMatchUiModel?.effectiveIsGoing ?? nextMatchAttendance.isGoing,
+                isGoing:
+                  nextMatchUiModel?.effectiveIsGoing ?? nextMatchState.rsvpStatus === 'going',
                 avatars: nextMatchUiModel?.socialAvatars ?? [],
                 count: nextMatchUiModel?.socialCount ?? 0,
                 titleOverride: nextMatchPanelTitle,

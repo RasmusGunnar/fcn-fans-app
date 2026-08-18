@@ -34,14 +34,13 @@ import {
 } from '../services/fanActivities';
 import { formatDateDa } from '../services/fixtures';
 import { getMatchHeroUrl, getTeamHeroImage } from '../services/sportsdb';
-import { useAttendance } from '../hooks/useAttendance';
-import { useMatchCheckIn } from '../hooks/useMatchCheckIn';
+import { navigateToStadiumLive } from '../navigation/navigationRef';
+import { useMatchdayState } from '../state/MatchdayStateContext';
 import { spacing, useTheme } from '../theme';
 import { buildMatchMapsUrl, FCN_TICKET_URL, isFcnHomeMatch } from '../utils/matchLinks';
 import { buildMatchdayUiModel } from '../utils/matchdayUiModel';
 
 type MatchDetailsRouteProp = RouteProp<RootStackParamList, 'MatchDetails'>;
-type MatchParticipationChoice = 'going' | 'not_going' | null;
 const MATCH_CHECKIN_FANPOINTS = 5;
 
 function formatCountdownLabel(kickoffAt: string, now: Date): string {
@@ -107,12 +106,11 @@ export default function MatchDetailsScreen() {
   const [loading, setLoading] = useState(true);
   const [heroUrl, setHeroUrl] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
-  const [participationChoice, setParticipationChoice] = useState<MatchParticipationChoice>(null);
   const heroPulse = useRef(new Animated.Value(1)).current;
   const checkInPulse = useRef(new Animated.Value(0)).current;
   const autoOpenedFanActivityIdRef = useRef<string | null>(null);
-  const attendance = useAttendance({ entityType: 'match', entityId: fixtureId });
-  const matchCheckIn = useMatchCheckIn(fixtureId, fixture?.kickoff_at ?? null);
+  const matchdayState = useMatchdayState(fixtureId);
+  const refreshMatchdayState = matchdayState.refresh;
 
   const loadFanActivities = useCallback(async () => {
     if (!fixtureId) {
@@ -128,10 +126,6 @@ export default function MatchDetailsScreen() {
     if (fixtureId) {
       loadFixture();
     }
-  }, [fixtureId]);
-
-  useEffect(() => {
-    setParticipationChoice(null);
   }, [fixtureId]);
 
   useEffect(() => {
@@ -160,10 +154,11 @@ export default function MatchDetailsScreen() {
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       void loadFanActivities();
+      void refreshMatchdayState().catch(() => undefined);
     });
 
     return unsubscribe;
-  }, [loadFanActivities, navigation]);
+  }, [loadFanActivities, navigation, refreshMatchdayState]);
 
   useEffect(() => {
     autoOpenedFanActivityIdRef.current = null;
@@ -245,13 +240,7 @@ export default function MatchDetailsScreen() {
   }, [heroPulse]);
 
   useEffect(() => {
-    if (attendance.isGoing) {
-      setParticipationChoice('going');
-    }
-  }, [attendance.isGoing]);
-
-  useEffect(() => {
-    if (!matchCheckIn.isCheckedIn) return;
+    if (!matchdayState.isCheckedIn) return;
 
     checkInPulse.setValue(0);
     Animated.sequence([
@@ -266,7 +255,7 @@ export default function MatchDetailsScreen() {
         useNativeDriver: true,
       }),
     ]).start();
-  }, [checkInPulse, matchCheckIn.isCheckedIn]);
+  }, [checkInPulse, matchdayState.isCheckedIn]);
 
   const matchdayUiModel = useMemo(() => {
     if (!fixture?.kickoff_at) {
@@ -276,28 +265,34 @@ export default function MatchDetailsScreen() {
     return buildMatchdayUiModel({
       kickoffAt: fixture.kickoff_at,
       now,
+      stadiumLiveOpen: matchdayState.stadiumLiveOpen,
       attendance: {
-        isGoing: attendance.isGoing,
-        countGoing: attendance.countGoing,
-        avatars: attendance.avatars,
+        isGoing: matchdayState.rsvpStatus === 'going',
+        countGoing: matchdayState.attendanceCount,
+        avatars: matchdayState.attendanceAvatars,
       },
       checkIn: {
-        isCheckedIn: matchCheckIn.isCheckedIn,
-        countCheckedIn: matchCheckIn.countCheckedIn,
-        avatars: matchCheckIn.avatars,
+        isCheckedIn: matchdayState.isCheckedIn,
+        countCheckedIn: matchdayState.participantCount,
+        avatars: matchdayState.participantAvatars,
       },
-      participationChoice,
+      participationChoice:
+        matchdayState.rsvpStatus === 'going'
+          ? 'going'
+          : matchdayState.rsvpStatus === 'not_going'
+            ? 'not_going'
+            : null,
     });
   }, [
-    attendance.avatars,
-    attendance.countGoing,
-    attendance.isGoing,
     fixture?.kickoff_at,
-    matchCheckIn.avatars,
-    matchCheckIn.countCheckedIn,
-    matchCheckIn.isCheckedIn,
+    matchdayState.attendanceAvatars,
+    matchdayState.attendanceCount,
+    matchdayState.isCheckedIn,
+    matchdayState.participantAvatars,
+    matchdayState.participantCount,
+    matchdayState.rsvpStatus,
+    matchdayState.stadiumLiveOpen,
     now,
-    participationChoice,
   ]);
   const effectiveIsMatchday = matchdayUiModel?.timing.isMatchday ?? false;
   const participationUiMode = useMemo<MatchdaySimpleParticipationMode>(() => {
@@ -323,15 +318,15 @@ export default function MatchDetailsScreen() {
         title: 'Du er tjekket ind',
         body:
           matchdayUiModel.previewMode === 'off'
-            ? `Du vælger selv synlighed i Stadion Live.\n+${MATCH_CHECKIN_FANPOINTS} fanpoint`
-            : 'Du vælger selv synlighed i Stadion Live.',
+            ? `Du deltager i Stadion Live og er synlig for andre checkede-in fans.\n+${MATCH_CHECKIN_FANPOINTS} fanpoint`
+            : 'Du deltager i Stadion Live og er synlig for andre checkede-in fans.',
       };
     }
 
     if (matchdayUiModel?.effectiveIsGoing) {
       return {
         title: 'Du har sagt, at du kommer – klar til at tjekke ind?',
-        body: 'Tjek ind på stadion. Du vælger selv, om du vil være synlig i Stadion Live.',
+        body: 'Tjek ind på stadion for at deltage i Stadion Live.',
       };
     }
 
@@ -356,8 +351,8 @@ export default function MatchDetailsScreen() {
       return undefined;
     }
 
-    return buildCheckInSocialProof(matchCheckIn.countCheckedIn);
-  }, [effectiveIsMatchday, matchCheckIn.countCheckedIn]);
+    return buildCheckInSocialProof(matchdayState.participantCount);
+  }, [effectiveIsMatchday, matchdayState.participantCount]);
   const handleDeleteFanActivity = useCallback(
     (fanActivityId: string) => {
       setFanActivities((current) => current.filter((activity) => activity.id !== fanActivityId));
@@ -459,7 +454,7 @@ export default function MatchDetailsScreen() {
   };
 
   const handleOpenMatchFans = () => {
-    (navigation as any).navigate('StadiumLive', { eventId: fixture.id });
+    navigateToStadiumLive(fixture.id);
   };
 
   const handleCreateFanActivity = () => {
@@ -479,24 +474,13 @@ export default function MatchDetailsScreen() {
     setSelectedFanActivity(null);
   };
 
-  const handleSelectParticipation = async (choice: Exclude<MatchParticipationChoice, null>) => {
-    setParticipationChoice(choice);
-
-    if (choice === 'going') {
-      if (!attendance.isGoing) {
-        await attendance.toggleGoing();
-      }
-      return;
-    }
-
-    if (attendance.isGoing) {
-      await attendance.toggleGoing();
-    }
+  const handleSelectParticipation = async (choice: 'going' | 'not_going') => {
+    await matchdayState.setRsvpStatus(choice);
   };
 
   const handleCheckIn = async () => {
     try {
-      await matchCheckIn.checkIn();
+      await matchdayState.checkIn();
     } catch {
       Alert.alert('Fejl', 'Kunne ikke gennemføre check-in.');
     }
@@ -520,12 +504,12 @@ export default function MatchDetailsScreen() {
     const usesAttendanceSocial = resolvedMatchdayUiModel.socialSource === 'attendance';
     const panelCount = resolvedMatchdayUiModel.socialCount;
     const panelAvatars = resolvedMatchdayUiModel.socialAvatars;
-    const panelSecondarySelected = usesAttendanceSocial && participationChoice === 'not_going';
+    const panelSecondarySelected = usesAttendanceSocial && matchdayState.rsvpStatus === 'not_going';
     const panelPrimaryLabel =
       participationUiMode === 'checked_in' || participationUiMode === 'not_going_matchday'
         ? undefined
         : participationUiMode === 'check_in'
-          ? matchCheckIn.loading
+          ? matchdayState.loading
             ? 'Tjekker ind...'
             : resolvedMatchdayUiModel.effectiveIsGoing
               ? 'Check ind på stadion'
@@ -539,12 +523,12 @@ export default function MatchDetailsScreen() {
       participationUiMode === 'checked_in'
         ? true
         : participationUiMode === 'check_in'
-          ? matchCheckIn.loading
-          : attendance.loading;
+          ? matchdayState.loading || !matchdayState.canCheckIn
+          : matchdayState.loading;
     const panelSecondaryLabel =
       participationUiMode === 'rsvp' && usesAttendanceSocial ? 'Kan ikke komme' : undefined;
     const panelSecondaryDisabled =
-      participationUiMode === 'rsvp' && usesAttendanceSocial ? attendance.loading : true;
+      participationUiMode === 'rsvp' && usesAttendanceSocial ? matchdayState.loading : true;
     const panel = (
       <MatchdayStatusPanel
         viewState={matchViewState}
@@ -561,7 +545,7 @@ export default function MatchDetailsScreen() {
         titleOverride={matchdayPanelText.title}
         bodyOverride={
           participationUiMode === 'checked_in'
-            ? 'Du vælger selv synlighed i Stadion Live.'
+            ? 'Du deltager i Stadion Live og er synlig for andre checkede-in fans.'
             : matchdayPanelText.body
         }
         socialCopyOverride={matchdaySocialProofOverride}
@@ -586,8 +570,8 @@ export default function MatchDetailsScreen() {
         ) : (
           panel
         )}
-        {matchCheckIn.error ? (
-          <Text style={styles.statusPanelError}>{matchCheckIn.error}</Text>
+        {matchdayState.error ? (
+          <Text style={styles.statusPanelError}>{matchdayState.error}</Text>
         ) : null}
       </View>
     );
@@ -704,8 +688,8 @@ export default function MatchDetailsScreen() {
                 <View style={styles.stadiumLiveActionCopy}>
                   <Text style={styles.stadiumLiveActionTitle}>På stadion</Text>
                   <Text style={styles.stadiumLiveActionBody}>
-                    {matchCheckIn.isCheckedIn
-                      ? `Se ${matchCheckIn.countCheckedIn} synlige fans`
+                    {matchdayState.isCheckedIn
+                      ? `Se ${matchdayState.participantCount} fans på stadion`
                       : 'Check ind for at se de andre fans'}
                   </Text>
                 </View>

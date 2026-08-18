@@ -7,6 +7,7 @@ import { NotificationUnreadProvider } from './src/state/NotificationUnreadContex
 import { MessageUnreadProvider } from './src/state/MessageUnreadContext';
 import { StadiumReactionProvider } from './src/state/StadiumReactionContext';
 import { IncomingShareProvider } from './src/state/IncomingShareContext';
+import { MatchdayStateProvider } from './src/state/MatchdayStateContext';
 import {
   getRuntimePerformanceStartedAt,
   logPerformanceTiming,
@@ -25,12 +26,14 @@ export default function App() {
       <IncomingShareProvider>
         <NotificationUnreadProvider>
           <MessageUnreadProvider>
-            <StadiumReactionProvider>
-              <FeedProvider>
-                <PushNotificationsBootstrap />
-                <RootNavigator />
-              </FeedProvider>
-            </StadiumReactionProvider>
+            <MatchdayStateProvider>
+              <StadiumReactionProvider>
+                <FeedProvider>
+                  <PushNotificationsBootstrap />
+                  <RootNavigator />
+                </FeedProvider>
+              </StadiumReactionProvider>
+            </MatchdayStateProvider>
           </MessageUnreadProvider>
         </NotificationUnreadProvider>
       </IncomingShareProvider>
