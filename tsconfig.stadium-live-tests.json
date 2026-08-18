@@ -12,6 +12,7 @@
   },
   "include": [
     "src/types/stadiumLive.ts",
+    "src/state/matchdayStateCore.ts",
     "src/utils/stadiumLive.ts",
     "src/utils/__tests__/stadiumLive.test.ts"
   ]

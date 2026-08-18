@@ -4,6 +4,11 @@ import path from 'node:path';
 import test from 'node:test';
 import type { StadiumParticipant, StadiumReaction } from '../../types/stadiumLive';
 import {
+  applyCheckInSnapshot,
+  applyRsvpStatus,
+  createInitialMatchdayState,
+} from '../../state/matchdayStateCore';
+import {
   STADIUM_REACTION_OPTIONS,
   getRemainingCooldownSeconds,
   getStadiumReactionCopy,
@@ -101,15 +106,73 @@ test('cooldown UI rounds up remaining seconds and clears expired values', () => 
   assert.equal(getRemainingCooldownSeconds('2026-08-10T09:59:59Z', now), 0);
 });
 
-test('migration keeps hidden, self, block, rate-limit, and outbox enforcement server-side', () => {
-  const source = readWorkspaceFile('supabase/migrations/20260810120000_add_stadium_live.sql');
-  assert.match(source, /preference\.is_visible = true/);
+test('repair migration uses UUID match ids, RPC-only mutations, active check-ins, and server enforcement', () => {
+  const source = readWorkspaceFile('supabase/migrations/20260818120000_repair_stadium_live_v1.sql');
+  assert.match(source, /alter column match_id type uuid using match_id::uuid/);
+  assert.match(source, /create or replace function public\.set_match_checkin_status/);
+  assert.match(source, /on conflict \(match_id, user_id\) do nothing/);
+  assert.match(source, /revoke all on table public\.match_checkins from anon, authenticated/);
+  assert.doesNotMatch(source, /preference\.is_visible = true/);
   assert.match(source, /checkin\.user_id <> v_user_id/);
   assert.match(source, /not public\.is_stadium_live_blocked/);
   assert.match(source, /interval '30 seconds'/);
   assert.match(source, />= 20/);
   assert.match(source, /perform public\.enqueue_notification/);
   assert.match(source, /p_preference_key => 'stadium_reactions'/);
+});
+
+test('shared matchday record updates RSVP, check-in, and check-out for every consumer', () => {
+  const initial = createInitialMatchdayState('match-id');
+  const rsvp = applyRsvpStatus(initial, 'going');
+  assert.equal(rsvp.rsvpStatus, 'going');
+  assert.equal(rsvp.attendanceCount, 1);
+  assert.equal(rsvp.currentUserParticipationState, 'rsvp_going');
+
+  const checkedIn = applyCheckInSnapshot(rsvp, {
+    countCheckedIn: 4,
+    avatars: ['avatar'],
+    profiles: [],
+    userIds: ['other-user'],
+    isCheckedIn: true,
+    stadiumLiveOpen: true,
+    canCheckIn: false,
+  });
+  assert.equal(checkedIn.isCheckedIn, true);
+  assert.equal(checkedIn.participantCount, 4);
+  assert.equal(checkedIn.currentUserParticipationState, 'checked_in');
+
+  const checkedOut = applyCheckInSnapshot(checkedIn, {
+    countCheckedIn: 3,
+    avatars: [],
+    profiles: [],
+    userIds: [],
+    isCheckedIn: false,
+    stadiumLiveOpen: true,
+    canCheckIn: true,
+  });
+  assert.equal(checkedOut.isCheckedIn, false);
+  assert.equal(checkedOut.participantCount, 3);
+  assert.equal(checkedOut.currentUserParticipationState, 'eligible');
+  assert.ok(checkedOut.revision > checkedIn.revision);
+});
+
+test('Home, Match Details, and Stadium Live use the shared state and canonical Stadium route', () => {
+  const home = readWorkspaceFile('src/screens/HomeScreen.tsx');
+  const details = readWorkspaceFile('src/screens/MatchDetailsScreen.tsx');
+  const stadium = readWorkspaceFile('src/screens/StadiumLiveScreen.tsx');
+  const matchdayContext = readWorkspaceFile('src/state/MatchdayStateContext.tsx');
+  const eventsStack = readWorkspaceFile('src/navigation/EventsStack.tsx');
+  assert.match(home, /useMatchdayState/);
+  assert.match(details, /useMatchdayState/);
+  assert.match(stadium, /useMatchdayState/);
+  assert.match(home, /navigateToStadiumLive/);
+  assert.match(details, /navigateToStadiumLive/);
+  assert.doesNotMatch(eventsStack, /name="StadiumLive"/);
+  assert.doesNotMatch(stadium, /Bliv synlig for andre fans/);
+  assert.match(stadium, /Check ud/);
+  assert.match(stadium, /Du er den første her/);
+  assert.match(matchdayContext, /activeUserIdRef\.current !== requestedUserId/);
+  assert.match(matchdayContext, /recordsRef\.current = \{\}/);
 });
 
 test('screen and provider preserve reply, DM, profile, realtime, and account reset wiring', () => {

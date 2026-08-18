@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "skipLibCheck": true
+  },
+  "include": [
+    "src/state/MatchdayStateContext.tsx",
+    "src/state/matchdayStateCore.ts",
+    "src/services/attendance.ts",
+    "src/services/checkins.ts",
+    "src/services/stadiumLiveApi.ts",
+    "src/hooks/useAttendance.ts",
+    "src/hooks/useMatchCheckIn.ts",
+    "src/screens/StadiumLiveScreen.tsx",
+    "src/utils/matchdayUiModel.ts"
+  ]
+}
