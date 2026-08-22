@@ -78,6 +78,17 @@ export function getRemainingCooldownSeconds(
   return Number.isFinite(remainingMs) ? Math.max(0, Math.ceil(remainingMs / 1000)) : 0;
 }
 
+export function getStadiumListBottomPadding(
+  measuredTabBarHeight: number,
+  fabClearance: number,
+): number {
+  const tabBarHeight = Number.isFinite(measuredTabBarHeight)
+    ? Math.max(0, measuredTabBarHeight)
+    : 0;
+  const clearance = Number.isFinite(fabClearance) ? Math.max(0, fabClearance) : 0;
+  return tabBarHeight + clearance;
+}
+
 export function shouldShowIncomingStadiumReaction(
   seenReactionIds: ReadonlySet<string>,
   reactionId: string,

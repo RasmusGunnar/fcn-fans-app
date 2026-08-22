@@ -12,6 +12,7 @@
     "src/services/stadiumLiveApi.ts",
     "src/hooks/useAttendance.ts",
     "src/hooks/useMatchCheckIn.ts",
+    "src/navigation/AppTabs.tsx",
     "src/screens/StadiumLiveScreen.tsx",
     "src/utils/matchdayUiModel.ts"
   ]

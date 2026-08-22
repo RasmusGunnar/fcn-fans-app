@@ -1,7 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import {
+  BottomTabBarHeightCallbackContext,
+  createBottomTabNavigator,
+} from '@react-navigation/bottom-tabs';
 import React, { Suspense } from 'react';
-import { InteractionManager, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  InteractionManager,
+  type LayoutChangeEvent,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CreateSheetProvider, useCreateSheet } from '../state/CreateSheetContext';
 import { colors } from '../theme';
@@ -11,6 +21,7 @@ import { EventsStack } from './EventsStack';
 import { HomeStack } from './HomeStack';
 import { LibraryStack } from './LibraryStack';
 import { ProfileStack } from './ProfileStack';
+import { APP_TAB_BAR_BASE_HEIGHT, APP_TAB_BAR_FAB_OVERFLOW } from './tabBarMetrics';
 import { isDemoMode } from '../config/appMode';
 
 const Tab = createBottomTabNavigator();
@@ -45,6 +56,7 @@ const tabData = [
 
 function CustomTabBar({ state, navigation, tabs, showCreate }: any) {
   const insets = useSafeAreaInsets();
+  const setTabBarHeight = React.useContext(BottomTabBarHeightCallbackContext);
   const {
     visible,
     openCreateSheet,
@@ -63,6 +75,13 @@ function CustomTabBar({ state, navigation, tabs, showCreate }: any) {
     const parentNavigation = navigation.getParent?.();
     (parentNavigation ?? navigation).navigate('CreateNewEvent');
   };
+
+  const handleLayout = React.useCallback(
+    (event: LayoutChangeEvent) => {
+      setTabBarHeight?.(event.nativeEvent.layout.height);
+    },
+    [setTabBarHeight],
+  );
 
   const leftTabs = tabs.slice(0, Math.ceil(tabs.length / 2));
   const rightTabs = tabs.slice(Math.ceil(tabs.length / 2));
@@ -106,7 +125,10 @@ function CustomTabBar({ state, navigation, tabs, showCreate }: any) {
   };
 
   return (
-    <View style={[styles.tabBarContainer, { height: 64 + insets.bottom }]}>
+    <View
+      onLayout={handleLayout}
+      style={[styles.tabBarContainer, { height: APP_TAB_BAR_BASE_HEIGHT + insets.bottom }]}
+    >
       <View style={styles.tabBar}>
         <View style={styles.sideGroup}>{leftTabs.map(renderTab)}</View>
         {showCreate ? <View style={{ width: 60 }} /> : null}
@@ -172,7 +194,7 @@ const styles = StyleSheet.create({
   },
   tabBar: {
     flexDirection: 'row',
-    height: 64,
+    height: APP_TAB_BAR_BASE_HEIGHT,
     position: 'relative',
   },
   sideGroup: {
@@ -196,7 +218,7 @@ const styles = StyleSheet.create({
   centerButton: {
     position: 'absolute',
     left: '50%',
-    top: -20,
+    top: -APP_TAB_BAR_FAB_OVERFLOW,
     width: 60,
     height: 60,
     borderRadius: 30,

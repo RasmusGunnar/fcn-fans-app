@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
+import { APP_TAB_BAR_BASE_HEIGHT, APP_TAB_BAR_FAB_OVERFLOW } from '../../navigation/tabBarMetrics';
 import type { StadiumParticipant, StadiumReaction } from '../../types/stadiumLive';
 import {
   applyCheckInSnapshot,
@@ -11,6 +12,7 @@ import {
 import {
   STADIUM_REACTION_OPTIONS,
   getRemainingCooldownSeconds,
+  getStadiumListBottomPadding,
   getStadiumReactionCopy,
   mergeStadiumReactions,
   sanitizeStadiumSection,
@@ -104,6 +106,24 @@ test('cooldown UI rounds up remaining seconds and clears expired values', () => 
   const now = Date.parse('2026-08-10T10:00:00Z');
   assert.equal(getRemainingCooldownSeconds('2026-08-10T10:00:30Z', now), 30);
   assert.equal(getRemainingCooldownSeconds('2026-08-10T09:59:59Z', now), 0);
+});
+
+test('participant list clears measured tab bars, safe areas, and the shared FAB overflow', () => {
+  const fabClearance = APP_TAB_BAR_FAB_OVERFLOW + 4;
+  assert.equal(getStadiumListBottomPadding(APP_TAB_BAR_BASE_HEIGHT, fabClearance), 88);
+  assert.equal(getStadiumListBottomPadding(APP_TAB_BAR_BASE_HEIGHT + 34, fabClearance), 122);
+  assert.equal(getStadiumListBottomPadding(Number.NaN, fabClearance), fabClearance);
+
+  const stadium = readWorkspaceFile('src/screens/StadiumLiveScreen.tsx');
+  const tabs = readWorkspaceFile('src/navigation/AppTabs.tsx');
+  assert.match(stadium, /useBottomTabBarHeight\(\)/);
+  assert.match(stadium, /APP_TAB_BAR_FAB_OVERFLOW \+ theme\.spacing\[1\]/);
+  assert.match(stadium, /contentContainerStyle=\{\[styles\.content, \{ paddingBottom:/);
+  assert.match(stadium, /scrollIndicatorInsets=\{\{ bottom: tabBarHeight \}\}/);
+  assert.match(tabs, /BottomTabBarHeightCallbackContext/);
+  assert.match(tabs, /setTabBarHeight\?\.\(event\.nativeEvent\.layout\.height\)/);
+  assert.match(tabs, /onLayout=\{handleLayout\}/);
+  assert.match(tabs, /top: -APP_TAB_BAR_FAB_OVERFLOW/);
 });
 
 test('repair migration uses UUID match ids, RPC-only mutations, active check-ins, and server enforcement', () => {

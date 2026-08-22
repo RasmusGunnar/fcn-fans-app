@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { RouteProp, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import React, { useCallback, useMemo, useState } from 'react';
@@ -16,6 +17,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../auth/AuthProvider';
 import { StadiumParticipantRow } from '../components/stadium/StadiumParticipantRow';
 import { Button, Card, Text } from '../components/ui';
+import { navigateToDirectMessageConversation } from '../navigation/navigationRef';
+import { APP_TAB_BAR_FAB_OVERFLOW } from '../navigation/tabBarMetrics';
 import { createOrGetDirectConversation } from '../services/messagesApi';
 import {
   getStadiumLiveParticipants,
@@ -25,7 +28,6 @@ import {
   updateStadiumLivePreferences,
 } from '../services/stadiumLiveApi';
 import { confirmAndSubmitReport } from '../services/reporting';
-import { navigateToDirectMessageConversation } from '../navigation/navigationRef';
 import { useStadiumReactions } from '../state/StadiumReactionContext';
 import { useMatchdayState } from '../state/MatchdayStateContext';
 import { useTheme } from '../theme';
@@ -37,6 +39,7 @@ import type {
 } from '../types/stadiumLive';
 import {
   getRemainingCooldownSeconds,
+  getStadiumListBottomPadding,
   getStadiumReactionCopy,
   sanitizeStadiumSection,
   splitStadiumParticipants,
@@ -56,6 +59,11 @@ export default function StadiumLiveScreen() {
   const { latestReaction, revision } = useStadiumReactions();
   const theme = useTheme();
   const styles = createStyles(theme);
+  const tabBarHeight = useBottomTabBarHeight();
+  const listBottomPadding = getStadiumListBottomPadding(
+    tabBarHeight,
+    APP_TAB_BAR_FAB_OVERFLOW + theme.spacing[1],
+  );
   const eventId = route.params.eventId;
   const matchdayState = useMatchdayState(eventId);
   const refreshMatchdayState = matchdayState.refresh;
@@ -499,7 +507,8 @@ export default function StadiumLiveScreen() {
       <SectionList
         sections={sections}
         keyExtractor={(participant) => participant.userId}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: listBottomPadding }]}
+        scrollIndicatorInsets={{ bottom: tabBarHeight }}
         keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => void load({ refresh: true })} />
