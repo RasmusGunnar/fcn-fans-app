@@ -26,10 +26,9 @@ module.exports = () => {
     },
     android: {
       ...baseConfig.android,
-      // The checked-in native Android project uses dk.rasmusgunnar.fcnfans.
-      // Keep production config untouched, while making the demo config match
-      // the demo-only Gradle applicationId selected by fcnDemoMode.
-      package: demoMode ? 'dk.rasmusgunnar.fcnfans.demo' : baseConfig.android.package,
+      // Production owns the canonical Play identity. Demo derives an isolated
+      // applicationId without coupling the host app to native module namespaces.
+      package: demoMode ? `${baseConfig.android.package}.demo` : baseConfig.android.package,
     },
     extra: {
       ...baseConfig.extra,

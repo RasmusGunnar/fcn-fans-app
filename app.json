@@ -27,7 +27,7 @@
       }
     },
     "android": {
-      "package": "com.rasmusjakobsen.fcnfans",
+      "package": "dk.fanbase.fcnfans",
       "versionCode": 1
     },
     "web": {

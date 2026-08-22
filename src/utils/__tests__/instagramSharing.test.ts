@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import test from 'node:test';
 import {
@@ -169,6 +170,54 @@ test('native configuration declares only text sharing and no media download path
     `${plugin}\n${ios}\n${android}`,
     /URLSession|DownloadManager|EXTRA_STREAM|service_role|SUPABASE|apikey/i,
   );
+});
+
+test('Android identity stays canonical while incoming-share keeps its module namespace', () => {
+  const appConfig = JSON.parse(readWorkspaceFile('app.json')) as {
+    expo: { scheme: string; android: { package: string } };
+  };
+  const plugin = readWorkspaceFile('plugins/withInstagramShare.js');
+  const moduleGradle = readWorkspaceFile('modules/incoming-share/android/build.gradle');
+  const moduleConfig = readWorkspaceFile('modules/incoming-share/expo-module.config.json');
+  const moduleSource = readWorkspaceFile(
+    'modules/incoming-share/android/src/main/java/dk/fcnfans/incomingshare/FCNIncomingShareModule.kt',
+  );
+  const loadConfig = createRequire(path.resolve(process.cwd(), 'package.json'))(
+    './app.config.js',
+  ) as () => {
+    scheme: string;
+    android: { package: string };
+  };
+  const previousAppMode = process.env.EXPO_PUBLIC_APP_MODE;
+  const previousSupabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+  const previousSupabaseKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+  const { productionConfig, demoConfig } = (() => {
+    try {
+      delete process.env.EXPO_PUBLIC_APP_MODE;
+      const production = loadConfig();
+      process.env.EXPO_PUBLIC_APP_MODE = 'demo';
+      return { productionConfig: production, demoConfig: loadConfig() };
+    } finally {
+      if (previousAppMode === undefined) delete process.env.EXPO_PUBLIC_APP_MODE;
+      else process.env.EXPO_PUBLIC_APP_MODE = previousAppMode;
+      if (previousSupabaseUrl === undefined) delete process.env.EXPO_PUBLIC_SUPABASE_URL;
+      else process.env.EXPO_PUBLIC_SUPABASE_URL = previousSupabaseUrl;
+      if (previousSupabaseKey === undefined) delete process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+      else process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = previousSupabaseKey;
+    }
+  })();
+
+  assert.equal(appConfig.expo.android.package, 'dk.fanbase.fcnfans');
+  assert.equal(appConfig.expo.scheme, 'fcnfans');
+  assert.equal(productionConfig.android.package, 'dk.fanbase.fcnfans');
+  assert.equal(productionConfig.scheme, 'fcnfans');
+  assert.equal(demoConfig.android.package, 'dk.fanbase.fcnfans.demo');
+  assert.equal(demoConfig.scheme, 'fcnfans-demo');
+  assert.match(plugin, /android\.intent\.action\.SEND/);
+  assert.match(plugin, /android:mimeType': 'text\/plain'/);
+  assert.match(moduleGradle, /namespace 'dk\.fcnfans\.incomingshare'/);
+  assert.match(moduleConfig, /dk\.fcnfans\.incomingshare\.FCNIncomingShareModule/);
+  assert.match(moduleSource, /package dk\.fcnfans\.incomingshare/);
 });
 
 test('migration validates URLs server-side and preserves the legacy send RPC', () => {

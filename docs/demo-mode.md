@@ -20,7 +20,7 @@ En intern EAS-demo-build kan bygges med:
 eas build --profile demo --platform android
 ```
 
-EAS-profilen sætter `EXPO_PUBLIC_APP_MODE=demo`. Den dynamiske Expo-config bruger navnet `FCN Fans Demo`, scheme `fcnfans-demo`, iOS bundle-id `dk.rasmusgunnar.fcnfans.demo` og Android package `dk.rasmusgunnar.fcnfans.demo`. Den lokale runner sætter også den demo-only Gradle-property, så en eksisterende native prebuild beholder production-ID'et uden demo-flag og bruger `.demo` med demo-flag.
+EAS-profilen sætter `EXPO_PUBLIC_APP_MODE=demo`. Den dynamiske Expo-config bruger navnet `FCN Fans Demo`, scheme `fcnfans-demo`, iOS bundle-id `dk.rasmusgunnar.fcnfans.demo` og Android package `dk.fanbase.fcnfans.demo`. Et eksisterende lokalt Android-projekt skal regenereres fra den aktuelle Expo-config, før `android`-kommandoerne bruges efter et package-skift.
 
 ## Start normal Production Mode
 
