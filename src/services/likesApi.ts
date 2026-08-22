@@ -1,5 +1,8 @@
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
+import { isDemoMode } from '../config/appMode';
+import { getDemoComments, getDemoLikeState, toggleDemoLike } from '../demo/interactions';
+import { DEMO_ENGAGEMENT, getDemoCommentPreviews } from '../demo/posts';
 
 export type LikeTargetType = 'post' | 'news' | 'event' | 'match' | 'bus_trip';
 
@@ -21,6 +24,9 @@ export async function fetchLikeStates(
   targetType: LikeTargetType,
   targetIds: string[],
 ): Promise<Map<string, { liked: boolean; likes: number }>> {
+  if (isDemoMode) {
+    return new Map(targetIds.map((id) => [id, getDemoLikeState(targetType, id)]));
+  }
   if (targetIds.length === 0) {
     return new Map();
   }
@@ -56,6 +62,14 @@ export async function fetchCommentCounts(
   targetType: LikeTargetType,
   targetIds: string[],
 ): Promise<Map<string, number>> {
+  if (isDemoMode) {
+    return new Map(
+      targetIds.map((id) => [
+        id,
+        DEMO_ENGAGEMENT[`${targetType}:${id}`]?.comments ?? getDemoComments(targetType, id).length,
+      ]),
+    );
+  }
   if (targetIds.length === 0) {
     return new Map();
   }
@@ -99,6 +113,9 @@ export async function fetchCommentPreviews(
   targetType: LikeTargetType,
   targetIds: string[],
 ): Promise<Map<string, CommentPreview[]>> {
+  if (isDemoMode) {
+    return new Map(targetIds.map((id) => [id, getDemoCommentPreviews(targetType, id)]));
+  }
   if (targetIds.length === 0) {
     return new Map();
   }
@@ -198,6 +215,9 @@ export async function fetchMyLikedIds(
   targetType: LikeTargetType,
   targetIds: string[],
 ): Promise<Set<string>> {
+  if (isDemoMode) {
+    return new Set(targetIds.filter((id) => getDemoLikeState(targetType, id).liked));
+  }
   if (!userId || targetIds.length === 0) return new Set();
 
   const { data, error } = await supabase
@@ -226,6 +246,10 @@ export async function toggleLike(
   userId: string,
   currentlyLiked: boolean,
 ): Promise<boolean> {
+  if (isDemoMode) {
+    toggleDemoLike(targetType, targetId);
+    return true;
+  }
   if (currentlyLiked) {
     // Delete like
     const { error } = await supabase

@@ -1,6 +1,8 @@
 import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
+import { isDemoMode } from '../config/appMode';
+import { createDemoSafeSupabaseClient } from './supabaseSafety';
 
 // Minimal local declaration for process.env in React Native environment
 declare const process: {
@@ -12,19 +14,15 @@ declare const process: {
   };
 };
 
-export const supabaseUrl =
-  process.env.EXPO_PUBLIC_SUPABASE_URL ??
-  process.env.SUPABASE_URL ??
-  '';
+export const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? '';
 
 export const supabaseAnonKey =
-  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ??
-  process.env.SUPABASE_ANON_KEY ??
-  '';
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY ?? '';
 
 const missingVars: string[] = [];
 if (!supabaseUrl) missingVars.push('EXPO_PUBLIC_SUPABASE_URL (fallback: SUPABASE_URL)');
-if (!supabaseAnonKey) missingVars.push('EXPO_PUBLIC_SUPABASE_ANON_KEY (fallback: SUPABASE_ANON_KEY)');
+if (!supabaseAnonKey)
+  missingVars.push('EXPO_PUBLIC_SUPABASE_ANON_KEY (fallback: SUPABASE_ANON_KEY)');
 
 let urlOk = true;
 try {
@@ -50,15 +48,17 @@ if (missingVars.length > 0) {
 
 // Create a client that won't crash app import time.
 // If config is missing, it will still exist, but any usage should be considered invalid.
-export const supabase = createClient(
-  supabaseUrl || 'https://invalid.local',
-  supabaseAnonKey || 'invalid',
+const productionSupabase = createClient(
+  isDemoMode ? 'https://demo.invalid.local' : supabaseUrl || 'https://invalid.local',
+  isDemoMode ? 'demo-local-only' : supabaseAnonKey || 'invalid',
   {
     auth: {
       storage: AsyncStorage,
-      persistSession: true,
-      autoRefreshToken: true,
+      persistSession: !isDemoMode,
+      autoRefreshToken: !isDemoMode,
       detectSessionInUrl: false,
     },
   },
 );
+
+export const supabase = createDemoSafeSupabaseClient(productionSupabase, isDemoMode);

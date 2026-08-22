@@ -5,6 +5,8 @@ import {
   getEmptyFanActivityRegistrationSummary,
   type FanActivityRegistrationSummary,
 } from './fanActivityRegistrations';
+import { isDemoMode } from '../config/appMode';
+import { DEMO_FAN_ACTIVITIES } from '../demo/matches';
 
 export type FanActivityParentType = 'match' | 'event';
 
@@ -114,9 +116,12 @@ const FAN_ACTIVITY_SELECT =
   'id, parent_type, parent_id, community_id, created_by, type, title, body, starts_at, ends_at, location_name, location_address, lat, lng, cover_url, cta_label, cta_url, registration_enabled, registration_capacity, registration_price_dkk, registration_payment_mode, registration_payment_instructions, registration_mobilepay_info, is_published, is_cancelled, sort_order, created_at, updated_at, communities(id, name, type, mobilepay_info, mobilepay_instructions)';
 
 function isMissingFanActivitiesTable(error: unknown): boolean {
-  const code = typeof error === 'object' && error !== null ? (error as { code?: string }).code : null;
+  const code =
+    typeof error === 'object' && error !== null ? (error as { code?: string }).code : null;
   const message =
-    typeof error === 'object' && error !== null ? String((error as { message?: string }).message ?? '') : '';
+    typeof error === 'object' && error !== null
+      ? String((error as { message?: string }).message ?? '')
+      : '';
 
   return (
     code === '42P01' ||
@@ -232,7 +237,9 @@ function normalizeExternalUrl(url: string | null | undefined): string | null {
   return `https://${normalized}`;
 }
 
-function toCommunityList(rows: FanActivityCommunityRow[] | null | undefined): FanActivityCommunity[] {
+function toCommunityList(
+  rows: FanActivityCommunityRow[] | null | undefined,
+): FanActivityCommunity[] {
   return (rows || [])
     .filter((row): row is FanActivityCommunityRow => Boolean(row?.id && row?.name))
     .map((row) => ({
@@ -248,6 +255,11 @@ async function fetchFanActivitiesForParent(
   parentType: FanActivityParentType,
   parentId: string,
 ): Promise<FanActivity[]> {
+  if (isDemoMode) {
+    return DEMO_FAN_ACTIVITIES.filter(
+      (activity) => activity.parent_type === parentType && activity.parent_id === parentId,
+    ).map((activity) => ({ ...activity }));
+  }
   const normalizedParentId = parentId.trim();
   if (!normalizedParentId) {
     return [];
@@ -266,7 +278,9 @@ async function fetchFanActivitiesForParent(
 
     if (error) {
       if (isMissingFanActivitiesTable(error)) {
-        logger.warn('[fanActivities] fan_activities table not available yet. Returning empty array.');
+        logger.warn(
+          '[fanActivities] fan_activities table not available yet. Returning empty array.',
+        );
         return [];
       }
 
@@ -300,6 +314,10 @@ export async function fetchFanActivitiesForEvent(eventId: string): Promise<FanAc
 }
 
 export async function fetchFanActivityById(fanActivityId: string): Promise<FanActivity | null> {
+  if (isDemoMode) {
+    const activity = DEMO_FAN_ACTIVITIES.find((item) => item.id === fanActivityId);
+    return activity ? { ...activity } : null;
+  }
   const normalizedFanActivityId = fanActivityId.trim();
   if (!normalizedFanActivityId) {
     return null;
@@ -344,6 +362,7 @@ export async function fetchFanActivityById(fanActivityId: string): Promise<FanAc
 }
 
 export async function fetchHomeFanActivities(limit = 12): Promise<FanActivity[]> {
+  if (isDemoMode) return DEMO_FAN_ACTIVITIES.slice(0, limit).map((activity) => ({ ...activity }));
   const safeLimit = Math.max(1, Math.min(limit, 50));
 
   try {
@@ -358,7 +377,9 @@ export async function fetchHomeFanActivities(limit = 12): Promise<FanActivity[]>
 
     if (error) {
       if (isMissingFanActivitiesTable(error)) {
-        logger.warn('[fanActivities] fan_activities table not available yet. Returning empty Home list.');
+        logger.warn(
+          '[fanActivities] fan_activities table not available yet. Returning empty Home list.',
+        );
         return [];
       }
 
@@ -388,6 +409,9 @@ export async function fetchManageableFanActivityCommunities(
     communityType?: 'community' | 'fan_faction';
   },
 ): Promise<FanActivityCommunity[]> {
+  if (isDemoMode) {
+    return [];
+  }
   const normalizedUserId = userId.trim();
   if (!normalizedUserId) {
     return [];

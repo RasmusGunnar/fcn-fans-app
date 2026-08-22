@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { isDemoMode } from '../config/appMode';
 
 export type WeeklyRankingData = {
   rank: number | null;
@@ -7,6 +8,7 @@ export type WeeklyRankingData = {
 };
 
 export async function fetchWeeklyRanking(): Promise<WeeklyRankingData | null> {
+  if (isDemoMode) return { rank: 12, score: 86, totalUsers: 248 };
   try {
     const {
       data: { user },

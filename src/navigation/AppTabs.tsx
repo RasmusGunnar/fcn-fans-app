@@ -11,6 +11,7 @@ import { EventsStack } from './EventsStack';
 import { HomeStack } from './HomeStack';
 import { LibraryStack } from './LibraryStack';
 import { ProfileStack } from './ProfileStack';
+import { isDemoMode } from '../config/appMode';
 
 const Tab = createBottomTabNavigator();
 const CreateSheet = React.lazy(() => import('../screens/CreateSheet'));
@@ -137,7 +138,7 @@ export function AppTabs() {
   return (
     <CreateSheetProvider>
       <Tab.Navigator
-        tabBar={(props) => <CustomTabBar {...props} tabs={tabs} showCreate />}
+        tabBar={(props) => <CustomTabBar {...props} tabs={tabs} showCreate={!isDemoMode} />}
         screenOptions={{
           headerShown: false,
         }}

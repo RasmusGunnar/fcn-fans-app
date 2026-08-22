@@ -9,6 +9,7 @@
 
 // ─── Team hero image via Edge Function (uses premium SPORTSDB_API_KEY) ──────
 
+import { isDemoMode } from '../config/appMode';
 import { supabaseAnonKey, supabaseUrl } from '../lib/supabase';
 
 const HERO_FIELDS = [
@@ -46,7 +47,7 @@ const teamHeroCache = new Map<string, string | null>();
  * Results are cached per session in a Map.
  */
 export async function getTeamHeroImage(teamId: string): Promise<string | null> {
-  if (!teamId) return null;
+  if (!teamId || isDemoMode) return null;
 
   const cached = teamHeroCache.get(teamId);
   if (cached !== undefined) return cached;

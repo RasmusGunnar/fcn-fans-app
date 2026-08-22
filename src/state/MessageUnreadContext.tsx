@@ -12,6 +12,7 @@ import { useAuth } from '../auth/AuthProvider';
 import { supabase } from '../lib/supabase';
 import { getDirectMessageUnreadCount } from '../services/messagesApi';
 import { clearAppIconBadge, syncAppIconBadge } from '../services/notificationsApi';
+import { isDemoMode } from '../config/appMode';
 
 type MessageUnreadContextValue = {
   unreadCount: number;
@@ -34,6 +35,11 @@ export function MessageUnreadProvider({ children }: { children: React.ReactNode 
   }, []);
 
   const refreshUnreadCount = useCallback(async (): Promise<number> => {
+    if (isDemoMode) {
+      publishUnreadCount(0);
+      return 0;
+    }
+
     const requestedUserId = user?.id ?? null;
     if (!requestedUserId) {
       publishUnreadCount(0);
@@ -53,6 +59,8 @@ export function MessageUnreadProvider({ children }: { children: React.ReactNode 
   }, [publishUnreadCount, user?.id]);
 
   useEffect(() => {
+    if (isDemoMode) return;
+
     if (!user?.id) {
       publishUnreadCount(0);
       void clearAppIconBadge();
@@ -63,7 +71,7 @@ export function MessageUnreadProvider({ children }: { children: React.ReactNode 
   }, [publishUnreadCount, refreshUnreadCount, user?.id]);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id || isDemoMode) return;
 
     const channel = supabase
       .channel(`message-unread-${user.id}`)
@@ -94,6 +102,8 @@ export function MessageUnreadProvider({ children }: { children: React.ReactNode 
   }, [refreshUnreadCount, user?.id]);
 
   useEffect(() => {
+    if (isDemoMode) return;
+
     let appState: AppStateStatus = AppState.currentState;
     const subscription = AppState.addEventListener('change', (nextState) => {
       const returningToForeground =

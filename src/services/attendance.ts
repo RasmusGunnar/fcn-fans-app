@@ -1,6 +1,9 @@
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { resolveAvatarUrl } from '../utils/avatar';
+import { isDemoMode } from '../config/appMode';
+import { getDemoParticipation, setDemoRsvp } from '../demo/interactions';
+import { DEMO_USERS } from '../demo/users';
 
 export interface AttendanceSnapshot {
   countGoing: number;
@@ -45,6 +48,22 @@ export async function fetchAttendanceSnapshot({
   entityId: string;
   currentUserId?: string;
 }): Promise<AttendanceSnapshot> {
+  if (isDemoMode) {
+    const participants = DEMO_USERS.slice(0, 9);
+    const participation = getDemoParticipation();
+    return {
+      countGoing: 24,
+      profiles: participants.map((user) => ({
+        user_id: user.id,
+        display_name: user.displayName,
+        avatar_url: user.avatarUrl,
+      })),
+      userIds: participants.map((user) => user.id),
+      avatars: [],
+      isGoing: participation.isGoing,
+      rsvpStatus: participation.isGoing ? 'going' : null,
+    };
+  }
   const goingQuery = supabase
     .from('rsvps')
     .select('user_id')
@@ -94,6 +113,10 @@ export async function setAttendanceStatus({
   userId: string;
   status: RsvpStatus;
 }): Promise<void> {
+  if (isDemoMode) {
+    setDemoRsvp(status);
+    return;
+  }
   if (status === null) {
     const { error } = await supabase
       .from('rsvps')

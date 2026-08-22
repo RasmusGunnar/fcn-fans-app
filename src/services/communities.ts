@@ -5,6 +5,13 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Crypto from 'expo-crypto';
 import { Alert } from 'react-native';
+import { isDemoMode } from '../config/appMode';
+import {
+  DEMO_COMMUNITIES,
+  getDemoCommunity,
+  getDemoCommunityMembers,
+  getDemoMembership,
+} from '../demo/communities';
 
 // ===== TYPES =====
 
@@ -130,6 +137,7 @@ export function sortCommunities(communities: Community[]): Community[] {
  * Get member count for a community
  */
 export async function getMemberCount(communityId: string): Promise<number> {
+  if (isDemoMode) return getDemoCommunity(communityId)?.member_count ?? 0;
   try {
     const { count, error } = await supabase
       .from('community_members')
@@ -153,6 +161,11 @@ export async function getMemberCount(communityId: string): Promise<number> {
  * Returns a map of community_id -> member count
  */
 export async function getMemberCounts(communityIds: string[]): Promise<Record<string, number>> {
+  if (isDemoMode) {
+    return Object.fromEntries(
+      communityIds.map((id) => [id, getDemoCommunity(id)?.member_count ?? 0]),
+    );
+  }
   try {
     if (communityIds.length === 0) return {};
 
@@ -183,6 +196,7 @@ export async function getMemberCounts(communityIds: string[]): Promise<Record<st
  * Get the shared base communities dataset used across app filters.
  */
 export async function getCommunities(): Promise<Community[]> {
+  if (isDemoMode) return DEMO_COMMUNITIES.map((community) => ({ ...community }));
   try {
     const { data, error, appliedFilters } = await fetchBaseCommunitiesRows();
 
@@ -222,6 +236,10 @@ export async function getCommunities(): Promise<Community[]> {
  * Get single community by ID
  */
 export async function getCommunity(id: string): Promise<Community | null> {
+  if (isDemoMode) {
+    const community = getDemoCommunity(id);
+    return community ? { ...community } : null;
+  }
   try {
     const { data, error } = await supabase
       .from('communities')
@@ -246,6 +264,7 @@ export async function getCommunity(id: string): Promise<Community | null> {
  * Get current user's membership for a community
  */
 export async function getMembership(communityId: string): Promise<CommunityMembership | null> {
+  if (isDemoMode) return getDemoMembership(communityId);
   try {
     const {
       data: { user },
@@ -279,6 +298,7 @@ export async function getMembership(communityId: string): Promise<CommunityMembe
  * Join a community (as member)
  */
 export async function joinCommunity(communityId: string): Promise<boolean> {
+  if (isDemoMode) return Boolean(getDemoCommunity(communityId));
   try {
     const {
       data: { user },
@@ -328,6 +348,7 @@ export async function createCommunity(
     geocoded_at?: string | null;
   },
 ): Promise<Community | null> {
+  if (isDemoMode) return null;
   try {
     // Get current user
     const {
@@ -404,6 +425,7 @@ export async function createCommunity(
  * Leave a community (delete membership)
  */
 export async function leaveCommunity(communityId: string): Promise<boolean> {
+  if (isDemoMode) return Boolean(getDemoCommunity(communityId));
   try {
     const {
       data: { user },
@@ -437,6 +459,7 @@ export async function leaveCommunity(communityId: string): Promise<boolean> {
  * List all members of a community (with profile info if available)
  */
 export async function listMembers(communityId: string): Promise<CommunityMember[]> {
+  if (isDemoMode) return getDemoCommunityMembers(communityId);
   try {
     // First get memberships
     const { data: memberships, error: memberError } = await supabase
@@ -495,6 +518,7 @@ export async function setMemberRole(
   userId: string,
   role: 'admin' | 'member',
 ): Promise<boolean> {
+  if (isDemoMode) return true;
   try {
     const { error } = await supabase
       .from('community_members')

@@ -11,10 +11,22 @@ const fs = require('fs');
 const path = require('path');
 
 const TARGET_NAME = 'FCNFansShareExtension';
-const EXTENSION_BUNDLE_ID = 'dk.rasmusgunnar.fcnfans.share';
-const APP_GROUP_ID = 'group.dk.rasmusgunnar.fcnfans.share';
+const PRODUCTION_EXTENSION_BUNDLE_ID = 'dk.rasmusgunnar.fcnfans.share';
+const PRODUCTION_APP_GROUP_ID = 'group.dk.rasmusgunnar.fcnfans.share';
 const DEPLOYMENT_TARGET = '15.1';
 const SOURCE_FILE = 'ShareViewController.swift';
+
+function getShareIdentifiers(config) {
+  const isDemo = config.ios?.bundleIdentifier?.endsWith('.demo') === true;
+  return {
+    extensionBundleId: isDemo
+      ? 'dk.rasmusgunnar.fcnfans.demo.share'
+      : PRODUCTION_EXTENSION_BUNDLE_ID,
+    appGroupId: isDemo ? 'group.dk.rasmusgunnar.fcnfans.demo.share' : PRODUCTION_APP_GROUP_ID,
+    scheme: isDemo ? 'fcnfans-demo' : 'fcnfans',
+    displayName: isDemo ? 'FCN Fans Demo' : 'FCN Fans',
+  };
+}
 
 function addUnique(values, value) {
   const result = Array.isArray(values) ? [...values] : [];
@@ -23,11 +35,12 @@ function addUnique(values, value) {
 }
 
 function withShareConfig(config) {
+  const { appGroupId, extensionBundleId } = getShareIdentifiers(config);
   config.ios = config.ios || {};
   config.ios.entitlements = config.ios.entitlements || {};
   config.ios.entitlements['com.apple.security.application-groups'] = addUnique(
     config.ios.entitlements['com.apple.security.application-groups'],
-    APP_GROUP_ID,
+    appGroupId,
   );
 
   const eas = config.extra?.eas || {};
@@ -37,8 +50,8 @@ function withShareConfig(config) {
   const appExtensions = [...(ios.appExtensions || [])];
   const extension = {
     targetName: TARGET_NAME,
-    bundleIdentifier: EXTENSION_BUNDLE_ID,
-    entitlements: { 'com.apple.security.application-groups': [APP_GROUP_ID] },
+    bundleIdentifier: extensionBundleId,
+    entitlements: { 'com.apple.security.application-groups': [appGroupId] },
   };
   const existingIndex = appExtensions.findIndex((item) => item.targetName === TARGET_NAME);
   if (existingIndex >= 0) appExtensions[existingIndex] = extension;
@@ -57,15 +70,16 @@ function withShareConfig(config) {
 }
 
 function withMainAppGroup(config) {
+  const { appGroupId } = getShareIdentifiers(config);
   config = withEntitlementsPlist(config, (mod) => {
     mod.modResults['com.apple.security.application-groups'] = addUnique(
       mod.modResults['com.apple.security.application-groups'],
-      APP_GROUP_ID,
+      appGroupId,
     );
     return mod;
   });
   return withInfoPlist(config, (mod) => {
-    mod.modResults.FCNIncomingShareAppGroupId = APP_GROUP_ID;
+    mod.modResults.FCNIncomingShareAppGroupId = appGroupId;
     return mod;
   });
 }
@@ -92,20 +106,25 @@ function withShareIntent(config) {
 }
 
 function withShareExtensionFiles(config) {
+  const { appGroupId, displayName, scheme } = getShareIdentifiers(config);
   return withDangerousMod(config, [
     'ios',
     async (mod) => {
       const targetDir = path.join(mod.modRequest.platformProjectRoot, TARGET_NAME);
       fs.mkdirSync(targetDir, { recursive: true });
-      fs.copyFileSync(
-        path.join(mod.modRequest.projectRoot, 'plugins', 'instagram-share', SOURCE_FILE),
-        path.join(targetDir, SOURCE_FILE),
-      );
+      const source = fs
+        .readFileSync(
+          path.join(mod.modRequest.projectRoot, 'plugins', 'instagram-share', SOURCE_FILE),
+          'utf8',
+        )
+        .replaceAll(PRODUCTION_APP_GROUP_ID, appGroupId)
+        .replaceAll('fcnfans://', `${scheme}://`);
+      fs.writeFileSync(path.join(targetDir, SOURCE_FILE), source);
       fs.writeFileSync(
         path.join(targetDir, 'Info.plist'),
         plist.build({
           CFBundleDevelopmentRegion: '$(DEVELOPMENT_LANGUAGE)',
-          CFBundleDisplayName: 'FCN Fans',
+          CFBundleDisplayName: displayName,
           CFBundleExecutable: '$(EXECUTABLE_NAME)',
           CFBundleIdentifier: '$(PRODUCT_BUNDLE_IDENTIFIER)',
           CFBundleInfoDictionaryVersion: '6.0',
@@ -128,14 +147,14 @@ function withShareExtensionFiles(config) {
       );
       fs.writeFileSync(
         path.join(targetDir, `${TARGET_NAME}.entitlements`),
-        plist.build({ 'com.apple.security.application-groups': [APP_GROUP_ID] }),
+        plist.build({ 'com.apple.security.application-groups': [appGroupId] }),
       );
       return mod;
     },
   ]);
 }
 
-function addXCConfigurationList(project, version, buildNumber) {
+function addXCConfigurationList(project, version, buildNumber, extensionBundleId) {
   const common = {
     CODE_SIGN_ENTITLEMENTS: `"${TARGET_NAME}/${TARGET_NAME}.entitlements"`,
     CODE_SIGN_STYLE: 'Automatic',
@@ -149,7 +168,7 @@ function addXCConfigurationList(project, version, buildNumber) {
       '"@executable_path/../../Frameworks"',
     ],
     MARKETING_VERSION: version,
-    PRODUCT_BUNDLE_IDENTIFIER: `"${EXTENSION_BUNDLE_ID}"`,
+    PRODUCT_BUNDLE_IDENTIFIER: `"${extensionBundleId}"`,
     PRODUCT_NAME: '"$(TARGET_NAME)"',
     SKIP_INSTALL: 'YES',
     SWIFT_EMIT_LOC_STRINGS: 'YES',
@@ -185,6 +204,7 @@ function addXCConfigurationList(project, version, buildNumber) {
 }
 
 function withShareExtensionTarget(config) {
+  const { extensionBundleId } = getShareIdentifiers(config);
   return withXcodeProject(config, (mod) => {
     const project = mod.modResults;
     const nativeTargets = project.pbxNativeTargetSection();
@@ -202,6 +222,7 @@ function withShareExtensionTarget(config) {
       project,
       mod.version || '1.0',
       mod.ios?.buildNumber || '1',
+      extensionBundleId,
     );
     const productFile = project.addProductFile(TARGET_NAME, {
       basename: `${TARGET_NAME}.appex`,

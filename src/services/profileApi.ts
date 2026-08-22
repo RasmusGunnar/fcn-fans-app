@@ -2,6 +2,10 @@ import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { getProfileSafe } from '../lib/profile';
 import type { FanLevelKey } from '../types/fan';
+import { isDemoMode } from '../config/appMode';
+import { DEMO_CURRENT_USER, getDemoUser } from '../demo/users';
+import { DEMO_COMMUNITIES, DEMO_COMMUNITY_ROLE_MAP } from '../demo/communities';
+import { DEMO_PRIMARY_FIXTURE } from '../demo/matches';
 
 // ===== TYPES =====
 
@@ -42,7 +46,11 @@ function normalizeUserProfile(
 
 async function readProfileDirect(userId: string): Promise<UserProfile | null> {
   for (const select of PROFILE_SELECT_ATTEMPTS) {
-    const { data, error } = await supabase.from('profiles').select(select).eq('id', userId).maybeSingle();
+    const { data, error } = await supabase
+      .from('profiles')
+      .select(select)
+      .eq('id', userId)
+      .maybeSingle();
 
     if (error) {
       logger.warn('[profileApi] Direct profile lookup failed for select:', { select, error });
@@ -50,7 +58,9 @@ async function readProfileDirect(userId: string): Promise<UserProfile | null> {
     }
 
     if (data) {
-      return normalizeUserProfile(data as unknown as Partial<UserProfile> & Pick<UserProfile, 'id'>);
+      return normalizeUserProfile(
+        data as unknown as Partial<UserProfile> & Pick<UserProfile, 'id'>,
+      );
     }
   }
 
@@ -122,6 +132,18 @@ export function formatEventDate(isoDate: string): string {
  * Fetch current user's profile
  */
 export async function fetchMyProfile(userId: string): Promise<UserProfile | null> {
+  if (isDemoMode) {
+    const user = getDemoUser(userId) ?? DEMO_CURRENT_USER;
+    return {
+      id: user.id,
+      display_name: user.displayName,
+      username: user.username,
+      avatar_url: user.avatarUrl,
+      member_since: '2024-07-01T12:00:00.000Z',
+      fan_level_key: user.fanLevelKey,
+      onboarding_complete: true,
+    };
+  }
   try {
     for (const select of PROFILE_SELECT_ATTEMPTS) {
       const profile = await getProfileSafe<Partial<UserProfile> & Pick<UserProfile, 'id'>>(
@@ -142,6 +164,7 @@ export async function fetchMyProfile(userId: string): Promise<UserProfile | null
 }
 
 export async function fetchStartupProfile(userId: string): Promise<UserProfile | null> {
+  if (isDemoMode) return fetchMyProfile(userId);
   try {
     const { data, error } = await supabase
       .from('profiles')
@@ -166,6 +189,7 @@ export async function fetchStartupProfile(userId: string): Promise<UserProfile |
 }
 
 export async function fetchPublicProfileById(userId: string): Promise<UserProfile | null> {
+  if (isDemoMode) return fetchMyProfile(userId);
   try {
     return await readProfileDirect(userId);
   } catch (err) {
@@ -183,6 +207,18 @@ export async function fetchPublicProfileById(userId: string): Promise<UserProfil
 export async function fetchMyCommunities(
   userId: string,
 ): Promise<{ ownerCommunities: MyCommunity[]; memberCommunities: MyCommunity[] }> {
+  if (isDemoMode) {
+    const memberCommunities = DEMO_COMMUNITIES.filter(
+      (community) => DEMO_COMMUNITY_ROLE_MAP[community.id],
+    ).map((community) => ({
+      id: community.id,
+      name: community.name,
+      type: community.type,
+      memberCount: community.member_count ?? 0,
+      role: DEMO_COMMUNITY_ROLE_MAP[community.id],
+    }));
+    return { ownerCommunities: [], memberCommunities };
+  }
   try {
     logger.log('[profileApi] Fetching communities for user:', userId);
 
@@ -206,7 +242,9 @@ export async function fetchMyCommunities(
     }
 
     if (!memberships || memberships.length === 0) {
-      logger.log('[profileApi] No community memberships found - ActorSelector will show 0 communities');
+      logger.log(
+        '[profileApi] No community memberships found - ActorSelector will show 0 communities',
+      );
       return { ownerCommunities: [], memberCommunities: [] };
     }
 
@@ -302,6 +340,18 @@ export async function fetchMyCommunities(
  * Returns up to 3 items with resolved titles and dates
  */
 export async function fetchMyUpcomingItems(userId: string): Promise<UpcomingItem[]> {
+  if (isDemoMode) {
+    return [
+      {
+        id: 'demo-upcoming-match',
+        targetType: 'match',
+        targetId: DEMO_PRIMARY_FIXTURE.id,
+        title: `${DEMO_PRIMARY_FIXTURE.home_team} vs ${DEMO_PRIMARY_FIXTURE.away_team}`,
+        date: DEMO_PRIMARY_FIXTURE.kickoff_at,
+        status: 'going',
+      },
+    ];
+  }
   try {
     logger.log('[profileApi] Fetching upcoming items for user:', userId);
     // Fetch user_upcoming_items
@@ -388,6 +438,7 @@ export async function fetchMyUpcomingItems(userId: string): Promise<UpcomingItem
  * Count communities owned by user
  */
 export async function countOwnedCommunities(userId: string): Promise<number> {
+  if (isDemoMode) return 0;
   try {
     const { count, error } = await supabase
       .from('community_members')

@@ -12,6 +12,7 @@ import {
   formatMessageUnreadBadge,
   getMessageInboxAccessibilityLabel,
 } from '../utils/directMessages';
+import { isDemoMode } from '../config/appMode';
 
 interface AppHeaderProps {
   title: string;
@@ -65,9 +66,16 @@ export function AppHeader({
             <Image source={logoSource || defaultLogo} style={styles.logo} resizeMode="contain" />
           </View>
           <View style={styles.textContainer}>
-            <Text style={styles.title} numberOfLines={1}>
-              {title}
-            </Text>
+            <View style={styles.titleRow}>
+              <Text style={styles.title} numberOfLines={1}>
+                {title}
+              </Text>
+              {isDemoMode ? (
+                <View style={styles.demoBadge}>
+                  <Text style={styles.demoBadgeText}>DEMO</Text>
+                </View>
+              ) : null}
+            </View>
             {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
           </View>
         </View>
@@ -162,6 +170,23 @@ function createStyles(theme: Theme) {
       fontSize: theme.typography.h3.fontSize,
       fontWeight: theme.typography.h3.fontWeight as any,
       color: theme.colors.bg.card,
+    },
+    titleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing[2],
+    },
+    demoBadge: {
+      borderRadius: theme.radius.pill,
+      paddingHorizontal: theme.spacing[2],
+      paddingVertical: theme.spacing[1] / 2,
+      backgroundColor: theme.colors.bg.card,
+    },
+    demoBadgeText: {
+      color: theme.colors.primary,
+      fontSize: theme.typography.caption.fontSize - 1,
+      fontWeight: '800',
+      letterSpacing: 0.6,
     },
     subtitle: {
       fontSize: theme.typography.small.fontSize,

@@ -26,10 +26,7 @@ import { isFanLevelKey } from '../lib/fanLevel';
 import { logger } from '../lib/logger';
 import { pickCameraPhoto, pickImageFromLibrary } from '../lib/mediaPicker';
 import { geocodeAddress } from '../services/geocoding';
-import {
-  FeedItemRenderer,
-  type FeedItemRendererProps,
-} from '../components/feed/FeedItemRenderer';
+import { FeedItemRenderer, type FeedItemRendererProps } from '../components/feed/FeedItemRenderer';
 import { MembersStatRow } from '../components/social/MembersStatRow';
 import { IconButton } from '../components/ui';
 import { getPublicUrl } from '../lib/storageUrl';
@@ -71,6 +68,9 @@ import { buildCommunityFeedTargetFilter } from '../utils/communityFeedTargets';
 import { mergeCommunityFeedProfiles } from '../utils/communityFeedProfiles';
 import { getFeedItemVisibleMediaKind } from '../utils/homeStartupPerformance';
 import { selectActiveInlineVideoKey } from '../utils/videoPlaybackBehavior';
+import { isDemoMode } from '../config/appMode';
+import { getDemoPostsForCommunity } from '../demo/posts';
+import { DEMO_PROFILE_MAP } from '../demo/users';
 
 type CommunityDetailRouteProp = RouteProp<
   { CommunityDetail: { id: string; title: string } },
@@ -232,10 +232,14 @@ export default function CommunityDetailScreen() {
     setLoading(true);
 
     // Get current user
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    setCurrentUserId(user?.id || null);
+    if (isDemoMode) {
+      setCurrentUserId(user?.id ?? null);
+    } else {
+      const {
+        data: { user: currentUser },
+      } = await supabase.auth.getUser();
+      setCurrentUserId(currentUser?.id || null);
+    }
 
     // Load community
     const communityData = await getCommunity(id);
@@ -276,6 +280,13 @@ export default function CommunityDetailScreen() {
     if (!id) return;
     setLoadingCommunityFeed(true);
     try {
+      if (isDemoMode) {
+        const demoPosts = getDemoPostsForCommunity(id);
+        setCommunityProfileMap({ ...DEMO_PROFILE_MAP });
+        setCommunityPostFeedItems(demoPosts.map((post) => toPostFeedItem({ ...post })));
+        return;
+      }
+
       const communityTarget = `community:${id}`;
       const feedTargetFilter = buildCommunityFeedTargetFilter(id);
       logger.log('[CommunityFeed][query]', {
@@ -362,7 +373,8 @@ export default function CommunityDetailScreen() {
           authorFanLevelKey: (profile?.fan_level_key as any) ?? null,
           actorType: dbPost.actor_type ?? 'user',
           actorId: dbPost.actor_id ?? dbPost.author_id,
-          actorDisplayName: dbPost.actor_type === 'community' ? null : (profile?.display_name ?? null),
+          actorDisplayName:
+            dbPost.actor_type === 'community' ? null : (profile?.display_name ?? null),
           actorAvatarUrl: dbPost.actor_type === 'community' ? communityAvatarUrl : null,
           communityId: dbPost.community_id ?? null,
           feedTargets: Array.isArray(dbPost.feed_targets)
@@ -639,9 +651,7 @@ export default function CommunityDetailScreen() {
     }
 
     setCommunity((prev) =>
-      prev
-        ? { ...prev, avatar_path: null, avatar_url: null, avatar_kind: null }
-        : prev,
+      prev ? { ...prev, avatar_path: null, avatar_url: null, avatar_kind: null } : prev,
     );
     Alert.alert('Succes', 'Logo/avatar fjernet!');
     loadData();
@@ -715,10 +725,7 @@ export default function CommunityDetailScreen() {
         } else {
           // Failure: just update location_label without coords
           logger.warn('[CommunityDetail] Geocoding failed, continuing without coords');
-          Alert.alert(
-            'Info',
-            'Kunne ikke finde koordinater – prøv fx "Værløse, Danmark"',
-          );
+          Alert.alert('Info', 'Kunne ikke finde koordinater – prøv fx "Værløse, Danmark"');
         }
       }
 
@@ -1036,232 +1043,240 @@ export default function CommunityDetailScreen() {
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         >
-        {/* 2. Hero Section */}
-        <View style={styles.heroSection}>
-          {heroUrl ? (
-            <Image source={{ uri: heroUrl }} style={styles.heroImage} resizeMode="cover" />
-          ) : (
-            <View style={styles.heroFallback} />
-          )}
-          {uploadingCover && (
-            <View style={styles.heroLoading}>
-              <ActivityIndicator size="small" color={theme.colors.bg.card} />
-            </View>
-          )}
-        </View>
-
-        {/* 3. Avatar - centered, overlapping hero */}
-        <View style={styles.avatarContainer}>
-          <View style={styles.avatarWrapper}>
-            {avatarUrl ? (
-              <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+          {/* 2. Hero Section */}
+          <View style={styles.heroSection}>
+            {heroUrl ? (
+              <Image source={{ uri: heroUrl }} style={styles.heroImage} resizeMode="cover" />
             ) : (
-              <View style={styles.avatarPlaceholder}>
-                <Ionicons
-                  name={community.type === 'fan_faction' ? 'star' : 'people-circle'}
-                  size={LAYOUT.avatarSize * 0.6}
-                  color={accentColor}
-                />
+              <View style={styles.heroFallback} />
+            )}
+            {uploadingCover && (
+              <View style={styles.heroLoading}>
+                <ActivityIndicator size="small" color={theme.colors.bg.card} />
               </View>
             )}
           </View>
-        </View>
 
-        {/* 4. Title */}
-        <View style={styles.titleSection}>
-          <View style={styles.titleRow}>
-            <Text style={styles.title}>{community.name}</Text>
-          </View>
-          <Text style={styles.tagline}>
-            {community.type === 'fan_faction' ? 'Den officielle fanklub' : 'Lokalt fællesskab'}
-          </Text>
-        </View>
-
-        {/* 5. CTA: Primary Button */}
-        <View style={styles.ctaContainer}>
-          <Pressable
-            onPress={handleJoinLeave}
-            disabled={joining || !!effectiveRole}
-            style={({ pressed }) => [
-              styles.ctaButton,
-              effectiveRole && styles.ctaButtonDisabled,
-              pressed && !effectiveRole && styles.ctaButtonPressed,
-            ]}
-          >
-            <View style={styles.ctaButtonContent}>
-              {!effectiveRole && (
-                <Ionicons
-                  name="person-add"
-                  size={16}
-                  color={theme.components.button.variants.primary.text}
-                />
-              )}
-              <Text style={[styles.ctaButtonText, effectiveRole && styles.ctaButtonTextDisabled]}>
-                {joining
-                  ? 'Tilmelder...'
-                  : effectiveRole
-                    ? effectiveRole === 'member'
-                      ? 'Medlem'
-                      : 'Ejer'
-                    : 'Bliv medlem'}
-              </Text>
-            </View>
-          </Pressable>
-        </View>
-
-        {/* 6. Members Row */}
-        <MembersStatRow
-          iconName="people"
-          label="Medlemmer"
-          valueText={`${memberCount} medlem${memberCount !== 1 ? 'mer' : ''}`}
-          avatars={members
-            .slice(0, 5)
-            .map((member) => resolveAvatarUrl(member.avatar_url))
-            .filter((url): url is string => !!url)}
-          actionText="Se alle"
-          horizontalPadding={LAYOUT.screenPaddingX}
-          showBorders
-          marginBottom={theme.spacing[2]}
-          onPress={() =>
-            (navigation as any).navigate('CommunityMembers', {
-              communityId: id,
-              title: community.name,
-              communityType: community.type,
-            })
-          }
-        />
-
-        {/* 7. Om Os Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>OM OS</Text>
-          <Text style={styles.aboutText} numberOfLines={4}>
-            {community.description || 'Ingen beskrivelse endnu.'}
-          </Text>
-          {locationLabel && <Text style={styles.locationText}>Område: {locationLabel}</Text>}
-        </View>
-
-        {/* 8. Kommende Events Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>KOMMENDE EVENTS</Text>
-          {nextFixture &&
-            renderEventCard({
-              type: 'match',
-              title: `${nextFixture.home_team} vs ${nextFixture.away_team}`,
-              dateIso: nextFixture.kickoff_at,
-              location: nextFixture.venue || nextFixture.venue_city,
-              onPress: () =>
-                (navigation as any).navigate('MatchDetails', { fixtureId: nextFixture.id }),
-            })}
-          {events.length > 0 &&
-            events.map((event) =>
-              renderEventCard({
-                type: 'event',
-                title: event.title,
-                dateIso: event.start_at,
-                location: event.location_name,
-                onPress: () => (navigation as any).navigate('EventDetails', { eventId: event.id }),
-              }),
-            )}
-          {!nextFixture && events.length === 0 && (
-            <Text style={styles.emptyText}>Ingen kommende aktiviteter endnu</Text>
-          )}
-        </View>
-
-        {/* 9. Feed Section */}
-        <View
-          style={styles.section}
-          onLayout={(event) => {
-            feedSectionYRef.current = event.nativeEvent.layout.y;
-            recomputeActiveVideoKey();
-          }}
-        >
-          <View style={styles.feedHeader}>
-            <Text style={styles.sectionTitle}>FÆLLESSKAB FEED</Text>
-            {isMember && (
-              <Pressable onPress={() => setShowMembers(!showMembers)}>
-                <Text style={styles.newPostLink}>Nyt opslag</Text>
-              </Pressable>
-            )}
-          </View>
-          {loadingCommunityFeed ? (
-            <ActivityIndicator size="small" />
-          ) : communityFeedItems.length > 0 ? (
-            communityFeedItems.map((item) => {
-              const key = getFeedItemKey(item);
-              const isVideoItem = getFeedItemVisibleMediaKind(item) === 'video';
-              const likeState = safeLikeMap[key] || { liked: false, likes: 0 };
-              const commentCount = safeCommentCountMap[key] || 0;
-              const commentPreviews = safeCommentPreviewMap[key] || [];
-
-              return (
-                <View
-                  key={key}
-                  onLayout={
-                    isVideoItem
-                      ? (event) => {
-                          feedCardLayoutsRef.current[key] = event.nativeEvent.layout;
-                          recomputeActiveVideoKey();
-                        }
-                      : undefined
-                  }
-                >
-                  <FeedItemRenderer
-                    item={item}
-                    itemKey={key}
-                    user={user}
-                    isAppAdmin={isAppAdmin}
-                    likeState={likeState}
-                    commentCount={commentCount}
-                    commentPreviews={commentPreviews}
-                    safeProfileMap={communityFeedProfileMap}
-                    communityMap={safeCommunityMap}
-                    // @ts-ignore
-                    attendanceMap={attendanceMap}
-                    toggleLike={toggleLike}
-                    removePost={removePost}
-                    removeNews={removeNews}
-                    incrementCommentCount={incrementCommentCount}
-                    addCommentPreview={addCommentPreview}
-                    isActiveVideo={isVideoItem && key === activeVideoKey}
+          {/* 3. Avatar - centered, overlapping hero */}
+          <View style={styles.avatarContainer}>
+            <View style={styles.avatarWrapper}>
+              {avatarUrl ? (
+                <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+              ) : (
+                <View style={styles.avatarPlaceholder}>
+                  <Ionicons
+                    name={community.type === 'fan_faction' ? 'star' : 'people-circle'}
+                    size={LAYOUT.avatarSize * 0.6}
+                    color={accentColor}
                   />
                 </View>
-              );
-            })
-          ) : (
-            <Text style={styles.emptyText}>Ingen opslag endnu</Text>
-          )}
-        </View>
+              )}
+            </View>
+          </View>
 
-        {/* Composer - Only for members */}
-        {isMember && (
-          <View style={styles.composerSection}>
+          {/* 4. Title */}
+          <View style={styles.titleSection}>
+            <View style={styles.titleRow}>
+              <Text style={styles.title}>{community.name}</Text>
+            </View>
+            <Text style={styles.tagline}>
+              {community.type === 'fan_faction' ? 'Den officielle fanklub' : 'Lokalt fællesskab'}
+            </Text>
+          </View>
+
+          {/* 5. CTA: Primary Button */}
+          <View style={styles.ctaContainer}>
             <Pressable
-              style={({ pressed }) => [styles.composerEntryCard, pressed && styles.composerEntryCardPressed]}
-              onPress={() => {
-                openCreateSheet({
-                  initialContentType: 'post',
-                  initialFeedTargets: [`community:${id}`],
-                  initialActor: user
-                    ? {
-                        type: 'user',
-                        id: user.id,
-                        name: resolveProfileDisplayName(profileMap, user.id, user.email || undefined),
-                      }
-                    : undefined,
-                });
-              }}
+              onPress={handleJoinLeave}
+              disabled={joining || !!effectiveRole}
+              style={({ pressed }) => [
+                styles.ctaButton,
+                effectiveRole && styles.ctaButtonDisabled,
+                pressed && !effectiveRole && styles.ctaButtonPressed,
+              ]}
             >
-              <View style={styles.composerEntryLeading}>
-                <Ionicons name="create-outline" size={18} color={accentColor} />
+              <View style={styles.ctaButtonContent}>
+                {!effectiveRole && (
+                  <Ionicons
+                    name="person-add"
+                    size={16}
+                    color={theme.components.button.variants.primary.text}
+                  />
+                )}
+                <Text style={[styles.ctaButtonText, effectiveRole && styles.ctaButtonTextDisabled]}>
+                  {joining
+                    ? 'Tilmelder...'
+                    : effectiveRole
+                      ? effectiveRole === 'member'
+                        ? 'Medlem'
+                        : 'Ejer'
+                      : 'Bliv medlem'}
+                </Text>
               </View>
-              <View style={styles.composerEntryBody}>
-                <Text style={styles.composerEntryTitle}>Hvad er på dit hjerte?</Text>
-                <Text style={styles.composerEntrySubtitle}>Opslå i {community.name}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={theme.colors.text.secondary} />
             </Pressable>
           </View>
-        )}
+
+          {/* 6. Members Row */}
+          <MembersStatRow
+            iconName="people"
+            label="Medlemmer"
+            valueText={`${memberCount} medlem${memberCount !== 1 ? 'mer' : ''}`}
+            avatars={members
+              .slice(0, 5)
+              .map((member) => resolveAvatarUrl(member.avatar_url))
+              .filter((url): url is string => !!url)}
+            actionText="Se alle"
+            horizontalPadding={LAYOUT.screenPaddingX}
+            showBorders
+            marginBottom={theme.spacing[2]}
+            onPress={() =>
+              (navigation as any).navigate('CommunityMembers', {
+                communityId: id,
+                title: community.name,
+                communityType: community.type,
+              })
+            }
+          />
+
+          {/* 7. Om Os Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>OM OS</Text>
+            <Text style={styles.aboutText} numberOfLines={4}>
+              {community.description || 'Ingen beskrivelse endnu.'}
+            </Text>
+            {locationLabel && <Text style={styles.locationText}>Område: {locationLabel}</Text>}
+          </View>
+
+          {/* 8. Kommende Events Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>KOMMENDE EVENTS</Text>
+            {nextFixture &&
+              renderEventCard({
+                type: 'match',
+                title: `${nextFixture.home_team} vs ${nextFixture.away_team}`,
+                dateIso: nextFixture.kickoff_at,
+                location: nextFixture.venue || nextFixture.venue_city,
+                onPress: () =>
+                  (navigation as any).navigate('MatchDetails', { fixtureId: nextFixture.id }),
+              })}
+            {events.length > 0 &&
+              events.map((event) =>
+                renderEventCard({
+                  type: 'event',
+                  title: event.title,
+                  dateIso: event.start_at,
+                  location: event.location_name,
+                  onPress: () =>
+                    (navigation as any).navigate('EventDetails', { eventId: event.id }),
+                }),
+              )}
+            {!nextFixture && events.length === 0 && (
+              <Text style={styles.emptyText}>Ingen kommende aktiviteter endnu</Text>
+            )}
+          </View>
+
+          {/* 9. Feed Section */}
+          <View
+            style={styles.section}
+            onLayout={(event) => {
+              feedSectionYRef.current = event.nativeEvent.layout.y;
+              recomputeActiveVideoKey();
+            }}
+          >
+            <View style={styles.feedHeader}>
+              <Text style={styles.sectionTitle}>FÆLLESSKAB FEED</Text>
+              {isMember && (
+                <Pressable onPress={() => setShowMembers(!showMembers)}>
+                  <Text style={styles.newPostLink}>Nyt opslag</Text>
+                </Pressable>
+              )}
+            </View>
+            {loadingCommunityFeed ? (
+              <ActivityIndicator size="small" />
+            ) : communityFeedItems.length > 0 ? (
+              communityFeedItems.map((item) => {
+                const key = getFeedItemKey(item);
+                const isVideoItem = getFeedItemVisibleMediaKind(item) === 'video';
+                const likeState = safeLikeMap[key] || { liked: false, likes: 0 };
+                const commentCount = safeCommentCountMap[key] || 0;
+                const commentPreviews = safeCommentPreviewMap[key] || [];
+
+                return (
+                  <View
+                    key={key}
+                    onLayout={
+                      isVideoItem
+                        ? (event) => {
+                            feedCardLayoutsRef.current[key] = event.nativeEvent.layout;
+                            recomputeActiveVideoKey();
+                          }
+                        : undefined
+                    }
+                  >
+                    <FeedItemRenderer
+                      item={item}
+                      itemKey={key}
+                      user={user}
+                      isAppAdmin={isAppAdmin}
+                      likeState={likeState}
+                      commentCount={commentCount}
+                      commentPreviews={commentPreviews}
+                      safeProfileMap={communityFeedProfileMap}
+                      communityMap={safeCommunityMap}
+                      // @ts-ignore
+                      attendanceMap={attendanceMap}
+                      toggleLike={toggleLike}
+                      removePost={removePost}
+                      removeNews={removeNews}
+                      incrementCommentCount={incrementCommentCount}
+                      addCommentPreview={addCommentPreview}
+                      isActiveVideo={isVideoItem && key === activeVideoKey}
+                    />
+                  </View>
+                );
+              })
+            ) : (
+              <Text style={styles.emptyText}>Ingen opslag endnu</Text>
+            )}
+          </View>
+
+          {/* Composer - Only for members */}
+          {isMember && (
+            <View style={styles.composerSection}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.composerEntryCard,
+                  pressed && styles.composerEntryCardPressed,
+                ]}
+                onPress={() => {
+                  openCreateSheet({
+                    initialContentType: 'post',
+                    initialFeedTargets: [`community:${id}`],
+                    initialActor: user
+                      ? {
+                          type: 'user',
+                          id: user.id,
+                          name: resolveProfileDisplayName(
+                            profileMap,
+                            user.id,
+                            user.email || undefined,
+                          ),
+                        }
+                      : undefined,
+                  });
+                }}
+              >
+                <View style={styles.composerEntryLeading}>
+                  <Ionicons name="create-outline" size={18} color={accentColor} />
+                </View>
+                <View style={styles.composerEntryBody}>
+                  <Text style={styles.composerEntryTitle}>Hvad er på dit hjerte?</Text>
+                  <Text style={styles.composerEntrySubtitle}>Opslå i {community.name}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={theme.colors.text.secondary} />
+              </Pressable>
+            </View>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -1324,11 +1339,7 @@ export default function CommunityDetailScreen() {
 
                 {community?.type === 'community' && (
                   <Pressable style={styles.editSheetAction} onPress={openFanFactionRequestModal}>
-                    <Ionicons
-                      name="flag-outline"
-                      size={20}
-                      color={theme.colors.text.primary}
-                    />
+                    <Ionicons name="flag-outline" size={20} color={theme.colors.text.primary} />
                     <Text style={styles.editSheetActionText}>
                       {pendingFanFactionRequest
                         ? 'Anmod om fanfraktion (Afventer)'
@@ -1341,10 +1352,7 @@ export default function CommunityDetailScreen() {
                   <>
                     <View style={styles.editSheetDivider} />
                     <Pressable
-                      style={[
-                        styles.editSheetAction,
-                        { opacity: deletingCommunity ? 0.6 : 1 },
-                      ]}
+                      style={[styles.editSheetAction, { opacity: deletingCommunity ? 0.6 : 1 }]}
                       onPress={handleDeleteCommunity}
                       disabled={deletingCommunity}
                     >
@@ -1353,7 +1361,9 @@ export default function CommunityDetailScreen() {
                         size={20}
                         color={theme.colors.state.error}
                       />
-                      <Text style={[styles.editSheetActionText, { color: theme.colors.state.error }]}>
+                      <Text
+                        style={[styles.editSheetActionText, { color: theme.colors.state.error }]}
+                      >
                         {deletingCommunity ? 'Sletter...' : 'Slet fællesskab'}
                       </Text>
                     </Pressable>
@@ -1416,7 +1426,9 @@ export default function CommunityDetailScreen() {
                     blurOnSubmit
                     onSubmitEditing={() => Keyboard.dismiss()}
                     editable={
-                      !submittingFanFactionRequest && !loadingFanFactionRequest && !pendingFanFactionRequest
+                      !submittingFanFactionRequest &&
+                      !loadingFanFactionRequest &&
+                      !pendingFanFactionRequest
                     }
                   />
 
@@ -1432,12 +1444,16 @@ export default function CommunityDetailScreen() {
                       style={[
                         styles.saveButton,
                         { backgroundColor: accentColor },
-                        (loadingFanFactionRequest || submittingFanFactionRequest || !!pendingFanFactionRequest) &&
+                        (loadingFanFactionRequest ||
+                          submittingFanFactionRequest ||
+                          !!pendingFanFactionRequest) &&
                           styles.disabledSaveButton,
                       ]}
                       onPress={handleSubmitFanFactionRequest}
                       disabled={
-                        loadingFanFactionRequest || submittingFanFactionRequest || !!pendingFanFactionRequest
+                        loadingFanFactionRequest ||
+                        submittingFanFactionRequest ||
+                        !!pendingFanFactionRequest
                       }
                     >
                       {submittingFanFactionRequest ? (
@@ -1530,40 +1546,40 @@ export default function CommunityDetailScreen() {
                   showsVerticalScrollIndicator={false}
                 >
                   <View style={styles.editSheet}>
-            <Text style={styles.editSheetTitle}>Redigér "Om os"</Text>
-            <TextInput
-              style={[styles.editInput, styles.editInputMultiline]}
-              value={editAboutText}
-              onChangeText={setEditAboutText}
-              placeholder="Beskrivelse af fællesskabet..."
-              placeholderTextColor={theme.colors.text.secondary}
-              multiline
-              numberOfLines={4}
-              editable={!savingAbout}
-            />
-            <View style={styles.messageModalActions}>
-              <Pressable
-                style={styles.cancelButton}
-                onPress={() => {
-                  setShowEditAbout(false);
-                  setEditAboutText('');
-                }}
-                disabled={savingAbout}
-              >
-                <Text style={styles.cancelButtonText}>Annuller</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.saveButton, { backgroundColor: accentColor }]}
-                onPress={handleSaveAbout}
-                disabled={savingAbout}
-              >
-                {savingAbout ? (
-                  <ActivityIndicator size="small" color={theme.colors.text.inverse} />
-                ) : (
-                  <Text style={styles.saveButtonText}>Gem</Text>
-                )}
-              </Pressable>
-            </View>
+                    <Text style={styles.editSheetTitle}>Redigér "Om os"</Text>
+                    <TextInput
+                      style={[styles.editInput, styles.editInputMultiline]}
+                      value={editAboutText}
+                      onChangeText={setEditAboutText}
+                      placeholder="Beskrivelse af fællesskabet..."
+                      placeholderTextColor={theme.colors.text.secondary}
+                      multiline
+                      numberOfLines={4}
+                      editable={!savingAbout}
+                    />
+                    <View style={styles.messageModalActions}>
+                      <Pressable
+                        style={styles.cancelButton}
+                        onPress={() => {
+                          setShowEditAbout(false);
+                          setEditAboutText('');
+                        }}
+                        disabled={savingAbout}
+                      >
+                        <Text style={styles.cancelButtonText}>Annuller</Text>
+                      </Pressable>
+                      <Pressable
+                        style={[styles.saveButton, { backgroundColor: accentColor }]}
+                        onPress={handleSaveAbout}
+                        disabled={savingAbout}
+                      >
+                        {savingAbout ? (
+                          <ActivityIndicator size="small" color={theme.colors.text.inverse} />
+                        ) : (
+                          <Text style={styles.saveButtonText}>Gem</Text>
+                        )}
+                      </Pressable>
+                    </View>
                   </View>
                 </ScrollView>
               </View>
@@ -1585,7 +1601,10 @@ export default function CommunityDetailScreen() {
             style={styles.modalFormRoot}
           >
             <View style={styles.editSheetOverlay}>
-              <Pressable style={styles.editSheetBackdrop} onPress={() => setShowEditLocation(false)} />
+              <Pressable
+                style={styles.editSheetBackdrop}
+                onPress={() => setShowEditLocation(false)}
+              />
               <ScrollView
                 style={styles.editSheetScrollContainer}
                 contentContainerStyle={[
@@ -1598,38 +1617,38 @@ export default function CommunityDetailScreen() {
                 showsVerticalScrollIndicator={false}
               >
                 <View style={styles.editSheet}>
-            <Text style={styles.editSheetTitle}>Redigér "Lokation"</Text>
-            <TextInput
-              style={styles.editInput}
-              value={editLocationText}
-              onChangeText={setEditLocationText}
-              placeholder="Område eller by..."
-              placeholderTextColor={theme.colors.text.secondary}
-              editable={!savingLocation}
-            />
-            <View style={styles.messageModalActions}>
-              <Pressable
-                style={styles.cancelButton}
-                onPress={() => {
-                  setShowEditLocation(false);
-                  setEditLocationText('');
-                }}
-                disabled={savingLocation}
-              >
-                <Text style={styles.cancelButtonText}>Annuller</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.saveButton, { backgroundColor: accentColor }]}
-                onPress={handleSaveLocation}
-                disabled={savingLocation}
-              >
-                {savingLocation ? (
-                  <ActivityIndicator size="small" color={theme.colors.text.inverse} />
-                ) : (
-                  <Text style={styles.saveButtonText}>Gem</Text>
-                )}
-              </Pressable>
-            </View>
+                  <Text style={styles.editSheetTitle}>Redigér "Lokation"</Text>
+                  <TextInput
+                    style={styles.editInput}
+                    value={editLocationText}
+                    onChangeText={setEditLocationText}
+                    placeholder="Område eller by..."
+                    placeholderTextColor={theme.colors.text.secondary}
+                    editable={!savingLocation}
+                  />
+                  <View style={styles.messageModalActions}>
+                    <Pressable
+                      style={styles.cancelButton}
+                      onPress={() => {
+                        setShowEditLocation(false);
+                        setEditLocationText('');
+                      }}
+                      disabled={savingLocation}
+                    >
+                      <Text style={styles.cancelButtonText}>Annuller</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.saveButton, { backgroundColor: accentColor }]}
+                      onPress={handleSaveLocation}
+                      disabled={savingLocation}
+                    >
+                      {savingLocation ? (
+                        <ActivityIndicator size="small" color={theme.colors.text.inverse} />
+                      ) : (
+                        <Text style={styles.saveButtonText}>Gem</Text>
+                      )}
+                    </Pressable>
+                  </View>
                 </View>
               </ScrollView>
             </View>

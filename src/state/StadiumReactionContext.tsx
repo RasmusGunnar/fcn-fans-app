@@ -20,6 +20,7 @@ import { createOrGetDirectConversation } from '../services/messagesApi';
 import { getLatestIncomingStadiumReaction, sendStadiumReaction } from '../services/stadiumLiveApi';
 import type { StadiumReaction } from '../types/stadiumLive';
 import { shouldShowIncomingStadiumReaction } from '../utils/stadiumLive';
+import { isDemoMode } from '../config/appMode';
 
 type StadiumReactionContextValue = {
   latestReaction: StadiumReaction | null;
@@ -51,6 +52,8 @@ export function StadiumReactionProvider({ children }: { children: React.ReactNod
 
   const reconcileLatest = useCallback(
     async (options?: { reactionId?: string; since?: string }) => {
+      if (isDemoMode) return;
+
       const requestedUserId = user?.id ?? null;
       if (!requestedUserId) return;
       const reaction = await getLatestIncomingStadiumReaction(requestedUserId, options);
@@ -63,7 +66,7 @@ export function StadiumReactionProvider({ children }: { children: React.ReactNod
     seenIdsRef.current.clear();
     setLatestReaction(null);
     setRevision(0);
-    if (!user?.id) return;
+    if (!user?.id || isDemoMode) return;
 
     const channel = supabase
       .channel(`stadium-reactions-${user.id}`)
@@ -93,6 +96,8 @@ export function StadiumReactionProvider({ children }: { children: React.ReactNod
   }, [reconcileLatest, user?.id]);
 
   useEffect(() => {
+    if (isDemoMode) return;
+
     let appState: AppStateStatus = AppState.currentState;
     const subscription = AppState.addEventListener('change', (nextState) => {
       const foregrounded =

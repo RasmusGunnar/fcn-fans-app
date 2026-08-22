@@ -34,6 +34,9 @@ import {
 } from '../services/fanActivities';
 import { formatDateDa } from '../services/fixtures';
 import { getMatchHeroUrl, getTeamHeroImage } from '../services/sportsdb';
+import { isDemoMode } from '../config/appMode';
+import { DEMO_MEDIA_FILES, demoMediaUrl } from '../demo/media';
+import { resolveDemoMediaAssetUri } from '../demo/mediaAssets';
 import { navigateToStadiumLive } from '../navigation/navigationRef';
 import { useMatchdayState } from '../state/MatchdayStateContext';
 import { spacing, useTheme } from '../theme';
@@ -368,9 +371,11 @@ export default function MatchDetailsScreen() {
     const data = await fetchFixtureById(fixtureId);
     if (data) {
       setFixture(data);
-      let hero = getMatchHeroUrl(data);
+      let hero = isDemoMode
+        ? resolveDemoMediaAssetUri(demoMediaUrl(DEMO_MEDIA_FILES.stand))
+        : getMatchHeroUrl(data);
       const homeTeamHeroId = data.home_team_provider_id ?? data.home_team_id ?? null;
-      if (!hero && homeTeamHeroId) {
+      if (!isDemoMode && !hero && homeTeamHeroId) {
         hero = await getTeamHeroImage(homeTeamHeroId);
       }
       setHeroUrl(hero);

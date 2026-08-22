@@ -1,5 +1,7 @@
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
+import { isDemoMode } from '../config/appMode';
+import { getDemoPollVotes, voteInDemoPoll } from '../demo/interactions';
 
 type PollVoteRow = {
   post_id: string;
@@ -22,6 +24,8 @@ export async function votePoll(postId: string, optionId: string): Promise<boolea
   if (!postId || !optionId) {
     return false;
   }
+
+  if (isDemoMode) return voteInDemoPoll(postId, optionId);
 
   const {
     data: { user },
@@ -57,6 +61,8 @@ export async function fetchPollVotes(postIds: string[]): Promise<PollVotesMap> {
   if (postIds.length === 0) {
     return {};
   }
+
+  if (isDemoMode) return getDemoPollVotes(postIds) as PollVotesMap;
 
   const { data, error } = await supabase
     .from('poll_votes')

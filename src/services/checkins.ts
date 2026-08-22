@@ -2,6 +2,9 @@ import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { resolveAvatarUrl } from '../utils/avatar';
 import { getStadiumLiveParticipants } from './stadiumLiveApi';
+import { isDemoMode } from '../config/appMode';
+import { getDemoParticipation, setDemoCheckedIn } from '../demo/interactions';
+import { DEMO_USERS } from '../demo/users';
 
 export type MatchCheckInParticipationState = 'checked_in' | 'eligible' | 'closed';
 
@@ -69,6 +72,25 @@ export async function fetchMatchCheckInSnapshot({
   matchId: string;
   currentUserId?: string;
 }): Promise<MatchCheckInSnapshot> {
+  if (isDemoMode) {
+    const participation = getDemoParticipation();
+    const profiles = DEMO_USERS.slice(0, 7).map((user) => ({
+      user_id: user.id,
+      display_name: user.displayName,
+      avatar_url: user.avatarUrl,
+    }));
+    return {
+      matchId,
+      countCheckedIn: 18,
+      avatars: [],
+      profiles,
+      userIds: profiles.map((profile) => profile.user_id),
+      isCheckedIn: participation.isCheckedIn,
+      stadiumLiveOpen: true,
+      canCheckIn: !participation.isCheckedIn,
+      currentUserParticipationState: participation.isCheckedIn ? 'checked_in' : 'eligible',
+    };
+  }
   const { data, error } = await supabase.rpc('get_match_checkin_snapshot', {
     p_match_id: matchId,
   });
@@ -84,6 +106,10 @@ export async function setMatchCheckInStatus({
   matchId: string;
   checkedIn: boolean;
 }): Promise<MatchCheckInSnapshot> {
+  if (isDemoMode) {
+    setDemoCheckedIn(checkedIn);
+    return fetchMatchCheckInSnapshot({ matchId });
+  }
   const { data, error } = await supabase.rpc('set_match_checkin_status', {
     p_match_id: matchId,
     p_checked_in: checkedIn,

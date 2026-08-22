@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
+import { isDemoMode } from '../config/appMode';
 
 export interface PushPreferences {
   repliesEnabled: boolean;
@@ -67,6 +68,7 @@ function isMissingPreferencesTable(error: { code?: string; message?: string } | 
 }
 
 export async function getPushPreferences(userId: string): Promise<PushPreferences> {
+  if (isDemoMode) return { ...DEFAULT_PUSH_PREFERENCES };
   try {
     const { data, error } = await supabase
       .from('push_preferences')
@@ -107,6 +109,9 @@ export async function savePushPreferences(
     >
   >,
 ): Promise<PushPreferences> {
+  if (isDemoMode) {
+    return { ...DEFAULT_PUSH_PREFERENCES, ...updates, updatedAt: new Date().toISOString() };
+  }
   const payload = {
     user_id: userId,
     ...(updates.repliesEnabled !== undefined ? { replies_enabled: updates.repliesEnabled } : {}),

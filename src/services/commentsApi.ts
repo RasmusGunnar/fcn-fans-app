@@ -1,5 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
+import { isDemoMode } from '../config/appMode';
+import { getDemoCommentById, toggleDemoCommentLike } from '../demo/interactions';
 
 export interface CommentLikeToggleInput {
   commentId: string;
@@ -99,6 +101,17 @@ export async function fetchCommentLikeStates(
   commentIds: string[],
   viewerUserId?: string,
 ): Promise<Map<string, CommentLikeState>> {
+  if (isDemoMode) {
+    return new Map(
+      commentIds.map((commentId) => {
+        const comment = getDemoCommentById(commentId);
+        return [
+          commentId,
+          { likeCount: comment?.like_count ?? 0, likedByMe: comment?.liked_by_me ?? false },
+        ];
+      }),
+    );
+  }
   return fetchCommentLikeStatesWithClient(supabase, commentIds, viewerUserId);
 }
 
@@ -173,6 +186,7 @@ export async function fetchCommentLikeStatesWithClient(
 export async function toggleCommentLike(
   input: CommentLikeToggleInput,
 ): Promise<CommentLikeToggleResult> {
+  if (isDemoMode) return { liked: toggleDemoCommentLike(input.commentId).liked };
   return toggleCommentLikeWithClient(supabase, input);
 }
 

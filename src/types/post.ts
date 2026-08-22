@@ -69,6 +69,7 @@ export interface Post {
   linkPreview?: LinkPreview | null;
   imageUri?: string;
   media?: {
+    demoVideoPreview?: boolean;
     bucket?: string;
     path?: string;
     thumbnail_bucket?: string;

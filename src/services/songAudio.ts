@@ -3,6 +3,7 @@ import * as Crypto from 'expo-crypto';
 import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
 import * as tus from 'tus-js-client';
+import { assertProductionWriteAllowed } from '../config/appMode';
 import { getPublicUrl } from '../lib/storageUrl';
 import { supabase, supabaseUrl } from '../lib/supabase';
 import {
@@ -125,6 +126,8 @@ export async function uploadSongAudio(
   file: SongAudioUploadCandidate,
   onProgress?: (progress: number) => void,
 ): Promise<SongAudioMetadata> {
+  assertProductionWriteAllowed('songAudio.uploadSongAudio');
+
   if (!isSongAudioStoragePath(file.storagePath)) {
     throw new SongAudioUploadError();
   }

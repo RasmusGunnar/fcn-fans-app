@@ -10,6 +10,7 @@ import {
   type MediaItem,
   type ResolvedMediaItem,
 } from './postMediaMapping';
+import { resolveDemoMediaAssetUri } from '../demo/mediaAssets';
 
 export {
   getMediaKind,
@@ -30,7 +31,8 @@ export {
  * @returns Resolved URL string, or null if no usable URL found
  */
 export function resolveMediaUrl(media: MediaItem | undefined): string | null {
-  return resolveMediaUrlWith(media, getPublicUrl);
+  const resolved = resolveMediaUrlWith(media, getPublicUrl);
+  return resolveDemoMediaAssetUri(resolved) ?? resolved;
 }
 
 export function resolveRenderableMedia(media: unknown): ResolvedMediaItem[] {
@@ -38,7 +40,8 @@ export function resolveRenderableMedia(media: unknown): ResolvedMediaItem[] {
 }
 
 export function resolveVideoThumbnailUrl(media: MediaItem | undefined): string | null {
-  return resolveVideoThumbnailUrlWith(media, getPublicUrl);
+  const resolved = resolveVideoThumbnailUrlWith(media, getPublicUrl);
+  return resolveDemoMediaAssetUri(resolved) ?? resolved;
 }
 
 /**

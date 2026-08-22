@@ -38,6 +38,8 @@ import {
   type CommentReplyRecord,
 } from '../../services/commentsApi';
 import type { CommentPreview } from '../../services/likesApi';
+import { isDemoMode } from '../../config/appMode';
+import { addDemoComment, getDemoComments, removeDemoComment } from '../../demo/interactions';
 
 export type CommentTargetType = 'post' | 'news' | 'event' | 'match' | 'bus_trip';
 
@@ -246,6 +248,22 @@ export function InlineComments({
     setError(null);
 
     try {
+      if (isDemoMode) {
+        const rows: CommentRecord[] = getDemoComments(targetType, targetId).map((comment) => ({
+          id: comment.id,
+          created_at: comment.created_at,
+          author_id: comment.author_id,
+          text: comment.text,
+          parent_id: comment.parent_id,
+          author_display_name: comment.author_display_name,
+          author_avatar_url: comment.author_avatar_url,
+          likeCount: comment.like_count,
+          likedByMe: comment.liked_by_me,
+        }));
+        setComments(groupComments(rows));
+        return;
+      }
+
       const { data, error: fetchError } = await supabase
         .from('comments_v2')
         .select('id, created_at, author_id, text, parent_id')
@@ -354,6 +372,34 @@ export function InlineComments({
     setSubmitting(true);
 
     try {
+      if (isDemoMode) {
+        const saved = addDemoComment({
+          targetType,
+          targetId,
+          authorId: currentUserId,
+          text: resolvedText,
+        });
+        const newComment: Comment = {
+          id: saved.id,
+          created_at: saved.created_at,
+          author_id: saved.author_id,
+          text: saved.text,
+          author_display_name: saved.author_display_name,
+          author_avatar_url: saved.author_avatar_url,
+          likeCount: 0,
+          likedByMe: false,
+          replies: [],
+        };
+        setComments((current) => [...current, newComment]);
+        if (!overrideText) {
+          setCommentText('');
+          setCommentSelection({ start: 0, end: 0 });
+          clearAutocomplete();
+        }
+        onNewComment?.(newComment);
+        return true;
+      }
+
       const { data, error: insertError } = await supabase
         .from('comments_v2')
         .insert({
@@ -489,6 +535,12 @@ export function InlineComments({
         style: 'destructive',
         onPress: async () => {
           try {
+            if (isDemoMode) {
+              removeDemoComment(commentId);
+              setComments((current) => current.filter((comment) => comment.id !== commentId));
+              return;
+            }
+
             const { error: deleteError } = await supabase
               .from('comments_v2')
               .delete()
@@ -622,6 +674,31 @@ export function InlineComments({
     handleCancelReply();
 
     try {
+      if (isDemoMode) {
+        const savedReply = addDemoComment({
+          targetType,
+          targetId,
+          authorId: currentUserId,
+          parentId: commentId,
+          text: optimisticReply.text,
+        });
+        setComments((current) =>
+          current.map((comment) =>
+            comment.id === commentId
+              ? {
+                  ...comment,
+                  replies: comment.replies.map((item) =>
+                    item.id === optimisticReply.id
+                      ? { ...item, id: savedReply.id, created_at: savedReply.created_at }
+                      : item,
+                  ),
+                }
+              : comment,
+          ),
+        );
+        return;
+      }
+
       const { data: savedReply, error: insertError } = await supabase
         .from('comments_v2')
         .insert({

@@ -9,6 +9,19 @@
       "distribution": "internal",
       "channel": "development"
     },
+    "demo": {
+      "distribution": "internal",
+      "channel": "demo",
+      "ios": {
+        "buildConfiguration": "Release"
+      },
+      "env": {
+        "EXPO_PUBLIC_APP_MODE": "demo",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://demo.invalid.local",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "demo-local-only",
+        "ORG_GRADLE_PROJECT_fcnDemoMode": "true"
+      }
+    },
     "preview": {
       "distribution": "internal",
       "ios": {

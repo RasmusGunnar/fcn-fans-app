@@ -1,5 +1,6 @@
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
+import { isDemoMode } from '../config/appMode';
 
 export type FanActivityRegistrationStatus =
   | 'pending_payment'
@@ -116,9 +117,12 @@ const EMPTY_SUMMARY: FanActivityRegistrationSummary = {
 };
 
 function isMissingRegistrationInfra(error: unknown): boolean {
-  const code = typeof error === 'object' && error !== null ? (error as { code?: string }).code : null;
+  const code =
+    typeof error === 'object' && error !== null ? (error as { code?: string }).code : null;
   const message =
-    typeof error === 'object' && error !== null ? String((error as { message?: string }).message ?? '') : '';
+    typeof error === 'object' && error !== null
+      ? String((error as { message?: string }).message ?? '')
+      : '';
 
   return (
     code === '42P01' ||
@@ -164,17 +168,17 @@ function toParticipant(row: FanActivityParticipantRow): FanActivityParticipant {
   };
 }
 
-function normalizeCommunity(
-  community?: CommunityRow | CommunityRow[] | null,
-): CommunityRow | null {
+function normalizeCommunity(community?: CommunityRow | CommunityRow[] | null): CommunityRow | null {
   if (!community) {
     return null;
   }
 
-  return Array.isArray(community) ? community[0] ?? null : community;
+  return Array.isArray(community) ? (community[0] ?? null) : community;
 }
 
-function toRegistrationListItem(row: FanActivityRegistrationListRow): FanActivityRegistrationListItem {
+function toRegistrationListItem(
+  row: FanActivityRegistrationListRow,
+): FanActivityRegistrationListItem {
   const base = toRegistration(row);
   const activity = row.fan_activities ?? null;
   const community = normalizeCommunity(activity?.communities ?? null);
@@ -189,22 +193,14 @@ function toRegistrationListItem(row: FanActivityRegistrationListRow): FanActivit
     communityName: community?.name ?? null,
     registrationPaymentMode: activity?.registration_payment_mode ?? null,
     registrationPriceDkk:
-      typeof activity?.registration_price_dkk === 'number'
-        ? activity.registration_price_dkk
-        : null,
+      typeof activity?.registration_price_dkk === 'number' ? activity.registration_price_dkk : null,
     registrationMobilepayInfo: activity?.registration_mobilepay_info ?? null,
     registrationPaymentInstructions: activity?.registration_payment_instructions ?? null,
   };
 }
 
 function normalizeActivityIds(activityIds: string[]): string[] {
-  return Array.from(
-    new Set(
-      activityIds
-        .map((value) => value.trim())
-        .filter(Boolean),
-    ),
-  );
+  return Array.from(new Set(activityIds.map((value) => value.trim()).filter(Boolean)));
 }
 
 async function callSingleRegistrationRpc(
@@ -380,10 +376,13 @@ export async function fetchFanActivityAdminRegistrations(
       throw profilesError;
     }
 
-    profileMap = ((profiles || []) as ProfileRow[]).reduce<Record<string, ProfileRow>>((acc, row) => {
-      acc[row.id] = row;
-      return acc;
-    }, {});
+    profileMap = ((profiles || []) as ProfileRow[]).reduce<Record<string, ProfileRow>>(
+      (acc, row) => {
+        acc[row.id] = row;
+        return acc;
+      },
+      {},
+    );
   }
 
   const statusOrder: Record<FanActivityRegistrationStatus, number> = {
@@ -445,7 +444,10 @@ export async function fetchPublicFanActivityParticipants(
   }
 }
 
-export async function fetchMyFanActivityRegistrations(): Promise<FanActivityRegistrationListItem[]> {
+export async function fetchMyFanActivityRegistrations(): Promise<
+  FanActivityRegistrationListItem[]
+> {
+  if (isDemoMode) return [];
   const {
     data: { user },
     error: userError,
@@ -470,7 +472,7 @@ export async function fetchMyFanActivityRegistrations(): Promise<FanActivityRegi
     throw error;
   }
 
-  return ((data || []) as FanActivityRegistrationListRow[]).map(toRegistrationListItem);
+  return ((data || []) as unknown as FanActivityRegistrationListRow[]).map(toRegistrationListItem);
 }
 
 export async function fetchMyFanActivityRegistrationDetail(
@@ -510,7 +512,7 @@ export async function fetchMyFanActivityRegistrationDetail(
     return null;
   }
 
-  return toRegistrationListItem(data as FanActivityRegistrationListRow);
+  return toRegistrationListItem(data as unknown as FanActivityRegistrationListRow);
 }
 
 export async function createFanActivityRegistration(

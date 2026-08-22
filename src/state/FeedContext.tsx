@@ -55,6 +55,9 @@ import { normalizeMedia } from '../utils/media';
 import { logPerformanceTiming, performanceNow } from '../utils/performanceTiming';
 import { POST_ENGAGEMENT_TARGET_TYPE } from '../utils/postEngagement';
 import { targetKey } from '../utils/targetKey';
+import { appMode, isDemoMode } from '../config/appMode';
+import { createDemoFeedSnapshot } from '../demo/feed';
+import { createMutationAdapter } from '../demo/interactions';
 
 type FeedProfileEntry = {
   display_name: string | null;
@@ -70,6 +73,10 @@ type EngagementCounts = {
 
 const FEED_POST_SELECT =
   'id, created_at, author_id, actor_type, actor_id, text, media, community_id, feed_targets, poll_data, link_preview, post_type';
+
+const feedMutationAdapter = createMutationAdapter(appMode, {
+  toggleLike: toggleLikeApi,
+});
 
 function mergeHomePostRowsById<T extends { id: string; created_at: string | null }>(
   rows: readonly T[],
@@ -601,6 +608,23 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     setError(null);
 
+    if (isDemoMode) {
+      const demo = createDemoFeedSnapshot();
+      setPosts(demo.posts);
+      setFeedItems(demo.feedItems);
+      setHomeFeedItems(demo.homeFeedItems);
+      setCommunityMap(demo.communityMap);
+      setProfileMap(demo.profileMap);
+      setLikeMap(demo.likeMap);
+      likeMapRef.current = demo.likeMap;
+      setCommentCountMap(demo.commentCountMap);
+      commentCountMapRef.current = demo.commentCountMap;
+      setCommentPreviewMap(demo.commentPreviewMap);
+      setAttendanceMap(demo.attendanceMap);
+      setLoading(false);
+      return;
+    }
+
     let transformedPosts: Post[] = [];
     let transformedHomePosts: Post[] = [];
     let newsItems: NewsItem[] = [];
@@ -830,20 +854,17 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       });
 
       const postIds = [
-        ...new Set(
-          [...transformedPosts, ...transformedHomePosts].map((post) => post.id),
-        ),
+        ...new Set([...transformedPosts, ...transformedHomePosts].map((post) => post.id)),
       ];
       const postEngagementStartedAt = performanceNow();
-      postEngagementCountsTask = fetchEngagementCounts(
-        POST_ENGAGEMENT_TARGET_TYPE,
-        postIds,
-      ).then((counts) => {
-        publishEngagementCounts(counts, false);
-        logPerformanceTiming('FeedFetch', 'post-engagement-counts', postEngagementStartedAt, {
-          targetCount: postIds.length,
-        });
-      });
+      postEngagementCountsTask = fetchEngagementCounts(POST_ENGAGEMENT_TARGET_TYPE, postIds).then(
+        (counts) => {
+          publishEngagementCounts(counts, false);
+          logPerformanceTiming('FeedFetch', 'post-engagement-counts', postEngagementStartedAt, {
+            targetCount: postIds.length,
+          });
+        },
+      );
 
       // Fetch author profiles for all posts and keep the current viewer profile available
       // so optimistic post inserts retain display name, avatar, and fan level in Home.
@@ -967,9 +988,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       baseDate,
     );
     const corePublicationStartedAt = performanceNow();
-    setFeedItems((previousItems) =>
-      reconcileFeedItemIdentities(previousItems, coreFeedItems),
-    );
+    setFeedItems((previousItems) => reconcileFeedItemIdentities(previousItems, coreFeedItems));
     setHomeFeedItems((previousItems) =>
       reconcileFeedItemIdentities(previousItems, coreHomeFeedItems),
     );
@@ -996,9 +1015,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
     logHomeFeedSnapshot('core', coreHomeFeedItems, baseDate);
 
     const corePostIds = [
-      ...new Set(
-        [...transformedPosts, ...transformedHomePosts].map((post) => post.id),
-      ),
+      ...new Set([...transformedPosts, ...transformedHomePosts].map((post) => post.id)),
     ];
     const coreNewsIds = newsItems.map((newsItem) => newsItem.id);
     const coreEventIds = upcomingEvents.map((event) => event.id);
@@ -1044,10 +1061,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       publishCommentPreviews(Object.assign({}, ...previewMaps));
       logPerformanceTiming('FeedFetch', 'engagement-previews', previewsStartedAt, {
         targetCount:
-          corePostIds.length +
-          coreNewsIds.length +
-          coreEventIds.length +
-          coreBusTripIds.length,
+          corePostIds.length + coreNewsIds.length + coreEventIds.length + coreBusTripIds.length,
         blocksMixedFeedPublication: false,
       });
     })();
@@ -1163,19 +1177,14 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (
-      communityFeedEntries.length > 0 ||
-      Object.keys(resolvedCommunityNames).length > 0
-    ) {
+    if (communityFeedEntries.length > 0 || Object.keys(resolvedCommunityNames).length > 0) {
       const recentCommunityMap: Record<string, string> = {
         ...resolvedCommunityNames,
       };
       communityFeedEntries.forEach((community) => {
         recentCommunityMap[community.community_id] = community.name;
       });
-      setCommunityMap((previousMap) =>
-        mergeCommunityNames(previousMap, recentCommunityMap),
-      );
+      setCommunityMap((previousMap) => mergeCommunityNames(previousMap, recentCommunityMap));
     }
 
     // Fetch event-like Home sources separately from posts/news.
@@ -1340,11 +1349,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
 
       const mergedLikeMap = likeMapRef.current;
       const rankedHomeFeedItems = sortHomeFeedItems(
-        withFeedEngagementSummary(
-          nextHomeFeedItems,
-          mergedLikeMap,
-          commentCountMapRef.current,
-        ),
+        withFeedEngagementSummary(nextHomeFeedItems, mergedLikeMap, commentCountMapRef.current),
         baseDate,
       );
       logPerformanceTiming('FeedItemsReady', 'mixed-feed-engagement-applied', fetchStartedAt, {
@@ -1647,7 +1652,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
 
       // Persist to DB
       try {
-        const success = await toggleLikeApi(kind, id, userId, currentState.liked);
+        const success = await feedMutationAdapter.toggleLike(kind, id, userId, currentState.liked);
         if (!success) {
           logger.warn('[toggleLike failed]', { targetType: kind, targetId: id, error: 'unknown' });
           // Revert on failure
@@ -1784,13 +1789,7 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
     });
   }, [contextValue, providerRenderStartedAt]);
 
-  return (
-    <FeedContext.Provider
-      value={contextValue}
-    >
-      {children}
-    </FeedContext.Provider>
-  );
+  return <FeedContext.Provider value={contextValue}>{children}</FeedContext.Provider>;
 }
 
 export function useFeed() {

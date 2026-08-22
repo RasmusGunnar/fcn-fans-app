@@ -12,6 +12,7 @@ import {
   getRuntimePerformanceStartedAt,
   logPerformanceTiming,
 } from './src/utils/performanceTiming';
+import { isDemoMode } from './src/config/appMode';
 
 const runtimeStartedAt = getRuntimePerformanceStartedAt();
 logPerformanceTiming('Startup', 'app-module-evaluated', runtimeStartedAt);
@@ -29,7 +30,7 @@ export default function App() {
             <MatchdayStateProvider>
               <StadiumReactionProvider>
                 <FeedProvider>
-                  <PushNotificationsBootstrap />
+                  {!isDemoMode ? <PushNotificationsBootstrap /> : null}
                   <RootNavigator />
                 </FeedProvider>
               </StadiumReactionProvider>

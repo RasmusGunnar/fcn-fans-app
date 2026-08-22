@@ -14,6 +14,7 @@ import {
   syncAppIconBadge,
 } from '../services/notificationsApi';
 import { supabase } from '../lib/supabase';
+import { isDemoMode } from '../config/appMode';
 
 type NotificationUnreadContextValue = {
   unreadCount: number;
@@ -37,6 +38,11 @@ export function NotificationUnreadProvider({ children }: { children: React.React
   }, []);
 
   const refreshUnreadCount = useCallback(async (): Promise<number> => {
+    if (isDemoMode) {
+      publishUnreadCount(0);
+      return 0;
+    }
+
     const requestedUserId = user?.id ?? null;
     if (!requestedUserId) {
       publishUnreadCount(0);
@@ -56,6 +62,8 @@ export function NotificationUnreadProvider({ children }: { children: React.React
   }, [publishUnreadCount, user?.id]);
 
   useEffect(() => {
+    if (isDemoMode) return;
+
     if (!user?.id) {
       publishUnreadCount(0);
       void clearAppIconBadge();
@@ -66,7 +74,7 @@ export function NotificationUnreadProvider({ children }: { children: React.React
   }, [publishUnreadCount, refreshUnreadCount, user?.id]);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id || isDemoMode) return;
 
     const channel = supabase
       .channel(`notification-unread-${user.id}`)

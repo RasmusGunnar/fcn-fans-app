@@ -1,12 +1,22 @@
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
-import { fetchCommentCounts, fetchCommentPreviews, fetchLikeStates, fetchMyLikedIds, type CommentPreview } from './likesApi';
+import {
+  fetchCommentCounts,
+  fetchCommentPreviews,
+  fetchLikeStates,
+  fetchMyLikedIds,
+  type CommentPreview,
+} from './likesApi';
 import type { FanLevelKey } from '../types/fan';
 import { normalizePostType, type Post } from '../types/post';
 import { resolveAvatarUrl } from '../utils/avatar';
 import { normalizeLinkPreview } from '../utils/linkPreview';
 import { normalizeMedia } from '../utils/media';
 import { POST_ENGAGEMENT_TARGET_TYPE } from '../utils/postEngagement';
+import { isDemoMode } from '../config/appMode';
+import { DEMO_POSTS, getDemoCommentPreviews } from '../demo/posts';
+import { getDemoLikeState } from '../demo/interactions';
+import { DEMO_PROFILE_MAP } from '../demo/users';
 
 type PostAuthorProfile = {
   display_name: string | null;
@@ -59,14 +69,16 @@ function readStringArray(value: unknown): string[] {
     return [];
   }
 
-  return value
-    .map((entry) => readString(entry))
-    .filter((entry): entry is string => Boolean(entry));
+  return value.map((entry) => readString(entry)).filter((entry): entry is string => Boolean(entry));
 }
 
 async function fetchProfileById(userId: string): Promise<PostAuthorProfile | null> {
   for (const select of PROFILE_SELECT_ATTEMPTS) {
-    const { data, error } = await supabase.from('profiles').select(select).eq('id', userId).maybeSingle();
+    const { data, error } = await supabase
+      .from('profiles')
+      .select(select)
+      .eq('id', userId)
+      .maybeSingle();
 
     if (error) {
       logger.warn('[postsApi] profile lookup failed for select', { select, error });
@@ -83,7 +95,9 @@ async function fetchProfileById(userId: string): Promise<PostAuthorProfile | nul
       display_name: readString(profile.display_name),
       username: 'username' in profile ? readString(profile.username) : null,
       avatar_url: readString(profile.avatar_url),
-      fan_level_key: ('fan_level_key' in profile ? readString(profile.fan_level_key) : null) as FanLevelKey | null,
+      fan_level_key: ('fan_level_key' in profile
+        ? readString(profile.fan_level_key)
+        : null) as FanLevelKey | null,
     };
   }
 
@@ -124,6 +138,23 @@ export async function fetchPostDetailById(
     return null;
   }
 
+  if (isDemoMode) {
+    const post = DEMO_POSTS.find((item) => item.id === normalizedPostId);
+    if (!post) return null;
+    const authorProfile = post.authorId ? (DEMO_PROFILE_MAP[post.authorId] ?? null) : null;
+    const likeState = getDemoLikeState('post', post.id);
+    return {
+      post: { ...post, likedByMe: likeState.liked, likesCount: likeState.likes },
+      authorProfile,
+      engagement: {
+        liked: likeState.liked,
+        likes: likeState.likes,
+        commentsCount: post.commentsCount,
+        commentPreviews: getDemoCommentPreviews('post', post.id),
+      },
+    };
+  }
+
   const { data, error } = await supabase
     .from('posts')
     .select(
@@ -144,20 +175,26 @@ export async function fetchPostDetailById(
   const authorProfilePromise = fetchProfileById(row.author_id);
   const communityIdentityId =
     readString(row.actor_type) === 'community'
-      ? readString(row.actor_id) ?? readString(row.community_id)
+      ? (readString(row.actor_id) ?? readString(row.community_id))
       : readString(row.community_id);
 
-  const [authorProfile, communityIdentity, likeStateMap, commentCountMap, commentPreviewMap, likedIds] =
-    await Promise.all([
-      authorProfilePromise,
-      fetchCommunityIdentity(communityIdentityId),
-      fetchLikeStates(POST_ENGAGEMENT_TARGET_TYPE, [normalizedPostId]),
-      fetchCommentCounts(POST_ENGAGEMENT_TARGET_TYPE, [normalizedPostId]),
-      fetchCommentPreviews(POST_ENGAGEMENT_TARGET_TYPE, [normalizedPostId]),
-      currentUserId
-        ? fetchMyLikedIds(currentUserId, POST_ENGAGEMENT_TARGET_TYPE, [normalizedPostId])
-        : Promise.resolve(new Set<string>()),
-    ]);
+  const [
+    authorProfile,
+    communityIdentity,
+    likeStateMap,
+    commentCountMap,
+    commentPreviewMap,
+    likedIds,
+  ] = await Promise.all([
+    authorProfilePromise,
+    fetchCommunityIdentity(communityIdentityId),
+    fetchLikeStates(POST_ENGAGEMENT_TARGET_TYPE, [normalizedPostId]),
+    fetchCommentCounts(POST_ENGAGEMENT_TARGET_TYPE, [normalizedPostId]),
+    fetchCommentPreviews(POST_ENGAGEMENT_TARGET_TYPE, [normalizedPostId]),
+    currentUserId
+      ? fetchMyLikedIds(currentUserId, POST_ENGAGEMENT_TARGET_TYPE, [normalizedPostId])
+      : Promise.resolve(new Set<string>()),
+  ]);
 
   const displayName = authorProfile?.display_name?.trim() || 'Fan';
   const actorType = readString(row.actor_type) === 'community' ? 'community' : 'user';
@@ -178,7 +215,10 @@ export async function fetchPostDetailById(
     authorFanLevelKey: authorProfile?.fan_level_key ?? null,
     actorType,
     actorId,
-    actorDisplayName: actorType === 'community' ? communityIdentity.name : authorProfile?.display_name ?? displayName,
+    actorDisplayName:
+      actorType === 'community'
+        ? communityIdentity.name
+        : (authorProfile?.display_name ?? displayName),
     actorAvatarUrl: actorType === 'community' ? communityIdentity.avatarUrl : null,
     communityName: communityIdentity.name ?? undefined,
     communityId: readString(row.community_id),

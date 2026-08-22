@@ -30,4 +30,7 @@ android/
 !modules/incoming-share/android/
 !modules/incoming-share/android/**
 
+# Keep native module source, but ignore its generated Gradle output.
+/modules/incoming-share/android/build/
+
 Udkast/

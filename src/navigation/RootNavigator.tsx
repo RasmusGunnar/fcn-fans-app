@@ -20,6 +20,7 @@ import {
 } from '../utils/performanceTiming';
 import { AppTabs } from './AppTabs';
 import { useIncomingShare } from '../state/IncomingShareContext';
+import { isDemoMode } from '../config/appMode';
 
 const Stack = createNativeStackNavigator();
 const AuthStack = React.lazy(() =>
@@ -121,7 +122,7 @@ function Inner() {
   }, [loadProfile]);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id || isDemoMode) return;
 
     const channel = supabase
       .channel(`profile-changes-${user.id}`)

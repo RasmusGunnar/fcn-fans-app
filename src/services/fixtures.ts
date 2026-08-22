@@ -1,6 +1,8 @@
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { fixEncoding } from '../utils/fixEncoding';
+import { isDemoMode } from '../config/appMode';
+import { DEMO_PRIMARY_FIXTURE, DEMO_SECOND_FIXTURE } from '../demo/matches';
 
 export interface Fixture {
   id: string;
@@ -124,10 +126,10 @@ function compareFixturesByKickoffAsc(a: Fixture, b: Fixture): number {
 function isFixtureDataComplete(fixture: Fixture): boolean {
   return Boolean(
     fixture.id &&
-      fixture.home_team &&
-      fixture.away_team &&
-      fixture.kickoff_at &&
-      toKickoffTimestamp(fixture.kickoff_at) > 0,
+    fixture.home_team &&
+    fixture.away_team &&
+    fixture.kickoff_at &&
+    toKickoffTimestamp(fixture.kickoff_at) > 0,
   );
 }
 
@@ -203,8 +205,7 @@ function normalizeFixture(row: FixtureRow): Fixture | null {
   return {
     id,
     provider: readString(row.provider) ?? 'unknown',
-    provider_fixture_id:
-      readString(row.provider_fixture_id) ?? readString(row.external_id) ?? id,
+    provider_fixture_id: readString(row.provider_fixture_id) ?? readString(row.external_id) ?? id,
     kickoff_at: kickoffAt,
     end_time: readString(row.end_time) ?? readString(raw?.end_time) ?? readString(raw?.endTime),
     competition: readString(row.competition),
@@ -373,6 +374,7 @@ export function selectPrimaryFixture(fixtures: Fixture[], now = new Date()): Fix
 }
 
 export async function fetchUpcomingFcntFixtures(limit = 30): Promise<Fixture[]> {
+  if (isDemoMode) return [DEMO_PRIMARY_FIXTURE, DEMO_SECOND_FIXTURE].slice(0, limit);
   try {
     return await fetchBestUpcomingFixtures(limit);
   } catch (err) {
@@ -382,6 +384,7 @@ export async function fetchUpcomingFcntFixtures(limit = 30): Promise<Fixture[]> 
 }
 
 export async function fetchUpcomingFixtures(limitCount = 50): Promise<Fixture[]> {
+  if (isDemoMode) return [DEMO_PRIMARY_FIXTURE, DEMO_SECOND_FIXTURE].slice(0, limitCount);
   try {
     return await fetchBestUpcomingFixtures(limitCount);
   } catch (err) {
@@ -391,6 +394,7 @@ export async function fetchUpcomingFixtures(limitCount = 50): Promise<Fixture[]>
 }
 
 export async function fetchPrimaryFixture(): Promise<Fixture | null> {
+  if (isDemoMode) return { ...DEMO_PRIMARY_FIXTURE };
   try {
     const fixtures = await fetchBestRelevantFixtures(NEXT_FIXTURE_LOOKAHEAD_LIMIT);
     return selectPrimaryFixture(fixtures);
@@ -401,6 +405,7 @@ export async function fetchPrimaryFixture(): Promise<Fixture | null> {
 }
 
 export async function fetchNextFixture(): Promise<Fixture | null> {
+  if (isDemoMode) return { ...DEMO_PRIMARY_FIXTURE };
   try {
     const fixtures = await fetchBestUpcomingFixtures(NEXT_FIXTURE_LOOKAHEAD_LIMIT);
     return selectNextFixture(fixtures);

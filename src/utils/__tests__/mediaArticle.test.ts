@@ -217,7 +217,14 @@ test('FanPostCard renders post body only when trimmed text exists', () => {
   assert.match(source, /\) : bodyText\.length > 0 \? \(/);
   assert.match(
     source,
-    /<Text variant="body" color="primary" style=\{styles\.text\}>[\s\S]*?\{bodyText\}[\s\S]*?<\/Text>/,
+    /<Text\s+variant="body"\s+color="primary"\s+style=\{styles\.bodyText\}[\s\S]*?>\s*\{renderBodyTextSegments\(\)\}\s*<\/Text>/,
   );
-  assert.match(source, /text:\s*\{[\s\S]*?marginBottom: theme\.spacing\[3\]/);
+  assert.match(
+    source,
+    /const renderBodyTextSegments = useCallback\([\s\S]*?bodySegments\.map\(\(segment, index\) =>[\s\S]*?segment\.type === 'url'/,
+  );
+  assert.match(
+    source,
+    /bodyTextContainer:\s*\{[\s\S]*?marginBottom: theme\.spacing\[3\]/,
+  );
 });

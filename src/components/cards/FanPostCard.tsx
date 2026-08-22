@@ -639,6 +639,16 @@ export function FanPostCard({
                 setImageLoadError(true);
               }}
             />
+            {firstMedia?.demoVideoPreview ? (
+              <View style={styles.demoVideoOverlay} pointerEvents="none">
+                <View style={styles.demoVideoPlayButton}>
+                  <Ionicons name="play" size={theme.spacing[6]} color={theme.colors.text.inverse} />
+                </View>
+                <Text variant="caption" style={styles.demoVideoLabel}>
+                  VIDEO
+                </Text>
+              </View>
+            ) : null}
           </Pressable>
         </CardMedia>
       ) : imageLoadError && __DEV__ ? (
@@ -708,6 +718,26 @@ const styles = StyleSheet.create({
   mediaImagePressable: {
     width: '100%',
     height: '100%',
+  },
+  demoVideoOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.overlay.medium,
+  },
+  demoVideoPlayButton: {
+    width: theme.spacing[14],
+    height: theme.spacing[14],
+    borderRadius: theme.radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.overlay.heavy,
+  },
+  demoVideoLabel: {
+    marginTop: theme.spacing[2],
+    color: theme.colors.text.inverse,
+    fontWeight: '800',
+    letterSpacing: 1,
   },
   videoPosterFallback: {
     width: '100%',

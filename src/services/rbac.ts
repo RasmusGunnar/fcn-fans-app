@@ -10,6 +10,8 @@
 
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
+import { isDemoMode } from '../config/appMode';
+import { DEMO_COMMUNITIES, DEMO_COMMUNITY_ROLE_MAP } from '../demo/communities';
 
 export const WILD_TIGERS_COMMUNITY_NAME = 'Wild Tigers';
 
@@ -22,6 +24,7 @@ function normalizeCommunityName(name: string | null | undefined): string {
  * System admins have full access to all resources
  */
 export async function isSystemAdmin(): Promise<boolean> {
+  if (isDemoMode) return false;
   try {
     const {
       data: { user },
@@ -54,6 +57,7 @@ export async function isSystemAdmin(): Promise<boolean> {
  * Returns a map of community_id -> role
  */
 export async function getMyCommunityRoles(): Promise<Record<string, 'owner' | 'admin' | 'member'>> {
+  if (isDemoMode) return { ...DEMO_COMMUNITY_ROLE_MAP };
   try {
     const {
       data: { user },
@@ -92,6 +96,12 @@ export async function getMyCommunityRoles(): Promise<Record<string, 'owner' | 'a
 export async function getMyCommunityRoleByName(
   communityName: string,
 ): Promise<'owner' | 'admin' | 'member' | null> {
+  if (isDemoMode) {
+    const community = DEMO_COMMUNITIES.find(
+      (item) => normalizeCommunityName(item.name) === normalizeCommunityName(communityName),
+    );
+    return community ? (DEMO_COMMUNITY_ROLE_MAP[community.id] ?? null) : null;
+  }
   try {
     const roleMap = await getMyCommunityRoles();
     const communityIds = Object.keys(roleMap);
@@ -115,7 +125,7 @@ export async function getMyCommunityRoleByName(
       (community) => normalizeCommunityName(community.name) === normalizedTargetName,
     );
 
-    return matchedCommunity ? roleMap[matchedCommunity.id] ?? null : null;
+    return matchedCommunity ? (roleMap[matchedCommunity.id] ?? null) : null;
   } catch (err) {
     logger.error('Error in getMyCommunityRoleByName:', err);
     return null;

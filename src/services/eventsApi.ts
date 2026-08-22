@@ -1,6 +1,13 @@
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { getMatchHeroUrl, getTeamHeroImage } from './sportsdb';
+import { isDemoMode } from '../config/appMode';
+import {
+  DEMO_BUS_TRIP,
+  DEMO_EVENT,
+  DEMO_PRIMARY_FIXTURE,
+  DEMO_SECOND_FIXTURE,
+} from '../demo/matches';
 
 // ===== TYPES =====
 
@@ -180,6 +187,7 @@ export type FeedItem =
  * Fetch upcoming fixtures (matches) from Supabase
  */
 export async function fetchMatchesUpcoming(limit = 20): Promise<Fixture[]> {
+  if (isDemoMode) return [DEMO_PRIMARY_FIXTURE, DEMO_SECOND_FIXTURE].slice(0, limit);
   try {
     const { data, error } = await runFixtureQuery({
       table: FCN_FIXTURES_VIEW,
@@ -216,6 +224,7 @@ export async function fetchMatchesUpcoming(limit = 20): Promise<Fixture[]> {
  * Fetch recent fixtures (matches) from Supabase
  */
 export async function fetchMatchesRecent(limit = 10): Promise<Fixture[]> {
+  if (isDemoMode) return [];
   try {
     const { data, error } = await runFixtureQuery({
       table: FCN_FIXTURES_VIEW,
@@ -252,6 +261,7 @@ export async function fetchMatchesRecent(limit = 10): Promise<Fixture[]> {
  * Fetch upcoming bus trips from Supabase (simplified - no joins)
  */
 export async function fetchBusTripsUpcoming(limit = 20): Promise<BusTrip[]> {
+  if (isDemoMode) return [DEMO_BUS_TRIP].slice(0, limit);
   try {
     const { data, error } = await supabase
       .from('bus_trips')
@@ -280,6 +290,10 @@ export async function fetchBusTripsUpcoming(limit = 20): Promise<BusTrip[]> {
  * Includes a 2-hour lookback so events that just started still appear.
  */
 export async function fetchEventsUpcoming(limit = 20, communityId?: string): Promise<Event[]> {
+  if (isDemoMode) {
+    const events = communityId && DEMO_EVENT.organizer_group_id !== communityId ? [] : [DEMO_EVENT];
+    return events.slice(0, limit);
+  }
   const cutoff = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(); // now − 2 h
 
   try {
@@ -351,16 +365,18 @@ export async function fetchFeedUpcoming(): Promise<FeedItem[]> {
     }));
 
     // Enrich: for matches without a heroUrl, try the team API (cached per session)
-    await Promise.all(
-      matchItems.map(async (item) => {
-        if (item.kind !== 'match') return;
-        if (item.heroUrl) return;
-        const pid = item.homeTeamProviderId;
-        if (!pid) return;
-        const teamHero = await getTeamHeroImage(pid);
-        if (teamHero) (item as any).heroUrl = teamHero;
-      }),
-    );
+    if (!isDemoMode) {
+      await Promise.all(
+        matchItems.map(async (item) => {
+          if (item.kind !== 'match') return;
+          if (item.heroUrl) return;
+          const pid = item.homeTeamProviderId;
+          if (!pid) return;
+          const teamHero = await getTeamHeroImage(pid);
+          if (teamHero) (item as any).heroUrl = teamHero;
+        }),
+      );
+    }
 
     const busTripItems: FeedItem[] = busTrips.map((bt) => {
       const fix = (bt as any).fixtures as {
@@ -426,6 +442,7 @@ export async function fetchFeedUpcoming(): Promise<FeedItem[]> {
  * Fetch single bus trip by ID (with organizer and fixture)
  */
 export async function fetchBusTripById(id: string): Promise<BusTrip | null> {
+  if (isDemoMode) return id === DEMO_BUS_TRIP.id ? { ...DEMO_BUS_TRIP } : null;
   try {
     logger.log('[eventsApi] Fetching bus trip by id:', id);
     const { data, error } = await supabase.from('bus_trips').select('*').eq('id', id).single();
@@ -484,6 +501,7 @@ async function fetchEventOrganizer(event: Event): Promise<FanGroup | null> {
  * Fetch single event by ID (with organizer)
  */
 export async function fetchEventById(id: string): Promise<Event | null> {
+  if (isDemoMode) return id === DEMO_EVENT.id ? { ...DEMO_EVENT } : null;
   try {
     logger.log('[eventsApi] Fetching event by id:', id);
     const { data, error } = await supabase.from('events').select('*').eq('id', id).single();
@@ -506,6 +524,10 @@ export async function fetchEventById(id: string): Promise<Event | null> {
  * Fetch single fixture by ID
  */
 export async function fetchFixtureById(id: string): Promise<Fixture | null> {
+  if (isDemoMode) {
+    const fixture = [DEMO_PRIMARY_FIXTURE, DEMO_SECOND_FIXTURE].find((item) => item.id === id);
+    return fixture ? { ...fixture } : null;
+  }
   try {
     const { data, error } = await supabase
       .from(FCN_FIXTURES_VIEW)

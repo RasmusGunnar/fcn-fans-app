@@ -7,6 +7,8 @@ import { logger } from '../lib/logger';
 import { clearAppIconBadge } from '../services/notificationsApi';
 import { isSystemAdmin } from '../services/rbac';
 import { logPerformanceTiming, performanceNow } from '../utils/performanceTiming';
+import { isDemoMode } from '../config/appMode';
+import { DEMO_AUTH_SESSION, DEMO_AUTH_USER } from '../demo/users';
 
 type User = any;
 type Session = any;
@@ -63,13 +65,18 @@ function getFriendlyAuthErrorMessage(error: unknown): string {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(isDemoMode ? DEMO_AUTH_USER : null);
+  const [session, setSession] = useState<Session | null>(isDemoMode ? DEMO_AUTH_SESSION : null);
+  const [loading, setLoading] = useState(!isDemoMode);
   const [isAppAdmin, setIsAppAdmin] = useState(false);
 
   // Check if user is app admin via RPC (to avoid RLS issues)
   useEffect(() => {
+    if (isDemoMode) {
+      setIsAppAdmin(false);
+      return;
+    }
+
     let mounted = true;
 
     const checkAdminStatus = async (userId: string) => {
@@ -114,6 +121,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user?.id]);
 
   useEffect(() => {
+    if (isDemoMode) {
+      setSession(DEMO_AUTH_SESSION);
+      setUser(DEMO_AUTH_USER);
+      setLoading(false);
+      return;
+    }
+
     let mounted = true;
     const sessionStartedAt = performanceNow();
 
@@ -150,6 +164,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signInWithOtp = async (email: string) => {
+    if (isDemoMode) return;
     setLoading(true);
     try {
       const { error } = await supabase.auth.signInWithOtp({ email });
@@ -163,6 +178,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signInWithPassword = async (email: string, password: string) => {
+    if (isDemoMode) return { user: DEMO_AUTH_USER, session: DEMO_AUTH_SESSION };
     setLoading(true);
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -180,6 +196,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUp = async (email: string, password: string) => {
+    if (isDemoMode) return { user: DEMO_AUTH_USER, session: DEMO_AUTH_SESSION };
     setLoading(true);
     try {
       const { data, error } = await supabase.auth.signUp({
@@ -212,6 +229,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const verifyOtp = async (email: string, token: string) => {
+    if (isDemoMode) return;
     setLoading(true);
     try {
       const { error } = await supabase.auth.verifyOtp({ email, token, type: 'email' } as any);
@@ -225,6 +243,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signInWithApple = async () => {
+    if (isDemoMode) return;
     setLoading(true);
     try {
       const AppleAuthentication = await import('expo-apple-authentication');
@@ -271,6 +290,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    if (isDemoMode) return;
     setLoading(true);
     try {
       if (user?.id) {

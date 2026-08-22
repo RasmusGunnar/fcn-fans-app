@@ -12,6 +12,13 @@ import type {
 } from '../types/discussion';
 import type { LinkPreview } from '../types/news';
 import { extractPrimaryUrl, groupDiscussionReplies } from '../utils/discussion';
+import { isDemoMode } from '../config/appMode';
+import { DEMO_DISCUSSION_THREADS } from '../demo/discussions';
+import {
+  addDemoDiscussionPost,
+  getDemoDiscussionPosts,
+  toggleDemoDiscussionReaction,
+} from '../demo/interactions';
 
 const SIGNED_URL_EXPIRES_IN_SECONDS = 60 * 60;
 const DEFAULT_POST_LIMIT = 50;
@@ -200,6 +207,7 @@ async function hydrateReactions(
 }
 
 export async function fetchDiscussionThreads(): Promise<DiscussionThread[]> {
+  if (isDemoMode) return DEMO_DISCUSSION_THREADS.map((thread) => ({ ...thread }));
   const rpcResponse = await supabase.rpc('get_discussion_threads_with_unread');
   if (!rpcResponse.error) {
     return (rpcResponse.data ?? []).map(mapThread);
@@ -233,6 +241,7 @@ export async function markDiscussionThreadRead(params: {
   threadId: string;
   lastSeenPostId: string;
 }): Promise<void> {
+  if (isDemoMode) return;
   const { error } = await supabase.rpc('mark_discussion_thread_read', {
     p_thread_id: params.threadId,
     p_last_seen_post_id: params.lastSeenPostId,
@@ -258,6 +267,7 @@ export async function fetchDiscussionPosts(params: {
   before?: string | null;
   limit?: number;
 }): Promise<DiscussionPost[]> {
+  if (isDemoMode) return getDemoDiscussionPosts(params.threadId);
   let query = supabase
     .from('discussion_posts')
     .select('*')
@@ -313,6 +323,7 @@ export async function fetchDiscussionPosts(params: {
 export async function fetchActiveDiscussionModeration(
   userId: string,
 ): Promise<DiscussionUserModeration | null> {
+  if (isDemoMode) return null;
   const { data, error } = await supabase
     .from('discussion_user_moderation')
     .select('*')
@@ -380,6 +391,15 @@ export async function createDiscussionPost(params: {
     throw new Error('Skriv en besked først.');
   }
 
+  if (isDemoMode) {
+    return addDemoDiscussionPost({
+      threadId: params.threadId,
+      parentPostId: params.parentPostId,
+      body,
+      userId: params.userId,
+    });
+  }
+
   const linkPreviewId = await fetchDiscussionLinkPreviewId(body);
 
   const { data: post, error } = await supabase
@@ -445,6 +465,8 @@ export async function updateDiscussionPost(params: {
     throw new Error('Beskeden må ikke være tom.');
   }
 
+  if (isDemoMode) return;
+
   const linkPreviewId = await fetchDiscussionLinkPreviewId(body);
   const { error } = await supabase
     .from('discussion_posts')
@@ -460,6 +482,7 @@ export async function updateDiscussionPost(params: {
 }
 
 export async function softDeleteDiscussionPost(postId: string, userId: string): Promise<void> {
+  if (isDemoMode) return;
   const { error } = await supabase
     .from('discussion_posts')
     .update({
@@ -478,6 +501,10 @@ export async function toggleDiscussionReaction(params: {
   userId: string;
   liked: boolean;
 }): Promise<boolean> {
+  if (isDemoMode) {
+    toggleDemoDiscussionReaction(params.postId);
+    return !params.liked;
+  }
   if (params.liked) {
     const { error } = await supabase
       .from('discussion_reactions')
@@ -511,6 +538,7 @@ export async function reportDiscussionPost(params: {
   reason: DiscussionReportReason;
   details?: string;
 }): Promise<void> {
+  if (isDemoMode) return;
   const { error } = await supabase.from('discussion_reports').insert({
     post_id: params.postId,
     reporter_user_id: params.userId,
@@ -528,6 +556,7 @@ export async function hideDiscussionPost(params: {
   adminUserId: string;
   reason?: string;
 }): Promise<void> {
+  if (isDemoMode) return;
   const { error } = await supabase
     .from('discussion_posts')
     .update({
@@ -541,6 +570,7 @@ export async function hideDiscussionPost(params: {
 }
 
 export async function showDiscussionPost(postId: string): Promise<void> {
+  if (isDemoMode) return;
   const { error } = await supabase
     .from('discussion_posts')
     .update({
@@ -557,6 +587,7 @@ export async function setDiscussionThreadLocked(params: {
   threadId: string;
   locked: boolean;
 }): Promise<void> {
+  if (isDemoMode) return;
   const { error } = await supabase
     .from('discussion_threads')
     .update({
@@ -572,6 +603,7 @@ export async function setDiscussionThreadPinned(params: {
   threadId: string;
   pinned: boolean;
 }): Promise<void> {
+  if (isDemoMode) return;
   const { error } = await supabase
     .from('discussion_threads')
     .update({
@@ -589,6 +621,7 @@ export async function timeoutDiscussionUser(params: {
   reason?: string;
   expiresAt?: string | null;
 }): Promise<void> {
+  if (isDemoMode) return;
   const { error } = await supabase.from('discussion_user_moderation').insert({
     user_id: params.userId,
     status: params.expiresAt ? 'timed_out' : 'blocked',
@@ -601,6 +634,7 @@ export async function timeoutDiscussionUser(params: {
 }
 
 export async function fetchOpenDiscussionReports(): Promise<DiscussionReport[]> {
+  if (isDemoMode) return [];
   const { data, error } = await supabase
     .from('discussion_reports')
     .select('id, post_id, reason, details, status, created_at')

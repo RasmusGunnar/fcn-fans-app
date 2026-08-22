@@ -29,6 +29,9 @@ import {
 import { fetchPrimaryFixture, formatShortDateDa, type Fixture } from '../services/fixtures';
 import { fetchPostDetailById } from '../services/postsApi';
 import { getMatchHeroUrl, getTeamHeroImage } from '../services/sportsdb';
+import { isDemoMode } from '../config/appMode';
+import { DEMO_MEDIA_FILES, demoMediaUrl } from '../demo/media';
+import { resolveDemoMediaAssetUri } from '../demo/mediaAssets';
 import { isHomePost } from '../utils/homeFeed';
 import { buildMatchdayUiModel } from '../utils/matchdayUiModel';
 import {
@@ -189,9 +192,11 @@ export default function HomeScreen() {
       const fixture = await fetchPrimaryFixture();
       setNextFixture(fixture);
 
-      let heroUrl = getMatchHeroUrl(fixture);
+      let heroUrl = isDemoMode
+        ? resolveDemoMediaAssetUri(demoMediaUrl(DEMO_MEDIA_FILES.stand))
+        : getMatchHeroUrl(fixture);
       const homeTeamHeroId = fixture?.home_team_provider_id ?? fixture?.home_team_id ?? null;
-      if (!heroUrl && homeTeamHeroId) {
+      if (!isDemoMode && !heroUrl && homeTeamHeroId) {
         heroUrl = await getTeamHeroImage(homeTeamHeroId);
       }
       setNextFixtureHeroUrl(heroUrl);

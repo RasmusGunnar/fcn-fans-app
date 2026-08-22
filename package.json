@@ -10,6 +10,9 @@
   },
   "scripts": {
     "start": "expo start",
+    "start:demo": "node scripts/run-expo-mode.cjs demo start",
+    "start:production": "node scripts/run-expo-mode.cjs production start",
+    "android:demo": "node scripts/run-expo-mode.cjs demo run:android",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
@@ -36,6 +39,7 @@
     "test:instagram-rich": "tsc -p tsconfig.instagram-embed-tests.json && node build/instagram-embed-tests/src/utils/__tests__/instagramEmbed.test.js && node build/instagram-embed-tests/supabase/functions/instagram_oembed/core.test.js",
     "typecheck:instagram-rich": "tsc -p tsconfig.instagram-embed-ui.json",
     "test:stadium-live": "tsc -p tsconfig.stadium-live-tests.json && node build/stadium-live-tests/utils/__tests__/stadiumLive.test.js",
+    "test:demo-mode": "tsc -p tsconfig.demo-mode-tests.json && node build/demo-mode-tests/demo/__tests__/demoMode.test.js && node build/demo-mode-tests/demo/__tests__/shotFlowSmoke.test.js",
     "typecheck:stadium-live": "tsc -p tsconfig.stadium-live-ui.json",
     "db:hosted": "echo \"⚠️  Use Supabase Dashboard SQL Editor + supabase/CHANGELOG_MANUAL.sql for hosted DB changes. Do NOT run 'db push' without Docker setup.\"",
     "design:check": "node scripts/design-check.js"

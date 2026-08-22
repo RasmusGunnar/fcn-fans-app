@@ -8,6 +8,8 @@ import { cleanText } from '../utils/text';
 import { Avatar } from './Avatar';
 import { PollVotersModal } from './PollVotersModal';
 import { Text } from './ui/Text';
+import { isDemoMode } from '../config/appMode';
+import { DEMO_CURRENT_USER } from '../demo/users';
 
 type PollOption = {
   id: string;
@@ -91,9 +93,9 @@ export function PollCard({ pollData, postId, profileMap }: PollCardProps) {
 
     setPollVotes(nextVotes);
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = isDemoMode
+      ? { id: DEMO_CURRENT_USER.id }
+      : (await supabase.auth.getUser()).data.user;
 
     if (user?.id) {
       const votedOptionId = Object.entries(nextVotes.voters).find(([, voterIds]) =>
@@ -119,6 +121,8 @@ export function PollCard({ pollData, postId, profileMap }: PollCardProps) {
   }, [loadVotes]);
 
   useEffect(() => {
+    if (isDemoMode) return;
+
     let cancelled = false;
 
     const missingIds = allVoterIds.filter((id) => !profileMap?.[id] && !fetchedVoterProfiles[id]);
@@ -165,6 +169,8 @@ export function PollCard({ pollData, postId, profileMap }: PollCardProps) {
   }, [allVoterIds, fetchedVoterProfiles, profileMap]);
 
   useEffect(() => {
+    if (isDemoMode) return;
+
     const channel = supabase
       .channel(`poll_votes:${postId}`)
       .on(
@@ -226,9 +232,9 @@ export function PollCard({ pollData, postId, profileMap }: PollCardProps) {
           return;
         }
 
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
+        const user = isDemoMode
+          ? { id: DEMO_CURRENT_USER.id }
+          : (await supabase.auth.getUser()).data.user;
 
         setSelectedOption(optionId);
         setPollVotes((current) => {
@@ -354,9 +360,9 @@ export function PollCard({ pollData, postId, profileMap }: PollCardProps) {
                         ]}
                       />
                     </View>
-                      <Text variant="body" style={styles.optionText}>
-                        {option.text}
-                      </Text>
+                    <Text variant="body" style={styles.optionText}>
+                      {option.text}
+                    </Text>
                     <View style={styles.optionStatusSlot}>
                       {isExpired && isWinner ? (
                         <Text
@@ -614,7 +620,7 @@ function createStyles(theme: ReturnType<typeof useTheme>) {
       overflow: 'hidden',
     },
     avatarBubbleOverlap: {
-      marginLeft: -(theme.spacing[1]),
+      marginLeft: -theme.spacing[1],
     },
     avatarInitials: {
       fontWeight: '700',
