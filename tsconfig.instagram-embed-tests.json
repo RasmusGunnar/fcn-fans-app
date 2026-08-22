@@ -17,6 +17,7 @@
     "src/types/news.ts",
     "src/lib/instagram.ts",
     "src/utils/instagramEmbed.ts",
+    "src/utils/instagramNavigation.ts",
     "src/utils/__tests__/instagramEmbed.test.ts",
     "supabase/functions/instagram_oembed/core.ts",
     "supabase/functions/instagram_oembed/core.test.ts"

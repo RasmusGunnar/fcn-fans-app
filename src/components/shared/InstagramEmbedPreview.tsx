@@ -1,8 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Image, Linking, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, View } from 'react-native';
 import { useInstagramEmbed } from '../../hooks/useInstagramEmbed';
-import { parseInstagramUrl } from '../../lib/instagram';
 import { useTheme, type Theme } from '../../theme';
 import type { SharedLinkAttachment } from '../../types/externalShare';
 import { getInstagramResourceLabel } from '../../lib/instagram';
@@ -28,15 +27,6 @@ export function InstagramEmbedPreview({
 
   useEffect(() => setThumbnailFailed(false), [attachment.canonicalUrl]);
 
-  const handlePress = () => {
-    if (onPress) {
-      onPress();
-      return;
-    }
-    const parsed = parseInstagramUrl(attachment.canonicalUrl);
-    if (parsed) void Linking.openURL(parsed.canonicalUrl).catch(() => undefined);
-  };
-
   const secondaryCopy =
     request.status === 'ready' && request.embed.authorName
       ? request.embed.authorName
@@ -47,10 +37,11 @@ export function InstagramEmbedPreview({
   return (
     <View style={styles.container}>
       <Pressable
-        onPress={handlePress}
+        onPress={onPress}
+        disabled={!onPress}
         style={({ pressed }) => [styles.preview, pressed && styles.pressed]}
-        accessibilityRole="button"
-        accessibilityLabel="Vis Instagram-indhold"
+        accessibilityRole={onPress ? 'button' : undefined}
+        accessibilityLabel={onPress ? 'Vis Instagram-indhold' : undefined}
       >
         <View style={styles.thumbnail}>
           {thumbnailUrl ? (
@@ -72,7 +63,7 @@ export function InstagramEmbedPreview({
             {secondaryCopy}
           </Text>
         </View>
-        {!onRemove ? (
+        {onPress && !onRemove ? (
           <Ionicons name="chevron-forward" size={20} color={theme.colors.text.secondary} />
         ) : null}
       </Pressable>

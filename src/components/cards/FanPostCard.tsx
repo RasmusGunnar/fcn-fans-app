@@ -53,7 +53,7 @@ import { getMediaArticleHeaderPresentation } from '../../utils/mediaArticlePrese
 import { MediaArticleSourceAvatar } from './MediaArticleSourceAvatar';
 import { FeedVideo } from '../feed/FeedVideo';
 import { InstagramEmbedCard } from '../shared/InstagramEmbedCard';
-import { fromInstagramLinkPreview } from '../../lib/instagram';
+import { fromInstagramLinkPreview, parseInstagramUrl } from '../../lib/instagram';
 import {
   resolveFanPostBadgeCandidate,
   type FanPostBadgeAuthorProfile,
@@ -286,6 +286,7 @@ export function FanPostCard({
   };
   const handleOpenBodyUrl = useCallback((url: string, event?: GestureResponderEvent) => {
     event?.stopPropagation();
+    if (parseInstagramUrl(url)) return;
     Linking.openURL(url).catch((error) => {
       if (__DEV__) {
         console.warn('[FanPostCard] Could not open link', { url, error });
@@ -295,7 +296,7 @@ export function FanPostCard({
   const renderBodyTextSegments = useCallback(
     () =>
       bodySegments.map((segment, index) =>
-        segment.type === 'url' ? (
+        segment.type === 'url' && !parseInstagramUrl(segment.url) ? (
           <Text
             key={`${segment.url}-${index}`}
             variant="body"

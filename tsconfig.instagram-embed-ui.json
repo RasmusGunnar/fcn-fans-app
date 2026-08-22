@@ -7,16 +7,20 @@
   "include": [
     "src/components/cards/FanPostCard.tsx",
     "src/components/feed/FeedItemRenderer.tsx",
+    "src/components/PostComposer.tsx",
     "src/components/shared/InstagramCard.tsx",
     "src/components/shared/InstagramEmbedCard.tsx",
     "src/components/shared/InstagramEmbedModal.tsx",
     "src/components/shared/InstagramEmbedPreview.tsx",
     "src/components/shared/InstagramEmbedRenderer.tsx",
+    "src/components/shared/InstagramOpenButton.tsx",
     "src/hooks/useInstagramEmbed.ts",
     "src/screens/ConversationScreen.tsx",
     "src/screens/IncomingShareScreen.tsx",
     "src/services/instagramEmbedApi.ts",
+    "src/services/instagramExternalNavigation.ts",
     "src/types/instagramEmbed.ts",
-    "src/utils/instagramEmbed.ts"
+    "src/utils/instagramEmbed.ts",
+    "src/utils/instagramNavigation.ts"
   ]
 }

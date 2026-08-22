@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useMemo } from 'react';
-import { Linking, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useTheme, type Theme } from '../../theme';
 import type { SharedLinkAttachment } from '../../types/externalShare';
 import { getInstagramResourceLabel, parseInstagramUrl } from '../../lib/instagram';
 import { Text } from '../ui';
+import { InstagramOpenButton } from './InstagramOpenButton';
 
 type InstagramCardProps = {
   attachment: SharedLinkAttachment;
@@ -23,12 +24,6 @@ export function InstagramCard({
   const styles = useMemo(() => createStyles(theme), [theme]);
   const validated = parseInstagramUrl(attachment.canonicalUrl);
   if (!validated) return null;
-
-  const openInstagram = () => {
-    const safeUrl = parseInstagramUrl(validated.canonicalUrl)?.canonicalUrl;
-    if (!safeUrl) return;
-    void Linking.openURL(safeUrl).catch(() => undefined);
-  };
 
   return (
     <View style={[styles.card, compact && styles.cardCompact]}>
@@ -57,20 +52,10 @@ export function InstagramCard({
         <Text variant="small" color="muted" style={styles.notice}>
           {unavailable
             ? 'Indholdet er privat, slettet eller midlertidigt utilgængeligt.'
-            : 'Indholdet åbnes på Instagram og kan kræve adgang.'}
+            : 'Brug knappen nedenfor for at åbne indholdet på Instagram.'}
         </Text>
       ) : null}
-      <Pressable
-        onPress={openInstagram}
-        style={({ pressed }) => [styles.openButton, pressed && styles.openButtonPressed]}
-        accessibilityRole="link"
-        accessibilityLabel="Åbn på Instagram"
-      >
-        <Text variant="small" style={styles.openButtonText}>
-          Åbn på Instagram
-        </Text>
-        <Ionicons name="open-outline" size={16} color={theme.colors.primary} />
-      </Pressable>
+      <InstagramOpenButton canonicalUrl={validated.canonicalUrl} />
     </View>
   );
 }
@@ -112,19 +97,5 @@ function createStyles(theme: Theme) {
       borderRadius: theme.radius.pill,
     },
     notice: { lineHeight: 18 },
-    openButton: {
-      minHeight: theme.spacing[10],
-      paddingHorizontal: theme.spacing[3],
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: theme.spacing[2],
-      borderWidth: theme.layout.borderWidth,
-      borderColor: theme.colors.border.default,
-      borderRadius: theme.radius.pill,
-      backgroundColor: theme.colors.bg.subtle,
-    },
-    openButtonPressed: { opacity: 0.8 },
-    openButtonText: { color: theme.colors.primary, fontWeight: '700' },
   });
 }

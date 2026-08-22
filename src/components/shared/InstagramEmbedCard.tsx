@@ -8,6 +8,7 @@ import { getInstagramEmbedUiState } from '../../utils/instagramEmbed';
 import { Text } from '../ui';
 import { InstagramCard } from './InstagramCard';
 import { InstagramEmbedRenderer } from './InstagramEmbedRenderer';
+import { InstagramOpenButton } from './InstagramOpenButton';
 
 type InstagramEmbedCardProps = {
   attachment: SharedLinkAttachment;
@@ -54,12 +55,16 @@ export function InstagramEmbedCard({
             Henter officielt Instagram-indhold…
           </Text>
         </View>
+        <InstagramOpenButton canonicalUrl={attachment.canonicalUrl} />
       </View>
     );
   }
   if (uiState === 'ready' && request.status === 'ready') {
     return (
-      <InstagramEmbedRenderer embed={request.embed} onFailure={() => setRendererFailed(true)} />
+      <View style={styles.readyCard}>
+        <InstagramEmbedRenderer embed={request.embed} onFailure={() => setRendererFailed(true)} />
+        <InstagramOpenButton canonicalUrl={request.embed.canonicalUrl} />
+      </View>
     );
   }
   return <InstagramCard attachment={attachment} onRemove={onRemove} unavailable />;
@@ -67,6 +72,7 @@ export function InstagramEmbedCard({
 
 function createStyles(theme: Theme) {
   return StyleSheet.create({
+    readyCard: { gap: theme.spacing[3] },
     loadingCard: {
       gap: theme.spacing[4],
       minHeight: theme.spacing[16] * 2,

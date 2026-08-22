@@ -1,5 +1,6 @@
 import { parseInstagramUrl } from '../lib/instagram';
 import type { InstagramEmbedResponse, RichInstagramResourceType } from '../types/instagramEmbed';
+import { INSTAGRAM_EMBED_NAVIGATION_GUARD_SCRIPT } from './instagramNavigation';
 
 export const INSTAGRAM_EMBED_SCRIPT_URL = 'https://www.instagram.com/embed.js';
 export const INSTAGRAM_EMBED_MIN_HEIGHT = 220;
@@ -158,31 +159,6 @@ export function parseInstagramEmbedHeightMessage(rawData: unknown): number | nul
   }
 }
 
-export function isAllowedInstagramEmbedNavigation(rawUrl: string): boolean {
-  if (rawUrl === 'about:blank') return true;
-  try {
-    const parsed = new URL(rawUrl);
-    const hostname = parsed.hostname.toLowerCase().replace(/\.$/, '');
-    if (
-      parsed.protocol !== 'https:' ||
-      (hostname !== 'instagram.com' && hostname !== 'www.instagram.com') ||
-      parsed.port ||
-      parsed.username ||
-      parsed.password
-    ) {
-      return false;
-    }
-    return (
-      parsed.pathname === '/' ||
-      parsed.pathname === '/embed.js' ||
-      /\/(?:p|reel)\/[A-Za-z0-9_-]{2,128}\/embed(?:\/captioned)?\/?$/.test(parsed.pathname) ||
-      /^\/[A-Za-z0-9][A-Za-z0-9._]{0,29}\/embed\/?$/.test(parsed.pathname)
-    );
-  } catch {
-    return false;
-  }
-}
-
 export function buildInstagramEmbedDocument(rawHtml: string): string | null {
   const markup = sanitizeInstagramEmbedMarkup(rawHtml);
   if (!markup) return null;
@@ -191,11 +167,14 @@ export function buildInstagramEmbedDocument(rawHtml: string): string | null {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-fcn-height' https://www.instagram.com; style-src 'unsafe-inline' https://www.instagram.com; img-src https: data:; media-src https://www.instagram.com https://*.cdninstagram.com https://*.fbcdn.net; frame-src https://www.instagram.com; connect-src https://www.instagram.com https://*.cdninstagram.com https://*.fbcdn.net; font-src https://www.instagram.com https://*.cdninstagram.com https://*.fbcdn.net; base-uri 'none'; form-action 'none';" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-fcn-height' https://www.instagram.com; style-src 'unsafe-inline' https://www.instagram.com; img-src https://www.instagram.com https://instagram.com https://*.cdninstagram.com https://*.fbcdn.net data:; media-src https://www.instagram.com https://instagram.com https://*.cdninstagram.com https://*.fbcdn.net; frame-src https://www.instagram.com https://instagram.com; connect-src https://www.instagram.com https://instagram.com https://*.cdninstagram.com https://*.fbcdn.net; font-src https://www.instagram.com https://instagram.com https://*.cdninstagram.com https://*.fbcdn.net; base-uri 'none'; form-action 'none';" />
   <style>html,body{margin:0;padding:0;background:transparent;overflow:hidden}body{width:100%}.instagram-media{margin:0 auto!important;min-width:0!important;width:calc(100% - 2px)!important}</style>
 </head>
 <body>
   ${markup}
+  <script nonce="fcn-height">
+    ${INSTAGRAM_EMBED_NAVIGATION_GUARD_SCRIPT}
+  </script>
   <script async src="${INSTAGRAM_EMBED_SCRIPT_URL}"></script>
   <script nonce="fcn-height">
     (function () {

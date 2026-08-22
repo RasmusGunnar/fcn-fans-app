@@ -1,8 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useMemo } from 'react';
-import { Linking, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { parseInstagramUrl } from '../../lib/instagram';
 import { useTheme, type Theme } from '../../theme';
 import type { SharedLinkAttachment } from '../../types/externalShare';
 import { Text } from '../ui';
@@ -17,11 +16,6 @@ type InstagramEmbedModalProps = {
 export function InstagramEmbedModal({ attachment, visible, onClose }: InstagramEmbedModalProps) {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
-
-  const openInstagram = () => {
-    const parsed = attachment ? parseInstagramUrl(attachment.canonicalUrl) : null;
-    if (parsed) void Linking.openURL(parsed.canonicalUrl).catch(() => undefined);
-  };
 
   return (
     <Modal visible={visible && Boolean(attachment)} animationType="slide" onRequestClose={onClose}>
@@ -38,14 +32,7 @@ export function InstagramEmbedModal({ attachment, visible, onClose }: InstagramE
           <Text variant="h3" style={styles.title}>
             Instagram
           </Text>
-          <Pressable
-            onPress={openInstagram}
-            style={styles.headerButton}
-            accessibilityRole="link"
-            accessibilityLabel="Åbn på Instagram"
-          >
-            <Ionicons name="open-outline" size={22} color={theme.colors.primary} />
-          </Pressable>
+          <View style={styles.headerButton} />
         </View>
         <ScrollView
           contentContainerStyle={styles.content}

@@ -11,7 +11,7 @@ FCN Fans accepts Instagram post, reel and profile links from the system share sh
 - Feed attachments use the existing `posts.link_preview` JSON column. Messages use the new `messages.external_share` JSON column and `send_message_v2`; the existing `send_message` contract remains unchanged.
 - An authenticated `instagram_oembed` Edge Function validates the canonical URL and calls only Meta's fixed, tokenless `https://graph.facebook.com/v25.0/instagram_oembed` endpoint. It is not a generic proxy and does not follow redirects.
 - The Edge Function removes scripts from Meta's returned HTML and stores the controlled result in the server-only `instagram_embed_cache`. Successful results expire after 12 hours; unavailable results expire after 10 minutes.
-- The React Native client revalidates the response and renders it in an isolated `react-native-webview` shell. The shell loads only the official `https://www.instagram.com/embed.js`, applies a restrictive CSP, disables shared cookies/file access/window creation and accepts only a finite, clamped height message.
+- The React Native client revalidates the response and renders it in an isolated `react-native-webview` shell. The shell loads only the official `https://www.instagram.com/embed.js`, applies a restrictive CSP, disables shared cookies/file access, blocks main-frame/new-window/custom-scheme navigation without external side effects and accepts only a finite, clamped height message. Instagram opens only from FCN Fans' explicit `Åbn på Instagram` CTA.
 - Home mounts rich WebViews only for at most two sufficiently visible Instagram posts. Direct-message rows and composers use compact metadata/thumbnail previews and open one shared rich modal on demand.
 
 ## Official Meta integration
@@ -70,7 +70,7 @@ Test on a real iPhone and Android device with a native development/production bu
 7. Sign out/account-switch after receiving a share and confirm another account cannot receive the bound payload.
 8. Confirm a public post, reel and profile render through the official rich embed in Home and the shared DM modal.
 9. Confirm Home never mounts more than two Instagram WebViews and DM message rows never mount a WebView.
-10. Open private/deleted/unavailable content and confirm the safe card explains the fallback and can open Instagram.
+10. Open private/deleted/unavailable content and confirm the safe card explains the fallback and only its explicit CTA can open Instagram.
 11. Disable connectivity or simulate a Meta timeout; confirm publishing/sending remains possible and the fallback appears.
 12. Try lookalike hosts, HTTP links, unsupported story/TV URLs and malformed identifiers; confirm rich lookup rejection without any arbitrary fetch.
 13. Retry a failed DM send and confirm only one message/push job set is created.
