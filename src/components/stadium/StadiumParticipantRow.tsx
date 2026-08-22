@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useTheme } from '../../theme';
 import type { StadiumParticipant, StadiumReactionType } from '../../types/stadiumLive';
+import { getStadiumReactionOption } from '../../utils/stadiumLive';
 import { OptionsMenu } from '../OptionsMenu';
 import { Avatar } from '../Avatar';
 import { Text } from '../ui';
@@ -11,6 +12,7 @@ import { StadiumReactionPicker } from './StadiumReactionPicker';
 type Props = {
   participant: StadiumParticipant;
   pending?: boolean;
+  sentReactionType?: StadiumReactionType | null;
   cooldownSeconds?: number;
   onProfile: () => void;
   onMessage: () => void;
@@ -21,6 +23,7 @@ type Props = {
 export function StadiumParticipantRow({
   participant,
   pending,
+  sentReactionType,
   cooldownSeconds = 0,
   onProfile,
   onMessage,
@@ -32,6 +35,16 @@ export function StadiumParticipantRow({
   const [pickerVisible, setPickerVisible] = useState(false);
   const displayName = participant.displayName || participant.username || 'FCN-fan';
   const disabled = pending || !participant.canReact || cooldownSeconds > 0;
+  const sentOption = sentReactionType ? getStadiumReactionOption(sentReactionType) : null;
+  const reactionAccessibilityLabel = pending
+    ? `Sender reaktion til ${displayName}`
+    : sentOption
+      ? `${sentOption.label} sendt til ${displayName}`
+      : cooldownSeconds > 0
+        ? `Vent ${cooldownSeconds} sekunder før en ny reaktion til ${displayName}`
+        : participant.canReact
+          ? `Send high five til ${displayName}`
+          : `Reaktioner er ikke tilgængelige for ${displayName}`;
 
   const handleSelect = (reactionType: StadiumReactionType) => {
     setPickerVisible(false);
@@ -82,20 +95,34 @@ export function StadiumParticipantRow({
       <View style={styles.actions}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Send high five til ${displayName}`}
-          accessibilityHint="Hold inde for at vælge en anden reaktion"
+          accessibilityLabel={reactionAccessibilityLabel}
+          accessibilityHint={disabled ? undefined : 'Hold inde for at vælge en anden reaktion'}
+          accessibilityState={{ disabled, busy: pending === true }}
           disabled={disabled}
           onPress={() => onReact('high_five')}
           onLongPress={() => !disabled && setPickerVisible(true)}
           delayLongPress={300}
           style={({ pressed }) => [
             styles.reactionButton,
+            sentOption ? styles.reactionButtonSent : null,
             pressed && !disabled ? styles.reactionButtonPressed : null,
             disabled ? styles.disabled : null,
           ]}
         >
-          <Text style={styles.reactionEmoji}>{pending ? '…' : '🙌'}</Text>
-          {cooldownSeconds > 0 ? (
+          <Text style={styles.reactionEmoji}>
+            {pending ? '…' : sentOption ? sentOption.emoji : '🙌'}
+          </Text>
+          {sentOption ? (
+            <Text
+              variant="small"
+              color="success"
+              numberOfLines={1}
+              maxFontSizeMultiplier={1.25}
+              accessibilityLiveRegion="polite"
+            >
+              Sendt
+            </Text>
+          ) : cooldownSeconds > 0 ? (
             <Text variant="small" color="secondary">
               {cooldownSeconds}s
             </Text>
@@ -173,16 +200,22 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     affinityText: { color: theme.colors.primary, fontWeight: '700' },
     actions: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[1] },
     reactionButton: {
-      width: theme.spacing[12],
-      height: theme.spacing[12],
+      minWidth: theme.spacing[12],
+      minHeight: theme.spacing[12],
       alignItems: 'center',
       justifyContent: 'center',
+      paddingHorizontal: theme.spacing[1],
+      paddingVertical: theme.spacing[1] / 2,
       borderWidth: theme.layout.borderHairline,
       borderColor: theme.colors.primary,
       borderRadius: theme.radius.pill,
       backgroundColor: theme.colors.bg.surface,
     },
     reactionEmoji: { fontSize: theme.spacing[6] },
+    reactionButtonSent: {
+      borderColor: theme.colors.state.success,
+      backgroundColor: theme.colors.bg.subtle,
+    },
     reactionButtonPressed: { opacity: 0.72, transform: [{ scale: 0.96 }] },
     pressed: { opacity: 0.75 },
     disabled: { opacity: 0.42 },

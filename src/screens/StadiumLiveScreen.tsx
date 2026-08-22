@@ -9,7 +9,6 @@ import {
   RefreshControl,
   SectionList,
   StyleSheet,
-  Switch,
   TextInput,
   View,
 } from 'react-native';
@@ -52,6 +51,9 @@ type StadiumLiveRoute = RouteProp<
 
 type ParticipantSection = { title: string; data: StadiumParticipant[] };
 
+const REACTION_SENT_FEEDBACK_MS = 1600;
+const COOLDOWN_TICK_MS = 1_000;
+
 export default function StadiumLiveScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<StadiumLiveRoute>();
@@ -85,7 +87,43 @@ export default function StadiumLiveScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingUserId, setPendingUserId] = useState<string | null>(null);
+  const [sentReaction, setSentReaction] = useState<{
+    userId: string;
+    reactionType: StadiumReactionType;
+  } | null>(null);
   const [cooldownByUserId, setCooldownByUserId] = useState<Record<string, string>>({});
+  const [cooldownNowMs, setCooldownNowMs] = useState(() => Date.now());
+  const [sectionEditorVisible, setSectionEditorVisible] = useState(false);
+  const sectionEditorVisibleRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!sentReaction) return;
+    const timeout = setTimeout(() => setSentReaction(null), REACTION_SENT_FEEDBACK_MS);
+    return () => clearTimeout(timeout);
+  }, [sentReaction]);
+
+  const hasActiveCooldowns = Object.keys(cooldownByUserId).length > 0;
+  React.useEffect(() => {
+    if (!hasActiveCooldowns) return;
+
+    const tickCooldowns = () => {
+      const now = Date.now();
+      setCooldownNowMs(now);
+      setCooldownByUserId((current) => {
+        const entries = Object.entries(current);
+        const activeEntries = entries.filter(
+          ([, cooldownUntil]) => getRemainingCooldownSeconds(cooldownUntil, now) > 0,
+        );
+        return activeEntries.length === entries.length
+          ? current
+          : Object.fromEntries(activeEntries);
+      });
+    };
+
+    tickCooldowns();
+    const interval = setInterval(tickCooldowns, COOLDOWN_TICK_MS);
+    return () => clearInterval(interval);
+  }, [hasActiveCooldowns]);
 
   const load = useCallback(
     async (options?: { refresh?: boolean }) => {
@@ -102,7 +140,9 @@ export default function StadiumLiveScreen() {
           refreshMatchdayState(),
         ]);
         setPreferences(nextPreferences);
-        setSectionDraft(nextPreferences.sectionLabel ?? '');
+        if (!sectionEditorVisibleRef.current) {
+          setSectionDraft(nextPreferences.sectionLabel ?? '');
+        }
 
         if (snapshot.isCheckedIn && snapshot.stadiumLiveOpen) {
           const [participantPage, recentReactions] = await Promise.all([
@@ -153,6 +193,7 @@ export default function StadiumLiveScreen() {
         setSectionDraft(saved.sectionLabel ?? '');
         await load({ refresh: true });
       } catch (saveError) {
+        setSectionDraft(preferences?.sectionLabel ?? '');
         Alert.alert(
           'Kunne ikke gemme',
           saveError instanceof Error ? saveError.message : 'Prøv igen.',
@@ -161,7 +202,7 @@ export default function StadiumLiveScreen() {
         setSavingPreferences(false);
       }
     },
-    [load, savingPreferences],
+    [load, preferences?.sectionLabel, savingPreferences],
   );
 
   const handleCheckIn = useCallback(async () => {
@@ -181,6 +222,34 @@ export default function StadiumLiveScreen() {
       setChangingParticipation(false);
     }
   }, [changingParticipation, checkInToMatch, load]);
+
+  const handleToggleReactions = useCallback(() => {
+    if (!preferences || savingPreferences || sectionEditorVisible) return;
+    void savePreferences({
+      isVisible: true,
+      reactionsEnabled: !preferences.reactionsEnabled,
+      sectionLabel: sanitizeStadiumSection(sectionDraft),
+    });
+  }, [preferences, savePreferences, savingPreferences, sectionDraft, sectionEditorVisible]);
+
+  const handleSectionEditingEnd = useCallback(() => {
+    sectionEditorVisibleRef.current = false;
+    setSectionEditorVisible(false);
+    if (!preferences) return;
+    const sectionLabel = sanitizeStadiumSection(sectionDraft);
+    setSectionDraft(sectionLabel ?? '');
+    if (sectionLabel === preferences.sectionLabel) return;
+    void savePreferences({
+      isVisible: true,
+      reactionsEnabled: preferences.reactionsEnabled,
+      sectionLabel,
+    });
+  }, [preferences, savePreferences, sectionDraft]);
+
+  const handleOpenSectionEditor = useCallback(() => {
+    sectionEditorVisibleRef.current = true;
+    setSectionEditorVisible(true);
+  }, []);
 
   const handleCheckOut = useCallback(async () => {
     if (changingParticipation) return;
@@ -217,6 +286,7 @@ export default function StadiumLiveScreen() {
         return;
       }
 
+      setSentReaction(null);
       setPendingUserId(participant.userId);
       try {
         const sent = await sendStadiumReaction({
@@ -229,10 +299,13 @@ export default function StadiumLiveScreen() {
           ...current,
           [participant.userId]: sent.cooldownUntil,
         }));
+        setCooldownNowMs(Date.now());
+        setSentReaction({ userId: participant.userId, reactionType });
+        setPendingUserId(null);
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
           () => undefined,
         );
-        await load({ refresh: true });
+        void load({ refresh: true });
       } catch (sendError) {
         Alert.alert(
           'Kunne ikke sende reaktion',
@@ -313,88 +386,128 @@ export default function StadiumLiveScreen() {
   }, [participants]);
 
   const receivedReactions = useMemo(
-    () => reactions.filter((reaction) => reaction.received).slice(0, 5),
+    () => reactions.filter((reaction) => reaction.received).slice(0, 2),
     [reactions],
   );
 
-  const renderPreferences = () => (
-    <Card style={styles.preferencesCard}>
-      <View style={styles.preferenceHeader}>
-        <View style={styles.preferenceIcon}>
-          <Ionicons name="radio-outline" size={22} color={theme.colors.primary} />
+  const preferencesReady = preferences !== null;
+  const reactionControlDisabled = !preferencesReady || savingPreferences || sectionEditorVisible;
+  const participantCountCopy = `${matchdayState.participantCount} ${
+    matchdayState.participantCount === 1 ? 'fan er her' : 'fans er her'
+  }`;
+
+  const renderCheckedInStatus = () => (
+    <Card style={styles.liveStatusCard}>
+      <View style={styles.liveStatusRow}>
+        <View style={styles.liveStatusIcon}>
+          <Ionicons name="checkmark" size={18} color={theme.colors.text.inverse} />
         </View>
-        <View style={styles.preferenceCopy}>
-          <Text variant="bodyBold">Stadion Live-indstillinger</Text>
+        <View style={styles.liveStatusCopy}>
+          <Text variant="bodyBold">Checket ind</Text>
           <Text variant="small" color="secondary">
-            Din synlighed følger automatisk dit aktive check-in.
+            {participantCountCopy}
           </Text>
         </View>
+        <Button
+          title={changingParticipation ? 'Tjekker ud…' : 'Check ud'}
+          variant="ghost"
+          size="sm"
+          onPress={() => void handleCheckOut()}
+          disabled={changingParticipation}
+        />
       </View>
 
-      <View style={styles.preferenceRow}>
-        <View style={styles.preferenceCopy}>
-          <Text variant="bodyBold">Tillad stadionreaktioner</Text>
-          <Text variant="small" color="secondary">
-            Andre checkede-in fans kan sende dig reaktioner under kampen.
-          </Text>
-        </View>
-        <Switch
-          value={preferences?.reactionsEnabled ?? true}
-          disabled={savingPreferences}
-          onValueChange={(reactionsEnabled) =>
-            void savePreferences({
-              isVisible: true,
-              reactionsEnabled,
-              sectionLabel: sanitizeStadiumSection(sectionDraft),
-            })
-          }
-          trackColor={{ false: theme.colors.border.default, true: theme.colors.primary }}
-          thumbColor={theme.colors.bg.card}
-        />
-      </View>
-      <View style={styles.sectionField}>
-        <Text variant="small" color="secondary">
-          Afsnit eller tribune (valgfrit)
-        </Text>
-        <TextInput
-          value={sectionDraft}
-          onChangeText={(value) => setSectionDraft(value.slice(0, 30))}
-          onEndEditing={() =>
-            void savePreferences({
-              isVisible: true,
-              reactionsEnabled: preferences?.reactionsEnabled ?? true,
-              sectionLabel: sanitizeStadiumSection(sectionDraft),
-            })
-          }
-          maxLength={30}
-          placeholder="Fx A-tribunen"
-          placeholderTextColor={theme.colors.text.muted}
-          style={styles.sectionInput}
-        />
-      </View>
+      {matchdayState.stadiumLiveOpen ? (
+        <>
+          <View style={styles.liveControls}>
+            <Pressable
+              accessibilityRole="switch"
+              accessibilityLabel="Tillad stadionreaktioner"
+              accessibilityState={{
+                checked: preferences?.reactionsEnabled ?? false,
+                disabled: reactionControlDisabled,
+              }}
+              disabled={reactionControlDisabled}
+              onPress={handleToggleReactions}
+              style={({ pressed }) => [
+                styles.liveControl,
+                pressed ? styles.liveControlPressed : null,
+                reactionControlDisabled ? styles.liveControlDisabled : null,
+              ]}
+            >
+              <Ionicons name="happy-outline" size={19} color={theme.colors.primary} />
+              <View style={styles.liveControlCopy}>
+                <Text variant="small" style={styles.liveControlLabel}>
+                  Reaktioner
+                </Text>
+                <Text
+                  variant="small"
+                  color={preferences?.reactionsEnabled ? 'success' : 'secondary'}
+                  numberOfLines={1}
+                >
+                  {!preferencesReady
+                    ? 'Henter…'
+                    : savingPreferences
+                      ? 'Gemmer…'
+                      : preferences.reactionsEnabled
+                        ? 'Til'
+                        : 'Fra'}
+                </Text>
+              </View>
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Rediger afsnit eller tribune"
+              accessibilityState={{ disabled: !preferencesReady || savingPreferences }}
+              disabled={!preferencesReady || savingPreferences}
+              onPress={handleOpenSectionEditor}
+              style={({ pressed }) => [
+                styles.liveControl,
+                pressed ? styles.liveControlPressed : null,
+                !preferencesReady || savingPreferences ? styles.liveControlDisabled : null,
+              ]}
+            >
+              <Ionicons name="location-outline" size={19} color={theme.colors.primary} />
+              <View style={styles.liveControlCopy}>
+                <Text variant="small" style={styles.liveControlLabel}>
+                  Tribune
+                </Text>
+                <Text variant="small" color="secondary" numberOfLines={1}>
+                  {!preferencesReady ? 'Henter…' : preferences.sectionLabel || 'Tilføj'}
+                </Text>
+              </View>
+            </Pressable>
+          </View>
+
+          {sectionEditorVisible ? (
+            <View style={styles.sectionField}>
+              <Text variant="small" color="secondary">
+                Afsnit eller tribune (valgfrit)
+              </Text>
+              <TextInput
+                autoFocus
+                accessibilityLabel="Afsnit eller tribune"
+                value={sectionDraft}
+                editable={!savingPreferences}
+                onChangeText={(value) => setSectionDraft(value.slice(0, 30))}
+                onEndEditing={handleSectionEditingEnd}
+                maxLength={30}
+                returnKeyType="done"
+                placeholder="Fx A-tribunen"
+                placeholderTextColor={theme.colors.text.muted}
+                style={styles.sectionInput}
+              />
+            </View>
+          ) : null}
+        </>
+      ) : null}
     </Card>
   );
 
   const ListHeader = (
     <View style={styles.listHeader}>
-      {matchdayState.isCheckedIn ? (
-        <Card style={styles.participationCard}>
-          <View style={styles.participationCopy}>
-            <Ionicons name="checkmark-circle" size={28} color={theme.colors.state.success} />
-            <View style={styles.preferenceCopy}>
-              <Text variant="h3">Du er checket ind</Text>
-              <Text color="secondary">Andre checkede-in fans kan se dig og sende reaktioner.</Text>
-            </View>
-          </View>
-          <Button
-            title={changingParticipation ? 'Tjekker ud…' : 'Check ud'}
-            variant="outline"
-            size="sm"
-            onPress={() => void handleCheckOut()}
-            disabled={changingParticipation}
-          />
-        </Card>
-      ) : null}
+      {matchdayState.isCheckedIn ? renderCheckedInStatus() : null}
       {!matchdayState.stadiumLiveOpen ? (
         <Card style={styles.stateCard}>
           <Ionicons name="time-outline" size={32} color={theme.colors.primary} />
@@ -421,9 +534,7 @@ export default function StadiumLiveScreen() {
             fullWidth
           />
         </Card>
-      ) : (
-        renderPreferences()
-      )}
+      ) : null}
       {matchdayState.isCheckedIn && receivedReactions.length > 0 ? (
         <View style={styles.recentSection}>
           <Text variant="h3">Seneste til dig</Text>
@@ -453,8 +564,13 @@ export default function StadiumLiveScreen() {
                   </Text>
                 </Pressable>
               ) : (
-                <Text variant="small" color="success">
-                  Svaret
+                <Text
+                  variant="small"
+                  color="success"
+                  numberOfLines={2}
+                  style={styles.reciprocalText}
+                >
+                  ↔ I har reageret på hinanden
                 </Text>
               )}
             </View>
@@ -524,7 +640,13 @@ export default function StadiumLiveScreen() {
           <StadiumParticipantRow
             participant={item}
             pending={pendingUserId === item.userId}
-            cooldownSeconds={getRemainingCooldownSeconds(cooldownByUserId[item.userId] ?? null)}
+            sentReactionType={
+              sentReaction?.userId === item.userId ? sentReaction.reactionType : null
+            }
+            cooldownSeconds={getRemainingCooldownSeconds(
+              cooldownByUserId[item.userId] ?? null,
+              cooldownNowMs,
+            )}
             onProfile={() => navigation.navigate('PublicProfile', { userId: item.userId })}
             onMessage={() => void handleMessage(item)}
             onReport={() =>
@@ -560,33 +682,47 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     backButton: { padding: theme.spacing[1] },
     headerCopy: { flex: 1, minWidth: 0 },
     headerSubtitle: { opacity: 0.86 },
-    content: { padding: theme.spacing[4], paddingBottom: theme.spacing[10] },
-    listHeader: { gap: theme.spacing[4], marginBottom: theme.spacing[4] },
-    preferencesCard: { gap: theme.spacing[3] },
-    participationCard: { gap: theme.spacing[3] },
-    participationCopy: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      gap: theme.spacing[3],
+    content: {
+      paddingTop: theme.layout.listGap,
+      paddingHorizontal: theme.layout.screenPadding,
     },
-    preferenceHeader: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3] },
-    preferenceRow: {
+    listHeader: { gap: theme.layout.listGap, marginBottom: theme.layout.listGap },
+    liveStatusCard: { gap: theme.layout.listGap },
+    liveStatusRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: theme.spacing[3],
-      paddingTop: theme.spacing[3],
-      borderTopWidth: theme.layout.borderHairline,
-      borderTopColor: theme.colors.border.default,
+      gap: theme.spacing[2],
     },
-    preferenceIcon: {
-      width: theme.spacing[10],
-      height: theme.spacing[10],
-      borderRadius: theme.radius.pill,
+    liveStatusIcon: {
+      width: theme.spacing[8],
+      height: theme.spacing[8],
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: theme.colors.bg.subtle,
+      borderRadius: theme.radius.pill,
+      backgroundColor: theme.colors.state.success,
     },
-    preferenceCopy: { flex: 1, minWidth: 0, gap: theme.spacing[1] },
+    liveStatusCopy: { flex: 1, minWidth: 0, gap: theme.spacing[1] / 2 },
+    liveControls: {
+      flexDirection: 'row',
+      gap: theme.spacing[2],
+    },
+    liveControl: {
+      flex: 1,
+      minWidth: 0,
+      minHeight: theme.spacing[12],
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing[2],
+      paddingHorizontal: theme.spacing[3],
+      borderWidth: theme.layout.borderHairline,
+      borderColor: theme.colors.border.default,
+      borderRadius: theme.radius.md,
+      backgroundColor: theme.colors.bg.surface,
+    },
+    liveControlCopy: { flex: 1, minWidth: 0 },
+    liveControlLabel: { fontWeight: '700' },
+    liveControlPressed: { opacity: 0.76, transform: [{ scale: 0.98 }] },
+    liveControlDisabled: { opacity: 0.48 },
     sectionField: { gap: theme.spacing[1] },
     sectionInput: {
       minHeight: theme.spacing[11],
@@ -615,6 +751,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       borderWidth: theme.layout.borderWidth,
     },
     reactionCopy: { flex: 1, minWidth: 0, gap: theme.spacing[1] },
+    reciprocalText: { flexShrink: 1, textAlign: 'right' },
     replyButton: {
       minHeight: theme.spacing[9],
       justifyContent: 'center',

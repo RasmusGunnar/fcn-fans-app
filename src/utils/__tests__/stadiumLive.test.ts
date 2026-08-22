@@ -191,8 +191,44 @@ test('Home, Match Details, and Stadium Live use the shared state and canonical S
   assert.doesNotMatch(stadium, /Bliv synlig for andre fans/);
   assert.match(stadium, /Check ud/);
   assert.match(stadium, /Du er den første her/);
+  assert.match(stadium, /variant="ghost"/);
+  assert.match(stadium, /accessibilityRole="switch"/);
+  assert.match(stadium, /reactionControlDisabled/);
+  assert.match(stadium, /sectionEditorVisible/);
+  assert.match(stadium, /if \(!sectionEditorVisibleRef\.current\)/);
+  assert.match(stadium, /sectionEditorVisibleRef\.current = true/);
+  assert.match(stadium, /reactionsEnabled: !preferences\.reactionsEnabled/);
+  assert.match(stadium, /sectionLabel: sanitizeStadiumSection\(sectionDraft\)/);
+  assert.doesNotMatch(stadium, /Stadion Live-indstillinger/);
   assert.match(matchdayContext, /activeUserIdRef\.current !== requestedUserId/);
   assert.match(matchdayContext, /recordsRef\.current = \{\}/);
+});
+
+test('Stadium keeps participant actions and adds local reaction confirmation only', () => {
+  const screen = readWorkspaceFile('src/screens/StadiumLiveScreen.tsx');
+  const row = readWorkspaceFile('src/components/stadium/StadiumParticipantRow.tsx');
+  assert.match(screen, /reaction\.received\)\.slice\(0, 2\)/);
+  assert.match(screen, /setSentReaction\(\{ userId: participant\.userId, reactionType \}\)/);
+  assert.match(screen, /setInterval\(tickCooldowns, COOLDOWN_TICK_MS\)/);
+  assert.match(screen, /void load\(\{ refresh: true \}\)/);
+  assert.match(screen, /↔ I har reageret på hinanden/);
+  assert.match(row, /sentReactionType/);
+  assert.match(row, /Sendt/);
+  assert.match(row, /onProfile/);
+  assert.match(row, /onMessage/);
+  assert.match(row, /Samme fællesskab/);
+  assert.match(row, /participant\.avatarUrl/);
+});
+
+test('known participant avatars resolve before the first paint', () => {
+  const avatar = readWorkspaceFile('src/components/Avatar.tsx');
+  assert.doesNotMatch(avatar, /useState<string \| null>\(null\)/);
+  assert.match(avatar, /useState<AvatarResolution>\(\(\) =>\s*createInitialAvatarResolution/);
+  assert.match(avatar, /resolution\.cacheKey === cacheKey/);
+  assert.match(avatar, /const cachedUri = pathCache\.get\(cacheKey\)/);
+  assert.match(avatar, /committedRequestKeyRef\.current !== requestKey/);
+  assert.match(avatar, /event\.nativeEvent\.source\.uri/);
+  assert.match(avatar, /key=\{requestKey\}/);
 });
 
 test('screen and provider preserve reply, DM, profile, realtime, and account reset wiring', () => {
