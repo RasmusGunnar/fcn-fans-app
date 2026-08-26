@@ -15,7 +15,7 @@ function getResponseExpiry(response: InstagramEmbedResponse): number {
 }
 
 export async function fetchInstagramEmbed(
-  attachment: SharedLinkAttachment,
+  attachment: Pick<SharedLinkAttachment, 'canonicalUrl'>,
 ): Promise<InstagramEmbedResponse> {
   const parsed = parseInstagramUrl(attachment.canonicalUrl);
   if (

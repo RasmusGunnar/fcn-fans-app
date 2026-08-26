@@ -44,7 +44,7 @@ import {
 } from '../utils/performanceTiming';
 import { navigateToMessagesList, navigateToStadiumLive } from '../navigation/navigationRef';
 import { fromInstagramLinkPreview } from '../lib/instagram';
-import { isRichInstagramUrl } from '../utils/instagramEmbed';
+import { isRichInstagramUrl, reconcileActiveInstagramEmbedKeys } from '../utils/instagramEmbed';
 
 logPerformanceEvent('ScreenLifecycle', 'module-evaluated', { screen: 'HomeScreen' });
 
@@ -128,7 +128,7 @@ export default function HomeScreen() {
   } = useFeed();
   const refreshing = loading;
   const [nextFixture, setNextFixture] = useState<Fixture | null>(null);
-  const [loadingFixture, setLoadingFixture] = useState(false);
+  const [loadingFixture, setLoadingFixture] = useState(true);
   const [nextFixtureHeroUrl, setNextFixtureHeroUrl] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
   const [selectedFeedFilter, setSelectedFeedFilter] = useState<HomeFeedFilter>('all');
@@ -180,10 +180,10 @@ export default function HomeScreen() {
         : null;
 
   // Ensure all maps have safe defaults
-  const safeProfileMap = profileMap || {};
-  const safeLikeMap = likeMap || {};
-  const safeCommentCountMap = commentCountMap || {};
-  const safeCommentPreviewMap = commentPreviewMap || {};
+  const safeProfileMap = useMemo(() => profileMap || {}, [profileMap]);
+  const safeLikeMap = useMemo(() => likeMap || {}, [likeMap]);
+  const safeCommentCountMap = useMemo(() => commentCountMap || {}, [commentCountMap]);
+  const safeCommentPreviewMap = useMemo(() => commentPreviewMap || {}, [commentPreviewMap]);
 
   const loadNextFixture = useCallback(async () => {
     const startedAt = performanceNow();
@@ -435,45 +435,68 @@ export default function HomeScreen() {
     setActiveInstagramEmbedKeys([]);
   }, [selectedFeedFilter]);
 
-  // Stable viewability config — 65 % of item must be visible for at least 200 ms
-  const viewabilityConfigRef = useRef({
+  // Video autoplay remains conservative: 65% of the complete item for at least 200 ms.
+  const videoViewabilityConfigRef = useRef({
     itemVisiblePercentThreshold: 65,
     minimumViewTime: 200,
   });
 
-  // Stable callback ref — never recreated, so FlatList never remounts cells
-  const onViewableItemsChangedRef = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
-    const firstVideo = viewableItems.find(
-      ({ item, isViewable }: ViewToken) =>
-        isViewable && getFeedItemVisibleMediaKind(item as FeedItem) === 'video',
-    );
-    const nextKey = firstVideo ? getFeedItemKey(firstVideo.item as FeedItem) : null;
-    setActiveVideoKey((prev) => {
-      if (prev === nextKey) return prev;
-      if (__DEV__) {
-        console.log('[HomeScreen] activeVideoKey →', nextKey);
-      }
-      return nextKey;
-    });
+  const onVideoViewableItemsChangedRef = useRef(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      const firstVideo = viewableItems.find(
+        ({ item, isViewable }: ViewToken) =>
+          isViewable && getFeedItemVisibleMediaKind(item as FeedItem) === 'video',
+      );
+      const nextKey = firstVideo ? getFeedItemKey(firstVideo.item as FeedItem) : null;
+      setActiveVideoKey((previous) => {
+        if (previous === nextKey) return previous;
+        if (__DEV__) {
+          console.log('[HomeScreen] activeVideoKey →', nextKey);
+        }
+        return nextKey;
+      });
+    },
+  );
 
-    const nextInstagramKeys = viewableItems
-      .filter(({ item, isViewable }: ViewToken) => {
-        const feedItem = item as FeedItem;
-        const instagramShare =
-          feedItem.kind === 'post' ? fromInstagramLinkPreview(feedItem.data.linkPreview) : null;
-        return (
-          isViewable && instagramShare !== null && isRichInstagramUrl(instagramShare.canonicalUrl)
-        );
-      })
-      .slice(0, 2)
-      .map(({ item }: ViewToken) => getFeedItemKey(item as FeedItem));
-    setActiveInstagramEmbedKeys((previous) =>
-      previous.length === nextInstagramKeys.length &&
-      previous.every((key, index) => key === nextInstagramKeys[index])
-        ? previous
-        : nextInstagramKeys,
-    );
+  // A rich embed can be taller than the viewport. Its dedicated policy uses
+  // viewport coverage and retains at most two keys across transient gaps.
+  const instagramViewabilityConfigRef = useRef({
+    viewAreaCoveragePercentThreshold: 20,
+    minimumViewTime: 200,
   });
+  const onInstagramViewableItemsChangedRef = useRef(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      const visibleInstagramKeys = viewableItems
+        .filter(({ item, isViewable }: ViewToken) => {
+          const feedItem = item as FeedItem;
+          const instagramShare =
+            feedItem.kind === 'post' ? fromInstagramLinkPreview(feedItem.data.linkPreview) : null;
+          return (
+            isViewable && instagramShare !== null && isRichInstagramUrl(instagramShare.canonicalUrl)
+          );
+        })
+        .slice(0, 2)
+        .map(({ item }: ViewToken) => getFeedItemKey(item as FeedItem));
+
+      setActiveInstagramEmbedKeys((previous) => {
+        const next = reconcileActiveInstagramEmbedKeys(previous, visibleInstagramKeys);
+        return previous.length === next.length &&
+          previous.every((key, index) => key === next[index])
+          ? previous
+          : next;
+      });
+    },
+  );
+  const viewabilityConfigCallbackPairsRef = useRef([
+    {
+      viewabilityConfig: videoViewabilityConfigRef.current,
+      onViewableItemsChanged: onVideoViewableItemsChangedRef.current,
+    },
+    {
+      viewabilityConfig: instagramViewabilityConfigRef.current,
+      onViewableItemsChanged: onInstagramViewableItemsChangedRef.current,
+    },
+  ]);
 
   const handleFlatListContentSizeChange = useCallback(
     (width: number, height: number) => {
@@ -799,8 +822,7 @@ export default function HomeScreen() {
       maxToRenderPerBatch={5}
       updateCellsBatchingPeriod={16}
       windowSize={7}
-      viewabilityConfig={viewabilityConfigRef.current}
-      onViewableItemsChanged={onViewableItemsChangedRef.current}
+      viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairsRef.current}
       onContentSizeChange={handleFlatListContentSizeChange}
       onScrollToIndexFailed={handleFeedScrollToIndexFailed}
       style={styles.container}
@@ -847,7 +869,7 @@ export default function HomeScreen() {
               onPressSocial={handleOpenNextMatchFans}
             />
           ) : null}
-          {loadingFixture ? (
+          {loadingFixture && !matchForBadge ? (
             <View style={[styles.content, styles.matchFallbackContent]}>
               <Card style={styles.card}>
                 <View style={styles.loadingContainer}>

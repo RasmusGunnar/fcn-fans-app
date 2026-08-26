@@ -12,6 +12,30 @@ export function buildInlineVideoPlaybackStatus(shouldPlay: boolean, muted: boole
   };
 }
 
+export type FeedVideoLifecycle = {
+  mountsPlayer: boolean;
+  shouldPlay: boolean;
+  isMuted: boolean;
+};
+
+/**
+ * Keeps player resource ownership separate from the card's fixed geometry.
+ * The player remains mounted while the app backgrounds, but is released when
+ * the card is no longer the single viewability-selected video.
+ */
+export function resolveFeedVideoLifecycle(
+  isActive: boolean,
+  appActive: boolean,
+  muted: boolean,
+): FeedVideoLifecycle {
+  const shouldPlay = isActive && appActive;
+  return {
+    mountsPlayer: isActive,
+    shouldPlay,
+    isMuted: muted || !shouldPlay,
+  };
+}
+
 export type InlineVideoCardLayout = {
   y: number;
   height: number;

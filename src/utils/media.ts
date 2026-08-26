@@ -4,6 +4,8 @@ import {
   getPrimaryMediaKind,
   isVideoMedia,
   normalizeMedia,
+  resolveFeedImageAspectRatio,
+  resolveFeedVideoAspectRatio,
   resolveMediaUrlWith,
   resolveRenderableMediaWith,
   resolveVideoThumbnailUrlWith,
@@ -17,6 +19,8 @@ export {
   getPrimaryMediaKind,
   isVideoMedia,
   normalizeMedia,
+  resolveFeedImageAspectRatio,
+  resolveFeedVideoAspectRatio,
   type MediaItem,
   type ResolvedMediaItem,
 };

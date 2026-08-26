@@ -30,6 +30,62 @@ export type ResolvedMediaItem = MediaItem & {
   type: 'image' | 'video';
 };
 
+export const FEED_IMAGE_FALLBACK_ASPECT_RATIO = 1;
+export const FEED_VIDEO_FALLBACK_ASPECT_RATIO = 4 / 5;
+
+function readValidDimension(candidate: unknown): number | null {
+  return typeof candidate === 'number' && Number.isFinite(candidate) && candidate > 0
+    ? candidate
+    : null;
+}
+
+function readPersistedDimensions(media: MediaItem | undefined): {
+  width: number | null;
+  height: number | null;
+} {
+  const directWidth = readValidDimension(media?.width);
+  const directHeight = readValidDimension(media?.height);
+  if (directWidth && directHeight) {
+    return { width: directWidth, height: directHeight };
+  }
+
+  const metadataWidth = readValidDimension(media?.metadata?.width);
+  const metadataHeight = readValidDimension(media?.metadata?.height);
+  if (metadataWidth && metadataHeight) {
+    return { width: metadataWidth, height: metadataHeight };
+  }
+
+  return {
+    width: null,
+    height: null,
+  };
+}
+
+/**
+ * Resolves feed image geometry before the remote image is loaded.
+ * Persisted upload dimensions win; legacy items use a deterministic square.
+ */
+export function resolveFeedImageAspectRatio(media: MediaItem | undefined): number {
+  const { width, height } = readPersistedDimensions(media);
+  if (!width || !height) return FEED_IMAGE_FALLBACK_ASPECT_RATIO;
+
+  return Math.min(Math.max(width / height, 4 / 5), 1.91);
+}
+
+/**
+ * Resolves the same bucketed ratio for both a video's poster and native player.
+ * Runtime player metadata must not resize an already-painted feed cell.
+ */
+export function resolveFeedVideoAspectRatio(media: MediaItem | undefined): number {
+  const { width, height } = readPersistedDimensions(media);
+  if (!width || !height) return FEED_VIDEO_FALLBACK_ASPECT_RATIO;
+
+  const naturalRatio = width / height;
+  if (naturalRatio < 0.9) return 4 / 5;
+  if (naturalRatio > 1.1) return 16 / 9;
+  return 1;
+}
+
 export type StoragePublicUrlResolver = (bucket: string, path: string) => string | null;
 
 export function normalizeMedia(media: unknown): MediaItem[] {

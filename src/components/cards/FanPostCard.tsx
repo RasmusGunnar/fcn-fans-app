@@ -33,6 +33,8 @@ import * as Linking from 'expo-linking';
 import {
   getMediaKind,
   normalizeMedia,
+  resolveFeedImageAspectRatio,
+  resolveFeedVideoAspectRatio,
   resolveMediaUrl,
   resolveRenderableMedia,
   resolveVideoThumbnailUrl,
@@ -54,6 +56,7 @@ import { MediaArticleSourceAvatar } from './MediaArticleSourceAvatar';
 import { FeedVideo } from '../feed/FeedVideo';
 import { InstagramEmbedCard } from '../shared/InstagramEmbedCard';
 import { fromInstagramLinkPreview, parseInstagramUrl } from '../../lib/instagram';
+import { INSTAGRAM_EMBED_INITIAL_HEIGHT } from '../../utils/instagramEmbed';
 import {
   resolveFanPostBadgeCandidate,
   type FanPostBadgeAuthorProfile,
@@ -175,7 +178,7 @@ export function FanPostCard({
   const bodyMeasurementKey = `${post.id}:${bodyText}`;
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(post.text);
-  const [imageLoadError, setImageLoadError] = useState(false);
+  const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
   const [inlineVideoMuted, setInlineVideoMuted] = useState(VIDEO_MUTED_BY_DEFAULT);
   const [bodyMeasurement, setBodyMeasurement] = useState(() => ({
     key: bodyMeasurementKey,
@@ -193,7 +196,7 @@ export function FanPostCard({
   const bodySegments = useMemo(() => splitBodyTextIntoSegments(bodyText), [bodyText]);
   const bodyCanToggle = !isMediaArticle && bodyLineCount > POST_BODY_COLLAPSED_LINES;
   const bodyNumberOfLines =
-    hasMeasuredBody && bodyCanToggle && !isBodyExpanded ? POST_BODY_COLLAPSED_LINES : undefined;
+    !isMediaArticle && !isBodyExpanded ? POST_BODY_COLLAPSED_LINES : undefined;
 
   const mediaArr = useMemo(
     () => (isMediaArticle ? [] : normalizeMedia(post.media)),
@@ -204,6 +207,8 @@ export function FanPostCard({
   const mediaUri = useMemo(() => resolveMediaUrl(firstMedia), [firstMedia]);
   const isVideo = mediaKind === 'video';
   const imageUrl = mediaKind === 'image' ? mediaUri : null;
+  const imageLoadError = imageUrl !== null && failedImageUrl === imageUrl;
+  const imageSource = useMemo(() => (imageUrl ? { uri: imageUrl } : undefined), [imageUrl]);
   const thumbnailUrl = useMemo(
     () => (isVideo ? resolveVideoThumbnailUrl(firstMedia) : null),
     [firstMedia, isVideo],
@@ -247,23 +252,8 @@ export function FanPostCard({
     },
     [bodyMeasurementKey],
   );
-  const videoAspectRatio = useMemo(() => {
-    const width = firstMedia?.width ?? firstMedia?.metadata?.width;
-    const height = firstMedia?.height ?? firstMedia?.metadata?.height;
-    if (!width || !height) return 4 / 5;
-    const natural = width / height;
-    if (natural < 0.9) return 4 / 5;
-    if (natural > 1.1) return 16 / 9;
-    return 1;
-  }, [firstMedia]);
-  const imageAspectRatio = useMemo(() => {
-    if (mediaKind !== 'image' || !firstMedia) return 1;
-    const w = firstMedia.width || firstMedia.metadata?.width;
-    const h = firstMedia.height || firstMedia.metadata?.height;
-    if (!w || !h) return 1;
-    const natural = w / h;
-    return Math.min(Math.max(natural, 4 / 5), 1.91);
-  }, [mediaKind, firstMedia]);
+  const videoAspectRatio = useMemo(() => resolveFeedVideoAspectRatio(firstMedia), [firstMedia]);
+  const imageAspectRatio = useMemo(() => resolveFeedImageAspectRatio(firstMedia), [firstMedia]);
 
   const deepLink = Linking.createURL(`/post/${post.id}`);
   const handleShare = () => {
@@ -524,12 +514,28 @@ export function FanPostCard({
         bodyContent
       ) : bodyText.length > 0 ? (
         <View style={styles.bodyTextContainer}>
+          {!isMediaArticle && !hasMeasuredBody ? (
+            <View
+              style={styles.bodyMeasureLayer}
+              pointerEvents="none"
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+            >
+              <Text
+                variant="body"
+                color="primary"
+                style={styles.bodyText}
+                onTextLayout={handleBodyTextLayout}
+              >
+                {renderBodyTextSegments()}
+              </Text>
+            </View>
+          ) : null}
           <Text
             variant="body"
             color="primary"
             style={styles.bodyText}
             numberOfLines={bodyNumberOfLines}
-            onTextLayout={hasMeasuredBody ? undefined : handleBodyTextLayout}
           >
             {renderBodyTextSegments()}
           </Text>
@@ -551,65 +557,30 @@ export function FanPostCard({
       ) : null}
       {!isMediaArticle && instagramShare ? (
         <View style={styles.externalShareContainer}>
-          <InstagramEmbedCard attachment={instagramShare} enabled={isInstagramEmbedActive} />
+          <InstagramEmbedCard
+            attachment={instagramShare}
+            enabled={isInstagramEmbedActive}
+            fixedHeight={INSTAGRAM_EMBED_INITIAL_HEIGHT}
+          />
         </View>
       ) : null}
       {isMediaArticle && post.linkPreview ? (
         <ArticlePreview preview={post.linkPreview} fallbackLabel="Artikel" />
       ) : !firstMedia ? null : isVideo ? (
         videoPresentation.canOpen ? (
-          <CardMedia fullBleed aspectRatio={null}>
-            {videoPresentation.mountsInlinePlayer && isActiveVideo ? (
-              <FeedVideo
-                uri={mediaUri!}
-                isActive
-                muted={inlineVideoMuted}
-                onPress={handleOpenMediaViewer(0)}
-                onToggleMuted={handleToggleInlineVideoMuted}
-                naturalWidth={firstMedia?.width ?? firstMedia?.metadata?.width}
-                naturalHeight={firstMedia?.height ?? firstMedia?.metadata?.height}
-                posterUri={videoPresentation.posterUri ?? undefined}
-              />
-            ) : (
-              <Pressable
-                style={styles.mediaPressable}
-                onPress={handleOpenMediaViewer(0)}
-                accessibilityRole="button"
-                accessibilityLabel="Åbn video"
-              >
-                <CardMedia aspectRatio={videoAspectRatio}>
-                  {videoPresentation.posterUri ? (
-                    <Image
-                      source={{ uri: videoPresentation.posterUri }}
-                      style={styles.mediaImage}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <View style={styles.videoPosterFallback} />
-                  )}
-                  <View
-                    style={[
-                      styles.videoOverlay,
-                      !videoPresentation.posterUri && styles.videoOverlayWithoutPoster,
-                    ]}
-                    pointerEvents="none"
-                  >
-                    <Ionicons
-                      name="play"
-                      size={theme.components.icon.size.lg}
-                      color={
-                        videoPresentation.posterUri
-                          ? theme.colors.text.inverse
-                          : theme.colors.text.secondary
-                      }
-                    />
-                  </View>
-                </CardMedia>
-              </Pressable>
-            )}
+          <CardMedia fullBleed aspectRatio={videoAspectRatio}>
+            <FeedVideo
+              uri={mediaUri!}
+              isActive={videoPresentation.mountsInlinePlayer && isActiveVideo}
+              muted={inlineVideoMuted}
+              onPress={handleOpenMediaViewer(0)}
+              onToggleMuted={handleToggleInlineVideoMuted}
+              aspectRatio={videoAspectRatio}
+              posterUri={videoPresentation.posterUri ?? undefined}
+            />
           </CardMedia>
         ) : (
-          <CardMedia fullBleed aspectRatio={null}>
+          <CardMedia fullBleed aspectRatio={videoAspectRatio}>
             <View style={styles.videoPlaceholder}>
               <Text variant="caption" color="secondary">
                 Video kunne ikke afspilles
@@ -617,7 +588,7 @@ export function FanPostCard({
             </View>
           </CardMedia>
         )
-      ) : imageUrl && !imageLoadError ? (
+      ) : imageUrl ? (
         <CardMedia fullBleed aspectRatio={imageAspectRatio}>
           <Pressable
             style={styles.mediaImagePressable}
@@ -625,22 +596,30 @@ export function FanPostCard({
             accessibilityRole="button"
             accessibilityLabel="Åbn billede"
           >
-            <Image
-              source={{ uri: imageUrl }}
-              style={styles.mediaImage}
-              resizeMode="cover"
-              onError={(e) => {
-                if (__DEV__) {
-                  console.log('[PostImageError]', {
-                    postId: post.id,
-                    uri: imageUrl,
-                    native: e?.nativeEvent,
-                  });
-                }
-                setImageLoadError(true);
-              }}
-            />
-            {firstMedia?.demoVideoPreview ? (
+            {imageLoadError ? (
+              <View style={styles.imageErrorContainer}>
+                <Text variant="caption" color="secondary" style={styles.imageErrorText}>
+                  Billede kunne ikke indlæses
+                </Text>
+              </View>
+            ) : (
+              <Image
+                source={imageSource!}
+                style={styles.mediaImage}
+                resizeMode="cover"
+                onError={(e) => {
+                  if (__DEV__) {
+                    console.log('[PostImageError]', {
+                      postId: post.id,
+                      uri: imageUrl,
+                      native: e?.nativeEvent,
+                    });
+                  }
+                  setFailedImageUrl(imageUrl);
+                }}
+              />
+            )}
+            {!imageLoadError && firstMedia?.demoVideoPreview ? (
               <View style={styles.demoVideoOverlay} pointerEvents="none">
                 <View style={styles.demoVideoPlayButton}>
                   <Ionicons name="play" size={theme.spacing[6]} color={theme.colors.text.inverse} />
@@ -652,12 +631,6 @@ export function FanPostCard({
             ) : null}
           </Pressable>
         </CardMedia>
-      ) : imageLoadError && __DEV__ ? (
-        <View style={styles.imageErrorContainer}>
-          <Text variant="caption" color="secondary" style={styles.imageErrorText}>
-            ⚠️ Billede kunne ikke indlæses
-          </Text>
-        </View>
       ) : (
         <View style={styles.mediaFallback}>
           <Text variant="caption" color="secondary">
@@ -680,6 +653,12 @@ const styles = StyleSheet.create({
   bodyTextContainer: {
     position: 'relative',
     marginBottom: theme.spacing[3],
+  },
+  bodyMeasureLayer: {
+    position: 'absolute',
+    left: theme.spacing[0],
+    right: theme.spacing[0],
+    opacity: 0,
   },
   bodyText: {},
   externalShareContainer: {
@@ -713,9 +692,6 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: theme.colors.border.default,
   },
-  mediaPressable: {
-    width: '100%',
-  },
   mediaImagePressable: {
     width: '100%',
     height: '100%',
@@ -740,38 +716,23 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1,
   },
-  videoPosterFallback: {
+  imageErrorContainer: {
     width: '100%',
     height: '100%',
-    backgroundColor: theme.colors.bg.subtle,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  videoOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: theme.colors.overlay.medium,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  videoOverlayWithoutPoster: {
-    backgroundColor: theme.colors.bg.subtle,
-  },
-  imageErrorContainer: {
     padding: theme.spacing[2],
-    marginVertical: theme.spacing[1],
     backgroundColor: theme.colors.border.default,
-    borderRadius: theme.radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   imageErrorText: {
     textAlign: 'center',
   },
   videoPlaceholder: {
-    height: 120,
+    width: '100%',
+    height: '100%',
     backgroundColor: theme.colors.border.default,
-    borderRadius: theme.radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: theme.spacing[2],
   },
   mediaFallback: {
     width: '100%',

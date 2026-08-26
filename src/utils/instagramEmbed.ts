@@ -6,7 +6,80 @@ export const INSTAGRAM_EMBED_SCRIPT_URL = 'https://www.instagram.com/embed.js';
 export const INSTAGRAM_EMBED_MIN_HEIGHT = 220;
 export const INSTAGRAM_EMBED_MAX_HEIGHT = 900;
 export const INSTAGRAM_EMBED_INITIAL_HEIGHT = 520;
+export const INSTAGRAM_EMBED_HEIGHT_EPSILON = 4;
 const MAX_EMBED_HTML_BYTES = 200 * 1024;
+const INSTAGRAM_EMBED_HEIGHT_CACHE_LIMIT = 100;
+const measuredHeightCache = new Map<string, number>();
+
+function clampInstagramEmbedHeight(height: number): number {
+  return Math.min(
+    INSTAGRAM_EMBED_MAX_HEIGHT,
+    Math.max(INSTAGRAM_EMBED_MIN_HEIGHT, Math.ceil(height)),
+  );
+}
+
+export function getInstagramEmbedReservedHeight(canonicalUrl: string): number {
+  return measuredHeightCache.get(canonicalUrl) ?? INSTAGRAM_EMBED_INITIAL_HEIGHT;
+}
+
+export function resolveInstagramEmbedFrameHeight(
+  canonicalUrl: string,
+  fixedHeight?: number,
+): number {
+  if (typeof fixedHeight === 'number' && Number.isFinite(fixedHeight) && fixedHeight > 0) {
+    return fixedHeight;
+  }
+  return getInstagramEmbedReservedHeight(canonicalUrl);
+}
+
+export function rememberInstagramEmbedHeight(canonicalUrl: string, measuredHeight: number): number {
+  if (!canonicalUrl || !Number.isFinite(measuredHeight)) {
+    return getInstagramEmbedReservedHeight(canonicalUrl);
+  }
+
+  const nextHeight = clampInstagramEmbedHeight(measuredHeight);
+  const currentHeight = getInstagramEmbedReservedHeight(canonicalUrl);
+  if (Math.abs(nextHeight - currentHeight) < INSTAGRAM_EMBED_HEIGHT_EPSILON) {
+    return currentHeight;
+  }
+
+  if (
+    !measuredHeightCache.has(canonicalUrl) &&
+    measuredHeightCache.size >= INSTAGRAM_EMBED_HEIGHT_CACHE_LIMIT
+  ) {
+    const oldestKey = measuredHeightCache.keys().next().value;
+    if (typeof oldestKey === 'string') measuredHeightCache.delete(oldestKey);
+  }
+  measuredHeightCache.set(canonicalUrl, nextHeight);
+  return nextHeight;
+}
+
+export function clearInstagramEmbedHeightCache(): void {
+  measuredHeightCache.clear();
+}
+
+/**
+ * Keeps at most two rich WebViews alive across transient viewability gaps.
+ * A newly visible embed takes priority; FlatList virtualization still releases
+ * the containing cell when it leaves the render window.
+ */
+export function reconcileActiveInstagramEmbedKeys(
+  previousKeys: readonly string[],
+  visibleKeys: readonly string[],
+  limit = 2,
+): string[] {
+  const safeLimit = Math.max(0, Math.floor(limit));
+  if (safeLimit === 0) return [];
+
+  const uniquePrevious = [...new Set(previousKeys.filter(Boolean))];
+  const uniqueVisible = [...new Set(visibleKeys.filter(Boolean))];
+  if (uniqueVisible.length === 0) return uniquePrevious.slice(0, safeLimit);
+
+  return [...uniqueVisible, ...uniquePrevious.filter((key) => !uniqueVisible.includes(key))].slice(
+    0,
+    safeLimit,
+  );
+}
 
 function byteLength(value: string): number {
   try {
@@ -150,10 +223,7 @@ export function parseInstagramEmbedHeightMessage(rawData: unknown): number | nul
     ) {
       return null;
     }
-    return Math.min(
-      INSTAGRAM_EMBED_MAX_HEIGHT,
-      Math.max(INSTAGRAM_EMBED_MIN_HEIGHT, Math.ceil(record.height)),
-    );
+    return clampInstagramEmbedHeight(record.height);
   } catch {
     return null;
   }
@@ -179,18 +249,31 @@ export function buildInstagramEmbedDocument(rawHtml: string): string | null {
   <script nonce="fcn-height">
     (function () {
       var lastHeight = 0;
+      var settleTimer = null;
+      function hasRenderedEmbed() {
+        return Boolean(
+          document.querySelector('.instagram-media-rendered') ||
+          document.querySelector('iframe[src*="instagram.com"]')
+        );
+      }
       function reportHeight() {
+        settleTimer = null;
+        if (!hasRenderedEmbed()) return;
         var height = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
-        if (!Number.isFinite(height) || height <= 0 || Math.abs(height - lastHeight) < 2) return;
+        if (!Number.isFinite(height) || height <= 0 || Math.abs(height - lastHeight) < 4) return;
         lastHeight = height;
         window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'height', height: height }));
       }
-      new MutationObserver(reportHeight).observe(document.body, { childList: true, subtree: true, attributes: true });
-      window.addEventListener('load', reportHeight);
-      window.addEventListener('resize', reportHeight);
-      reportHeight();
-      setTimeout(reportHeight, 500);
-      setTimeout(reportHeight, 1500);
+      function scheduleHeightReport() {
+        if (settleTimer !== null) clearTimeout(settleTimer);
+        settleTimer = setTimeout(reportHeight, 300);
+      }
+      new MutationObserver(scheduleHeightReport).observe(document.body, { childList: true, subtree: true, attributes: true });
+      window.addEventListener('load', scheduleHeightReport);
+      window.addEventListener('resize', scheduleHeightReport);
+      scheduleHeightReport();
+      setTimeout(scheduleHeightReport, 500);
+      setTimeout(scheduleHeightReport, 1500);
     })();
   </script>
 </body>

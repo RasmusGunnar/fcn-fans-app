@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useMemo } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useTheme, type Theme } from '../../theme';
 import type { SharedLinkAttachment } from '../../types/externalShare';
 import { getInstagramResourceLabel, parseInstagramUrl } from '../../lib/instagram';
@@ -12,6 +12,8 @@ type InstagramCardProps = {
   compact?: boolean;
   onRemove?: () => void;
   unavailable?: boolean;
+  showOpenButton?: boolean;
+  style?: StyleProp<ViewStyle>;
 };
 
 export function InstagramCard({
@@ -19,6 +21,8 @@ export function InstagramCard({
   compact = false,
   onRemove,
   unavailable = false,
+  showOpenButton = true,
+  style,
 }: InstagramCardProps) {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
@@ -26,7 +30,7 @@ export function InstagramCard({
   if (!validated) return null;
 
   return (
-    <View style={[styles.card, compact && styles.cardCompact]}>
+    <View style={[styles.card, compact && styles.cardCompact, style]}>
       <View style={styles.headerRow}>
         <View style={styles.providerIcon}>
           <Ionicons name="logo-instagram" size={compact ? 20 : 24} color={theme.colors.primary} />
@@ -55,7 +59,7 @@ export function InstagramCard({
             : 'Brug knappen nedenfor for at åbne indholdet på Instagram.'}
         </Text>
       ) : null}
-      <InstagramOpenButton canonicalUrl={validated.canonicalUrl} />
+      {showOpenButton ? <InstagramOpenButton canonicalUrl={validated.canonicalUrl} /> : null}
     </View>
   );
 }
