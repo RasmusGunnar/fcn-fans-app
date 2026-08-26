@@ -54,6 +54,7 @@
     "src/utils/__tests__/communityFeed.test.ts",
     "src/utils/__tests__/commentLikeState.test.ts",
     "src/utils/__tests__/fanPostBadge.test.ts",
+    "src/utils/__tests__/feedMediaStability.test.ts",
     "src/services/__tests__/weeklyTopFanApiFallback.test.ts"
   ]
 }

@@ -33,6 +33,7 @@
     "test:media-article-candidates": "tsc -p tsconfig.media-article-tests.json && node build/media-article-tests/utils/__tests__/mediaArticleCandidates.test.js && node build/media-article-tests/utils/__tests__/mediaArticleCandidateList.test.js && node build/media-article-tests/utils/__tests__/mediaArticleApprovalError.test.js && tsc -p tsconfig.media-article-candidate-core-tests.json && node build/media-article-candidate-tests/supabase/functions/_shared/__tests__/mediaArticleCandidateCore.test.js && node build/media-article-candidate-tests/supabase/functions/_shared/__tests__/newsMedia.test.js",
     "test:post-media": "tsc -p tsconfig.media-article-tests.json && node build/media-article-tests/utils/__tests__/postMediaMapping.test.js",
     "test:feed-video": "tsc -p tsconfig.media-article-tests.json && node build/media-article-tests/utils/__tests__/videoPlaybackBehavior.test.js",
+    "test:feed-media-stability": "tsc -p tsconfig.media-article-tests.json && node --test build/media-article-tests/utils/__tests__/feedMediaStability.test.js",
     "test:song-audio": "tsc -p tsconfig.song-audio-tests.json && node build/song-audio-tests/utils/__tests__/songAudio.test.js",
     "test:direct-messages": "tsc -p tsconfig.direct-message-tests.json && node build/direct-message-tests/utils/__tests__/directMessages.test.js",
     "test:instagram-sharing": "tsc -p tsconfig.instagram-sharing-tests.json && node build/instagram-sharing-tests/utils/__tests__/instagramSharing.test.js",

@@ -5,11 +5,18 @@ import test from 'node:test';
 import vm from 'node:vm';
 import {
   buildInstagramEmbedDocument,
+  clearInstagramEmbedHeightCache,
+  getInstagramEmbedReservedHeight,
   getInstagramEmbedUiState,
+  INSTAGRAM_EMBED_HEIGHT_EPSILON,
+  INSTAGRAM_EMBED_INITIAL_HEIGHT,
   INSTAGRAM_EMBED_SCRIPT_URL,
   INSTAGRAM_EMBED_MAX_HEIGHT,
   INSTAGRAM_EMBED_MIN_HEIGHT,
   parseInstagramEmbedHeightMessage,
+  reconcileActiveInstagramEmbedKeys,
+  rememberInstagramEmbedHeight,
+  resolveInstagramEmbedFrameHeight,
   sanitizeInstagramEmbedMarkup,
   validateInstagramEmbedResponse,
 } from '../instagramEmbed';
@@ -89,6 +96,10 @@ test('builds a shell with only the official Instagram script and a restrictive C
   assert.doesNotMatch(document, /evil\.test/);
   assert.match(document, /Content-Security-Policy/);
   assert.match(document, /ReactNativeWebView\.postMessage/);
+  assert.match(document, /scheduleHeightReport/);
+  assert.match(document, /clearTimeout\(settleTimer\)/);
+  assert.match(document, /instagram-media-rendered/);
+  assert.match(document, /iframe\[src\*="instagram\.com"\]/);
   assert.match(document, /__FCN_INSTAGRAM_NAVIGATION_GUARD__/);
   assert.match(document, /img-src https:\/\/www\.instagram\.com/);
   assert.doesNotMatch(document, /img-src https: data:/);
@@ -106,6 +117,55 @@ test('accepts only strict finite height messages and clamps their range', () => 
   assert.equal(parseInstagramEmbedHeightMessage('{"type":"url","height":400}'), null);
   assert.equal(parseInstagramEmbedHeightMessage('{"type":"height","height":"400"}'), null);
   assert.equal(parseInstagramEmbedHeightMessage('{"type":"height","height":400,"url":"x"}'), null);
+});
+
+test('retains measured modal geometry by canonical URL across renderer remounts', () => {
+  clearInstagramEmbedHeightCache();
+  assert.equal(getInstagramEmbedReservedHeight(URL), INSTAGRAM_EMBED_INITIAL_HEIGHT);
+
+  const measuredHeight = 642;
+  assert.equal(rememberInstagramEmbedHeight(URL, measuredHeight), measuredHeight);
+  assert.equal(getInstagramEmbedReservedHeight(URL), measuredHeight);
+  assert.equal(
+    rememberInstagramEmbedHeight(URL, measuredHeight + INSTAGRAM_EMBED_HEIGHT_EPSILON - 1),
+    measuredHeight,
+    'small WebView measurement jitter must not resize a measured render frame',
+  );
+  assert.equal(
+    getInstagramEmbedReservedHeight('https://www.instagram.com/reel/OTHER_12/'),
+    INSTAGRAM_EMBED_INITIAL_HEIGHT,
+  );
+  clearInstagramEmbedHeightCache();
+});
+
+test('feed geometry remains fixed when the rich renderer reports a different height', () => {
+  clearInstagramEmbedHeightCache();
+  assert.equal(
+    resolveInstagramEmbedFrameHeight(URL, INSTAGRAM_EMBED_INITIAL_HEIGHT),
+    INSTAGRAM_EMBED_INITIAL_HEIGHT,
+  );
+
+  rememberInstagramEmbedHeight(URL, 642);
+  assert.equal(
+    resolveInstagramEmbedFrameHeight(URL, INSTAGRAM_EMBED_INITIAL_HEIGHT),
+    INSTAGRAM_EMBED_INITIAL_HEIGHT,
+    'placeholder and measured rich content must retain the feed reservation',
+  );
+  clearInstagramEmbedHeightCache();
+});
+
+test('retains at most two rich embeds across transient viewability gaps', () => {
+  assert.deepEqual(reconcileActiveInstagramEmbedKeys([], ['post:a']), ['post:a']);
+  assert.deepEqual(reconcileActiveInstagramEmbedKeys(['post:a'], []), ['post:a']);
+  assert.deepEqual(reconcileActiveInstagramEmbedKeys(['post:a'], ['post:b']), ['post:b', 'post:a']);
+  assert.deepEqual(reconcileActiveInstagramEmbedKeys(['post:b', 'post:a'], ['post:c']), [
+    'post:c',
+    'post:b',
+  ]);
+  assert.deepEqual(reconcileActiveInstagramEmbedKeys(['post:a'], ['post:b', 'post:c', 'post:d']), [
+    'post:b',
+    'post:c',
+  ]);
 });
 
 test('allows the controlled shell and only explicit official embed subframes', () => {
@@ -331,12 +391,12 @@ test('feed and modal route rich content through the same safe renderer and CTA',
 
   assert.match(
     feed,
-    /<InstagramEmbedCard attachment=\{instagramShare\} enabled=\{isInstagramEmbedActive\}/,
+    /<InstagramEmbedCard[\s\S]*?attachment=\{instagramShare\}[\s\S]*?enabled=\{isInstagramEmbedActive\}[\s\S]*?fixedHeight=\{INSTAGRAM_EMBED_INITIAL_HEIGHT\}/,
   );
   assert.match(feed, /if \(parseInstagramUrl\(url\)\) return/);
   assert.match(feed, /segment\.type === 'url' && !parseInstagramUrl\(segment\.url\)/);
-  assert.match(embedCard, /<InstagramEmbedRenderer embed=\{request\.embed\}/);
-  assert.match(embedCard, /<InstagramOpenButton canonicalUrl=\{request\.embed\.canonicalUrl\}/);
+  assert.match(embedCard, /<InstagramEmbedRenderer[\s\S]*?embed=\{request\.embed\}/);
+  assert.match(embedCard, /onHeightChange=\{handleHeightChange\}/);
   assert.match(embedCard, /<InstagramOpenButton canonicalUrl=\{attachment\.canonicalUrl\}/);
   assert.match(modal, /<InstagramEmbedCard attachment=\{attachment\} enabled=\{visible\}/);
   assert.doesNotMatch(modal, /Linking|openInstagramFromExplicitCta/);
@@ -368,11 +428,11 @@ test('fallback and rich CTAs use the sole centralized Linking path', () => {
 
   assert.match(
     embedCard,
-    /return <InstagramCard attachment=\{attachment\} onRemove=\{onRemove\} unavailable \/>/,
+    /<InstagramCard[\s\S]*?attachment=\{attachment\}[\s\S]*?unavailable[\s\S]*?showOpenButton=\{false\}/,
   );
   assert.match(
     embedCard,
-    /if \(uiState === 'placeholder'\) \{\s*return <InstagramCard attachment=\{attachment\} onRemove=\{onRemove\} \/>/,
+    /if \(uiState === 'placeholder'\)[\s\S]*?<InstagramCard[\s\S]*?showOpenButton=\{false\}/,
   );
   assert.match(fallback, /<InstagramOpenButton canonicalUrl=\{validated\.canonicalUrl\} \/>/);
   assert.match(
@@ -391,6 +451,55 @@ test('fallback and rich CTAs use the sole centralized Linking path', () => {
     ).length,
     1,
   );
+});
+
+test('placeholder, loading, rich and fallback content share one reserved outer frame', () => {
+  const embedCard = readWorkspaceFile('src/components/shared/InstagramEmbedCard.tsx');
+  const renderer = readWorkspaceFile('src/components/shared/InstagramEmbedRenderer.tsx');
+  const hook = readWorkspaceFile('src/hooks/useInstagramEmbed.ts');
+  const home = readWorkspaceFile('src/screens/HomeScreen.tsx');
+
+  assert.equal((embedCard.match(/styles\.mediaFrame/g) ?? []).length, 1);
+  assert.match(embedCard, /styles\.mediaFrame, \{ height: reservedHeight \}/);
+  assert.match(embedCard, /let frameContent: React\.ReactNode/);
+  assert.match(embedCard, /uiState === 'placeholder'/);
+  assert.match(embedCard, /uiState === 'loading'/);
+  assert.match(embedCard, /uiState === 'ready'/);
+  assert.match(embedCard, /unavailable/);
+  assert.doesNotMatch(renderer, /setHeight|INSTAGRAM_EMBED_INITIAL_HEIGHT/);
+  assert.match(renderer, /onHeightChange\(nextHeight\)/);
+  assert.match(renderer, /key=\{`\$\{embed\.canonicalUrl\}:\$\{navigationEpoch\}`\}/);
+  assert.match(renderer, /const source = useMemo\(/);
+  assert.match(renderer, /source=\{source\}/);
+  assert.doesNotMatch(renderer, /source=\{\{ html: document/);
+  assert.match(renderer, /ref=\{webViewRef\}/);
+  assert.match(
+    renderer,
+    /onContentProcessDidTerminate=\{\(\) => webViewRef\.current\?\.reload\(\)\}/,
+  );
+  assert.match(
+    renderer,
+    /onRenderProcessGone=\{\(\) => setNavigationEpoch\(\(value\) => value \+ 1\)\}/,
+  );
+  assert.doesNotMatch(renderer, /onContentProcessDidTerminate=\{onFailure\}/);
+
+  assert.match(hook, /completedRequestRef/);
+  assert.match(hook, /fetchInstagramEmbed\(\{ canonicalUrl \}\)/);
+  assert.match(hook, /expiresAtMs: Date\.parse\(response\.expiresAt\)/);
+  assert.match(hook, /completedRequest\.expiresAtMs > Date\.now\(\)/);
+  assert.match(hook, /scopedState\.canonicalUrl === canonicalUrl/);
+  assert.doesNotMatch(
+    hook,
+    /\.catch[\s\S]*?completedRequestRef\.current = \{ canonicalUrl, attempt \}/,
+  );
+  assert.doesNotMatch(hook, /\[attachment\.canonicalUrl, attachment,/);
+
+  assert.match(home, /reconcileActiveInstagramEmbedKeys\(previous, visibleInstagramKeys\)/);
+  assert.match(
+    home,
+    /viewabilityConfigCallbackPairs=\{viewabilityConfigCallbackPairsRef\.current\}/,
+  );
+  assert.match(home, /viewAreaCoveragePercentThreshold: 20/);
 });
 
 test('maps lazy, loading, ready and failed requests to deterministic UI states', () => {

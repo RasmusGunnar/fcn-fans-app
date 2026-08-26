@@ -4,10 +4,29 @@ import {
   buildFeedVideoPresentation,
   buildInlineVideoPlaybackStatus,
   buildMediaViewerParams,
+  resolveFeedVideoLifecycle,
   selectActiveInlineVideoKey,
   toggleVideoMuted,
   VIDEO_MUTED_BY_DEFAULT,
 } from '../videoPlaybackBehavior';
+
+test('video lifecycle releases offscreen players and preserves foreground state', () => {
+  assert.deepEqual(resolveFeedVideoLifecycle(false, true, false), {
+    mountsPlayer: false,
+    shouldPlay: false,
+    isMuted: true,
+  });
+  assert.deepEqual(resolveFeedVideoLifecycle(true, true, false), {
+    mountsPlayer: true,
+    shouldPlay: true,
+    isMuted: false,
+  });
+  assert.deepEqual(resolveFeedVideoLifecycle(true, false, false), {
+    mountsPlayer: true,
+    shouldPlay: false,
+    isMuted: true,
+  });
+});
 
 test('feed video presentation mounts inline player and autoplays when a video URI exists', () => {
   const presentation = buildFeedVideoPresentation(
