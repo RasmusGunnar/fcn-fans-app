@@ -3,7 +3,7 @@
     "name": "FCN Fans",
     "slug": "fcn-fans-mvp",
     "scheme": "fcnfans",
-    "version": "0.1.10",
+    "version": "0.1.11",
     "orientation": "portrait",
     "icon": "./assets/app-icon.png",
     "userInterfaceStyle": "automatic",
@@ -15,7 +15,7 @@
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
-      "buildNumber": "7",
+      "buildNumber": "72",
       "bundleIdentifier": "dk.rasmusgunnar.fcnfans",
       "usesAppleSignIn": true,
       "infoPlist": {
