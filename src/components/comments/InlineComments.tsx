@@ -9,6 +9,7 @@ import {
   TextInput,
   Pressable,
   ActivityIndicator,
+  AppState,
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -57,6 +58,8 @@ interface CommentRecord extends CommentReply {
 }
 
 interface InlineCommentsProps {
+  latestFirst?: boolean;
+  refreshIntervalMs?: number;
   targetType: CommentTargetType;
   targetId: string;
   currentUserId: string | undefined;
@@ -94,6 +97,8 @@ export function InlineComments({
   quickActionSuccessText,
   quickActionFeedbackForValue,
   replyModeLabel,
+  latestFirst = false,
+  refreshIntervalMs,
 }: InlineCommentsProps) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -216,7 +221,7 @@ export function InlineComments({
 
     records.forEach((record) => {
       const { parent_id, ...rest } = record;
-      if (parent_id) {
+      if (parent_id && records.some((parent) => parent.id === parent_id)) {
         if (!repliesByParent[parent_id]) {
           repliesByParent[parent_id] = [];
         }
@@ -243,94 +248,91 @@ export function InlineComments({
     });
   }, []);
 
-  const fetchComments = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const fetchComments = useCallback(
+    async (quiet = false) => {
+      if (!quiet) setLoading(true);
+      setError(null);
 
-    try {
-      if (isDemoMode) {
-        const rows: CommentRecord[] = getDemoComments(targetType, targetId).map((comment) => ({
-          id: comment.id,
-          created_at: comment.created_at,
-          author_id: comment.author_id,
-          text: comment.text,
-          parent_id: comment.parent_id,
-          author_display_name: comment.author_display_name,
-          author_avatar_url: comment.author_avatar_url,
-          likeCount: comment.like_count,
-          likedByMe: comment.liked_by_me,
-        }));
-        setComments(groupComments(rows));
-        return;
-      }
+      try {
+        if (isDemoMode) {
+          const rows: CommentRecord[] = getDemoComments(targetType, targetId).map((comment) => ({
+            id: comment.id,
+            created_at: comment.created_at,
+            author_id: comment.author_id,
+            text: comment.text,
+            parent_id: comment.parent_id,
+            author_display_name: comment.author_display_name,
+            author_avatar_url: comment.author_avatar_url,
+            likeCount: comment.like_count,
+            likedByMe: comment.liked_by_me,
+          }));
+          setComments(groupComments(rows));
+          return;
+        }
 
-      const { data, error: fetchError } = await supabase
-        .from('comments_v2')
-        .select('id, created_at, author_id, text, parent_id')
-        .eq('target_type', targetType)
-        .eq('target_id', targetId)
-        .order('created_at', { ascending: true }); // Latest at bottom for Instagram-style
+        const query = supabase
+          .from('comments_v2')
+          .select('id, created_at, author_id, text, parent_id')
+          .eq('target_type', targetType)
+          .eq('target_id', targetId)
+          .order('created_at', { ascending: !latestFirst })
+          .order('id', { ascending: !latestFirst });
+        const { data, error: fetchError } = await query;
 
-      if (fetchError) throw fetchError;
+        if (fetchError) throw fetchError;
 
-      // Fetch author info (display_name, avatar_url) for display
-      const rows = (data || []) as CommentRecord[];
-      const likeStateByCommentId = await fetchCommentLikeStates(
-        rows.map((comment) => comment.id),
-        currentUserId,
-      );
-      const commentsWithAuthors = await Promise.all(
-        rows.map(async (comment) => {
-          const likeState = likeStateByCommentId.get(comment.id) ?? {
-            likeCount: 0,
-            likedByMe: false,
-          };
-          const { data: profile, error: profileError } = await supabase
-            .from('profiles')
-            .select('id, display_name, avatar_url')
-            .eq('id', comment.author_id)
-            .single();
-
-          if (__DEV__ && profileError) {
-            console.warn(
-              `[InlineComments] Profile fetch error for ${comment.author_id.substring(0, 8)}:`,
-              profileError.message,
-            );
-          }
-
-          // Guard against undefined profile
-          if (!profile) {
-            return {
-              ...comment,
-              author_display_name: null,
-              author_avatar_url: null,
-              likeCount: likeState.likeCount,
-              likedByMe: likeState.likedByMe,
-            };
-          }
-
+        // Fetch author info (display_name, avatar_url) for display
+        const rows = (data || []) as CommentRecord[];
+        const likeStateByCommentId = await fetchCommentLikeStates(
+          rows.map((comment) => comment.id),
+          currentUserId,
+        );
+        const ids = [...new Set(rows.map((comment) => comment.author_id))];
+        const profileResult = ids.length
+          ? await supabase.from('profiles').select('id, display_name, avatar_url').in('id', ids)
+          : { data: [], error: null };
+        if (profileResult.error) throw profileResult.error;
+        const profiles = new Map(
+          (profileResult.data ?? []).map((profile) => [profile.id, profile]),
+        );
+        const commentsWithAuthors = rows.map((comment) => {
+          const profile = profiles.get(comment.author_id);
+          const like = likeStateByCommentId.get(comment.id);
           return {
             ...comment,
-            author_display_name: profile.display_name || null,
-            author_avatar_url: profile.avatar_url || null,
-            likeCount: likeState.likeCount,
-            likedByMe: likeState.likedByMe,
+            author_display_name: profile?.display_name ?? null,
+            author_avatar_url: profile?.avatar_url ?? null,
+            likeCount: like?.likeCount ?? 0,
+            likedByMe: like?.likedByMe ?? false,
           };
-        }),
-      );
+        });
 
-      setComments(groupComments(commentsWithAuthors));
-    } catch (err: any) {
-      console.error('[InlineComments] Fetch error:', err);
-      setError('Kunne ikke hente kommentarer');
-    } finally {
-      setLoading(false);
-    }
-  }, [currentUserId, groupComments, targetType, targetId]);
+        setComments(groupComments(commentsWithAuthors));
+      } catch (err: any) {
+        console.error('[InlineComments] Fetch error:', err);
+        setError('Kunne ikke hente kommentarer');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [currentUserId, groupComments, targetType, targetId, latestFirst],
+  );
 
   useEffect(() => {
-    fetchComments();
+    void fetchComments();
   }, [fetchComments]);
+  useEffect(() => {
+    if (!refreshIntervalMs) return;
+    const refresh = () => {
+      if (AppState.currentState === 'active') void fetchComments(true);
+    };
+    const timer = setInterval(refresh, Math.max(60_000, refreshIntervalMs));
+    const subscription = AppState.addEventListener('change', refresh);
+    return () => {
+      clearInterval(timer);
+      subscription.remove();
+    };
+  }, [fetchComments, refreshIntervalMs]);
 
   useEffect(() => {
     return () => {
@@ -1092,8 +1094,10 @@ export function InlineComments({
   const hasHiddenInlineComments = variant === 'inline' && comments.length > maxInlineComments;
   const commentsToDisplay =
     variant === 'inline' && !showAllInlineComments
-      ? comments.slice(0, maxInlineComments)
-      : comments;
+      ? (latestFirst ? [...comments].reverse() : comments).slice(0, maxInlineComments)
+      : latestFirst
+        ? [...comments].reverse()
+        : comments;
 
   const renderContent = () => {
     if (loading) {
@@ -1113,7 +1117,7 @@ export function InlineComments({
           <Text variant="caption" color="error" style={styles.errorText}>
             {error}
           </Text>
-          <Pressable onPress={fetchComments}>
+          <Pressable onPress={() => void fetchComments()}>
             <Text variant="caption" color="primary" style={styles.retryText}>
               Prøv igen
             </Text>
@@ -1289,18 +1293,30 @@ export function InlineComments({
         </View>
       ) : null}
 
+      {latestFirst ? (
+        <>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => void fetchComments(true)}
+            style={{ padding: 12 }}
+          >
+            <Text color="primary">Opdater · nyeste kommentarer</Text>
+          </Pressable>
+          {composerSection}
+        </>
+      ) : null}
       {renderContent()}
 
-      {variant === 'inline' ? (
+      {!latestFirst && variant === 'inline' ? (
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'position' : 'height'}
           keyboardVerticalOffset={Platform.OS === 'ios' ? -theme.spacing[2] : 0}
         >
           {composerSection}
         </KeyboardAvoidingView>
-      ) : (
+      ) : !latestFirst ? (
         composerSection
-      )}
+      ) : null}
     </>
   );
 

@@ -28,9 +28,9 @@ type CommunityWithAvatar = Community & {
   imageUrl?: string | null;
 };
 
-async function withTimeout<T>(promise: Promise<T>, label: string, ms = 8000): Promise<T> {
+async function withTimeout<T>(promise: PromiseLike<T>, label: string, ms = 8000): Promise<T> {
   return Promise.race([
-    promise,
+    Promise.resolve(promise),
     new Promise<T>((_, reject) => {
       setTimeout(() => reject(new Error(`${label} timed out`)), ms);
     }),
@@ -209,9 +209,7 @@ export default function OnboardingCommunitiesSetupScreen({ navigation, route }: 
         if (parent) {
           parent.dispatch(StackActions.replace('Main'));
         } else {
-          logger.error(
-            '[Onboarding] No parent navigator found when trying to remount root-flow',
-          );
+          logger.error('[Onboarding] No parent navigator found when trying to remount root-flow');
           throw new Error('No parent navigator found');
         }
       } catch (error: any) {
@@ -356,16 +354,9 @@ export default function OnboardingCommunitiesSetupScreen({ navigation, route }: 
           accessibilityRole="button"
         >
           <Text
-            style={[
-              styles.primaryButtonText,
-              !canContinue && styles.primaryButtonTextDisabled,
-            ]}
+            style={[styles.primaryButtonText, !canContinue && styles.primaryButtonTextDisabled]}
           >
-            {saving
-              ? 'Gemmer...'
-              : selectedIds.size > 0
-                ? 'Fortsæt'
-                : 'Fortsæt uden valg'}
+            {saving ? 'Gemmer...' : selectedIds.size > 0 ? 'Fortsæt' : 'Fortsæt uden valg'}
           </Text>
         </Pressable>
       </View>
@@ -377,7 +368,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
   StyleSheet.create({
     root: {
       flex: 1,
-      backgroundColor: theme.colors.background,
+      backgroundColor: theme.colors.bg.default,
     },
 
     main: {
@@ -402,7 +393,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       fontSize: 13,
       lineHeight: 18,
       fontWeight: '700',
-      color: theme.colors.textSecondary,
+      color: theme.colors.text.secondary,
       textTransform: 'uppercase',
       letterSpacing: 1,
       marginBottom: theme.spacing[2],
@@ -412,7 +403,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       fontSize: 31,
       lineHeight: 37,
       fontWeight: '700',
-      color: theme.colors.text,
+      color: theme.colors.text.primary,
       letterSpacing: -0.5,
       marginBottom: theme.spacing[3],
     },
@@ -420,7 +411,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     subtitle: {
       fontSize: 17,
       lineHeight: 26,
-      color: theme.colors.textSecondary,
+      color: theme.colors.text.secondary,
       marginBottom: theme.spacing[4],
     },
 
@@ -428,7 +419,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       borderRadius: theme.radius.xl,
       paddingHorizontal: theme.spacing[4],
       paddingVertical: theme.spacing[4],
-      backgroundColor: theme.colors.surfaceSecondary,
+      backgroundColor: theme.colors.bg.subtle,
       marginBottom: theme.spacing[5],
     },
 
@@ -436,14 +427,14 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       fontSize: 15,
       lineHeight: 21,
       fontWeight: '700',
-      color: theme.colors.text,
+      color: theme.colors.text.primary,
       marginBottom: theme.spacing[1],
     },
 
     selectionSubtitle: {
       fontSize: 14,
       lineHeight: 20,
-      color: theme.colors.textSecondary,
+      color: theme.colors.text.secondary,
     },
 
     selectedChipsRow: {
@@ -456,7 +447,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       borderRadius: theme.radius.pill,
       paddingHorizontal: theme.spacing[3],
       paddingVertical: theme.spacing[2],
-      backgroundColor: theme.colors.surface,
+      backgroundColor: theme.colors.bg.surface,
       marginRight: theme.spacing[2],
       marginBottom: theme.spacing[2],
     },
@@ -465,14 +456,14 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       fontSize: 13,
       lineHeight: 18,
       fontWeight: '600',
-      color: theme.colors.text,
+      color: theme.colors.text.primary,
     },
 
     sectionLabel: {
       fontSize: 15,
       lineHeight: 22,
       fontWeight: '700',
-      color: theme.colors.text,
+      color: theme.colors.text.primary,
       marginBottom: theme.spacing[3],
     },
 
@@ -486,37 +477,37 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       borderRadius: theme.radius.xl,
       paddingHorizontal: theme.spacing[5],
       paddingVertical: theme.spacing[5],
-      backgroundColor: theme.colors.surface,
+      backgroundColor: theme.colors.bg.surface,
       borderWidth: 1,
-      borderColor: theme.colors.border,
+      borderColor: theme.colors.border.default,
     },
 
     emptyTitle: {
       fontSize: 18,
       lineHeight: 24,
       fontWeight: '700',
-      color: theme.colors.text,
+      color: theme.colors.text.primary,
       marginBottom: theme.spacing[2],
     },
 
     emptySubtitle: {
       fontSize: 15,
       lineHeight: 22,
-      color: theme.colors.textSecondary,
+      color: theme.colors.text.secondary,
     },
 
     card: {
       borderRadius: theme.radius.xl,
-      backgroundColor: theme.colors.surface,
+      backgroundColor: theme.colors.bg.surface,
       borderWidth: 1,
-      borderColor: theme.colors.border,
+      borderColor: theme.colors.border.default,
       paddingHorizontal: theme.spacing[4],
       paddingVertical: theme.spacing[4],
       marginBottom: theme.spacing[3],
     },
 
     cardSelected: {
-      backgroundColor: theme.colors.surfaceSecondary,
+      backgroundColor: theme.colors.bg.subtle,
       borderColor: theme.colors.primary,
     },
 
@@ -531,7 +522,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       borderRadius: theme.radius.pill,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: theme.colors.surfaceSecondary,
+      backgroundColor: theme.colors.bg.subtle,
       overflow: 'hidden',
       marginRight: theme.spacing[4],
       flexShrink: 0,
@@ -551,7 +542,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       fontSize: 18,
       lineHeight: 22,
       fontWeight: '700',
-      color: theme.colors.text,
+      color: theme.colors.text.primary,
     },
 
     cardTextColumn: {
@@ -563,7 +554,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       fontSize: 18,
       lineHeight: 24,
       fontWeight: '700',
-      color: theme.colors.text,
+      color: theme.colors.text.primary,
       marginBottom: theme.spacing[1],
       letterSpacing: -0.3,
     },
@@ -571,7 +562,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     cardDescription: {
       fontSize: 14,
       lineHeight: 21,
-      color: theme.colors.textSecondary,
+      color: theme.colors.text.secondary,
     },
 
     followChip: {
@@ -582,8 +573,8 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       alignItems: 'center',
       justifyContent: 'center',
       borderWidth: 1,
-      borderColor: theme.colors.border,
-      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.border.default,
+      backgroundColor: theme.colors.bg.surface,
       flexShrink: 0,
     },
 
@@ -596,20 +587,20 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       fontSize: 14,
       lineHeight: 18,
       fontWeight: '600',
-      color: theme.colors.text,
+      color: theme.colors.text.primary,
     },
 
     followChipTextSelected: {
-      color: theme.colors.white,
+      color: theme.colors.text.inverse,
     },
 
     footer: {
       paddingHorizontal: theme.spacing[6],
       paddingTop: theme.spacing[3],
       paddingBottom: theme.spacing[6],
-      backgroundColor: theme.colors.background,
+      backgroundColor: theme.colors.bg.default,
       borderTopWidth: 1,
-      borderTopColor: theme.colors.border,
+      borderTopColor: theme.colors.border.default,
     },
 
     skipButton: {
@@ -636,17 +627,17 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
 
     primaryButtonDisabled: {
-      backgroundColor: theme.colors.surfaceSecondary,
+      backgroundColor: theme.colors.bg.subtle,
     },
 
     primaryButtonText: {
       fontSize: 18,
       lineHeight: 24,
       fontWeight: '700',
-      color: theme.colors.white,
+      color: theme.colors.text.inverse,
     },
 
     primaryButtonTextDisabled: {
-      color: theme.colors.textSecondary,
+      color: theme.colors.text.secondary,
     },
   });

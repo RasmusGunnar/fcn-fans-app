@@ -190,9 +190,7 @@ export async function listMediaArticleCandidates(): Promise<MediaArticleCandidat
 
   const { data, error } = await supabase
     .from('media_article_candidates')
-    .select(
-      'id, source_key, source_name, source_url, canonical_url, title, description, image_url, caption, published_at, detected_keywords, relevance_score, status, reviewed_at, published_post_id, created_at, updated_at',
-    )
+    .select('*')
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -222,6 +220,7 @@ export async function runMediaArticleCandidateIngestion(
 
 export async function updateMediaArticleCandidate(input: {
   id: string;
+  intakeVersion?: number;
   sourceName: string;
   canonicalUrl: string;
   title: string;
@@ -255,14 +254,17 @@ export async function updateMediaArticleCandidate(input: {
   if (input.status) {
     update.status = input.status;
   }
+  if (input.intakeVersion === 1) {
+    if (input.description.trim().length > 500)
+      throw new TypeError('Resumé må højst være 500 tegn.');
+    update.proposed_summary = cleanOptionalText(input.description) ?? null;
+  }
 
   const { data, error } = await supabase
     .from('media_article_candidates')
     .update(update)
     .eq('id', input.id)
-    .select(
-      'id, source_key, source_name, source_url, canonical_url, title, description, image_url, caption, published_at, detected_keywords, relevance_score, status, reviewed_at, published_post_id, created_at, updated_at',
-    )
+    .select('*')
     .single();
 
   if (error) {

@@ -380,7 +380,7 @@ export async function getDirectMessageBlockStatus(otherUserId: string): Promise<
   });
   if (error) {
     logger.warn('[messagesApi] Block status failed', { code: error.code });
-    return false;
+    return true;
   }
   return Boolean(data);
 }

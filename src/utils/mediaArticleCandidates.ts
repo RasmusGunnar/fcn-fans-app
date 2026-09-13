@@ -18,6 +18,11 @@ export type MediaArticleCandidateRow = {
   status: string;
   reviewed_at: string | null;
   published_post_id: string | null;
+  intake_version?: number;
+  published_news_id?: string | null;
+  score_reasons?: unknown;
+  possible_duplicate_id?: string | null;
+  duplicate_suspected?: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -40,6 +45,11 @@ export type MediaArticleCandidateItem = {
   statusLabel: string;
   reviewedAt: string | null;
   publishedPostId: string | null;
+  intakeVersion?: number;
+  publishedNewsId?: string | null;
+  scoreReasons?: string[];
+  possibleDuplicateId?: string | null;
+  duplicateSuspected?: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -116,6 +126,11 @@ export function buildMediaArticleCandidateItems(
         statusLabel: getMediaArticleCandidateStatusLabel(status),
         reviewedAt: row.reviewed_at,
         publishedPostId: row.published_post_id,
+        intakeVersion: row.intake_version ?? 0,
+        publishedNewsId: row.published_news_id ?? null,
+        scoreReasons: cleanStringArray(row.score_reasons),
+        possibleDuplicateId: row.possible_duplicate_id ?? null,
+        duplicateSuspected: row.duplicate_suspected === true,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       };

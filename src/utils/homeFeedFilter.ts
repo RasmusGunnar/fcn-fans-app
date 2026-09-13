@@ -22,8 +22,9 @@ export function filterHomeFeedItems(items: FeedItem[], filter: HomeFeedFilter): 
 
   return items
     .filter(
-      (item): item is Extract<FeedItem, { kind: 'post' }> =>
-        item.kind === 'post' && normalizePostType(item.data.postType) === postType,
+      (item): item is Extract<FeedItem, { kind: 'post' | 'news' }> =>
+        (item.kind === 'post' && normalizePostType(item.data.postType) === postType) ||
+        (filter === 'media_articles' && item.kind === 'news' && item.data.intakeOrigin === true),
     )
     .sort((left, right) => toTimestamp(right.data.createdAt) - toTimestamp(left.data.createdAt));
 }

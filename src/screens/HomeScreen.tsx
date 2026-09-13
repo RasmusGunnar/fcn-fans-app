@@ -1,17 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  View,
-  Text,
-  FlatList,
-  StyleSheet,
-  RefreshControl,
-  Pressable,
-  ViewToken,
-} from 'react-native';
+import { View, Text, FlatList, StyleSheet, RefreshControl, ViewToken } from 'react-native';
 import { useFocusEffect, useIsFocused, useNavigation, useRoute } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { AppHeader } from '../components/AppHeader';
 import NextMatchBadge from '../components/home/NextMatchBadge';
+import { HomeFeedFilters } from '../components/home/HomeFeedFilters';
 import { Card } from '../components/ui/Card';
 import { FeedItemRenderer } from '../components/feed/FeedItemRenderer';
 import { useFeed } from '../state/FeedContext';
@@ -48,11 +41,6 @@ import { isRichInstagramUrl, reconcileActiveInstagramEmbedKeys } from '../utils/
 
 logPerformanceEvent('ScreenLifecycle', 'module-evaluated', { screen: 'HomeScreen' });
 
-const HOME_FEED_FILTER_OPTIONS: { value: HomeFeedFilter; label: string }[] = [
-  { value: 'all', label: 'Alle' },
-  { value: 'fan_posts', label: 'Fan Posts' },
-  { value: 'media_articles', label: 'FCN i medierne' },
-];
 const EMPTY_LIKE_STATE = { liked: false, likes: 0 };
 const EMPTY_COMMENT_PREVIEWS: never[] = [];
 let hasEnteredHomeScreen = false;
@@ -530,6 +518,7 @@ export default function HomeScreen() {
             homeLogo: nextFixture.home_logo_url ?? null,
             awayLogo: nextFixture.away_logo_url ?? null,
             kickoff: nextFixture.kickoff_at,
+            statusCode: nextFixture.status_short,
             venue: nextFixture.venue ?? null,
             venueCity: nextFixture.venue_city ?? null,
             title: `${nextFixture.home_team} vs ${nextFixture.away_team}`,
@@ -889,31 +878,7 @@ export default function HomeScreen() {
             </View>
           ) : null}
           <View style={styles.content}>
-            <View style={styles.feedFilterBar}>
-              {HOME_FEED_FILTER_OPTIONS.map((option) => {
-                const isSelected = selectedFeedFilter === option.value;
-
-                return (
-                  <Pressable
-                    key={option.value}
-                    style={[styles.feedFilterTab, isSelected && styles.feedFilterTabActive]}
-                    onPress={() => setSelectedFeedFilter(option.value)}
-                    accessibilityRole="tab"
-                    accessibilityState={{ selected: isSelected }}
-                  >
-                    <Text
-                      style={[
-                        styles.feedFilterTabText,
-                        isSelected && styles.feedFilterTabTextActive,
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {option.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+            <HomeFeedFilters value={selectedFeedFilter} onChange={setSelectedFeedFilter} />
 
             {!loading && filteredEmptyText && visibleFeedItems.length === 0 ? (
               <View style={styles.feedEmptyState}>
@@ -933,36 +898,6 @@ const createStyles = () =>
     content: { paddingHorizontal: spacing[0], paddingVertical: spacing.md },
     matchFallbackContent: { paddingTop: spacing.lg },
     card: { marginBottom: spacing.md },
-    feedFilterBar: {
-      flexDirection: 'row',
-      gap: theme.spacing[1],
-      paddingHorizontal: theme.spacing[3],
-      marginBottom: theme.spacing[4],
-    },
-    feedFilterTab: {
-      flex: 1,
-      minHeight: theme.spacing[10],
-      paddingHorizontal: theme.spacing[1],
-      borderRadius: theme.radius.pill,
-      borderWidth: theme.layout.borderHairline,
-      borderColor: theme.colors.border.default,
-      backgroundColor: theme.colors.bg.surface,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    feedFilterTabActive: {
-      borderColor: colors.fcnRed,
-      backgroundColor: colors.fcnRed,
-    },
-    feedFilterTabText: {
-      color: colors.text,
-      fontSize: 12,
-      fontWeight: '600',
-      textAlign: 'center',
-    },
-    feedFilterTabTextActive: {
-      color: colors.card,
-    },
     feedEmptyState: {
       paddingHorizontal: theme.spacing[4],
       paddingVertical: theme.spacing[10],

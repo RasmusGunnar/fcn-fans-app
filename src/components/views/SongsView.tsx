@@ -3,7 +3,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../../auth/AuthProvider';
 import { logger } from '../../lib/logger';
-import { getMyCommunityRoleByName, WILD_TIGERS_COMMUNITY_NAME } from '../../services/rbac';
 import {
   deleteSongAudio,
   getSongAudioPublicUrl,
@@ -13,6 +12,7 @@ import {
 import {
   assertSongVersionCurrent,
   canManageWildTigersSongs,
+  createSong,
   deleteSong,
   fetchSongs,
   SongConflictError,
@@ -20,7 +20,6 @@ import {
 } from '../../services/songsApi';
 import { defaultTheme } from '../../theme';
 import { SONG_CATEGORY_LABELS, type Song } from '../../types/song';
-import { canEditSongs as canEditSongsPermission } from '../../utils/permissions';
 import {
   runSongAudioSaveSaga,
   runSongDeleteSaga,
@@ -31,6 +30,7 @@ import { SongAccordionCard } from '../songs/SongAccordionCard';
 import { SongEditModal } from '../songs/SongEditModal';
 import { SongReaderModal } from '../songs/SongReaderModal';
 import { SongSuggestCard } from '../songs/SongSuggestCard';
+import { Button } from '../ui/Button';
 
 const theme = defaultTheme;
 
@@ -119,18 +119,18 @@ function SongSection({
 
 export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
   const navigation = useNavigation();
-  const { isAppAdmin, user } = useAuth();
+  const { user } = useAuth();
   const [songs, setSongs] = useState<Song[]>([]);
   const [loading, setLoading] = useState(true);
   const [source, setSource] = useState<'remote' | 'fallback'>('remote');
   const [expandedSongId, setExpandedSongId] = useState<string | null>(null);
   const [editingSong, setEditingSong] = useState<Song | null>(null);
+  const [creatingSong, setCreatingSong] = useState(false);
   const [readingSong, setReadingSong] = useState<Song | null>(null);
   const [activeFilter, setActiveFilter] = useState<Song['category']>('slagsang');
   const [saving, setSaving] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [deletingSongId, setDeletingSongId] = useState<string | null>(null);
-  const [wildTigersRole, setWildTigersRole] = useState<'owner' | 'admin' | 'member' | null>(null);
   const [canManageSongsViaRpc, setCanManageSongsViaRpc] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -176,43 +176,13 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
     };
   }, [loading, source, user?.id]);
 
-  useEffect(() => {
-    let mounted = true;
-
-    const loadWildTigersRole = async () => {
-      if (loading) {
-        return;
-      }
-
-      if (!user?.id || source !== 'remote' || isAppAdmin) {
-        if (mounted) {
-          setWildTigersRole(null);
-        }
-        return;
-      }
-
-      const role = await getMyCommunityRoleByName(WILD_TIGERS_COMMUNITY_NAME);
-      if (mounted) {
-        setWildTigersRole(role);
-      }
-    };
-
-    void loadWildTigersRole();
-
-    return () => {
-      mounted = false;
-    };
-  }, [isAppAdmin, loading, source, user?.id]);
-
   const chants = useMemo(() => songs.filter((song) => song.category === 'slagsang'), [songs]);
   const playerSongs = useMemo(
     () => songs.filter((song) => song.category === 'spillersang'),
     [songs],
   );
 
-  const canEditSongs =
-    source === 'remote' &&
-    (canManageSongsViaRpc === true || canEditSongsPermission(isAppAdmin, wildTigersRole));
+  const canEditSongs = source === 'remote' && canManageSongsViaRpc === true;
   const activeSongs = activeFilter === 'slagsang' ? chants : playerSongs;
 
   useEffect(() => {
@@ -252,7 +222,11 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
     spotifyUrl: string | null;
     audioChange: SongAudioChange;
   }) => {
-    if (!editingSong) return;
+    if (saving || (!editingSong && !creatingSong)) return;
+    if (!values.title.trim() || !values.lyrics.trim()) {
+      Alert.alert('Fejl', 'Udfyld titel og sangtekst.');
+      return;
+    }
     if (!isValidSpotifyUrl(values.spotifyUrl)) {
       Alert.alert('Fejl', 'Indtast et gyldigt Spotify-link.');
       return;
@@ -265,6 +239,16 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
       if (canStillManage !== true) {
         throw new SongAudioUploadError('permission_lost');
       }
+      if (creatingSong) {
+        const createdSong = await createSong(values);
+        setSongs((current) => [createdSong, ...current]);
+        setActiveFilter(createdSong.category);
+        setExpandedSongId(createdSong.id);
+        setCreatingSong(false);
+        Alert.alert('Succes', 'Sangen er oprettet.');
+        return;
+      }
+      if (!editingSong) return;
       if (!editingSong.updatedAt) {
         throw new SongConflictError();
       }
@@ -385,16 +369,31 @@ export function SongsView({ paddingBottom = 0 }: SongsViewProps) {
       />
 
       <View style={styles.card}>
-        <SongSuggestCard onPressSuggest={handleSuggestSong} />
+        {canEditSongs ? (
+          <Button
+            title="Tilføj ny"
+            onPress={() => {
+              stopActiveSongAudio();
+              setEditingSong(null);
+              setCreatingSong(true);
+            }}
+            disabled={saving || deletingSongId !== null}
+          />
+        ) : (
+          <SongSuggestCard onPressSuggest={handleSuggestSong} />
+        )}
       </View>
 
       <SongEditModal
-        visible={!!editingSong}
+        visible={creatingSong || !!editingSong}
         song={editingSong}
         saving={saving || deletingSongId !== null}
         uploadProgress={uploadProgress}
         onClose={() => {
-          if (!saving && deletingSongId === null) setEditingSong(null);
+          if (!saving && deletingSongId === null) {
+            setEditingSong(null);
+            setCreatingSong(false);
+          }
         }}
         onSave={handleSaveSong}
       />

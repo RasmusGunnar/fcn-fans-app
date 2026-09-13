@@ -63,7 +63,7 @@ export function buildMatchdayUiModel({
     previewMode === 'off' && stadiumLiveOpen !== undefined
       ? { ...resolvedTiming, isMatchday: stadiumLiveOpen }
       : resolvedTiming;
-  const baseIsGoing = participationChoice === 'going' || attendance.isGoing;
+  const baseIsGoing = participationChoice !== null ? participationChoice === 'going' : attendance.isGoing;
   // `matchday` preview should only open the matchday window.
   // A real successful check-in must still be allowed to promote the UI into
   // the confirmed state on both MatchDetails and Home.
@@ -76,13 +76,13 @@ export function buildMatchdayUiModel({
   });
 
   const isCheckedInConfirmed = viewState === 'checked_in_confirmed';
-  const socialSource: MatchdaySocialSource = viewState === 'pre_match' ? 'attendance' : 'checkin';
+  const socialSource: MatchdaySocialSource = 'attendance';
 
   return {
     previewMode,
     timing,
     viewState,
-    effectiveIsGoing: baseIsGoing || isCheckedInConfirmed,
+    effectiveIsGoing: baseIsGoing,
     effectiveIsCheckedIn,
     socialSource,
     socialCount: socialSource === 'attendance' ? attendance.countGoing : checkIn.countCheckedIn,

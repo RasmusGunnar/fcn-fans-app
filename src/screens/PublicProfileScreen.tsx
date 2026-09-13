@@ -52,19 +52,23 @@ export default function PublicProfileScreen() {
     ReturnType<typeof fetchPublicProfileById>
   > | null>(null);
   const [messageBlocked, setMessageBlocked] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(true);
   const [messageAccessLoading, setMessageAccessLoading] = useState(false);
   const [openingConversation, setOpeningConversation] = useState(false);
 
   useEffect(() => {
     if (!userId) {
       setResolvedProfile(null);
+      setProfileLoading(false);
       return;
     }
 
     let cancelled = false;
+    setProfileLoading(true);
     fetchPublicProfileById(userId).then((profile) => {
       if (!cancelled) {
         setResolvedProfile(profile);
+        setProfileLoading(false);
       }
     });
 
@@ -310,7 +314,7 @@ export default function PublicProfileScreen() {
         </Text>
       </View>
       <FanBarometerCompactCard level={fanLevel} state="ready" />
-      {canReportUser && !messageAccessLoading && !messageBlocked ? (
+      {resolvedProfile && canReportUser && !messageAccessLoading && !messageBlocked ? (
         <View style={styles.reportButtonWrap}>
           <OutlineButton
             title={openingConversation ? 'Åbner...' : 'Send besked'}
@@ -324,6 +328,13 @@ export default function PublicProfileScreen() {
           <OutlineButton title="Rapportér bruger" onPress={handleReportUser} />
         </View>
       ) : null}
+    </View>
+  );
+
+  if (profileLoading || !resolvedProfile) return (
+    <View style={styles.container}>
+      <AppHeader title="Profil" subtitle="" showProfileButton={false} />
+      <Text style={styles.headerCard}>{profileLoading ? 'Henter profil…' : 'Profilen findes ikke eller er ikke tilgængelig.'}</Text>
     </View>
   );
 

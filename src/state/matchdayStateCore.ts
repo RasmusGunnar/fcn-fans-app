@@ -7,6 +7,7 @@ export type MatchdayProfile = {
 };
 
 export type AttendanceSnapshotInput = {
+  profiles?: MatchdayProfile[];
   countGoing: number;
   avatars: string[];
   userIds: string[];
@@ -39,6 +40,7 @@ export type SharedMatchdayState = {
   canCheckIn: boolean;
   currentUserParticipationState: CurrentUserParticipationState;
   attendanceCount: number;
+  attendanceProfiles: MatchdayProfile[];
   attendanceAvatars: string[];
   attendanceUserIds: string[];
   participantAvatars: string[];
@@ -72,6 +74,7 @@ export function createInitialMatchdayState(matchId: string): SharedMatchdayState
     canCheckIn: false,
     currentUserParticipationState: 'closed',
     attendanceCount: 0,
+    attendanceProfiles: [],
     attendanceAvatars: [],
     attendanceUserIds: [],
     participantAvatars: [],
@@ -102,6 +105,7 @@ export function applyMatchdaySnapshots(
       stadiumLiveOpen: checkIn.stadiumLiveOpen,
     }),
     attendanceCount: attendance.countGoing,
+    attendanceProfiles: attendance.profiles ?? [],
     attendanceAvatars: attendance.avatars,
     attendanceUserIds: attendance.userIds,
     participantAvatars: checkIn.avatars,

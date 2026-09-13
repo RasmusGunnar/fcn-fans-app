@@ -3,9 +3,7 @@
 // NO hardcoded numbers or color strings allowed.
 
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker, {
-  type DateTimePickerEvent,
-} from '@react-native-community/datetimepicker';
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -40,6 +38,7 @@ import {
   type ResolvedFanActivityCommunity,
 } from '../services/fanActivities';
 import { defaultTheme as theme } from '../theme';
+import { supabase } from '../lib/supabase';
 
 type CreateFanActivityRouteProp = RouteProp<RootStackParamList, 'CreateFanActivity'>;
 type FanActivityTypeValue = 'fanmarch' | 'bustur' | 'tifo' | 'fanbar' | 'andet';
@@ -213,6 +212,57 @@ export default function CreateFanActivityScreen() {
   const [communityAccessError, setCommunityAccessError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [loadedActivity, setLoadedActivity] = useState<FanActivity | null>(null);
+  const [importUrl, setImportUrl] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [importWarnings, setImportWarnings] = useState<string[] | null>(null);
+  const [importReviewed, setImportReviewed] = useState(false);
+
+  const importTrip = async () => {
+    if (!resolvedCommunity?.id || importing || isEditMode || parentType !== 'match') return;
+    setImporting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('import-bustur', {
+        body: { url: importUrl, communityId: resolvedCommunity.id },
+      });
+      if (error || !data?.manualReviewRequired)
+        throw new Error('Import er ikke tilgængelig, eller siden kunne ikke læses sikkert.');
+      if (data.fixtureId && data.fixtureId !== parentId)
+        throw new Error(
+          'Turen ser ud til at høre til en anden kamp. Åbn den rigtige kamp og opret aktiviteten derfra.',
+        );
+      Alert.alert(
+        'Brug importerede oplysninger?',
+        'Titel, beskrivelse, afgang og CTA erstattes. Arrangørens betalingsoplysninger bevares.',
+        [
+          { text: 'Annuller', style: 'cancel' },
+          {
+            text: 'Brug oplysninger',
+            onPress: () => {
+              setTitle(data.title);
+              setBody(data.body);
+              setLocationName(data.locationName);
+              setCtaLabel(data.ctaLabel);
+              setCtaUrl(data.ctaUrl);
+              if (data.startsAtIso) setStartsAt(new Date(data.startsAtIso));
+              setHasEndAt(false);
+              setRegistrationEnabled(false);
+              setRegistrationCapacity(data.capacity ? String(data.capacity) : '');
+              setRegistrationPriceDkk(data.price != null ? String(data.price) : '');
+              setImportWarnings(data.warnings);
+              setImportReviewed(false);
+            },
+          },
+        ],
+      );
+    } catch (error) {
+      Alert.alert(
+        'Kunne ikke importere',
+        error instanceof Error ? error.message : 'Udfyld formularen manuelt.',
+      );
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const parentLabel = parentType === 'match' ? 'kamp' : 'event';
   const parentPossessiveLabel = parentType === 'match' ? 'kampens' : 'eventets';
@@ -527,6 +577,8 @@ export default function CreateFanActivityScreen() {
   };
 
   const handleSelectCommunity = (community: FanActivityCommunity) => {
+    if (importing) return;
+    setImportReviewed(false);
     setResolvedCommunity(community);
     setCommunityResolutionSource('explicit_selection');
     setCommunityAccessError(null);
@@ -538,7 +590,8 @@ export default function CreateFanActivityScreen() {
     if (!title.trim()) reasons.push('Udfyld titel');
     if (!resolvedCommunity?.id) reasons.push('Vælg arrangør');
     if (registrationEnabled && !parsedRegistrationCapacity) reasons.push('Angiv kapacitet');
-    if (isPaidRegistration && !communityMobilepayInfo) reasons.push('Mangler MobilePay på arrangør');
+    if (isPaidRegistration && !communityMobilepayInfo)
+      reasons.push('Mangler MobilePay på arrangør');
     if (hasEndAt && endsAt < startsAt) reasons.push('Sluttid skal være efter starttid');
     return reasons;
   }, [
@@ -555,6 +608,8 @@ export default function CreateFanActivityScreen() {
   ]);
 
   const isSubmitDisabled =
+    importing ||
+    (importWarnings !== null && !importReviewed) ||
     submitting ||
     loadingCommunity ||
     Boolean(communityAccessError) ||
@@ -562,6 +617,13 @@ export default function CreateFanActivityScreen() {
     missingReasons.length > 0;
 
   const handleSubmit = async () => {
+    if (importing || (importWarnings !== null && !importReviewed)) {
+      Alert.alert(
+        'Gennemgå import',
+        'Bekræft kamp, afgang og de importerede oplysninger før oprettelse.',
+      );
+      return;
+    }
     if (!type.trim()) {
       Alert.alert('Fejl', 'Vælg en type for fanaktiviteten.');
       return;
@@ -681,7 +743,8 @@ export default function CreateFanActivityScreen() {
               KNYTTET TIL {parentLabel.toUpperCase()}
             </Text>
             <Text variant="body" color="primary">
-              Fanaktiviteten bliver vist på {parentPossessiveLabel} detaljeside, når den er oprettet.
+              Fanaktiviteten bliver vist på {parentPossessiveLabel} detaljeside, når den er
+              oprettet.
             </Text>
           </Card>
 
@@ -706,7 +769,11 @@ export default function CreateFanActivityScreen() {
                       isSelected && styles.typeCardSelected,
                       pressed && styles.typeCardPressed,
                     ]}
-                    onPress={() => setType(option.value)}
+                    onPress={() => {
+                      if (importing) return;
+                      setImportReviewed(false);
+                      setType(option.value);
+                    }}
                   >
                     <View style={[styles.typeIconWrap, isSelected && styles.typeIconWrapSelected]}>
                       <Ionicons
@@ -924,7 +991,6 @@ export default function CreateFanActivityScreen() {
                 </Pressable>
               </View>
             ) : null}
-
           </Card>
 
           <Card style={styles.card}>
@@ -1155,7 +1221,9 @@ export default function CreateFanActivityScreen() {
                         {communityMobilepayInfo || 'Mangler MobilePay-info på arrangør'}
                       </Text>
                       <Text variant="caption" color="secondary">
-                        {resolvedCommunity?.name ? `Arrangør: ${resolvedCommunity.name}` : 'Arrangør'}
+                        {resolvedCommunity?.name
+                          ? `Arrangør: ${resolvedCommunity.name}`
+                          : 'Arrangør'}
                       </Text>
                     </View>
 
@@ -1184,6 +1252,48 @@ export default function CreateFanActivityScreen() {
               </>
             ) : null}
           </Card>
+          {!isEditMode && parentType === 'match' && type === 'bustur' && resolvedCommunity?.id ? (
+            <Card>
+              <Text variant="h3">Importér bustur fra URL</Text>
+              <Text variant="caption" color="secondary">
+                Offentlig side · oplysninger til manuel gennemgang
+              </Text>
+              <TextInput
+                accessibilityLabel="Turens offentlige URL"
+                style={styles.input}
+                value={importUrl}
+                onChangeText={setImportUrl}
+                autoCapitalize="none"
+                keyboardType="url"
+                maxLength={2000}
+                placeholder="https://…"
+                editable={!importing && !submitting}
+              />
+              <OutlineButton
+                title={importing ? 'Henter oplysninger…' : 'Hent oplysninger'}
+                onPress={() => void importTrip()}
+                disabled={importing || submitting || !importUrl.trim()}
+              />
+            </Card>
+          ) : null}
+          {importWarnings !== null ? (
+            <Card>
+              <Text variant="caption" color="secondary">
+                {importWarnings.join('\n')}
+              </Text>
+              <Pressable
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: importReviewed }}
+                onPress={() => setImportReviewed((current) => !current)}
+                style={styles.input}
+              >
+                <Text>
+                  {importReviewed ? '✓ ' : '○ '}Jeg bekræfter den valgte kamp, afgang, pris og
+                  kilde. Opret først efter min gennemgang.
+                </Text>
+              </Pressable>
+            </Card>
+          ) : null}
         </ScrollView>
 
         <View style={[styles.footer, { paddingBottom: insets.bottom + theme.spacing[4] }]}>
@@ -1192,12 +1302,12 @@ export default function CreateFanActivityScreen() {
               Mangler: {missingReasons.join(' · ')}
             </Text>
           ) : null}
-          <OutlineButton title="Annuller" onPress={() => navigation.goBack()} disabled={submitting} />
-          <PrimaryButton
-            title={submitLabel}
-            onPress={handleSubmit}
-            disabled={isSubmitDisabled}
+          <OutlineButton
+            title="Annuller"
+            onPress={() => navigation.goBack()}
+            disabled={submitting}
           />
+          <PrimaryButton title={submitLabel} onPress={handleSubmit} disabled={isSubmitDisabled} />
         </View>
       </KeyboardAvoidingView>
 

@@ -156,10 +156,12 @@ export default function AdminMediaArticlesScreen() {
       (['pending', 'approved', 'ignored', 'rejected'] as const).map((status) => ({
         key: status,
         label: `${STATUS_TAB_LABELS[status]} (${
-          status === 'approved' ? articles.length : statusCounts[status]
+          status === 'approved'
+            ? articles.length + candidates.filter((candidate) => !!candidate.publishedNewsId).length
+            : statusCounts[status]
         })`,
       })),
-    [articles.length, statusCounts],
+    [articles.length, candidates, statusCounts],
   );
   const filteredCandidates = useMemo(
     () =>
@@ -199,13 +201,24 @@ export default function AdminMediaArticlesScreen() {
   const listItems = useMemo<AdminMediaListItem[]>(
     () =>
       activeStatus === 'approved'
-        ? filteredArticles.map(
-            (article): AdminMediaListItem => ({
-              id: `article:${article.id}`,
-              kind: 'article',
-              article,
-            }),
-          )
+        ? [
+            ...filteredCandidates
+              .filter((candidate) => !!candidate.publishedNewsId)
+              .map(
+                (candidate): AdminMediaListItem => ({
+                  id: `candidate:${candidate.id}`,
+                  kind: 'candidate',
+                  candidate,
+                }),
+              ),
+            ...filteredArticles.map(
+              (article): AdminMediaListItem => ({
+                id: `article:${article.id}`,
+                kind: 'article',
+                article,
+              }),
+            ),
+          ]
         : filteredCandidates.map(
             (candidate): AdminMediaListItem => ({
               id: `candidate:${candidate.id}`,
@@ -268,6 +281,7 @@ export default function AdminMediaArticlesScreen() {
       replaceCandidate(
         await updateMediaArticleCandidate({
           id: candidate.id,
+          intakeVersion: candidate.intakeVersion,
           ...draft,
         }),
       );
@@ -290,6 +304,7 @@ export default function AdminMediaArticlesScreen() {
         await updateMediaArticleCandidate({
           id: candidate.id,
           sourceName: candidate.sourceName,
+          intakeVersion: candidate.intakeVersion,
           canonicalUrl: candidate.canonicalUrl,
           title: candidate.title,
           description: candidate.description,
@@ -309,7 +324,9 @@ export default function AdminMediaArticlesScreen() {
   const handleCandidateApprove = (candidate: MediaArticleCandidateItem) => {
     Alert.alert(
       'Publicér artikel',
-      `"${candidate.title}" oprettes som et normalt opslag i FCN i medierne.`,
+      candidate.intakeVersion === 1
+        ? `"${candidate.title}" publiceres som en fælles nyhed i app og web med link til originalen.`
+        : `"${candidate.title}" oprettes som et normalt opslag i FCN i medierne.`,
       [
         { text: 'Annuller', style: 'cancel' },
         {

@@ -5,6 +5,7 @@ import { isDemoMode } from '../config/appMode';
 import { DEMO_PRIMARY_FIXTURE, DEMO_SECOND_FIXTURE } from '../demo/matches';
 
 export interface Fixture {
+  status_short?: string | null;
   id: string;
   provider: string;
   provider_fixture_id: string;
@@ -207,6 +208,7 @@ function normalizeFixture(row: FixtureRow): Fixture | null {
     provider: readString(row.provider) ?? 'unknown',
     provider_fixture_id: readString(row.provider_fixture_id) ?? readString(row.external_id) ?? id,
     kickoff_at: kickoffAt,
+    status_short: readString(row.status_short),
     end_time: readString(row.end_time) ?? readString(raw?.end_time) ?? readString(raw?.endTime),
     competition: readString(row.competition),
     round: readString(row.round),

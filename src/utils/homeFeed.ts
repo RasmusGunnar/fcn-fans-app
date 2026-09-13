@@ -1,3 +1,4 @@
+import { placeWeeklyFan } from './fanExperience';
 import type { CommunityFeedSource } from '../services/communityFeedApi';
 import type { BusTrip, Event } from '../services/eventsApi';
 import type { FanActivity } from '../services/fanActivities';
@@ -961,7 +962,17 @@ export function sortHomeFeedItems(items: FeedItem[], baseDate = new Date()): Fee
   logHomeRankingDebug(finalEntries);
   logHomeFeedAudit(finalEntries, auditContext, safeItems, relevantItems);
 
-  return finalEntries.map((entry) => entry.item);
+  return placeWeeklyFan(
+    finalEntries.map((entry) => entry.item),
+    (item) => ({
+      award: item.kind === 'weekly_top_fan',
+      kind: item.kind,
+      createdAt: getFeedItemCreatedAt(item),
+      startsAt: item.data.eventStartAt,
+      endsAt: item.data.eventEndAt,
+    }),
+    baseDate.getTime(),
+  );
 }
 
 function toNewsFeedItem(newsItem: NewsItem): FeedItem {

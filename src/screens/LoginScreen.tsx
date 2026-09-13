@@ -16,6 +16,7 @@ import {
   Keyboard,
   Platform,
   Dimensions,
+  Linking,
 } from 'react-native';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -274,6 +275,25 @@ export default function LoginScreen({ route, navigation }: Props) {
             returnKeyType={isSignup ? 'done' : 'go'}
           />
         </View>
+
+        {!isSignup ? (
+          <Pressable
+            accessibilityRole="link"
+            accessibilityLabel="Glemt adgangskode? Åbner sikker nulstilling i browseren"
+            disabled={loading}
+            onPress={() => {
+              // Request and recovery stay in one browser, preserving Supabase PKCE.
+              // No credentials are passed through the native deep link.
+              void Linking.openURL('https://fcnfans.app/auth/forgot-password').catch(() => {
+                Alert.alert('Kunne ikke åbne browseren', 'Gå til fcnfans.app/auth/forgot-password for at nulstille dit kodeord.');
+              });
+            }}
+            style={styles.primaryActionSection}
+          >
+            <Text variant="bodyBold" style={{ color: theme.colors.primary }}>Glemt adgangskode?</Text>
+            <Text variant="caption" color="secondary">Nulstil sikkert på web, og log ind i appen igen.</Text>
+          </Pressable>
+        ) : null}
 
         <View
           style={[

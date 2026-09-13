@@ -133,6 +133,17 @@ export function MediaArticleCandidateCard({
         ) : null}
       </View>
 
+      {!editing && candidate.scoreReasons?.length ? (
+        <Text variant="caption" color="secondary">
+          {candidate.scoreReasons.join(' · ')}
+        </Text>
+      ) : null}
+      {candidate.duplicateSuspected || candidate.possibleDuplicateId ? (
+        <Text variant="caption" color="secondary">
+          Mulig dublet – sammenhold med eksisterende historier.
+        </Text>
+      ) : null}
+
       {editing ? (
         <View style={styles.editFields}>
           <Field

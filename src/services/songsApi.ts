@@ -212,6 +212,29 @@ export async function updateSong(
   return mapSongRow(data as SongRow);
 }
 
+/** Same songs INSERT RLS as edit; no client role or identity can grant access. */
+export async function createSong(values: {
+  title: string;
+  lyrics: string;
+  category: SongCategory;
+  spotifyUrl: string | null;
+}): Promise<Song> {
+  if (!values.title.trim() || !values.lyrics.trim()) throw new Error('song_validation');
+  const { data, error } = await supabase
+    .from('songs')
+    .insert({
+      title: values.title.trim(),
+      lyrics: values.lyrics.trim(),
+      category: values.category,
+      spotify_url: values.spotifyUrl?.trim() || null,
+      is_manually_edited: true,
+    })
+    .select(SONG_COLUMNS)
+    .single();
+  if (error) throw error;
+  return mapSongRow(data as SongRow);
+}
+
 export async function deleteSong(songId: string, originalUpdatedAt: string): Promise<void> {
   const { data, error } = await supabase
     .from('songs')

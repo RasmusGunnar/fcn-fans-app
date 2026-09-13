@@ -183,7 +183,28 @@ function normalizeCommunityCoordinate(community: CommunityData): CommunityMapAud
     };
   }
 
-  if (latitudeMatch.parsed < -90 || latitudeMatch.parsed > 90) {
+  const latitude = latitudeMatch.parsed;
+  const longitude = longitudeMatch.parsed;
+
+  if (latitude === null) {
+    return {
+      community,
+      normalizedCoordinate: null,
+      exclusionReason: 'missing_or_invalid_lat',
+      debug,
+    };
+  }
+
+  if (longitude === null) {
+    return {
+      community,
+      normalizedCoordinate: null,
+      exclusionReason: 'missing_or_invalid_lng',
+      debug,
+    };
+  }
+
+  if (latitude < -90 || latitude > 90) {
     return {
       community,
       normalizedCoordinate: null,
@@ -192,7 +213,7 @@ function normalizeCommunityCoordinate(community: CommunityData): CommunityMapAud
     };
   }
 
-  if (longitudeMatch.parsed < -180 || longitudeMatch.parsed > 180) {
+  if (longitude < -180 || longitude > 180) {
     return {
       community,
       normalizedCoordinate: null,
@@ -204,8 +225,8 @@ function normalizeCommunityCoordinate(community: CommunityData): CommunityMapAud
   return {
     community,
     normalizedCoordinate: {
-      latitude: latitudeMatch.parsed,
-      longitude: longitudeMatch.parsed,
+      latitude,
+      longitude,
       latitudeSource: latitudeMatch.source,
       longitudeSource: longitudeMatch.source,
     },
@@ -410,9 +431,7 @@ export default function CommunitiesScreen() {
           fan_factions: orderedBaseCommunities.filter(
             (community) => community.type === 'fan_faction',
           ),
-          communities: orderedBaseCommunities.filter(
-            (community) => community.type === 'community',
-          ),
+          communities: orderedBaseCommunities.filter((community) => community.type === 'community'),
           mine: orderedBaseCommunities.filter((community) => !!myCommunityRoles[community.id]),
         }),
         { itemCount: orderedBaseCommunities.length },

@@ -17,11 +17,7 @@ function isInstagramUrl(url: string | null | undefined): boolean {
   }
 }
 
-async function withTimeout<T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-  message: string,
-): Promise<T> {
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
   let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
 
   try {
@@ -249,7 +245,9 @@ export async function fetchNewsItems(limit: number = 50): Promise<NewsItem[]> {
       id: item.id,
       url: item.url,
       title: fixEncoding(item.title) ?? undefined,
-      description: fixEncoding(item.description) ?? undefined,
+      description: fixEncoding(item.summary || item.description) ?? undefined,
+      intakeOrigin: item.intake_origin === true,
+      topic: typeof item.topic === 'string' ? item.topic : undefined,
       note: fixEncoding(item.note) ?? undefined,
       imageUrl: sanitizeNewsHeroImageUrl(item.image_url, item.url) || undefined,
       siteName: fixEncoding(item.site_name) ?? undefined,

@@ -1,0 +1,35 @@
+# Only build inputs belong in the cloud archive. This intentionally replaces
+# .gitignore for EAS uploads; local work and Git staging are not modified.
+/*
+!/App.tsx
+!/app.json
+!/app.config.js
+!/eas.json
+!/package.json
+!/package-lock.json
+!/babel.config.js
+!/metro.config.js
+!/tsconfig.json
+!/assets
+!/assets/**
+!/src
+!/src/**
+!/plugins
+!/plugins/**
+!/modules
+!/modules/**
+
+**/__tests__/
+**/*.test.*
+**/.DS_Store
+**/node_modules/
+**/.env
+**/.env.*
+**/*.log
+**/*.p8
+**/*.p12
+**/*.mobileprovision
+**/*.cer
+**/*.key
+**/*.pem
+/modules/incoming-share/android/build/

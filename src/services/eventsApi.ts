@@ -77,6 +77,10 @@ export interface Event {
 }
 
 export interface Fixture {
+  status_short?: string | null;
+  status_long?: string | null;
+  home_goals?: number | null;
+  away_goals?: number | null;
   id: string;
   home_team: string;
   away_team: string;

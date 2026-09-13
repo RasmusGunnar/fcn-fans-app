@@ -85,6 +85,20 @@ test('Alle preserves the existing mixed feed reference and order', () => {
   );
 });
 
+test('V1.1C curated news joins FCN i medierne without mixing in ordinary shared links', () => {
+  const original = mixedFeed.find((item) => item.kind === 'news');
+  if (!original || original.kind !== 'news') throw new Error('Missing news fixture');
+  const curated: FeedItem = {
+    ...original,
+    id: 'curated',
+    data: { ...original.data, intakeOrigin: true },
+  };
+  const result = filterHomeFeedItems([...mixedFeed, curated], 'media_articles');
+  assert.ok(result.some((item) => item.id === 'curated'));
+  assert.ok(!result.some((item) => item.id === 'news-1'));
+  assert.ok(!filterHomeFeedItems([curated], 'fan_posts').length);
+});
+
 test('Fan Posts includes only normal posts sorted newest first', () => {
   const result = filterHomeFeedItems(mixedFeed, 'fan_posts');
 
@@ -111,9 +125,7 @@ test('Weekly Top Fan fallback stays in Alle and out of specialized post tabs', (
   const mediaArticles = filterHomeFeedItems(mixedFeed, 'media_articles');
 
   assert.ok(
-    allItems.some(
-      (item) => item.kind === 'weekly_top_fan' && item.data.isFallbackLatest === true,
-    ),
+    allItems.some((item) => item.kind === 'weekly_top_fan' && item.data.isFallbackLatest === true),
   );
   assert.ok(fanPosts.every((item) => item.kind !== 'weekly_top_fan'));
   assert.ok(mediaArticles.every((item) => item.kind !== 'weekly_top_fan'));

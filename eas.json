@@ -32,7 +32,11 @@
     },
     "production": {
       "autoIncrement": true,
-      "channel": "testflight"
+      "channel": "testflight",
+      "environment": "production",
+      "env": {
+        "EXPO_PUBLIC_APP_MODE": "production"
+      }
     }
   },
   "submit": {

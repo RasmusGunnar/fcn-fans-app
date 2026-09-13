@@ -70,14 +70,14 @@ export function SongEditModal({
   const [pickingAudio, setPickingAudio] = useState(false);
 
   useEffect(() => {
-    if (!song) return;
-    setTitle(song.title);
-    setLyrics(song.lyrics);
-    setCategory(song.category);
-    setSpotifyUrl(song.spotifyUrl ?? '');
+    if (!visible) return;
+    setTitle(song?.title ?? '');
+    setLyrics(song?.lyrics ?? '');
+    setCategory(song?.category ?? 'slagsang');
+    setSpotifyUrl(song?.spotifyUrl ?? '');
     setAudioChange({ kind: 'keep' });
     setPickingAudio(false);
-  }, [song]);
+  }, [song, visible]);
 
   const disabled = useMemo(() => {
     return saving || pickingAudio || !title.trim() || !lyrics.trim();
@@ -118,7 +118,7 @@ export function SongEditModal({
         <Pressable style={styles.backdrop} onPress={onClose} />
 
         <View style={styles.sheet}>
-          <Text style={styles.title}>Rediger sang</Text>
+          <Text style={styles.title}>{song ? 'Rediger sang' : 'Tilføj ny sang'}</Text>
 
           <ScrollView
             style={styles.form}
@@ -175,96 +175,107 @@ export function SongEditModal({
               />
             </View>
 
-            <View style={styles.audioSection}>
-              <View style={styles.field}>
-                <Text style={styles.label}>Lydfil</Text>
-                {audioChange.kind === 'replace' ? (
-                  <View style={styles.audioDetails}>
-                    <Text style={styles.audioStatus}>Ny lydfil valgt</Text>
-                    <Text style={styles.audioMeta} numberOfLines={2}>
-                      {audioChange.file.name} · {audioChange.file.extension.toUpperCase()}
-                      {selectedAudioSize ? ` · ${selectedAudioSize}` : ''}
-                    </Text>
-                  </View>
-                ) : song?.audioPath && audioChange.kind !== 'remove' ? (
-                  <View style={styles.audioDetails}>
-                    <Text style={styles.audioStatus}>Lydfil tilknyttet</Text>
-                    <Text style={styles.audioMeta}>
-                      {song.audioMimeType === 'audio/mpeg'
-                        ? 'MP3'
-                        : song.audioMimeType === 'audio/mp4'
-                          ? 'M4A'
-                          : 'AAC'}
-                      {currentAudioSize ? ` · ${currentAudioSize}` : ''}
-                    </Text>
-                  </View>
-                ) : audioChange.kind === 'remove' ? (
-                  <Text style={styles.audioMeta}>Lydfilen fjernes, når du gemmer.</Text>
-                ) : (
-                  <Text style={styles.audioMeta}>Ingen lydfil tilknyttet.</Text>
-                )}
-              </View>
+            {!title.trim() || !lyrics.trim() ? (
+              <Text accessibilityLiveRegion="polite" style={styles.audioMeta}>
+                Udfyld titel og sangtekst for at gemme.
+              </Text>
+            ) : null}
+            {!song ? (
+              <Text style={styles.audioMeta}>
+                Du kan tilføje en lydfil ved at redigere sangen efter oprettelse.
+              </Text>
+            ) : (
+              <View style={styles.audioSection}>
+                <View style={styles.field}>
+                  <Text style={styles.label}>Lydfil</Text>
+                  {audioChange.kind === 'replace' ? (
+                    <View style={styles.audioDetails}>
+                      <Text style={styles.audioStatus}>Ny lydfil valgt</Text>
+                      <Text style={styles.audioMeta} numberOfLines={2}>
+                        {audioChange.file.name} · {audioChange.file.extension.toUpperCase()}
+                        {selectedAudioSize ? ` · ${selectedAudioSize}` : ''}
+                      </Text>
+                    </View>
+                  ) : song?.audioPath && audioChange.kind !== 'remove' ? (
+                    <View style={styles.audioDetails}>
+                      <Text style={styles.audioStatus}>Lydfil tilknyttet</Text>
+                      <Text style={styles.audioMeta}>
+                        {song.audioMimeType === 'audio/mpeg'
+                          ? 'MP3'
+                          : song.audioMimeType === 'audio/mp4'
+                            ? 'M4A'
+                            : 'AAC'}
+                        {currentAudioSize ? ` · ${currentAudioSize}` : ''}
+                      </Text>
+                    </View>
+                  ) : audioChange.kind === 'remove' ? (
+                    <Text style={styles.audioMeta}>Lydfilen fjernes, når du gemmer.</Text>
+                  ) : (
+                    <Text style={styles.audioMeta}>Ingen lydfil tilknyttet.</Text>
+                  )}
+                </View>
 
-              <View style={styles.audioActions}>
-                <Button
-                  title={
-                    pickingAudio
-                      ? 'Åbner...'
-                      : song?.audioPath || audioChange.kind === 'replace'
-                        ? 'Erstat lydfil'
-                        : 'Tilføj lydfil'
-                  }
-                  variant="outline"
-                  size="sm"
-                  onPress={() => void handlePickAudio()}
-                  disabled={saving || pickingAudio}
-                />
-                {audioChange.kind === 'replace' ? (
+                <View style={styles.audioActions}>
                   <Button
-                    title="Fjern valgt fil"
-                    variant="ghost"
+                    title={
+                      pickingAudio
+                        ? 'Åbner...'
+                        : song?.audioPath || audioChange.kind === 'replace'
+                          ? 'Erstat lydfil'
+                          : 'Tilføj lydfil'
+                    }
+                    variant="outline"
                     size="sm"
-                    onPress={() => setAudioChange({ kind: 'keep' })}
-                    disabled={saving}
+                    onPress={() => void handlePickAudio()}
+                    disabled={saving || pickingAudio}
                   />
-                ) : song?.audioPath && audioChange.kind !== 'remove' ? (
-                  <Button
-                    title="Fjern lydfil"
-                    variant="ghost"
-                    size="sm"
-                    onPress={handleRemoveAudio}
-                    disabled={saving}
-                  />
-                ) : audioChange.kind === 'remove' ? (
-                  <Button
-                    title="Fortryd fjernelse"
-                    variant="ghost"
-                    size="sm"
-                    onPress={() => setAudioChange({ kind: 'keep' })}
-                    disabled={saving}
-                  />
+                  {audioChange.kind === 'replace' ? (
+                    <Button
+                      title="Fjern valgt fil"
+                      variant="ghost"
+                      size="sm"
+                      onPress={() => setAudioChange({ kind: 'keep' })}
+                      disabled={saving}
+                    />
+                  ) : song?.audioPath && audioChange.kind !== 'remove' ? (
+                    <Button
+                      title="Fjern lydfil"
+                      variant="ghost"
+                      size="sm"
+                      onPress={handleRemoveAudio}
+                      disabled={saving}
+                    />
+                  ) : audioChange.kind === 'remove' ? (
+                    <Button
+                      title="Fortryd fjernelse"
+                      variant="ghost"
+                      size="sm"
+                      onPress={() => setAudioChange({ kind: 'keep' })}
+                      disabled={saving}
+                    />
+                  ) : null}
+                </View>
+
+                {isUploading ? (
+                  <View style={styles.uploadStatus}>
+                    <View style={styles.uploadStatusRow}>
+                      <ActivityIndicator size="small" color={theme.colors.brand.accent} />
+                      <Text style={styles.uploadText}>
+                        Uploader lyd... {Math.round(uploadProgress * 100)}%
+                      </Text>
+                    </View>
+                    <View style={styles.progressTrack}>
+                      <View
+                        style={[
+                          styles.progressFill,
+                          { width: `${Math.max(0, Math.min(100, uploadProgress * 100))}%` },
+                        ]}
+                      />
+                    </View>
+                  </View>
                 ) : null}
               </View>
-
-              {isUploading ? (
-                <View style={styles.uploadStatus}>
-                  <View style={styles.uploadStatusRow}>
-                    <ActivityIndicator size="small" color={theme.colors.brand.accent} />
-                    <Text style={styles.uploadText}>
-                      Uploader lyd... {Math.round(uploadProgress * 100)}%
-                    </Text>
-                  </View>
-                  <View style={styles.progressTrack}>
-                    <View
-                      style={[
-                        styles.progressFill,
-                        { width: `${Math.max(0, Math.min(100, uploadProgress * 100))}%` },
-                      ]}
-                    />
-                  </View>
-                </View>
-              ) : null}
-            </View>
+            )}
           </ScrollView>
 
           <View style={styles.actions}>

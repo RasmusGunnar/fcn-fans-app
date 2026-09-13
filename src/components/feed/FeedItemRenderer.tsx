@@ -156,6 +156,8 @@ function FeedItemRendererComponent(props: FeedItemRendererProps): React.ReactEle
           displayName={item.data.displayName}
           fanLevelKey={item.data.fanLevelKey}
           weekStartDate={item.data.weekStartDate}
+          awardedAt={item.data.generatedAt ?? item.data.createdAt}
+          weeklyScore={item.data.weeklyScore}
           title={item.data.title}
           subtitle={item.data.subtitle}
           body={item.data.body}
