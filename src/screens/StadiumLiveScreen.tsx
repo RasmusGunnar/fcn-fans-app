@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { RouteProp, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
+  AppState,
+  Platform,
   Pressable,
   RefreshControl,
   SectionList,
@@ -12,13 +13,15 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../auth/AuthProvider';
 import { StadiumParticipantRow } from '../components/stadium/StadiumParticipantRow';
+import { MatchAttendancePanel } from '../components/match/MatchAttendancePanel';
+import { InlineComments } from '../components/comments/InlineComments';
 import { Button, Card, Text } from '../components/ui';
 import { navigateToDirectMessageConversation } from '../navigation/navigationRef';
-import { APP_TAB_BAR_FAB_OVERFLOW } from '../navigation/tabBarMetrics';
 import { createOrGetDirectConversation } from '../services/messagesApi';
+import { fetchFixtureById, type Fixture } from '../services/eventsApi';
 import {
   getStadiumLiveParticipants,
   getStadiumLivePreferences,
@@ -30,6 +33,8 @@ import { confirmAndSubmitReport } from '../services/reporting';
 import { useStadiumReactions } from '../state/StadiumReactionContext';
 import { useMatchdayState } from '../state/MatchdayStateContext';
 import { useTheme } from '../theme';
+import { matchExperience } from '../utils/fanExperience';
+import { matchdayExperience } from '../utils/matchdayExperience';
 import type {
   StadiumLivePreferences,
   StadiumParticipant,
@@ -38,7 +43,6 @@ import type {
 } from '../types/stadiumLive';
 import {
   getRemainingCooldownSeconds,
-  getStadiumListBottomPadding,
   getStadiumReactionCopy,
   sanitizeStadiumSection,
   splitStadiumParticipants,
@@ -57,20 +61,23 @@ const COOLDOWN_TICK_MS = 1_000;
 export default function StadiumLiveScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<StadiumLiveRoute>();
-  const { user } = useAuth();
+  const { user, isAppAdmin } = useAuth();
   const { latestReaction, revision } = useStadiumReactions();
   const theme = useTheme();
   const styles = createStyles(theme);
-  const tabBarHeight = useBottomTabBarHeight();
-  const listBottomPadding = getStadiumListBottomPadding(
-    tabBarHeight,
-    APP_TAB_BAR_FAB_OVERFLOW + theme.spacing[1],
-  );
+  const insets = useSafeAreaInsets();
+  const listBottomPadding = insets.bottom + theme.spacing[6];
   const eventId = route.params.eventId;
   const matchdayState = useMatchdayState(eventId);
   const refreshMatchdayState = matchdayState.refresh;
   const checkInToMatch = matchdayState.checkIn;
   const checkOutOfMatch = matchdayState.checkOut;
+  const [fixture, setFixture] = useState<Fixture | null>(null);
+  const experience = matchExperience(fixture?.status_short, fixture?.kickoff_at ?? '');
+  const matchday = matchdayExperience(
+    matchdayState,
+    Boolean(fixture) && experience.planningAllowed,
+  );
 
   const [preferences, setPreferences] = useState<StadiumLivePreferences | null>(null);
   const [sectionDraft, setSectionDraft] = useState('');
@@ -135,10 +142,12 @@ export default function StadiumLiveScreen() {
       }
       setError(null);
       try {
-        const [nextPreferences, snapshot] = await Promise.all([
+        const [nextPreferences, snapshot, nextFixture] = await Promise.all([
           getStadiumLivePreferences(),
           refreshMatchdayState(),
+          fetchFixtureById(eventId),
         ]);
+        setFixture(nextFixture);
         setPreferences(nextPreferences);
         if (!sectionEditorVisibleRef.current) {
           setSectionDraft(nextPreferences.sectionLabel ?? '');
@@ -158,9 +167,7 @@ export default function StadiumLiveScreen() {
           setReactions([]);
         }
       } catch (loadError) {
-        setError(
-          loadError instanceof Error ? loadError.message : 'Stadion Live kunne ikke hentes.',
-        );
+        setError(loadError instanceof Error ? loadError.message : 'Kampdag kunne ikke hentes.');
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -172,6 +179,14 @@ export default function StadiumLiveScreen() {
   useFocusEffect(
     useCallback(() => {
       void load();
+      const interval = setInterval(() => void load({ refresh: true }), 60_000);
+      const subscription = AppState.addEventListener('change', (state) => {
+        if (state === 'active') void load({ refresh: true });
+      });
+      return () => {
+        clearInterval(interval);
+        subscription.remove();
+      };
     }, [load]),
   );
 
@@ -396,28 +411,10 @@ export default function StadiumLiveScreen() {
     matchdayState.participantCount === 1 ? 'fan er her' : 'fans er her'
   }`;
 
-  const renderCheckedInStatus = () => (
-    <Card style={styles.liveStatusCard}>
-      <View style={styles.liveStatusRow}>
-        <View style={styles.liveStatusIcon}>
-          <Ionicons name="checkmark" size={18} color={theme.colors.text.inverse} />
-        </View>
-        <View style={styles.liveStatusCopy}>
-          <Text variant="bodyBold">Checket ind</Text>
-          <Text variant="small" color="secondary">
-            {participantCountCopy}
-          </Text>
-        </View>
-        <Button
-          title={changingParticipation ? 'Tjekker ud…' : 'Check ud'}
-          variant="ghost"
-          size="sm"
-          onPress={() => void handleCheckOut()}
-          disabled={changingParticipation}
-        />
-      </View>
-
-      {matchdayState.stadiumLiveOpen ? (
+  const renderLiveControls = () => (
+    <View style={styles.liveStatusCard}>
+      <Text variant="h3">På stadion</Text>
+      {matchday.open ? (
         <>
           <View style={styles.liveControls}>
             <Pressable
@@ -502,40 +499,90 @@ export default function StadiumLiveScreen() {
           ) : null}
         </>
       ) : null}
-    </Card>
+    </View>
   );
 
   const ListHeader = (
     <View style={styles.listHeader}>
-      {matchdayState.isCheckedIn ? renderCheckedInStatus() : null}
-      {!matchdayState.stadiumLiveOpen ? (
-        <Card style={styles.stateCard}>
-          <Ionicons name="time-outline" size={32} color={theme.colors.primary} />
-          <Text variant="h3" style={styles.centerText}>
-            Stadion Live er lukket
+      <View key="match" style={styles.matchIdentity} testID="matchday-match">
+        <Text variant="small" style={{ color: theme.colors.primaryDark, fontWeight: '800' }}>
+          {matchday.open ? '● KAMPDAG ER ÅBEN' : loading ? 'Henter kampstatus…' : 'MATCH CENTER'}
+        </Text>
+        <Text variant="h3">
+          {fixture ? `${fixture.home_team} – ${fixture.away_team}` : 'Kampdag'}
+        </Text>
+        <Text variant="small" color="secondary">
+          {fixture
+            ? [
+                experience.label,
+                experience.showScore && fixture.home_goals != null && fixture.away_goals != null
+                  ? `${fixture.home_goals} – ${fixture.away_goals}`
+                  : null,
+                fixture.venue,
+              ]
+                .filter(Boolean)
+                .join(' · ')
+            : 'Kampoplysninger ikke tilgængelige endnu'}
+        </Text>
+      </View>
+      <View key="checkin" style={styles.liveStatusRow} testID="matchday-checkin">
+        <View style={styles.liveStatusCopy}>
+          <Text variant="bodyBold" accessibilityLiveRegion="polite">
+            {matchday.checkInLabel}
           </Text>
-          <Text color="secondary" style={styles.centerText}>
-            Stadion Live åbner seks timer før kickoff og lukker seks timer efter.
+          <Text variant="small" color="secondary">
+            {matchday.checkInState === 'CHECKED_IN'
+              ? participantCountCopy
+              : matchday.open
+                ? 'Check-in er separat fra din tilmelding.'
+                : experience.state === 'POST_MATCH'
+                  ? 'Kampen er slut. Kampsnak fortsætter.'
+                  : 'Kampsnak fortsætter. Check-in åbner i kampvinduet.'}
           </Text>
-        </Card>
-      ) : !matchdayState.isCheckedIn ? (
-        <Card style={styles.stateCard}>
-          <Ionicons name="location-outline" size={32} color={theme.colors.primary} />
-          <Text variant="h3" style={styles.centerText}>
-            Check ind på stadion
-          </Text>
-          <Text color="secondary" style={styles.centerText}>
-            Check ind på stadion for at se og interagere med andre fans.
-          </Text>
+        </View>
+        {matchday.checkInState !== 'UNAVAILABLE' ? (
           <Button
-            title={changingParticipation ? 'Tjekker ind…' : 'Check ind på stadion'}
-            onPress={() => void handleCheckIn()}
-            disabled={changingParticipation || matchdayState.loading}
-            fullWidth
+            title={
+              changingParticipation ? 'Gemmer…' : matchdayState.isCheckedIn ? 'Tjek ud' : 'Tjek ind'
+            }
+            variant="outline"
+            size="sm"
+            onPress={() => void (matchdayState.isCheckedIn ? handleCheckOut() : handleCheckIn())}
+            disabled={
+              changingParticipation || matchdayState.loading || Boolean(matchdayState.error)
+            }
           />
-        </Card>
-      ) : null}
-      {matchdayState.isCheckedIn && receivedReactions.length > 0 ? (
+        ) : null}
+      </View>
+      <MatchAttendancePanel
+        key="attendees"
+        embedded
+        socialOnly
+        state={matchdayState}
+        planningAllowed={experience.planningAllowed}
+        setRsvp={matchdayState.setRsvpStatus}
+        checkIn={checkInToMatch}
+        checkOut={checkOutOfMatch}
+      />
+      <View key="conversation" testID="matchday-conversation" style={styles.conversation}>
+        <InlineComments
+          targetType="match"
+          targetId={eventId}
+          currentUserId={user?.id || ''}
+          isAppAdmin={isAppAdmin}
+          variant="inline"
+          maxInlineComments={4}
+          titleOverride="Kampsnak"
+          latestFirst
+          refreshIntervalMs={
+            experience.conversationFirst && experience.state !== 'POST_MATCH' ? 60_000 : undefined
+          }
+          composerPlaceholder="Skriv i kampsnak …"
+          replyModeLabel="Svar"
+        />
+      </View>
+      {matchdayState.isCheckedIn && matchday.open ? renderLiveControls() : null}
+      {matchdayState.isCheckedIn && matchday.open && receivedReactions.length > 0 ? (
         <View style={styles.recentSection}>
           <Text variant="h3">Seneste til dig</Text>
           {receivedReactions.map((reaction) => (
@@ -584,7 +631,7 @@ export default function StadiumLiveScreen() {
         </Card>
       ) : null}
       {matchdayState.isCheckedIn &&
-      matchdayState.stadiumLiveOpen &&
+      matchday.open &&
       participants.length === 0 &&
       !loading &&
       !error ? (
@@ -601,31 +648,41 @@ export default function StadiumLiveScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
+      <View style={[styles.header, !matchday.open && { backgroundColor: theme.colors.bg.card }]}>
         <Pressable
+          accessibilityRole="button"
           accessibilityLabel="Gå tilbage"
           onPress={() => navigation.goBack()}
           style={styles.backButton}
         >
-          <Ionicons name="arrow-back" size={24} color={theme.colors.text.inverse} />
+          <Ionicons
+            name="arrow-back"
+            size={24}
+            color={matchday.open ? theme.colors.text.inverse : theme.colors.text.primary}
+          />
         </Pressable>
         <View style={styles.headerCopy}>
-          <Text variant="h2" color="inverse">
-            På stadion
+          <Text variant="h2" color={matchday.open ? 'inverse' : 'primary'}>
+            Kampdag
           </Text>
-          <Text variant="small" color="inverse" style={styles.headerSubtitle}>
-            {matchdayState.participantCount}{' '}
-            {matchdayState.participantCount === 1 ? 'fan er her' : 'fans er her'}
+          <Text
+            variant="small"
+            color={matchday.open ? 'inverse' : 'secondary'}
+            style={styles.headerSubtitle}
+          >
+            Fans · check-in · Kampsnak
           </Text>
         </View>
       </View>
 
       <SectionList
-        sections={sections}
+        sections={matchday.open ? sections : []}
         keyExtractor={(participant) => participant.userId}
         contentContainerStyle={[styles.content, { paddingBottom: listBottomPadding }]}
-        scrollIndicatorInsets={{ bottom: tabBarHeight }}
+        scrollIndicatorInsets={{ bottom: insets.bottom }}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        automaticallyAdjustKeyboardInsets
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => void load({ refresh: true })} />
         }
@@ -677,7 +734,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       gap: theme.spacing[2],
       paddingHorizontal: theme.spacing[4],
       paddingVertical: theme.spacing[3],
-      backgroundColor: theme.colors.primary,
+      backgroundColor: theme.colors.primaryDark,
     },
     backButton: { padding: theme.spacing[1] },
     headerCopy: { flex: 1, minWidth: 0 },
@@ -687,19 +744,17 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       paddingHorizontal: theme.layout.screenPadding,
     },
     listHeader: { gap: theme.layout.listGap, marginBottom: theme.layout.listGap },
+    matchIdentity: { gap: theme.spacing[1] },
+    conversation: {
+      borderTopWidth: theme.layout.borderHairline,
+      borderTopColor: theme.colors.border.default,
+      paddingTop: theme.spacing[2],
+    },
     liveStatusCard: { gap: theme.layout.listGap },
     liveStatusRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: theme.spacing[2],
-    },
-    liveStatusIcon: {
-      width: theme.spacing[8],
-      height: theme.spacing[8],
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: theme.radius.pill,
-      backgroundColor: theme.colors.state.success,
     },
     liveStatusCopy: { flex: 1, minWidth: 0, gap: theme.spacing[1] / 2 },
     liveControls: {

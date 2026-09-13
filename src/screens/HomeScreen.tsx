@@ -856,6 +856,7 @@ export default function HomeScreen() {
               onPress={handleOpenNextMatch}
               onPressPrimaryAction={handleNextMatchPrimaryAction}
               onPressSocial={handleOpenNextMatchFans}
+              onOpenMatchday={handleOpenNextMatchFans}
             />
           ) : null}
           {loadingFixture && !matchForBadge ? (

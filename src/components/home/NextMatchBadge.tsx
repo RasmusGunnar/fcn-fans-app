@@ -9,6 +9,8 @@ import { cleanText } from '../../utils/text';
 import { type MatchdayStatusPanelAction } from '../match/MatchdayStatusPanel';
 import type { MatchViewState } from '../../utils/matchdayState';
 import { matchExperience } from '../../utils/fanExperience';
+import { matchdayExperience } from '../../utils/matchdayExperience';
+import { MatchdayEntry } from '../match/MatchdayEntry';
 
 interface NextMatchBadgeProps {
   match: {
@@ -43,6 +45,7 @@ interface NextMatchBadgeProps {
   countdownLabel?: string;
   onPressPrimaryAction?: () => void;
   onPressSocial?: () => void;
+  onOpenMatchday?: () => void;
   onPress: () => void;
 }
 
@@ -50,6 +53,7 @@ const NextMatchBadge: React.FC<NextMatchBadgeProps> = ({
   match,
   matchStatusPanel,
   countdownLabel,
+  onOpenMatchday,
   onPress,
 }) => {
   const state = useMatchdayState(match?.id);
@@ -57,9 +61,18 @@ const NextMatchBadge: React.FC<NextMatchBadgeProps> = ({
   if (!match) return null;
   const venue = [cleanText(match.venue), cleanText(match.venueCity)].filter(Boolean).join(' · ');
   const experience = matchExperience(match.statusCode, match.kickoff);
+  const matchday = matchdayExperience(state, experience.planningAllowed);
   return (
-    <View style={[styles.wrapper, { backgroundColor: theme.colors.bg.card }]}>
-      <View style={styles.kickerRow}>
+    <View
+      style={[
+        styles.wrapper,
+        { backgroundColor: theme.colors.bg.card },
+        matchday.open && { borderColor: theme.colors.primaryDark },
+      ]}
+    >
+      <View
+        style={[styles.kickerRow, matchday.open && { backgroundColor: theme.colors.pill.red.bg }]}
+      >
         <View style={styles.kickerMark} />
         <Text style={styles.kicker}>MATCH CENTER</Text>
       </View>
@@ -91,6 +104,7 @@ const NextMatchBadge: React.FC<NextMatchBadgeProps> = ({
           }
         />
       </Pressable>
+      {onOpenMatchday ? <MatchdayEntry state={matchday} onPress={onOpenMatchday} /> : null}
       {matchStatusPanel ? (
         <MatchAttendancePanel
           embedded

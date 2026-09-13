@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
+import { matchdayExperience } from '../matchdayExperience';
 import { APP_TAB_BAR_BASE_HEIGHT, APP_TAB_BAR_FAB_OVERFLOW } from '../../navigation/tabBarMetrics';
 import type { StadiumParticipant, StadiumReaction } from '../../types/stadiumLive';
 import {
@@ -116,10 +117,11 @@ test('participant list clears measured tab bars, safe areas, and the shared FAB 
 
   const stadium = readWorkspaceFile('src/screens/StadiumLiveScreen.tsx');
   const tabs = readWorkspaceFile('src/navigation/AppTabs.tsx');
-  assert.match(stadium, /useBottomTabBarHeight\(\)/);
-  assert.match(stadium, /APP_TAB_BAR_FAB_OVERFLOW \+ theme\.spacing\[1\]/);
+  assert.match(stadium, /useSafeAreaInsets\(\)/);
+  assert.match(stadium, /insets\.bottom \+ theme\.spacing\[6\]/);
+  assert.doesNotMatch(stadium, /useBottomTabBarHeight/);
   assert.match(stadium, /contentContainerStyle=\{\[styles\.content, \{ paddingBottom:/);
-  assert.match(stadium, /scrollIndicatorInsets=\{\{ bottom: tabBarHeight \}\}/);
+  assert.match(stadium, /scrollIndicatorInsets=\{\{ bottom: insets.bottom \}\}/);
   assert.match(tabs, /BottomTabBarHeightCallbackContext/);
   assert.match(tabs, /setTabBarHeight\?\.\(event\.nativeEvent\.layout\.height\)/);
   assert.match(tabs, /onLayout=\{handleLayout\}/);
@@ -188,10 +190,17 @@ test('Home, Match Details, and Stadium Live use the shared state and canonical S
   assert.match(home, /navigateToStadiumLive/);
   assert.match(details, /navigateToStadiumLive/);
   assert.doesNotMatch(eventsStack, /name="StadiumLive"/);
+  assert.doesNotMatch(readWorkspaceFile('src/navigation/HomeStack.tsx'), /name="StadiumLive"/);
+  assert.match(readWorkspaceFile('src/navigation/RootNavigator.tsx'), /name="StadiumLive" component=\{ProtectedStadiumLiveScreen\}/);
   assert.doesNotMatch(stadium, /Bliv synlig for andre fans/);
-  assert.match(stadium, /Check ud/);
+  assert.match(stadium, /Tjek ud/);
   assert.match(stadium, /Du er den første her/);
-  assert.match(stadium, /variant="ghost"/);
+  assert.match(stadium, /variant="outline"/);
+  assert.match(stadium, /titleOverride="Kampsnak"/);
+  assert.match(stadium, /key="conversation"/);
+  assert.match(stadium, /matchday\.checkInState !== 'UNAVAILABLE'/);
+  assert.match(home, /onOpenMatchday=\{handleOpenNextMatchFans\}/);
+  assert.match(details, /<MatchdayEntry/);
   assert.match(stadium, /accessibilityRole="switch"/);
   assert.match(stadium, /reactionControlDisabled/);
   assert.match(stadium, /sectionEditorVisible/);
@@ -202,6 +211,19 @@ test('Home, Match Details, and Stadium Live use the shared state and canonical S
   assert.doesNotMatch(stadium, /Stadion Live-indstillinger/);
   assert.match(matchdayContext, /activeUserIdRef\.current !== requestedUserId/);
   assert.match(matchdayContext, /recordsRef\.current = \{\}/);
+});
+
+test('Kampdag uses the server window, explicit check-in states and quieter post-match mode', () => {
+  const ready = { ...createInitialMatchdayState('fixture'), loaded: true,
+    stadiumLiveOpen: true, canCheckIn: true };
+  assert.equal(matchdayExperience(ready, true).checkInState, 'NOT_CHECKED_IN');
+  const checked = matchdayExperience({ ...ready, isCheckedIn: true }, true);
+  assert.equal(checked.checkInState, 'CHECKED_IN');
+  assert.equal(checked.entryLabel, 'Gå til kampdagen');
+  assert.equal(matchdayExperience({ ...ready, canCheckIn: false }, true).checkInState, 'UNAVAILABLE');
+  assert.equal(matchdayExperience({ ...ready, stadiumLiveOpen: false }, true).open, false);
+  assert.equal(matchdayExperience({ ...ready, error: 'offline' }, true).open, false);
+  assert.equal(matchdayExperience(ready, false).open, false);
 });
 
 test('Stadium keeps participant actions and adds local reaction confirmation only', () => {

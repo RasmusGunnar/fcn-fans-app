@@ -19,6 +19,8 @@ import { InlineComments } from '../components/comments/InlineComments';
 import { FanActivityDetailSheet } from '../components/fan/FanActivityDetailSheet';
 import { MatchAttendancePanel } from '../components/match/MatchAttendancePanel';
 import { MatchHero } from '../components/match/MatchHero';
+import { MatchdayEntry } from '../components/match/MatchdayEntry';
+import { matchdayExperience } from '../utils/matchdayExperience';
 import { matchExperience } from '../utils/fanExperience';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { FanActivitiesShowcase } from '../components/fan/FanActivitiesShowcase';
@@ -347,13 +349,11 @@ export default function MatchDetailsScreen() {
       checkIn={matchdayState.checkIn}
       checkOut={matchdayState.checkOut}
     />
-    {matchdayState.stadiumLiveOpen && experience.planningAllowed ? <Pressable
-      accessibilityRole="button" onPress={handleOpenMatchFans}
-      style={{ padding: 16, borderRadius: 16, backgroundColor: theme.colors.primary }}>
-      <Text style={{ color: theme.colors.text.inverse, fontWeight: '700' }}>Åbn Stadion Live →</Text>
-    </Pressable> : <Text style={{ padding: 12, color: theme.colors.text.secondary }}>
-      {experience.planningAllowed ? 'Stadion Live åbner i kampvinduet' : 'Stadion Live er afsluttet'}
-    </Text>}
+    {!matchdayExperience(matchdayState, experience.planningAllowed).open ? (
+      <Text style={{ padding: theme.spacing[3], color: theme.colors.text.secondary }}>
+        {experience.planningAllowed ? 'Kampdag åbner i kampvinduet' : 'Kampdag er afsluttet'}
+      </Text>
+    ) : null}
     </View>
   );
   const conversation = (
@@ -548,6 +548,10 @@ export default function MatchDetailsScreen() {
                     ? 'SLUT'
                     : 'VS'
             }
+          />
+          <MatchdayEntry
+            state={matchdayExperience(matchdayState, experience.planningAllowed)}
+            onPress={handleOpenMatchFans}
           />
         </View>
         <View style={styles.contentBlock}>

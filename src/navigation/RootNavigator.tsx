@@ -37,6 +37,8 @@ const MessagesStack = React.lazy(() =>
 );
 const IncomingShareScreen = React.lazy(() => import('../screens/IncomingShareScreen'));
 const SharePostComposerScreen = React.lazy(() => import('../screens/SharePostComposerScreen'));
+const StadiumLiveScreen = React.lazy(() => import('../screens/StadiumLiveScreen'));
+const PublicProfileScreen = React.lazy(() => import('../screens/PublicProfileScreen'));
 
 function normalizeFanActivityDetailPath(path: string): string {
   const normalizedPath = path.replace(/^\/+/, '');
@@ -174,6 +176,20 @@ function ProtectedIncomingShareScreen() {
   return <IncomingShareScreen />;
 }
 
+function ProtectedStadiumLiveScreen() {
+  const { user, loading } = useAuth();
+  if (loading) return <LoadingScreen />;
+  if (!user) return <AuthStack />;
+  return <StadiumLiveScreen />;
+}
+
+function ProtectedPublicProfileScreen() {
+  const { user, loading } = useAuth();
+  if (loading) return <LoadingScreen />;
+  if (!user) return <AuthStack />;
+  return <PublicProfileScreen />;
+}
+
 function ProtectedSharePostComposerScreen() {
   const { user, loading } = useAuth();
   if (loading) return <LoadingScreen />;
@@ -223,6 +239,7 @@ export function RootNavigator() {
   const linking = {
     prefixes: [Linking.createURL('/'), 'fcnfans://'],
     config: {
+      initialRouteName: 'Main',
       screens: {
         Main: {
           screens: {
@@ -230,7 +247,6 @@ export function RootNavigator() {
               screens: {
                 HomeMain: 'home',
                 MatchDetails: 'match/:fixtureId',
-                StadiumLive: 'stadium/:eventId',
                 PostDetail: 'post/:postId',
               },
             },
@@ -258,6 +274,7 @@ export function RootNavigator() {
             GroupInfo: ':conversationId/info',
           },
         },
+        StadiumLive: 'stadium/:eventId',
         IncomingShare: 'incoming-share',
       },
     },
@@ -276,6 +293,8 @@ export function RootNavigator() {
       >
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           <Stack.Screen name="Main" component={Inner} />
+          <Stack.Screen name="StadiumLive" component={ProtectedStadiumLiveScreen} />
+          <Stack.Screen name="PublicProfile" component={ProtectedPublicProfileScreen} />
           <Stack.Screen name="Messages" component={ProtectedMessagesStack} />
           <Stack.Screen name="IncomingShare" component={ProtectedIncomingShareScreen} />
           <Stack.Screen

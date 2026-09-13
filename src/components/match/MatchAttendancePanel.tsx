@@ -26,6 +26,7 @@ export function MatchAttendancePanel({
   checkIn,
   checkOut,
   embedded = false,
+  socialOnly = false,
 }: {
   state: SharedMatchdayState;
   planningAllowed: boolean;
@@ -33,6 +34,7 @@ export function MatchAttendancePanel({
   checkIn: () => Promise<void>;
   checkOut: () => Promise<void>;
   embedded?: boolean;
+  socialOnly?: boolean;
 }) {
   const theme = useTheme();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
@@ -140,7 +142,7 @@ export function MatchAttendancePanel({
           {available ? rsvp.title : 'Din tilmelding kunne ikke hentes'}
         </Text>
       </View>
-      {planningAllowed ? (
+      {planningAllowed && !socialOnly ? (
         <View style={styles.actions}>
           <AttendanceAction
             label="Jeg kommer"
@@ -159,45 +161,49 @@ export function MatchAttendancePanel({
           />
         </View>
       ) : null}
-      <View
-        testID="match-checkin"
-        style={[styles.checkin, { borderTopColor: theme.colors.border.subtle }]}
-      >
-        <Ionicons
-          name={checkinRelevant ? 'location-outline' : 'lock-closed-outline'}
-          size={16}
-          color={theme.colors.text.secondary}
-        />
-        <View style={styles.checkinCopy}>
-          <Text style={[styles.note, { color: theme.colors.text.secondary }]}>
-            {!available
-              ? 'Check-in-status ikke tilgængelig'
-              : !checkinRelevant
-                ? planningAllowed
-                  ? 'Check-in åbner i kampvinduet'
-                  : 'Check-in er lukket'
-                : state.isCheckedIn
-                  ? 'Du er checket ind'
-                  : `${state.participantCount} er checket ind`}
-          </Text>
-          {checkinRelevant && available ? (
-            <Text style={[styles.caption, { color: theme.colors.text.secondary }]}>
-              {state.isCheckedIn
-                ? `${state.participantCount} på stadion · separat fra tilmelding`
-                : 'På stadion · separat fra tilmelding'}
+      {!socialOnly ? (
+        <View
+          testID="match-checkin"
+          style={[styles.checkin, { borderTopColor: theme.colors.border.subtle }]}
+        >
+          <Ionicons
+            name={checkinRelevant ? 'location-outline' : 'lock-closed-outline'}
+            size={16}
+            color={theme.colors.text.secondary}
+          />
+          <View style={styles.checkinCopy}>
+            <Text style={[styles.note, { color: theme.colors.text.secondary }]}>
+              {!available
+                ? 'Check-in-status ikke tilgængelig'
+                : !checkinRelevant
+                  ? planningAllowed
+                    ? 'Check-in åbner i kampvinduet'
+                    : 'Check-in er lukket'
+                  : state.isCheckedIn
+                    ? '✓ Du er tjekket ind'
+                    : state.canCheckIn
+                      ? 'Er du på stadion?'
+                      : 'Check-in er ikke tilgængeligt lige nu'}
             </Text>
+            {checkinRelevant && available ? (
+              <Text style={[styles.caption, { color: theme.colors.text.secondary }]}>
+                {state.isCheckedIn
+                  ? `${state.participantCount} på stadion · separat fra tilmelding`
+                  : 'På stadion · separat fra tilmelding'}
+              </Text>
+            ) : null}
+          </View>
+          {checkinRelevant ? (
+            <AttendanceAction
+              compact
+              label={state.isCheckedIn ? 'Tjek ud' : 'Tjek ind'}
+              selected={state.isCheckedIn}
+              disabled={!available || state.loading || (!state.isCheckedIn && !state.canCheckIn)}
+              onPress={() => void action(state.isCheckedIn ? checkOut : checkIn)}
+            />
           ) : null}
         </View>
-        {checkinRelevant ? (
-          <AttendanceAction
-            compact
-            label={state.isCheckedIn ? 'Tjek ud' : 'Tjek ind'}
-            selected={state.isCheckedIn}
-            disabled={state.loading || (!state.isCheckedIn && !state.canCheckIn)}
-            onPress={() => void action(state.isCheckedIn ? checkOut : checkIn)}
-          />
-        ) : null}
-      </View>
+      ) : null}
       {feedback || state.error ? (
         <Text accessibilityLiveRegion="polite" style={[styles.note, { color: theme.colors.error }]}>
           {feedback || state.error}

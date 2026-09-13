@@ -40,7 +40,7 @@ type HomeFeedParams = {
 type ResolvedNotificationRoute =
   | {
       targetType: 'stadium_reaction';
-      routeLabel: 'Main > Home > StadiumLive';
+      routeLabel: 'StadiumLive';
       eventId: string;
       reactionId?: string;
       fallback: boolean;
@@ -169,12 +169,10 @@ export function navigateToDirectMessageConversation(conversationId: string) {
 }
 
 export function navigateToStadiumLive(eventId: string, highlightReactionId?: string) {
-  navigationRef.navigate('Main', {
-    screen: 'Home',
-    params: {
-      screen: 'StadiumLive',
-      params: { eventId, ...(highlightReactionId ? { highlightReactionId } : {}) },
-    },
+  // One root route retains the originating tab/detail stack for both button and gesture back.
+  navigationRef.navigate('StadiumLive', {
+    eventId,
+    ...(highlightReactionId ? { highlightReactionId } : {}),
   });
 }
 
@@ -192,7 +190,7 @@ function resolveNotificationRoute(payload: Record<string, unknown>): ResolvedNot
   if (resolvedType === 'stadium_reaction' && eventId) {
     return {
       targetType: 'stadium_reaction',
-      routeLabel: 'Main > Home > StadiumLive',
+      routeLabel: 'StadiumLive',
       eventId,
       ...(reactionId ? { reactionId } : {}),
       fallback: false,

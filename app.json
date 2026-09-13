@@ -15,7 +15,7 @@
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
-      "buildNumber": "73",
+      "buildNumber": "74",
       "bundleIdentifier": "dk.rasmusgunnar.fcnfans",
       "usesAppleSignIn": true,
       "infoPlist": {
