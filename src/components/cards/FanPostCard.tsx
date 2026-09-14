@@ -328,11 +328,12 @@ export function FanPostCard({
 
   const handleSaveEdit = async () => {
     if (!editText.trim()) return;
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('posts')
       .update({ text: editText.trim() })
-      .eq('id', post.id);
-    if (error) {
+      .eq('id', post.id)
+      .select('id');
+    if (error || !data?.some((row) => row.id === post.id)) {
       Alert.alert('Fejl', 'Kunne ikke opdatere opslaget');
       console.warn('Update post error', error);
     } else {
@@ -347,8 +348,8 @@ export function FanPostCard({
   };
 
   const handleDeletePost = async () => {
-    const { error } = await supabase.from('posts').delete().eq('id', post.id);
-    if (error) {
+    const { data, error } = await supabase.from('posts').delete().eq('id', post.id).select('id');
+    if (error || !data?.some((row) => row.id === post.id)) {
       Alert.alert('Fejl', 'Kunne ikke slette opslaget');
       console.warn('Delete post error', error);
     } else {

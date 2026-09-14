@@ -5,7 +5,6 @@
 import { useNavigation } from '@react-navigation/native';
 import React from 'react';
 import { Alert, Linking, StyleSheet, View } from 'react-native';
-import { useCommunityRole } from '../../hooks/useCommunityRole';
 import { getSafeFanLevelKey } from '../../lib/fanLevel';
 import { logger } from '../../lib/logger';
 import { supabase } from '../../lib/supabase';
@@ -84,11 +83,7 @@ export function NewsCard({
   const newsCreatedBy = newsItem.createdBy ?? (newsItem as any).created_by ?? null;
   const newsActorType = newsItem.actorType ?? (newsItem as any).actor_type ?? 'user';
   const newsActorId = newsItem.actorId ?? (newsItem as any).actor_id ?? newsCreatedBy;
-  const newsCommunityId = newsItem.communityId ?? (newsItem as any).community_id ?? null;
   const cleanedNote = cleanText(newsItem.note);
-  const authoredCommunityId =
-    newsActorType === 'community' ? newsActorId || newsCommunityId || null : null;
-  const { role: authoredCommunityRole } = useCommunityRole(authoredCommunityId);
   const resolvedActor = resolveActorLine({
     actorType: newsActorType,
     authorId: newsActorType === 'user' ? newsActorId || newsCreatedBy || undefined : undefined,
@@ -120,12 +115,13 @@ export function NewsCard({
     viewerUserId,
     itemAuthorId: newsCreatedBy ?? undefined,
     itemActorType: newsActorType,
-    itemCommunityRole: authoredCommunityRole,
+    // news_items DELETE RLS permits the author or app admin, not community role alone.
+    itemCommunityRole: null,
   });
 
   const handleDeleteNews = async () => {
-    const { error } = await supabase.from('news_items').delete().eq('id', newsItem.id);
-    if (error) {
+    const { data, error } = await supabase.from('news_items').delete().eq('id', newsItem.id).select('id');
+    if (error || !data?.some((row) => row.id === newsItem.id)) {
       Alert.alert('Fejl', 'Kunne ikke slette nyheden');
       logger.warn('Delete news error', error);
     } else {

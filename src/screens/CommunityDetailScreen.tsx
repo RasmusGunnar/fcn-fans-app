@@ -141,6 +141,14 @@ export default function CommunityDetailScreen() {
   const [communityProfileMap, setCommunityProfileMap] = useState<CommunityFeedProfileMap>({});
   const [loadingCommunityFeed, setLoadingCommunityFeed] = useState(false);
 
+  const handlePostDeleted = useCallback((postId: string) => {
+    removePost(postId);
+    setPosts((prev) => prev.filter((post) => post.id !== postId));
+    setCommunityPostFeedItems((prev) =>
+      prev.filter((item) => !(item.kind === 'post' && item.id === postId)),
+    );
+  }, [removePost]);
+
   // Scroll-driven single-video autoplay — same principle as Home feed.
   // We track each feed card's y/height via onLayout refs and compare against
   // the current scroll offset to find the first card that is ≥60% visible.
@@ -1226,7 +1234,7 @@ export default function CommunityDetailScreen() {
                       // @ts-ignore
                       attendanceMap={attendanceMap}
                       toggleLike={toggleLike}
-                      removePost={removePost}
+                      removePost={handlePostDeleted}
                       removeNews={removeNews}
                       incrementCommentCount={incrementCommentCount}
                       addCommentPreview={addCommentPreview}
