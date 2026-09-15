@@ -39,6 +39,8 @@ import {
 } from '../services/fanActivities';
 import { defaultTheme as theme } from '../theme';
 import { supabase } from '../lib/supabase';
+import type { FanActivityCoverSelection } from '../lib/fanActivityCover';
+import { BusturCoverEditor } from '../components/fan/BusturCoverEditor';
 
 type CreateFanActivityRouteProp = RouteProp<RootStackParamList, 'CreateFanActivity'>;
 type FanActivityTypeValue = 'fanmarch' | 'bustur' | 'tifo' | 'fanbar' | 'andet';
@@ -212,6 +214,8 @@ export default function CreateFanActivityScreen() {
   const [communityAccessError, setCommunityAccessError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [loadedActivity, setLoadedActivity] = useState<FanActivity | null>(null);
+  const [cover, setCover] = useState<FanActivityCoverSelection | null | undefined>(undefined);
+  const [coverPreparing, setCoverPreparing] = useState(false);
   const [importUrl, setImportUrl] = useState('');
   const [importing, setImporting] = useState(false);
   const [importWarnings, setImportWarnings] = useState<string[] | null>(null);
@@ -608,6 +612,7 @@ export default function CreateFanActivityScreen() {
   ]);
 
   const isSubmitDisabled =
+    coverPreparing ||
     importing ||
     (importWarnings !== null && !importReviewed) ||
     submitting ||
@@ -617,6 +622,7 @@ export default function CreateFanActivityScreen() {
     missingReasons.length > 0;
 
   const handleSubmit = async () => {
+    if (isSubmitDisabled) return;
     if (importing || (importWarnings !== null && !importReviewed)) {
       Alert.alert(
         'Gennemgå import',
@@ -663,6 +669,7 @@ export default function CreateFanActivityScreen() {
 
       if (isEditMode && fanActivityId) {
         await updateFanActivity({
+          cover: type === 'bustur' ? cover : undefined,
           fanActivityId,
           type,
           title,
@@ -680,6 +687,7 @@ export default function CreateFanActivityScreen() {
         });
       } else {
         await createFanActivity({
+          cover: type === 'bustur' ? cover : undefined,
           parentType,
           parentId,
           parentCommunityId: parentCommunityId ?? null,
@@ -854,6 +862,11 @@ export default function CreateFanActivityScreen() {
               }}
             />
           </Card>
+
+          {type === 'bustur' ? <Card style={styles.card}>
+            <BusturCoverEditor initialUrl={loadedActivity?.cover_url} value={cover} onChange={setCover} onBusyChange={setCoverPreparing}
+              disabled={submitting || importing || loadingCommunity || Boolean(communityAccessError) || !resolvedCommunity?.id} />
+          </Card> : null}
 
           <Card style={styles.card}>
             <Text variant="h3" color="primary" style={styles.sectionTitle}>

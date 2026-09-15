@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { ImageBackground, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { FanActivityCover } from './FanActivityCover';
 import type { FanActivity } from '../../services/fanActivities';
 import { getShadowStyle, useTheme } from '../../theme';
 import { Text } from '../ui';
@@ -39,7 +40,8 @@ export function FanActivityHeroCard({
         pressed && onPress ? styles.pressed : null,
       ]}
     >
-      <ImageBackground
+      <FanActivityCover
+        coverUrl={activity.cover_url}
         source={preset.source}
         resizeMode="cover"
         style={styles.heroImage}
@@ -83,7 +85,7 @@ export function FanActivityHeroCard({
             </Text>
           </View>
         </View>
-      </ImageBackground>
+      </FanActivityCover>
 
       <View style={styles.content}>
         <Text variant="h3" color="primary" style={styles.title}>

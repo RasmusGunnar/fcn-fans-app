@@ -27,6 +27,7 @@ export function MatchAttendancePanel({
   checkOut,
   embedded = false,
   socialOnly = false,
+  matchCenter = false,
 }: {
   state: SharedMatchdayState;
   planningAllowed: boolean;
@@ -35,6 +36,7 @@ export function MatchAttendancePanel({
   checkOut: () => Promise<void>;
   embedded?: boolean;
   socialOnly?: boolean;
+  matchCenter?: boolean;
 }) {
   const theme = useTheme();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
@@ -84,6 +86,7 @@ export function MatchAttendancePanel({
       testID="match-attendance"
       style={[
         styles.panel,
+        matchCenter && styles.matchCenterPanel,
         {
           backgroundColor: theme.colors.bg.card,
           borderRadius: embedded ? 0 : 18,
@@ -93,10 +96,22 @@ export function MatchAttendancePanel({
       ]}
     >
       <View style={styles.socialHeading}>
-        <Text accessibilityRole="header" style={[styles.heading, { color }]}>
+        <Text
+          accessibilityRole="header"
+          style={[styles.heading, matchCenter && styles.matchCenterHeading, { color }]}
+        >
           {available ? (
             <>
-              <Text style={styles.count}>{state.attendanceCount}</Text> fans kommer
+              <Text
+                style={[
+                  styles.count,
+                  matchCenter && styles.matchCenterCount,
+                  matchCenter && theme.mode === 'dark' && { color: '#F2BECA' },
+                ]}
+              >
+                {state.attendanceCount}
+              </Text>{' '}
+              fans kommer
             </>
           ) : (
             'Deltagerantal ikke tilgængeligt'
@@ -110,34 +125,48 @@ export function MatchAttendancePanel({
             setOpen(true);
             void load(0);
           }}
-          style={({ pressed }) => [styles.seeAll, { opacity: pressed ? 0.6 : 1 }]}
+          style={({ pressed }) => [
+            styles.seeAll,
+            matchCenter && styles.matchCenterSeeAll,
+            { opacity: pressed ? 0.6 : 1 },
+          ]}
         >
-          <Text style={[styles.linkLabel, { color: primary }]}>Se alle</Text>
+          <Text
+            style={[
+              styles.linkLabel,
+              matchCenter && styles.matchCenterLinkLabel,
+              { color: primary },
+            ]}
+          >
+            Se alle
+          </Text>
           <Ionicons name="chevron-forward" size={14} color={primary} />
         </Pressable>
       </View>
-      <View style={styles.socialPreview}>
-        <View style={styles.avatarStack}>
-          {state.attendanceProfiles.slice(0, 5).map((person, index) => (
-            <View
-              key={person.user_id}
-              accessible
-              accessibilityLabel={person.display_name || 'FCN fan'}
-              style={{
-                marginLeft: index ? -7 : 0,
-                borderWidth: 2,
-                borderColor: theme.colors.bg.card,
-                borderRadius: 20,
-              }}
-            >
-              <Avatar
-                avatarUrl={person.avatar_url}
-                label={person.display_name || 'FCN fan'}
-                size={30}
-              />
-            </View>
-          ))}
-        </View>
+      <View style={[styles.socialPreview, matchCenter && styles.matchCenterPreview]}>
+        {state.attendanceProfiles.length > 0 ? (
+          <View style={styles.avatarStack}>
+            {state.attendanceProfiles.slice(0, 5).map((person, index) => (
+              <View
+                key={person.user_id}
+                accessible
+                accessibilityLabel={person.display_name || 'FCN fan'}
+                style={{
+                  marginLeft: index ? (matchCenter ? -9 : -7) : 0,
+                  borderWidth: 2,
+                  borderColor: theme.colors.bg.card,
+                  borderRadius: 20,
+                }}
+              >
+                <Avatar
+                  avatarUrl={person.avatar_url}
+                  label={person.display_name || 'FCN fan'}
+                  size={matchCenter ? 32 : 30}
+                />
+              </View>
+            ))}
+          </View>
+        ) : null}
         <Text style={[styles.note, { color: theme.colors.text.secondary, flex: 1 }]}>
           {available ? rsvp.title : 'Din tilmelding kunne ikke hentes'}
         </Text>
@@ -147,6 +176,7 @@ export function MatchAttendancePanel({
           <AttendanceAction
             label="Jeg kommer"
             primary
+            matchCenter={matchCenter}
             stretch
             selected={rsvp.attending}
             disabled={state.loading}
@@ -154,6 +184,7 @@ export function MatchAttendancePanel({
           />
           <AttendanceAction
             label="Kan ikke komme"
+            matchCenter={matchCenter}
             stretch
             selected={rsvp.notAttending}
             disabled={state.loading}
@@ -161,29 +192,35 @@ export function MatchAttendancePanel({
           />
         </View>
       ) : null}
-      {!socialOnly ? (
+      {!socialOnly && checkinRelevant ? (
         <View
           testID="match-checkin"
-          style={[styles.checkin, { borderTopColor: theme.colors.border.subtle }]}
+          style={[
+            styles.checkin,
+            { borderTopColor: theme.colors.border.subtle },
+            matchCenter && styles.matchCenterCheckin,
+          ]}
         >
           <Ionicons
-            name={checkinRelevant ? 'location-outline' : 'lock-closed-outline'}
+            name="location-outline"
             size={16}
-            color={theme.colors.text.secondary}
+            color={
+              matchCenter
+                ? theme.mode === 'dark'
+                  ? '#F2BECA'
+                  : '#841B38'
+                : theme.colors.text.secondary
+            }
           />
           <View style={styles.checkinCopy}>
             <Text style={[styles.note, { color: theme.colors.text.secondary }]}>
               {!available
                 ? 'Check-in-status ikke tilgængelig'
-                : !checkinRelevant
-                  ? planningAllowed
-                    ? 'Check-in åbner i kampvinduet'
-                    : 'Check-in er lukket'
-                  : state.isCheckedIn
-                    ? '✓ Du er tjekket ind'
-                    : state.canCheckIn
-                      ? 'Er du på stadion?'
-                      : 'Check-in er ikke tilgængeligt lige nu'}
+                : state.isCheckedIn
+                  ? '✓ Du er tjekket ind'
+                  : state.canCheckIn
+                    ? 'Er du på stadion?'
+                    : 'Check-in er ikke tilgængeligt lige nu'}
             </Text>
             {checkinRelevant && available ? (
               <Text style={[styles.caption, { color: theme.colors.text.secondary }]}>
@@ -324,6 +361,7 @@ function AttendanceAction({
   primary = false,
   compact = false,
   stretch = false,
+  matchCenter = false,
 }: {
   label: string;
   onPress: () => void;
@@ -332,6 +370,7 @@ function AttendanceAction({
   primary?: boolean;
   compact?: boolean;
   stretch?: boolean;
+  matchCenter?: boolean;
 }) {
   const theme = useTheme();
   const foreground = primary
@@ -349,24 +388,39 @@ function AttendanceAction({
       style={({ pressed }) => [
         styles.action,
         stretch && styles.stretchAction,
+        matchCenter && styles.matchCenterRsvp,
+        matchCenter && selected && primary && styles.selectedRsvp,
         {
           paddingHorizontal: compact ? 10 : 14,
           backgroundColor: primary
             ? selected
-              ? theme.colors.primaryDark
-              : theme.colors.primary
+              ? matchCenter
+                ? '#65132B'
+                : theme.colors.primaryDark
+              : matchCenter
+                ? '#961C3E'
+                : theme.colors.primary
             : selected
               ? theme.colors.bg.subtle
               : compact
                 ? 'transparent'
                 : theme.colors.bg.default,
-          borderColor: selected && !primary ? theme.colors.text.secondary : 'transparent',
+          borderColor:
+            matchCenter && selected && primary
+              ? '#B64A65'
+              : selected && !primary
+                ? theme.colors.text.secondary
+                : 'transparent',
           opacity: disabled ? 0.45 : pressed ? 0.75 : 1,
         },
       ]}
     >
       {selected && primary && !compact ? (
-        <Ionicons name="checkmark" size={15} color={foreground} />
+        <Ionicons
+          name={matchCenter ? 'checkmark-circle' : 'checkmark'}
+          size={matchCenter ? 18 : 15}
+          color={foreground}
+        />
       ) : null}
       <Text
         style={[
@@ -382,6 +436,34 @@ function AttendanceAction({
 
 const styles = StyleSheet.create({
   panel: { paddingHorizontal: 16, paddingBottom: 12, paddingTop: 8, gap: 10 },
+  matchCenterPanel: { paddingHorizontal: 14, paddingTop: 4, paddingBottom: 12, gap: 6 },
+  matchCenterHeading: { fontSize: 16, lineHeight: 24, fontWeight: '700' },
+  matchCenterCount: { color: '#841B38', fontSize: 28, lineHeight: 32, fontWeight: '900' },
+  matchCenterPreview: { marginTop: -6, marginBottom: 0, gap: 8 },
+  matchCenterLinkLabel: { fontSize: 13, fontWeight: '700' },
+  matchCenterRsvp: { paddingVertical: 8, borderRadius: 12 },
+  matchCenterSeeAll: {
+    paddingLeft: 8,
+    paddingRight: 0,
+    minWidth: 60,
+    justifyContent: 'flex-end',
+  },
+  selectedRsvp: {
+    shadowColor: '#65132B',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  matchCenterCheckin: {
+    borderTopWidth: 0,
+    borderLeftWidth: 3,
+    borderLeftColor: '#A12849',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(150,28,62,0.06)',
+  },
   socialHeading: {
     flexDirection: 'row',
     alignItems: 'center',

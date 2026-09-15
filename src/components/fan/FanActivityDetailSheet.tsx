@@ -4,7 +4,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import React, { useState } from 'react';
 import {
   Alert,
-  ImageBackground,
   Linking,
   Modal,
   Pressable,
@@ -23,6 +22,7 @@ import { PrimaryButton } from '../PrimaryButton';
 import { Text } from '../ui';
 import { FanActivityRegistrationSection } from './FanActivityRegistrationSection';
 import { getFanActivityVisualPreset } from './fanActivityVisualPresets';
+import { FanActivityCover } from './FanActivityCover';
 
 type FanActivityDetailSheetProps = {
   visible: boolean;
@@ -322,7 +322,8 @@ export function FanActivityDetailSheet({
             ]}
             showsVerticalScrollIndicator={false}
           >
-            <ImageBackground
+            <FanActivityCover
+              coverUrl={activity.cover_url}
               source={preset.source}
               resizeMode="cover"
               style={styles.heroImage}
@@ -348,7 +349,7 @@ export function FanActivityDetailSheet({
                   />
                 </Pressable>
               </View>
-            </ImageBackground>
+            </FanActivityCover>
 
             <View style={styles.contentFlow}>
               <View style={styles.headingBlock}>

@@ -1,5 +1,6 @@
 import React from 'react';
-import { ImageBackground, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { FanActivityCover } from './FanActivityCover';
 import { getShadowStyle, useTheme } from '../../theme';
 import type { FeedFanActivityData } from '../../types/feed';
 import { Text } from '../ui';
@@ -97,7 +98,8 @@ export function FanActivityFeedCard({ item, onPress }: FanActivityFeedCardProps)
         pressed && onPress ? styles.pressed : null,
       ]}
     >
-      <ImageBackground
+      <FanActivityCover
+        coverUrl={item.coverUrl}
         source={preset.source}
         resizeMode="cover"
         style={styles.hero}
@@ -113,7 +115,7 @@ export function FanActivityFeedCard({ item, onPress }: FanActivityFeedCardProps)
             },
           ]}
         />
-      </ImageBackground>
+      </FanActivityCover>
 
       <View style={styles.content}>
         <View

@@ -18,17 +18,22 @@ export function MatchdayEntry({
     <View
       testID="matchday-entry"
       style={{
-        padding: theme.spacing[4],
-        gap: theme.spacing[2],
-        backgroundColor: theme.colors.pill.red.bg,
+        paddingHorizontal: theme.spacing[3],
+        paddingVertical: theme.spacing[2],
+        gap: theme.spacing[1] + theme.spacing[1] / 2,
+        backgroundColor: '#8E1534',
+        borderTopWidth: 1,
+        borderTopColor: '#C74362',
       }}
     >
-      <Text variant="small" style={{ color: theme.colors.primaryDark, fontWeight: '800' }}>
+      <Text variant="small" style={{ color: '#FFFFFF', fontWeight: '800', letterSpacing: 1 }}>
         ● KAMPDAG ER ÅBEN
       </Text>
-      <Text variant="small">Tjek ind, se hvem der er her og deltag i Kampsnak.</Text>
+      <Text variant="small" style={{ color: '#FFE3EB' }}>
+        Tjek ind, se hvem der er her og deltag i Kampsnak.
+      </Text>
       {state.checkInState === 'CHECKED_IN' ? (
-        <Text variant="small" accessibilityLiveRegion="polite">
+        <Text variant="small" accessibilityLiveRegion="polite" style={{ color: '#FFFFFF' }}>
           ✓ Du er tjekket ind
         </Text>
       ) : null}
@@ -38,16 +43,17 @@ export function MatchdayEntry({
         accessibilityHint="Åbner Kampdag med fans, check-in og Kampsnak."
         onPress={onPress}
         style={({ pressed }) => ({
-          minHeight: theme.spacing[12],
+          minHeight: 44,
           justifyContent: 'center',
           alignItems: 'center',
-          padding: theme.spacing[3],
+          paddingHorizontal: theme.spacing[3],
+          paddingVertical: theme.spacing[2],
           borderRadius: theme.radius.md,
-          backgroundColor: theme.colors.primaryDark,
+          backgroundColor: '#FFFFFF',
           opacity: pressed ? 0.8 : 1,
         })}
       >
-        <Text variant="bodyBold" color="inverse">
+        <Text variant="bodyBold" style={{ color: '#77112D' }}>
           {state.entryLabel} →
         </Text>
       </Pressable>

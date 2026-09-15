@@ -67,12 +67,10 @@ const NextMatchBadge: React.FC<NextMatchBadgeProps> = ({
       style={[
         styles.wrapper,
         { backgroundColor: theme.colors.bg.card },
-        matchday.open && { borderColor: theme.colors.primaryDark },
+        matchday.open && { borderColor: '#BE294C' },
       ]}
     >
-      <View
-        style={[styles.kickerRow, matchday.open && { backgroundColor: theme.colors.pill.red.bg }]}
-      >
+      <View style={[styles.kickerRow, matchday.open && { backgroundColor: '#A01538' }]}>
         <View style={styles.kickerMark} />
         <Text style={styles.kicker}>MATCH CENTER</Text>
       </View>
@@ -83,6 +81,7 @@ const NextMatchBadge: React.FC<NextMatchBadgeProps> = ({
         style={({ pressed }) => ({ opacity: pressed ? 0.88 : 1 })}
       >
         <MatchHero
+          energized={matchday.open}
           imageUrl={match.coverUrl}
           homeTeam={cleanText(match.homeTeam)}
           awayTeam={cleanText(match.awayTeam)}
@@ -107,6 +106,7 @@ const NextMatchBadge: React.FC<NextMatchBadgeProps> = ({
       {onOpenMatchday ? <MatchdayEntry state={matchday} onPress={onOpenMatchday} /> : null}
       {matchStatusPanel ? (
         <MatchAttendancePanel
+          matchCenter
           embedded
           state={state}
           planningAllowed={experience.planningAllowed}
@@ -125,10 +125,10 @@ const styles = StyleSheet.create({
   wrapper: {
     marginHorizontal: 16,
     marginTop: 8,
-    marginBottom: 12,
+    marginBottom: 24,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#EBDCDF',
+    borderColor: '#72132E',
     overflow: 'hidden',
   },
   kickerRow: {
@@ -136,9 +136,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 7,
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: '#F8EFF1',
+    paddingVertical: 6,
+    backgroundColor: '#65132B',
   },
-  kickerMark: { width: 3, height: 10, borderRadius: 2, backgroundColor: '#8D1831' },
-  kicker: { fontSize: 10, fontWeight: '800', letterSpacing: 1.4, color: '#701B2E' },
+  kickerMark: { width: 3, height: 12, borderRadius: 2, backgroundColor: '#F4C95D' },
+  kicker: { fontSize: 10, fontWeight: '800', letterSpacing: 1.8, color: '#FFFFFF' },
 });

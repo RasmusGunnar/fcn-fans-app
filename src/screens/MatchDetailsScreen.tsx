@@ -342,18 +342,19 @@ export default function MatchDetailsScreen() {
 
   const participation = (
     <View>
-    <MatchAttendancePanel
-      state={matchdayState}
-      planningAllowed={experience.planningAllowed}
-      setRsvp={matchdayState.setRsvpStatus}
-      checkIn={matchdayState.checkIn}
-      checkOut={matchdayState.checkOut}
-    />
-    {!matchdayExperience(matchdayState, experience.planningAllowed).open ? (
-      <Text style={{ padding: theme.spacing[3], color: theme.colors.text.secondary }}>
-        {experience.planningAllowed ? 'Kampdag åbner i kampvinduet' : 'Kampdag er afsluttet'}
-      </Text>
-    ) : null}
+      <MatchAttendancePanel
+        matchCenter
+        state={matchdayState}
+        planningAllowed={experience.planningAllowed}
+        setRsvp={matchdayState.setRsvpStatus}
+        checkIn={matchdayState.checkIn}
+        checkOut={matchdayState.checkOut}
+      />
+      {!matchdayExperience(matchdayState, experience.planningAllowed).open ? (
+        <Text style={{ padding: theme.spacing[3], color: theme.colors.text.secondary }}>
+          {experience.planningAllowed ? 'Kampdag åbner i kampvinduet' : 'Kampdag er afsluttet'}
+        </Text>
+      ) : null}
     </View>
   );
   const conversation = (
@@ -526,6 +527,7 @@ export default function MatchDetailsScreen() {
       >
         <View style={styles.heroShell}>
           <MatchHero
+            energized={matchdayExperience(matchdayState, experience.planningAllowed).open}
             imageUrl={heroUrl}
             homeTeam={fixture.home_team}
             awayTeam={fixture.away_team}

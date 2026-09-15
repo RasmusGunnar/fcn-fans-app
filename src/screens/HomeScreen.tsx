@@ -878,7 +878,7 @@ export default function HomeScreen() {
               </Card>
             </View>
           ) : null}
-          <View style={styles.content}>
+          <View style={[styles.content, styles.feedSection]}>
             <HomeFeedFilters value={selectedFeedFilter} onChange={setSelectedFeedFilter} />
 
             {!loading && filteredEmptyText && visibleFeedItems.length === 0 ? (
@@ -897,6 +897,11 @@ const createStyles = () =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.bg },
     content: { paddingHorizontal: spacing[0], paddingVertical: spacing.md },
+    feedSection: {
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: '#D8C2C9',
+      paddingTop: spacing.lg,
+    },
     matchFallbackContent: { paddingTop: spacing.lg },
     card: { marginBottom: spacing.md },
     feedEmptyState: {

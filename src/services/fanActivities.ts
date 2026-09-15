@@ -1,5 +1,6 @@
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
+import { prepareFanActivityCoverChange, discardUnattachedFanActivityCover, type FanActivityCoverSelection } from '../lib/fanActivityCover';
 import {
   fetchFanActivityRegistrationSummaries,
   getEmptyFanActivityRegistrationSummary,
@@ -19,6 +20,7 @@ export type FanActivityCommunity = {
 };
 
 export type CreateFanActivityInput = {
+  cover?: FanActivityCoverSelection | null;
   parentType: FanActivityParentType;
   parentId: string;
   communityId?: string | null;
@@ -40,6 +42,7 @@ export type CreateFanActivityInput = {
 };
 
 export type UpdateFanActivityInput = {
+  cover?: FanActivityCoverSelection | null;
   fanActivityId: string;
   type: string;
   title: string;
@@ -664,7 +667,9 @@ export async function createFanActivity(input: CreateFanActivityInput): Promise<
     }
   }
 
+  const cover = await prepareFanActivityCoverChange(input.cover, normalizedCommunityId, normalizedType);
   const insertPayload = {
+    ...cover.patch,
     parent_type: input.parentType,
     parent_id: normalizedParentId,
     community_id: normalizedCommunityId,
@@ -696,6 +701,7 @@ export async function createFanActivity(input: CreateFanActivityInput): Promise<
     .single();
 
   if (error) {
+    if (/^[0-9A-Z]{5}$/.test(error.code ?? '')) await discardUnattachedFanActivityCover(cover.uploadedPath);
     throw error;
   }
 
@@ -755,7 +761,14 @@ export async function updateFanActivity(input: UpdateFanActivityInput): Promise<
     throw new Error('MobilePay-info er påkrævet for betalingsaktiviteter.');
   }
 
+  let cover: Awaited<ReturnType<typeof prepareFanActivityCoverChange>> = { patch: {} };
+  if (input.cover !== undefined) {
+    const current = await supabase.from('fan_activities').select('community_id, type').eq('id', normalizedFanActivityId).single();
+    if (current.error || !current.data || current.data.type !== 'bustur') throw new Error('Fanaktiviteten kunne ikke bekræftes.');
+    cover = await prepareFanActivityCoverChange(input.cover, current.data.community_id, normalizedType);
+  }
   const updatePayload = {
+    ...cover.patch,
     type: normalizedType,
     title: normalizedTitle,
     body: normalizedBody,
@@ -780,6 +793,7 @@ export async function updateFanActivity(input: UpdateFanActivityInput): Promise<
     .single();
 
   if (error) {
+    if (/^[0-9A-Z]{5}$/.test(error.code ?? '')) await discardUnattachedFanActivityCover(cover.uploadedPath);
     throw error;
   }
 
