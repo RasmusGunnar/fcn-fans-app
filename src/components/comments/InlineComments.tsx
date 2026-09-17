@@ -41,6 +41,7 @@ import {
 import type { CommentPreview } from '../../services/likesApi';
 import { isDemoMode } from '../../config/appMode';
 import { addDemoComment, getDemoComments, removeDemoComment } from '../../demo/interactions';
+import {fetchContentComments,insertContentComment} from '../../services/contentDiscoveryApi';
 
 export type CommentTargetType = 'post' | 'news' | 'event' | 'match' | 'bus_trip';
 
@@ -270,14 +271,7 @@ export function InlineComments({
           return;
         }
 
-        const query = supabase
-          .from('comments_v2')
-          .select('id, created_at, author_id, text, parent_id')
-          .eq('target_type', targetType)
-          .eq('target_id', targetId)
-          .order('created_at', { ascending: !latestFirst })
-          .order('id', { ascending: !latestFirst });
-        const { data, error: fetchError } = await query;
+        const { data, error: fetchError } = await fetchContentComments(targetType,targetId,latestFirst);
 
         if (fetchError) throw fetchError;
 
@@ -402,16 +396,12 @@ export function InlineComments({
         return true;
       }
 
-      const { data, error: insertError } = await supabase
-        .from('comments_v2')
-        .insert({
+      const { data, error: insertError } = await insertContentComment({
           author_id: currentUserId,
           target_type: targetType,
           target_id: targetId,
           text: resolvedText,
-        })
-        .select('id, created_at, author_id, text, parent_id')
-        .single();
+        });
 
       if (insertError) throw insertError;
 
@@ -701,17 +691,13 @@ export function InlineComments({
         return;
       }
 
-      const { data: savedReply, error: insertError } = await supabase
-        .from('comments_v2')
-        .insert({
+      const { data: savedReply, error: insertError } = await insertContentComment({
           author_id: currentUserId,
           target_type: targetType,
           target_id: targetId,
           parent_id: commentId,
           text: optimisticReply.text,
-        })
-        .select('id, created_at, author_id, text, parent_id')
-        .single();
+        });
 
       if (insertError || !savedReply) {
         throw insertError ?? new Error('Reply insert failed');

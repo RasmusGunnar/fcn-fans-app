@@ -1,9 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
+import React from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../Avatar';
-import { useTheme } from '../../theme';
-import { weeklyFanPhase } from '../../utils/fanExperience';
 import type { FanLevelKey } from '../../types/fan';
 
 export type WeeklyTopFanCardProps = {
@@ -29,88 +27,66 @@ export type WeeklyTopFanCardProps = {
 export function WeeklyTopFanCard({
   avatarUrl,
   displayName,
-  awardedAt,
   weeklyScore,
   subtitle,
   onPressProfile,
   onPressReference,
 }: WeeklyTopFanCardProps) {
-  const theme = useTheme();
-  const [phase, setPhase] = useState(() => weeklyFanPhase(awardedAt));
-  useEffect(() => {
-    const update = () => {
-      if (AppState.currentState === 'active') setPhase(weeklyFanPhase(awardedAt));
-    };
-    const timer = setInterval(update, 60_000);
-    const listener = AppState.addEventListener('change', update);
-    return () => {
-      clearInterval(timer);
-      listener.remove();
-    };
-  }, [awardedAt]);
-  const fresh = phase === 'fresh';
-  const ink = fresh ? '#fff' : theme.colors.text.primary;
+  // Award age affects feed position, never the winner's visual significance.
   return (
-    <View
-      style={[
-        styles.card,
-        {
-          backgroundColor: fresh ? '#38141e' : theme.colors.bg.card,
-          borderColor: theme.colors.primary + '25',
-        },
-      ]}
-    >
+    <View testID="weekly-fan-card" style={styles.card}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Se ${displayName}s profil · Ugens fan`}
         onPress={onPressProfile}
-        style={styles.row}
+        style={({ pressed }) => [styles.row, { opacity: pressed ? 0.8 : 1 }]}
       >
         <View style={styles.avatar}>
-          <Avatar avatarUrl={avatarUrl} label={displayName} size={44} />
+          <Avatar avatarUrl={avatarUrl} label={displayName} size={64} />
         </View>
         <View style={styles.identity}>
-          <Text style={[styles.kicker, { color: fresh ? '#f0d99f' : theme.colors.primary }]}>
-            UGENS FAN
-          </Text>
-          <Text numberOfLines={2} style={[styles.name, { color: ink }]}>
+          <Text style={styles.kicker}>UGENS FAN</Text>
+          <Text numberOfLines={2} style={styles.name}>
             {displayName || 'FCN fan'}
           </Text>
         </View>
-        <Ionicons name="trophy-outline" size={26} color="#c2a15c" />
+        <Ionicons name="trophy" size={30} color="#F7D994" />
       </Pressable>
-      {fresh ? (
-        <Text numberOfLines={2} style={[styles.reason, { color: '#ffffffcc' }]}>
-          {subtitle?.trim() || 'Et stærkt bidrag til fællesskabet'}
-        </Text>
-      ) : null}
-      {fresh && typeof weeklyScore === 'number' ? (
-        <Text style={styles.score}>{weeklyScore} point i ugen · tak for engagementet</Text>
+      <Text numberOfLines={2} style={styles.reason}>
+        {subtitle?.trim() || 'Tak for engagementet i fællesskabet'}
+      </Text>
+      {typeof weeklyScore === 'number' ? (
+        <Text style={styles.score}>{weeklyScore} point i ugen</Text>
       ) : null}
       {onPressReference ? (
-        <Pressable accessibilityRole="button" onPress={onPressReference} style={styles.reference}>
-          <Text
-            style={{
-              color: fresh ? '#f0d99f' : theme.colors.primary,
-              fontWeight: '700',
-              fontSize: 12,
-            }}
-          >
-            Se bidraget →
-          </Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Se vinderens bidrag"
+          onPress={onPressReference}
+          style={({ pressed }) => [styles.reference, { opacity: pressed ? 0.7 : 1 }]}
+        >
+          <Text style={styles.referenceLabel}>Se bidraget →</Text>
         </Pressable>
       ) : null}
     </View>
   );
 }
 const styles = StyleSheet.create({
-  card: { borderRadius: 18, borderWidth: 1, padding: 16 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  avatar: { borderWidth: 2, borderColor: '#c2a15c', borderRadius: 25, padding: 1 },
-  identity: { flex: 1 },
-  kicker: { fontSize: 10, fontWeight: '800', letterSpacing: 1.2 },
-  name: { fontSize: 17, fontWeight: '800', marginTop: 4 },
-  reason: { fontSize: 14, lineHeight: 20, marginTop: 12 },
+  card: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderTopWidth: 3,
+    padding: 18,
+    backgroundColor: '#791B35',
+    borderColor: '#C49A50',
+  },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, flexShrink: 1, minHeight: 44 },
+  avatar: { borderWidth: 2, borderRadius: 38, padding: 3, borderColor: '#F7D994' },
+  identity: { flex: 1, minWidth: 0 },
+  kicker: { color: '#F7D994', fontSize: 12, fontWeight: '800', letterSpacing: 1.6 },
+  name: { color: '#fff', fontSize: 22, lineHeight: 27, fontWeight: '800', marginTop: 4 },
+  reason: { color: '#FFEAF0', fontSize: 14, lineHeight: 20, marginTop: 14 },
   score: { color: '#f0d99f', fontSize: 12, fontWeight: '600', marginTop: 8 },
-  reference: { paddingTop: 10, paddingBottom: 2, alignSelf: 'flex-start' },
+  reference: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
+  referenceLabel: { color: '#F7D994', fontWeight: '700', fontSize: 12 },
 });

@@ -105,6 +105,7 @@ export function NewsCard({
     undefined;
 
   const handleOpenLink = () => {
+    if(newsItem.storyId){navigation.navigate('ContentStory',{storyId:newsItem.storyId});return;}
     Linking.openURL(newsItem.url).catch((err) => {
       logger.warn('[NewsCard] Failed to open URL:', err);
     });
@@ -154,7 +155,7 @@ export function NewsCard({
       currentUserId={viewerUserId}
       isAppAdmin={viewerIsAppAdmin}
       onOpenDetail={
-        cardModel.pressBehavior === 'open_external'
+        newsItem.storyId ? handleOpenLink : cardModel.pressBehavior === 'open_external'
           ? () => Linking.openURL(cardModel.externalUrl!)
           : undefined
       }

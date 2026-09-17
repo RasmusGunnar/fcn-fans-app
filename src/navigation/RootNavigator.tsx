@@ -39,6 +39,7 @@ const IncomingShareScreen = React.lazy(() => import('../screens/IncomingShareScr
 const SharePostComposerScreen = React.lazy(() => import('../screens/SharePostComposerScreen'));
 const StadiumLiveScreen = React.lazy(() => import('../screens/StadiumLiveScreen'));
 const PublicProfileScreen = React.lazy(() => import('../screens/PublicProfileScreen'));
+const ContentDiscoveryScreen=React.lazy(()=>import('../screens/ContentDiscoveryScreen'));
 
 function normalizeFanActivityDetailPath(path: string): string {
   const normalizedPath = path.replace(/^\/+/, '');
@@ -276,6 +277,8 @@ export function RootNavigator() {
         },
         StadiumLive: 'stadium/:eventId',
         IncomingShare: 'incoming-share',
+        ContentStory: 'nyheder/stories/:storyId',
+        ContentDiscovery: 'discovery',
       },
     },
     getStateFromPath(path: string, options: any) {
@@ -293,6 +296,8 @@ export function RootNavigator() {
       >
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           <Stack.Screen name="Main" component={Inner} />
+          <Stack.Screen name="ContentDiscovery" component={ContentDiscoveryScreen}/>
+          <Stack.Screen name="ContentStory" component={ContentDiscoveryScreen}/>
           <Stack.Screen name="StadiumLive" component={ProtectedStadiumLiveScreen} />
           <Stack.Screen name="PublicProfile" component={ProtectedPublicProfileScreen} />
           <Stack.Screen name="Messages" component={ProtectedMessagesStack} />

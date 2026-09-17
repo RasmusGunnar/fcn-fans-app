@@ -5,6 +5,7 @@ import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { AppHeader } from '../components/AppHeader';
 import NextMatchBadge from '../components/home/NextMatchBadge';
 import { HomeFeedFilters } from '../components/home/HomeFeedFilters';
+import {ContentDiscoveryEntry} from '../components/home/ContentDiscoveryEntry';
 import { Card } from '../components/ui/Card';
 import { FeedItemRenderer } from '../components/feed/FeedItemRenderer';
 import { useFeed } from '../state/FeedContext';
@@ -880,6 +881,7 @@ export default function HomeScreen() {
           ) : null}
           <View style={[styles.content, styles.feedSection]}>
             <HomeFeedFilters value={selectedFeedFilter} onChange={setSelectedFeedFilter} />
+            {selectedFeedFilter==='media_articles'?<ContentDiscoveryEntry/>:null}
 
             {!loading && filteredEmptyText && visibleFeedItems.length === 0 ? (
               <View style={styles.feedEmptyState}>

@@ -1,4 +1,5 @@
 import { placeWeeklyFan } from './fanExperience';
+import { activationScore, type ActivationSignal } from './activationSignals';
 import type { CommunityFeedSource } from '../services/communityFeedApi';
 import type { BusTrip, Event } from '../services/eventsApi';
 import type { FanActivity } from '../services/fanActivities';
@@ -610,7 +611,18 @@ export function getHomeRankingBreakdown(
 }
 
 export function getHomeRankingScore(item: FeedItem, now = new Date()): number {
-  return getHomeRankingBreakdown(item, now).finalScore;
+  return getHomeRankingBreakdown(item, now).finalScore + (item.kind === 'post' || item.kind === 'news'
+    ? activationScore(item.data.activation, now.getTime()) : 0);
+}
+
+/** Attach server signals to the current list, preserving concurrent local edits/deletions. */
+export function withHomeActivationSignals(items: FeedItem[], signals: ReadonlyMap<string, ActivationSignal>, now = new Date()): FeedItem[] {
+  const signaled = items.map(item => {
+    if (item.kind !== 'post' && item.kind !== 'news') return item;
+    const activation = signals.get(item.kind + ':' + item.data.id);
+    return item.data.activation === activation ? item : { ...item, data: { ...item.data, activation } } as FeedItem;
+  });
+  return reconcileFeedItemIdentities(items, sortHomeFeedItems(signaled, now));
 }
 
 type RankedHomeFeedEntry = {
@@ -948,7 +960,8 @@ export function sortHomeFeedItems(items: FeedItem[], baseDate = new Date()): Fee
 
       return {
         item,
-        score: breakdown.finalScore,
+        score: breakdown.finalScore + (item.kind === 'post' || item.kind === 'news'
+          ? activationScore(item.data.activation, baseDate.getTime()) : 0),
         sortTimestamp: toTimestamp(getHomeRecencyDate(item)),
         breakdown,
       };

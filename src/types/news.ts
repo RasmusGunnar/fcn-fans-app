@@ -1,4 +1,5 @@
 export interface NewsItem {
+  storyId?: string;
   intakeOrigin?: boolean;
   topic?: string;
   id: string;

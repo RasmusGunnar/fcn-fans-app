@@ -3,10 +3,12 @@
  */
 
 import type { FanLevelKey } from './fan';
+import type { ActivationSignal } from '../utils/activationSignals';
 import { NewsItem } from './news';
 import { Post } from './post';
 
 export type FeedRankingSignals = {
+  activation?: ActivationSignal;
   sortDate?: string | null;
   eventStartAt?: string | null;
   eventEndAt?: string | null;

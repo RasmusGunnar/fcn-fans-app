@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { NewsItem, LinkPreview } from '../types/news';
 import { fixEncoding } from '../utils/fixEncoding';
 import { sanitizeNewsHeroImageUrl } from '../utils/newsMedia';
+import {contentStoryTargets} from './contentDiscoveryApi';
 
 const LINK_PREVIEW_TIMEOUT_MS = 8000;
 
@@ -241,7 +242,13 @@ export async function fetchNewsItems(limit: number = 50): Promise<NewsItem[]> {
       throw error;
     }
 
-    return (data || []).map((item) => ({
+    const stories=await contentStoryTargets('news',(data??[]).map(item=>item.id));
+    const seen=new Set<string>();
+    return (data || []).flatMap((item) => {
+      const story=stories[item.id];if(story&&seen.has(story.id))return[];if(story)seen.add(story.id);
+      if(story)item={...item,id:story.target_id,url:story.sources[0]?.url??item.url,title:story.title,summary:story.summary,image_url:story.image_url,site_name:story.sources.length+' kilder',created_at:story.updated_at,note:null};
+      return [{
+      storyId:story?.id,
       id: item.id,
       url: item.url,
       title: fixEncoding(item.title) ?? undefined,
@@ -260,7 +267,7 @@ export async function fetchNewsItems(limit: number = 50): Promise<NewsItem[]> {
       likesCount: 0,
       commentsCount: 0,
       likedByMe: false,
-    }));
+    }];});
   } catch (error: any) {
     logger.warn(
       '[newsApi] fetchNewsItems failed (returning empty array):',

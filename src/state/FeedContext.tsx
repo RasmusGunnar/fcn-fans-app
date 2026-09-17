@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { InteractionManager } from 'react-native';
 import { supabase } from '../lib/supabase';
+import { readActivationSignals, type ActivationTarget } from '../utils/activationSignals';
 import { logger } from '../lib/logger';
 import {
   fetchHomeCommunityFeedItems,
@@ -43,6 +44,7 @@ import {
   toPostFeedItem,
   withFeedEngagementSummary,
   withFeedEngagementSummaryPreservingList,
+  withHomeActivationSignals,
 } from '../utils/homeFeed';
 import {
   buildHomePostFeedTargetFilter,
@@ -1347,11 +1349,18 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      const activationTargets: ActivationTarget[] = nextHomeFeedItems.flatMap(item =>
+        item.kind === 'post' || item.kind === 'news' ? [{ type: item.kind, id: item.data.id }] : [],
+      );
+      const activation = await readActivationSignals(supabase, activationTargets);
+      if (!isCurrentRequest()) return;
       const mergedLikeMap = likeMapRef.current;
-      const rankedHomeFeedItems = sortHomeFeedItems(
+      const rankedHomeFeedItems = withHomeActivationSignals(
         withFeedEngagementSummary(nextHomeFeedItems, mergedLikeMap, commentCountMapRef.current),
+        activation,
         baseDate,
       );
+      setHomeFeedItems(previousItems => withHomeActivationSignals(previousItems, activation));
       logPerformanceTiming('FeedItemsReady', 'mixed-feed-engagement-applied', fetchStartedAt, {
         feedItemCount: nextFeedItems.length,
         homeItemCount: rankedHomeFeedItems.length,

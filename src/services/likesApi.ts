@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { isDemoMode } from '../config/appMode';
 import { getDemoComments, getDemoLikeState, toggleDemoLike } from '../demo/interactions';
 import { DEMO_ENGAGEMENT, getDemoCommentPreviews } from '../demo/posts';
+import {contentStoryTargets,resolveContentStory,fetchContentComments} from './contentDiscoveryApi';
 
 export type LikeTargetType = 'post' | 'news' | 'event' | 'match' | 'bus_trip';
 
@@ -52,6 +53,8 @@ export async function fetchLikeStates(
     });
   });
 
+  const stories=await contentStoryTargets(targetType,targetIds);
+  for(const [id,story] of Object.entries(stories))resultMap.set(id,{liked:story.liked_by_me,likes:story.likes_count});
   return resultMap;
 }
 
@@ -92,6 +95,9 @@ export async function fetchCommentCounts(
     resultMap.set(item.target_id, item.comments_count);
   });
 
+  const stories=await contentStoryTargets(targetType,targetIds);
+  for(const [id,story] of Object.entries(stories))resultMap.set(id,story.comments_count);
+
   return resultMap;
 }
 
@@ -131,7 +137,8 @@ export async function fetchCommentPreviews(
     // Keep the existing per-target limit semantics, but hydrate all authors in one query.
     await Promise.all(
       targetIds.map(async (targetId) => {
-        const { data, error } = await supabase
+        const story=await resolveContentStory(targetType,targetId);
+        const { data, error } = story ? await fetchContentComments(targetType,targetId,true) : await supabase
           .from('comments_v2')
           .select('id, author_id, text, created_at')
           .eq('target_type', targetType)
@@ -147,7 +154,7 @@ export async function fetchCommentPreviews(
           return;
         }
 
-        commentsByTarget.set(targetId, data || []);
+        commentsByTarget.set(targetId, (data || []).slice(0,2));
       }),
     );
 
@@ -234,7 +241,10 @@ export async function fetchMyLikedIds(
     return new Set();
   }
 
-  return new Set((data || []).map((r) => r.target_id));
+  const liked=new Set<string>((data || []).map((r) => r.target_id));
+  const stories=await contentStoryTargets(targetType,targetIds);
+  for(const [id,story] of Object.entries(stories)){if(story.liked_by_me)liked.add(id);else liked.delete(id);}
+  return liked;
 }
 
 /**
@@ -250,6 +260,8 @@ export async function toggleLike(
     toggleDemoLike(targetType, targetId);
     return true;
   }
+  try {const story=await resolveContentStory(targetType,targetId);if(story){const result=await supabase.rpc('set_content_story_like',{p_story:story.id,p_liked:!currentlyLiked});return !result.error;}}
+  catch{return false;}
   if (currentlyLiked) {
     // Delete like
     const { error } = await supabase
