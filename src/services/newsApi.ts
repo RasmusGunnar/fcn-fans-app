@@ -1,3 +1,4 @@
+import { newsMetadata } from "../utils/newsMetadata";
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { NewsItem, LinkPreview } from '../types/news';
@@ -242,6 +243,13 @@ export async function fetchNewsItems(limit: number = 50): Promise<NewsItem[]> {
       throw error;
     }
 
+    // Keep the latest episodes/videos/articles reachable during a burst of social posts.
+    // Additive column detection preserves older hosted schemas and released app contracts.
+    if(data?.some(item=>item.engine_metadata!==undefined)){
+      const extra=await Promise.all(['article','social','podcast','video'].map(format=>supabase.from('news_items').select('*').eq('engine_metadata->>format',format).order('created_at',{ascending:false}).limit(Math.min(5,limit))));
+      const seen=new Set((data??[]).map(item=>item.id));
+      for(const result of extra)if(!result.error)for(const row of result.data??[])if(!seen.has(row.id)){seen.add(row.id);data.push(row);}
+    }
     const stories=await contentStoryTargets('news',(data??[]).map(item=>item.id));
     const seen=new Set<string>();
     return (data || []).flatMap((item) => {
@@ -253,6 +261,7 @@ export async function fetchNewsItems(limit: number = 50): Promise<NewsItem[]> {
       url: item.url,
       title: fixEncoding(item.title) ?? undefined,
       description: fixEncoding(item.summary || item.description) ?? undefined,
+      engineMetadata: newsMetadata(item.engine_metadata),
       intakeOrigin: item.intake_origin === true,
       topic: typeof item.topic === 'string' ? item.topic : undefined,
       note: fixEncoding(item.note) ?? undefined,

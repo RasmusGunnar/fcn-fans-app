@@ -1,10 +1,11 @@
+import { newsAction, newsFormatLabels, safeMediaLink } from '../../utils/newsMetadata';
 // DESIGN SYSTEM GUARDRAIL: This file uses theme tokens via defaultTheme.
 // All spacing, colors, and radius values must use theme.spacing[N], theme.colors.*, theme.radius.*
 // NO hardcoded numbers or color strings allowed.
 
 import { useNavigation } from '@react-navigation/native';
 import React from 'react';
-import { Alert, Linking, StyleSheet, View } from 'react-native';
+import { Alert, Linking, StyleSheet, View, Pressable } from 'react-native';
 import { getSafeFanLevelKey } from '../../lib/fanLevel';
 import { logger } from '../../lib/logger';
 import { supabase } from '../../lib/supabase';
@@ -105,8 +106,14 @@ export function NewsCard({
     undefined;
 
   const handleOpenLink = () => {
-    if(newsItem.storyId){navigation.navigate('ContentStory',{storyId:newsItem.storyId});return;}
-    Linking.openURL(newsItem.url).catch((err) => {
+    if (newsItem.storyId) {
+      navigation.navigate('ContentStory', { storyId: newsItem.storyId });
+      return;
+    }
+    if (newsItem.engineMetadata?.withdrawn) return;
+    const link = safeMediaLink(newsItem.engineMetadata?.mediaUrl) || safeMediaLink(newsItem.url);
+    if (!link) return;
+    Linking.openURL(link).catch((err) => {
       logger.warn('[NewsCard] Failed to open URL:', err);
     });
   };
@@ -121,7 +128,11 @@ export function NewsCard({
   });
 
   const handleDeleteNews = async () => {
-    const { data, error } = await supabase.from('news_items').delete().eq('id', newsItem.id).select('id');
+    const { data, error } = await supabase
+      .from('news_items')
+      .delete()
+      .eq('id', newsItem.id)
+      .select('id');
     if (error || !data?.some((row) => row.id === newsItem.id)) {
       Alert.alert('Fejl', 'Kunne ikke slette nyheden');
       logger.warn('Delete news error', error);
@@ -155,9 +166,11 @@ export function NewsCard({
       currentUserId={viewerUserId}
       isAppAdmin={viewerIsAppAdmin}
       onOpenDetail={
-        newsItem.storyId ? handleOpenLink : cardModel.pressBehavior === 'open_external'
-          ? () => Linking.openURL(cardModel.externalUrl!)
-          : undefined
+        newsItem.storyId
+          ? handleOpenLink
+          : cardModel.pressBehavior === 'open_external'
+            ? handleOpenLink
+            : undefined
       }
       actions={{
         liked,
@@ -172,14 +185,25 @@ export function NewsCard({
     >
       <CardHeader
         avatarSlot={
-          <Avatar userId={actorUserId} avatarUrl={resolvedAvatarUrl} size={40} label={authorName} />
+          <Avatar
+            userId={newsItem.engineMetadata ? undefined : actorUserId}
+            avatarUrl={newsItem.engineMetadata ? undefined : resolvedAvatarUrl}
+            size={40}
+            label={newsItem.engineMetadata?.originalSource || authorName}
+          />
         }
-        nameLine={cardModel.nameLine}
+        nameLine={
+          newsItem.engineMetadata?.account ||
+          newsItem.engineMetadata?.originalSource ||
+          cardModel.nameLine
+        }
         fallbackTitle={authorName}
         subtitle={timeAgo}
-        inlineBadge={<FanLevelBadge level={actorFanLevel} size="sm" />}
+        inlineBadge={
+          newsItem.engineMetadata ? undefined : <FanLevelBadge level={actorFanLevel} size="sm" />
+        }
         onPressAuthor={
-          actorUserId
+          actorUserId && !newsItem.engineMetadata
             ? () => navigation.navigate('PublicProfile', { userId: actorUserId })
             : undefined
         }
@@ -193,11 +217,68 @@ export function NewsCard({
           </Text>
         </View>
       ) : null}
+      {newsItem.engineMetadata && (
+        <View style={styles.noteBlock}>
+          <Text variant="body" style={styles.engineTitle} accessibilityRole="header">
+            {newsItem.title}
+          </Text>
+          {newsItem.engineMetadata.format !== 'social' && !!newsItem.description && (
+            <Text variant="body">{newsItem.description}</Text>
+          )}
+          <Text variant="body">
+            {newsFormatLabels[newsItem.engineMetadata.format]} ·{' '}
+            {newsItem.engineMetadata.program ||
+              newsItem.engineMetadata.account ||
+              newsItem.engineMetadata.originalSource}
+            {newsItem.engineMetadata.platform ? ' · ' + newsItem.engineMetadata.platform : ''}
+          </Text>
+          {newsItem.engineMetadata.withdrawn ? (
+            <Text variant="body">Kilden er trukket tilbage. Samtalen er bevaret.</Text>
+          ) : (
+            <>
+              {newsItem.engineMetadata.format === 'social' && (
+                <Text variant="body" numberOfLines={8}>
+                  {newsItem.engineMetadata.originalText}
+                </Text>
+              )}
+              {newsItem.engineMetadata.translation && (
+                <Text variant="body">
+                  Maskinoversættelse ({newsItem.engineMetadata.translation.language}):{' '}
+                  {newsItem.engineMetadata.translation.text}
+                </Text>
+              )}
+              {newsItem.engineMetadata.format === 'podcast' && (
+                <Text variant="body">
+                  {newsItem.engineMetadata.textBasis === 'description'
+                    ? 'Baseret på episodebeskrivelsen'
+                    : ''}
+                  {newsItem.engineMetadata.durationSeconds
+                    ? ' · ' + Math.round(newsItem.engineMetadata.durationSeconds / 60) + ' min.'
+                    : ''}
+                </Text>
+              )}
+              {newsItem.engineMetadata.summaryOrigin === 'own_ai' && (
+                <Text variant="body">AI-assisteret resumé</Text>
+              )}
+              <Pressable
+                onPress={handleOpenLink}
+                accessibilityRole="link"
+                accessibilityLabel={newsAction(newsItem.engineMetadata)}
+                style={styles.noteBlock}
+              >
+                <Text variant="body" color="primary">
+                  {newsAction(newsItem.engineMetadata)} ↗
+                </Text>
+              </Pressable>
+            </>
+          )}
+        </View>
+      )}
       <ArticlePreview
         preview={{
           url: newsItem.url,
           title: newsItem.title,
-          description: newsItem.description,
+          description: newsItem.engineMetadata ? undefined : newsItem.description,
           imageUrl: newsItem.imageUrl,
           siteName: newsItem.siteName,
         }}
@@ -211,6 +292,7 @@ export function NewsCard({
 const theme = defaultTheme;
 
 const styles = StyleSheet.create({
+  engineTitle: { fontWeight: '700', marginBottom: theme.spacing[2] },
   noteBlock: {
     marginTop: theme.spacing[3],
     marginBottom: theme.spacing[3],

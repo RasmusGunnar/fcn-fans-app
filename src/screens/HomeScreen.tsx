@@ -166,7 +166,7 @@ export default function HomeScreen() {
       ? 'Ingen fanopslag endnu'
       : selectedFeedFilter === 'media_articles'
         ? 'Ingen artikler endnu'
-        : null;
+        : selectedFeedFilter !== 'all' ? 'Intet indhold i dette format endnu' : null;
 
   // Ensure all maps have safe defaults
   const safeProfileMap = useMemo(() => profileMap || {}, [profileMap]);

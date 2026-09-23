@@ -1,0 +1,12 @@
+{
+  "status": "PASS",
+  "environment": "actual native components on React Native Web; platform/comments backend fixture",
+  "formats": 4,
+  "canonicalId": "e99c5950-d6d0-4386-a0f1-d191f4a9eac7",
+  "widths": [
+    390,
+    360
+  ],
+  "physicalDevice": "NOT_RUN",
+  "hostedWrites": 0
+}

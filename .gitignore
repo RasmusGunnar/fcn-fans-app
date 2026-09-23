@@ -34,3 +34,7 @@ android/
 /modules/incoming-share/android/build/
 
 Udkast/
+
+# Local news-engine validation outputs
+/artifacts/
+/artifacts-typecheck.txt
