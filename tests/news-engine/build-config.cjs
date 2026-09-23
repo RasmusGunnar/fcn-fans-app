@@ -1,0 +1,23 @@
+const assert = require('node:assert/strict');
+const test = require('node:test');
+const config = require('../../app.config.js');
+const base = require('../../app.json').expo;
+test('test builds fail closed for missing staging configuration and the known production host',()=>{
+ process.env.FCN_NEWS_ENGINE_TEST='1';
+ delete process.env.FCN_NEWS_ENGINE_STAGING_HOST;
+ assert.throws(config,/NEWS_ENGINE_TEST_BLOCKED/);
+ process.env.EXPO_PUBLIC_SUPABASE_URL='https://benmedekvstxetcomngr.supabase.co';
+ process.env.FCN_NEWS_ENGINE_STAGING_HOST='benmedekvstxetcomngr.supabase.co';
+ process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY='fixture';
+ assert.throws(config,/NEWS_ENGINE_TEST_BLOCKED/);
+ process.env.FCN_NEWS_ENGINE_STAGING_HOST='staging.invalid';
+ process.env.EXPO_PUBLIC_SUPABASE_URL='https://staging.invalid';
+ const result=config();
+ assert.equal(result.name,'FCN Fans Test');
+ assert.equal(result.extra.validationEnvironment,'staging');
+ assert.equal(result.ios.bundleIdentifier,base.ios.bundleIdentifier);
+ assert.equal(result.android.package,base.android.package);
+ assert.equal(result.updates.enabled,false);
+ delete process.env.FCN_NEWS_ENGINE_TEST;
+ assert.equal(config().name,base.name);
+});

@@ -1,0 +1,9 @@
+{
+  "sourceCommit": "005c5d43a1bf71e1fbd2bc82ce89bafd73cae48f",
+  "rows": 4,
+  "sqlPublishedId": "bf1e6e55-c158-44e7-b1f6-3444593f4033",
+  "legacyMapper": "PASS",
+  "transport": "fixture",
+  "physicalDevice": "NOT_RUN",
+  "storeBuildIdentity": "EAS iOS 76 / Android 3; binary-to-store linkage not independently attested"
+}

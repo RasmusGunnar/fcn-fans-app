@@ -31,3 +31,7 @@ CRON_ENABLED = false
 AUTO_PUBLISH_ENABLED = false
 
 Commit-hook limitation: `design:check` reports 28 pre-existing hardcoded-style matches. Running the unchanged script against an archived `a1c87cc` source tree and this branch produced **byte-identical findings and exit 1**; see `news-engine/design-baseline.json`. No new finding was introduced. The existing hook explicitly documents `git commit --no-verify` as its escape hatch; that option was used for this scoped commit instead of changing unrelated screens/components. Typecheck, feed tests, browser checks and native exports were run separately and passed.
+
+## Release validation follow-up
+
+See [device-test handoff](V1_2C_1_DEVICE_TEST.md) for prepared guarded testbuild profiles, missing staging configuration, released-client mapper evidence and installation/checklist instructions. No installable build or physical test is claimed.

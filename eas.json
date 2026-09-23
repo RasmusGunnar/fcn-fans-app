@@ -37,6 +37,26 @@
       "env": {
         "EXPO_PUBLIC_APP_MODE": "production"
       }
+    },
+    "news-engine-ios": {
+      "extends": "production",
+      "environment": "preview",
+      "channel": "news-engine-test",
+      "env": {
+        "FCN_NEWS_ENGINE_TEST": "1"
+      }
+    },
+    "news-engine-android": {
+      "extends": "preview",
+      "environment": "preview",
+      "channel": "news-engine-test",
+      "autoIncrement": true,
+      "env": {
+        "FCN_NEWS_ENGINE_TEST": "1"
+      },
+      "android": {
+        "buildType": "apk"
+      }
     }
   },
   "submit": {

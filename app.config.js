@@ -8,6 +8,18 @@ const demoSupabaseEnvironment = {
 };
 
 module.exports = () => {
+  const newsEngineTest = process.env.FCN_NEWS_ENGINE_TEST === '1';
+  if (newsEngineTest) {
+    let endpoint;
+    try { endpoint = new URL(process.env.EXPO_PUBLIC_SUPABASE_URL || ''); } catch { /* rejected below */ }
+    const expectedHost = process.env.FCN_NEWS_ENGINE_STAGING_HOST;
+    if (!endpoint || endpoint.protocol !== 'https:' || endpoint.username || endpoint.password ||
+        !expectedHost || endpoint.hostname !== expectedHost ||
+        endpoint.hostname === 'benmedekvstxetcomngr.supabase.co' ||
+        !process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY) {
+      throw new Error('NEWS_ENGINE_TEST_BLOCKED: configure an explicit non-production HTTPS staging host and its publishable/anon key.');
+    }
+  }
   const demoMode = process.env.EXPO_PUBLIC_APP_MODE?.trim().toLowerCase() === 'demo';
 
   if (demoMode) {
@@ -16,7 +28,7 @@ module.exports = () => {
 
   return {
     ...baseConfig,
-    name: demoMode ? 'FCN Fans Demo' : baseConfig.name,
+    name: newsEngineTest ? 'FCN Fans Test' : demoMode ? 'FCN Fans Demo' : baseConfig.name,
     scheme: demoMode ? 'fcnfans-demo' : baseConfig.scheme,
     ios: {
       ...baseConfig.ios,
@@ -33,6 +45,7 @@ module.exports = () => {
     extra: {
       ...baseConfig.extra,
       appMode: demoMode ? 'demo' : 'production',
+      ...(newsEngineTest ? { validationEnvironment: 'staging' } : {}),
     },
   };
 };
