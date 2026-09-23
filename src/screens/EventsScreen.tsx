@@ -15,6 +15,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import MapView, { Marker, Region } from 'react-native-maps';
 import { useAuth } from '../auth/AuthProvider';
 import { AppHeader } from '../components/AppHeader';
+import { CarpoolSummary } from '../components/carpool/CarpoolSummary';
 import { EventsOverviewMatchCard } from '../components/events/EventsOverviewMatchCard';
 import { FeedItemRenderer } from '../components/feed/FeedItemRenderer';
 import { MapMarkerIcon } from '../components/MapMarkerIcon';
@@ -591,6 +592,7 @@ export default function EventsScreen() {
             />
           }
         >
+          <CarpoolSummary />
           {filteredFeed.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyIcon}>📅</Text>

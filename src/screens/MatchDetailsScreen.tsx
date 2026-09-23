@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../auth/AuthProvider';
 import { InlineComments } from '../components/comments/InlineComments';
+import { CarpoolSummary } from '../components/carpool/CarpoolSummary';
 import { FanActivityDetailSheet } from '../components/fan/FanActivityDetailSheet';
 import { MatchAttendancePanel } from '../components/match/MatchAttendancePanel';
 import { MatchHero } from '../components/match/MatchHero';
@@ -557,6 +558,7 @@ export default function MatchDetailsScreen() {
           />
         </View>
         <View style={styles.contentBlock}>
+          <CarpoolSummary fixtureId={fixtureId} />
           {modules.map((module) => (
             <View key={module.key}>{module.content}</View>
           ))}

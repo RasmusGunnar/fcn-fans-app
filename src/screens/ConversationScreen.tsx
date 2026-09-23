@@ -41,6 +41,7 @@ import {
   unblockDirectMessageUser,
 } from '../services/messagesApi';
 import { useMessageUnread } from '../state/MessageUnreadContext';
+import { CARPOOL_CHAT_CLOSED } from '../utils/carpoolChat';
 import { useTheme, type Theme } from '../theme';
 import type {
   ConversationDetails,
@@ -127,7 +128,7 @@ export default function ConversationScreen() {
     conversationId,
     userId: user?.id,
     displayName: currentDisplayName,
-    enabled: Boolean(isFocused && details),
+    enabled: Boolean(isFocused && details && !details.readOnlyReason),
   });
 
   const returnToInbox = useCallback(
@@ -308,7 +309,7 @@ export default function ConversationScreen() {
   }, [selectImage]);
 
   const submitMessage = useCallback(async () => {
-    if (!conversationId || !user?.id || sending || details?.blocked) return;
+    if (!conversationId || !user?.id || sending || details?.blocked || details?.readOnlyReason) return;
     const normalizedBody = composer.trim();
     const imageUri = selectedImage?.uri ?? null;
     const externalShareCanonicalUrl = externalShare?.canonicalUrl ?? null;
@@ -354,6 +355,9 @@ export default function ConversationScreen() {
       setExternalShare(null);
       setPendingSend(null);
     } catch (error) {
+      if (error instanceof Error && error.message === CARPOOL_CHAT_CLOSED) {
+        setDetails(current => current ? { ...current, readOnlyReason: CARPOOL_CHAT_CLOSED } : current);
+      }
       setSendError(
         error instanceof Error ? error.message : 'Beskeden kunne ikke sendes. Prøv igen.',
       );
@@ -364,6 +368,7 @@ export default function ConversationScreen() {
     composer,
     conversationId,
     details?.blocked,
+    details?.readOnlyReason,
     externalShare,
     pendingSend,
     selectedImage,
@@ -596,7 +601,7 @@ export default function ConversationScreen() {
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <Text variant="body" color="secondary" style={styles.centeredText}>
-                Skriv den første besked i {title}.
+                {details?.readOnlyReason ? 'Ingen tidligere beskeder.' : `Skriv den første besked i ${title}.`}
               </Text>
             </View>
           }
@@ -609,8 +614,15 @@ export default function ConversationScreen() {
           </Text>
         </Pressable>
       ) : null}
-      {details?.type === 'group' ? <TypingIndicator label={typingLabel} /> : null}
-      {details?.blocked ? (
+      {details?.type === 'group' && !details.readOnlyReason ? <TypingIndicator label={typingLabel} /> : null}
+      {details?.readOnlyReason ? (
+        <Pressable style={styles.blockedComposer} onPress={() => void loadConversation('refresh')} accessibilityRole="button" accessibilityLabel={`${details.readOnlyReason} Tryk for at opdatere status.`}>
+          <Ionicons name="lock-closed-outline" size={20} color={theme.colors.text.secondary} />
+          <Text variant="body" color="secondary" style={styles.blockedText} accessibilityLiveRegion="polite">
+            {details.readOnlyReason}
+          </Text>
+        </Pressable>
+      ) : details?.blocked ? (
         <View style={styles.blockedComposer}>
           <Ionicons name="ban-outline" size={20} color={theme.colors.text.secondary} />
           <Text variant="body" color="secondary" style={styles.blockedText}>

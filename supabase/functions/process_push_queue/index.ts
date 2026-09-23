@@ -532,8 +532,17 @@ async function markDeliveryFailed(
   });
 }
 
+export async function getCarpoolSkipReason(supabase: any, job: NotificationJob): Promise<string | null> {
+  if (job.notification_type !== 'carpool') return null;
+  const preferences = await fetchPushPreferencesByUserIds(supabase, [job.recipient_user_id]);
+  return isPushPreferenceEnabled(preferences, job.recipient_user_id, 'community_activity')
+    ? null
+    : 'preference_disabled';
+}
+
 async function processJob(supabase: any, job: NotificationJob): Promise<JobProcessResult> {
   const deliverySkipReason =
+    (await getCarpoolSkipReason(supabase, job)) ??
     (await getDirectMessageSkipReason(supabase, job)) ??
     (await getStadiumReactionSkipReason(supabase, job));
   if (deliverySkipReason) {

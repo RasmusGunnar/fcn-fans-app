@@ -1,5 +1,6 @@
 import { createNavigationContainerRef } from '@react-navigation/native';
 import { logger } from '../lib/logger';
+import { carpoolId } from '../services/carpoolContract';
 
 type NotificationPayload = Record<string, unknown> | null | undefined;
 type NotificationTargetType =
@@ -12,6 +13,7 @@ type NotificationTargetType =
   | 'event'
   | 'match'
   | 'stadium_reaction'
+  | 'carpool'
   | 'direct_message';
 type PostDetailTargetType =
   | 'post'
@@ -38,6 +40,7 @@ type HomeFeedParams = {
 };
 
 type ResolvedNotificationRoute =
+  | { targetType: 'carpool'; routeLabel: 'CarpoolRide'; rideId: string; fallback: boolean }
   | {
       targetType: 'stadium_reaction';
       routeLabel: 'StadiumLive';
@@ -104,6 +107,7 @@ function normalizeNotificationTargetType(value: string | null): NotificationTarg
     value === 'event' ||
     value === 'match' ||
     value === 'stadium_reaction' ||
+    value === 'carpool' ||
     value === 'direct_message'
   ) {
     return value;
@@ -186,6 +190,9 @@ function resolveNotificationRoute(payload: Record<string, unknown>): ResolvedNot
   const fanActivityId = readString(payload.fanActivityId);
   const conversationId = readString(payload.conversationId ?? payload.targetId);
   const reactionId = readString(payload.reactionId);
+  if (resolvedType === 'carpool' && carpoolId(payload.rideId)) {
+    return {targetType:'carpool',routeLabel:'CarpoolRide',rideId:payload.rideId,fallback:false};
+  }
 
   if (resolvedType === 'stadium_reaction' && eventId) {
     return {
@@ -295,6 +302,11 @@ export function navigateFromNotificationData(
 
   if (resolvedRoute.targetType === 'direct_message') {
     navigateToDirectMessageConversation(resolvedRoute.conversationId);
+    return true;
+  }
+
+  if (resolvedRoute.targetType === 'carpool') {
+    navigationRef.navigate('CarpoolRide', {rideId:resolvedRoute.rideId});
     return true;
   }
 

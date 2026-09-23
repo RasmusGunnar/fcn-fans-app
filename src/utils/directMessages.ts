@@ -294,6 +294,7 @@ export function getDirectMessageErrorMessage(error: unknown): string {
   const message = String(
     (error as { message?: unknown } | null)?.message ?? error ?? '',
   ).toLowerCase();
+  if (message.includes('carpool_chat_read_only')) return 'Turen er aflyst eller afsluttet – chatten er lukket.';
   if (message.includes('direct_message_blocked')) return 'I kan ikke sende beskeder til hinanden.';
   if (message.includes('group_member_limit')) return 'Gruppen kan højst have 10 medlemmer.';
   if (message.includes('group_admin_required') || message.includes('group_role_forbidden')) {

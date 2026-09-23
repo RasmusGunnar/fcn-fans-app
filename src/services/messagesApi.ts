@@ -21,6 +21,7 @@ import type {
 } from '../types/messages';
 import type { SharedLinkAttachment } from '../types/externalShare';
 import { getDirectMessageErrorMessage, mapConversationInboxRow } from '../utils/directMessages';
+import { carpoolChatNotice, CHAT_STATE_UNAVAILABLE } from '../utils/carpoolChat';
 
 type RpcError = { message?: string; code?: string };
 
@@ -159,7 +160,17 @@ export async function getConversationDetails(
     .rpc('get_conversation_details', { p_conversation_id: conversationId })
     .maybeSingle();
   if (error) throwFriendlyError(error, 'Samtalen kunne ikke hentes.');
-  return data ? mapConversationDetails(data as Record<string, unknown>) : null;
+  if (!data) return null;
+  const details = mapConversationDetails(data as Record<string, unknown>);
+  if (details.type === 'group') {
+    try {
+      const state = await supabase.rpc('carpool_chat_state', { p_conversation_id: conversationId });
+      details.readOnlyReason = state.error ? CHAT_STATE_UNAVAILABLE : carpoolChatNotice(state.data);
+    } catch {
+      details.readOnlyReason = CHAT_STATE_UNAVAILABLE;
+    }
+  }
+  return details;
 }
 
 export const getDirectConversationDetails = getConversationDetails;

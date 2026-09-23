@@ -329,7 +329,7 @@ test('V1.5 UI sources keep private media, typing, group info, and direct-only se
   );
 
   assert.match(conversationSource, /details\?\.type === 'direct'[\s\S]*seen \? 'Set' : 'Sendt'/);
-  assert.match(conversationSource, /details\?\.type === 'group' \? <TypingIndicator/);
+  assert.match(conversationSource, /details\?\.type === 'group' && !details.readOnlyReason \? <TypingIndicator/);
   assert.match(groupInfoSource, /removeGroupMember/);
   assert.match(groupInfoSource, /updateGroupMemberRole/);
   assert.match(mediaSource, /MESSAGE_MEDIA_BUCKET = 'message-media'/);

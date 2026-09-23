@@ -15,6 +15,7 @@ export type MessagePeer = {
 };
 
 export type ConversationDetails = {
+  readOnlyReason?: string | null;
   id: string;
   type: ConversationType;
   name: string | null;
