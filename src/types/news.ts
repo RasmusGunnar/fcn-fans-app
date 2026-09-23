@@ -1,4 +1,5 @@
 export interface NewsItem {
+  engineMetadata?: import("../utils/newsMetadata").NewsMetadata;
   storyId?: string;
   intakeOrigin?: boolean;
   topic?: string;

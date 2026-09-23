@@ -7,6 +7,10 @@ const OPTIONS: { value: HomeFeedFilter; label: string }[] = [
   { value: 'all', label: 'Alle' },
   { value: 'fan_posts', label: 'Fan Posts' },
   { value: 'media_articles', label: 'FCN i medierne' },
+  { value: 'article', label: 'Nyheder' },
+  { value: 'social', label: 'Sociale medier' },
+  { value: 'podcast', label: 'Podcasts' },
+  { value: 'video', label: 'Video' },
 ];
 
 export function HomeFeedFilters({

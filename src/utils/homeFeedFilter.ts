@@ -1,7 +1,8 @@
+import { balanceNews, type NewsFormat } from './newsMetadata';
 import type { FeedItem } from '../types/feed';
 import { normalizePostType, type PostType } from '../types/post';
 
-export type HomeFeedFilter = 'all' | 'fan_posts' | 'media_articles';
+export type HomeFeedFilter = 'all' | 'fan_posts' | 'media_articles' | NewsFormat;
 
 function toTimestamp(value: string | null | undefined): number {
   if (!value) return 0;
@@ -15,9 +16,15 @@ function getPostTypeForFilter(filter: Exclude<HomeFeedFilter, 'all'>): PostType 
 
 export function filterHomeFeedItems(items: FeedItem[], filter: HomeFeedFilter): FeedItem[] {
   if (filter === 'all') {
-    return items;
+    return balanceNews(items, (item) =>
+      item.kind === 'news' ? (item.data.engineMetadata?.format ?? 'article') : 'community',
+    );
   }
 
+  if (['article', 'social', 'podcast', 'video'].includes(filter))
+    return items.filter(
+      (item) => item.kind === 'news' && (item.data.engineMetadata?.format ?? 'article') === filter,
+    );
   const postType = getPostTypeForFilter(filter);
 
   return items
